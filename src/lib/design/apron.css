@@ -1644,6 +1644,9 @@ a.ap-embed-ogcard:hover { background: var(--hover); }
 .ap-mention-room::before { content: "\21B3 "; font-weight: 400; }
 .ap-mention-hash-room::before { content: none; }
 .ap-mention-unknown { color: var(--ink-muted); }
+/* A role's chip (`@&role`): a mention's tint, outlined so it reads as a group rather than one person, and only reads. */
+.ap-mention-role { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--denim) 45%, transparent); cursor: default; }
+.ap-mpick-role-glyph { display: inline-grid; place-items: center; flex: none; width: var(--avatar-sm); height: var(--avatar-sm); border-radius: var(--radius-sm); background: var(--denim-soft); color: var(--denim); }
 /* An Apron link written as its URL, drawn as a mention that says what it is (Appendix A.4); it stays the link. A user's
    reads as a user mention. The rest lead with their kind's icon, the same Lucide icons LinkCard's tag draws (a
    message-square, a hash, a corner-down-right), as masks, since a body's markup is a sanitized string with no SVG in

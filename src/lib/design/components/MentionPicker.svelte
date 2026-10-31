@@ -1,21 +1,22 @@
 <script lang="ts">
 	/*
-	 * Above the Composer while you type `@name` (people), `#room` (rooms and threads) or `:shortcode` (emoji); ↑ ↓ move, Tab or
+	 * Above the Composer while you type `@name` (people, and roles: `@&role` mentions everyone else here who holds it), `#room` (rooms and threads) or `:shortcode` (emoji); ↑ ↓ move, Tab or
 	 * Enter takes one. It opens below the field instead where what scrolls around it has no room above, as over the first
 	 * message of a timeline being edited.
 	 */
 	import type { Snippet } from 'svelte';
 	import type { ClassValue } from 'svelte/elements';
+	import Users from '@lucide/svelte/icons/users';
 	import Avatar from './Avatar.svelte';
-	import type { PickerEmoji, PickerRoom, Sender } from './types';
+	import type { PickerEmoji, PickerRole, PickerRoom, Sender } from './types';
 	import { uid } from './util';
 
 	/** The list is a listbox, as its options need. */
 	interface Props {
 		/** What has been typed after the `@`, `#` or `:`; in a person's name and ID it reads in accent. */
 		query?: string;
-		/** `@`: who can be named. The list shows `rooms` instead when given, else `emoji`. */
-		people?: Sender[];
+		/** `@`: who can be named, people and roles, in the order shown. The list shows `rooms` instead when given, else `emoji`. */
+		people?: (Sender | PickerRole)[];
 		/** `#`: rooms and threads, each its title and `#room_id`. */
 		rooms?: PickerRoom[];
 		/** `:`: emoji, each its glyph, `:shortcode:` and name. */
@@ -23,7 +24,7 @@
 		/** The highlighted option, which Tab (and Enter) takes. */
 		active?: number;
 		/** A pick (a click keeps the focus in the field): the item and its index in the list shown. */
-		onpick?: (item: Sender | PickerRoom | PickerEmoji, index: number) => void;
+		onpick?: (item: Sender | PickerRole | PickerRoom | PickerEmoji, index: number) => void;
 		onhover?: (index: number) => void;
 		/** The list's ID, which the field names in `aria-controls`; option `i` is `${id}-${i}`, its `aria-activedescendant`. */
 		id?: string;
@@ -37,11 +38,11 @@
 	let { query = '', people = [], rooms, emoji, active = 0, onpick, onhover, id, avatar, class: className, testid }: Props = $props();
 
 	const kind = $derived(rooms ? 'rooms' : emoji ? 'emoji' : 'people');
-	const items: (Sender | PickerRoom | PickerEmoji)[] = $derived(rooms ?? emoji ?? people);
+	const items: (Sender | PickerRole | PickerRoom | PickerEmoji)[] = $derived(rooms ?? emoji ?? people);
 	const listLabel = $derived(kind === 'rooms' ? 'Room suggestions' : kind === 'emoji' ? 'Emoji suggestions' : 'Mention someone');
 	const emptyText = $derived(kind === 'rooms' ? `No room matches “${query}”` : kind === 'emoji' ? `No emoji match “${query}”` : query ? `No one here matches “${query}”` : 'People in this room');
 	const q = $derived(query.toLowerCase());
-	const key = (item: Sender | PickerRoom | PickerEmoji, index: number): string => ('user_id' in item ? uid(item) : item.id) ?? String(index);
+	const key = (item: Sender | PickerRole | PickerRoom | PickerEmoji, index: number): string => ('user_id' in item ? uid(item) : 'role' in item ? `&${item.role}` : item.id) ?? String(index);
 	let list = $state<HTMLUListElement>();
 	let none = $state<HTMLDivElement>();
 	/** Opens below the field, for want of room above. */
@@ -95,6 +96,10 @@
 					{#if avatar}{@render avatar(item)}{:else}<Avatar {name} src={item.avatar} size="sm" />{/if}
 					<span class="ap-mpick-name">{@render mark(name)}</span>
 					{#if pid !== name}<span class="ap-mpick-id">{@render mark(pid, '@')}</span>{/if}
+				{:else if 'role' in item}
+					<span class="ap-mpick-role-glyph" aria-hidden="true"><Users size={13} strokeWidth={2.25} /></span>
+					<span class="ap-mpick-name">{@render mark(item.role, '@')}</span>
+					<span class="ap-mpick-id">{item.count === 1 ? '1 person' : `${item.count} people`}</span>
 				{:else if 'native' in item}
 					<span class="ap-mpick-emoji-glyph" aria-hidden="true">{#if item.image}<img class="ap-cemoji" src={item.image} alt="" />{:else}{item.native}{/if}</span>
 					<span class="ap-mpick-name">:{item.id}:</span>

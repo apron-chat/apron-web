@@ -22,7 +22,9 @@ test.describe('mentions in the composer', () => {
 
 	test('a mention picked with Tab goes out as @user_id and in body.mentions', async ({ preview, page }) => {
 		await page.keyboard.type('@ad');
-		await expect(picker(preview).getByRole('option')).toHaveText([/Ada Lovelace/]);
+		// Ada's role matches too, after her.
+		await expect(picker(preview).getByRole('option')).toHaveText([/Ada Lovelace/, /@admin/]);
+		await page.keyboard.press('ArrowDown');
 		await page.keyboard.press('ArrowDown');
 		await page.keyboard.press('Tab');
 		await expect(picker(preview)).toBeHidden();
@@ -89,6 +91,40 @@ test.describe('mentions in the composer', () => {
 		await page.keyboard.press('Enter');
 		const sent = await preview.waitForSent('message', (p) => p.body?.text === '@Ada Lovelac! see you');
 		expect(sent.body.mentions ?? []).toEqual([]);
+	});
+});
+
+test.describe('role mentions in the composer', () => {
+	test.use({ ...DEVICES.desktop, knobs: { people: { grace: { roles: ['moderator'] } } } });
+
+	test('a picked role is a chip, goes out as @&role, and mentions everyone else here who holds it', async ({ preview, page }) => {
+		await preview.open();
+		await preview.composer().click();
+		await page.keyboard.type('@mod');
+		await expect(picker(preview).getByRole('option')).toHaveText([/@moderator\s*2 people/]);
+		await page.keyboard.press('Tab');
+		const role = preview.composer().locator('.ap-mention-role');
+		await expect(role).toHaveText('@moderator');
+		await expect(role).toHaveAttribute('title', 'Mentions all 2 people here with the role moderator');
+		await page.keyboard.type('please look');
+		await page.keyboard.press('Enter');
+
+		const sent = await preview.waitForSent('message', (p) => p.body?.text === '@&moderator please look');
+		expect([...sent.body.mentions].sort()).toEqual(['grace', 'margaret']);
+		// The timeline draws it as the role, not as `@&moderator`.
+		await expect(preview.message('@moderator please look').locator('.ap-mention-role')).toHaveText('@moderator');
+	});
+
+	test('a typed @&role becomes a chip once finished, and @& lists roles alone', async ({ preview, page }) => {
+		await preview.open();
+		await preview.composer().click();
+		await page.keyboard.type('@&');
+		await expect(picker(preview).getByRole('option')).toHaveText([/@moderator/, /@admin/]);
+		await page.keyboard.type('admin ok');
+		await expect(preview.composer().locator('.ap-mention-role')).toHaveText('@admin');
+		await page.keyboard.press('Enter');
+		const sent = await preview.waitForSent('message', (p) => p.body?.text === '@&admin ok');
+		expect(sent.body.mentions).toEqual(['ada']);
 	});
 });
 

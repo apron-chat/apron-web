@@ -1,6 +1,7 @@
 import { untrack } from 'svelte';
 import { mentionClass, mentionLabel, type Mention, type MentionPerson } from '$lib/protocol/markdown';
-import { collapseMentions, draftLength, draftMentions, draftText, insertMention, insertText, mentionQuery, normalizeDraft, unchip, type DraftChip, type DraftPart } from './draft';
+import { chipText, collapseMentions, draftLength, draftMentions, draftText, insertMention, insertText, mentionQuery, normalizeDraft, partLength, unchip, type DraftChip, type DraftPart } from './draft';
+import { roomRoles, searchRoles, type RoleSuggestion } from './role-mentions';
 import { isAutocompleteDismissed, type DismissedAutocomplete } from './autocomplete-dismiss';
 import { emojiQuery as findEmojiQuery, searchEmoji, withCustomEmoji, type EmojiQuery, type EmojiSuggestion } from './emoji-autocomplete';
 import { customEmoji } from './custom-emoji.svelte';
@@ -13,13 +14,19 @@ import { enterAction, handheld } from './handheld';
 /**
  * Where a message is written, the composer's and the message editor's
  * alike: a plain-text editable (`ComposerEditable`) whose mentions are
- * non-editable name chips, `@user_id` in the text (Appendix A.3), and the
- * autocomplete for `@` people, `#` rooms and `:` emoji. One of these per
+ * non-editable name chips, `@user_id` in the text (Appendix A.3), or `@&role`
+ * for everyone here with a role, and the autocomplete for `@` people and
+ * roles, `#` rooms and `:` emoji. One of these per
  * field, made as its component (`MessageField`) starts, which draws the
  * field and the picker from it.
  */
 
 const MENTION_MATCHES_MAX = 8;
+/** At most this many of the `@` picker's places go to roles, after anyone named exactly. */
+const ROLE_MATCHES_MAX = 3;
+
+/** A suggestion in the `@` picker: a person, or a role (`@&role`). */
+export type MentionMatch = MentionPerson | RoleSuggestion;
 
 /** How the field's component takes part. */
 export interface DraftHost {
@@ -67,7 +74,10 @@ export class DraftField {
 	/** A phone or tablet, where Enter starts a new line (`enterAction`). */
 	private readonly onHandheld = handheld();
 
-	matches: MentionPerson[];
+	matches: MentionMatch[];
+	/** The roles someone else here holds, which an `@` can name. */
+	roles: RoleSuggestion[];
+	private roleIds: string[];
 	/** The server's custom emoji first (`ext:emoji`, once their catalog has arrived), then the standard ones. */
 	emojiMatches: EmojiSuggestion[];
 	/** The IDs a typed `#room_id` collapses into a chip for. */
@@ -91,6 +101,8 @@ export class DraftField {
 	constructor(host: DraftHost, pickerId: string) {
 		this.host = host;
 		this.pickerId = pickerId;
+		this.roles = $derived(roomRoles(host.people));
+		this.roleIds = $derived(this.roles.map((suggestion) => suggestion.role));
 		this.matches = $derived(this.query === undefined ? [] : this.matching(this.query));
 		this.emojiMatches = $derived(this.emojiFound && this.emojiData ? withCustomEmoji(customEmoji.catalog, this.emojiFound.query, searchEmoji(this.emojiData, this.emojiFound.query), (emoji) => directory.mediaGate.src(customEmoji.image(emoji).src)) : []);
 		this.roomIds = $derived(host.rooms.map((room) => room.id));
@@ -117,7 +129,7 @@ export class DraftField {
 			untrack(() => {
 				this.lastSelection = undefined;
 				// Nobody typed it: its `@user_id`s become chips, the last one too, and a name in plain text stays text.
-				const collapsed = collapseMentions([text], this.host.people, { caret: text.length, final: true, names: false, isUser: this.isUser, rooms: this.roomIds });
+				const collapsed = collapseMentions([text], this.host.people, { caret: text.length, final: true, names: false, isUser: this.isUser, rooms: this.roomIds, roles: this.roleIds });
 				this.draw(current, collapsed.parts, document.activeElement === current ? collapsed.caret : undefined);
 				this.commit(current, collapsed.parts, false);
 			});
@@ -293,18 +305,19 @@ export class DraftField {
 		this.query = found.query;
 	};
 
-	/** Swaps the typed `@…` for a chip: the person's name on screen, `@user_id` on the wire (Appendix A.3). */
-	pick(person: MentionPerson): void {
+	/** Swaps the typed `@…` for a chip: the person's name on screen, `@user_id` on the wire (Appendix A.3); a role's, `@&role`. */
+	pick(item: MentionMatch): void {
 		const field = this.element;
 		if (!field) return;
 		const { parts, caret } = readDraft(field);
-		this.picked(field, insertMention(parts, this.anchor, caret ?? draftLength(parts), person.id));
+		const end = caret ?? draftLength(parts);
+		this.picked(field, 'role' in item ? insertMention(parts, this.anchor, end, item.role, 'role') : insertMention(parts, this.anchor, end, item.id));
 	}
 
 	pickRoom(room: RoomSuggestion): void {
 		const field = this.element;
 		if (!field || !this.roomFound) return;
-		this.picked(field, insertMention(readDraft(field).parts, this.roomFound.start, this.roomFound.end, room.id, true));
+		this.picked(field, insertMention(readDraft(field).parts, this.roomFound.start, this.roomFound.end, room.id, 'room'));
 	}
 
 	pickEmoji(item: EmojiSuggestion): void {
@@ -324,8 +337,14 @@ export class DraftField {
 
 	private isUser = (id: string): boolean => this.host.people.some((person) => person.id === id) || (this.host.known?.includes(id) ?? false) || directory.resolve(id)?.kind === 'user';
 
-	/** People whose name or ID starts with the query; someone it names exactly comes first. */
-	private matching(text: string): MentionPerson[] {
+	/**
+	 * People whose name or ID starts with the query, and roles whose name
+	 * does: whoever it names exactly first, then people, then a few roles,
+	 * kept a place even when the people fill the list. `@&` asks for roles alone.
+	 */
+	private matching(text: string): MentionMatch[] {
+		const roles = searchRoles(this.roles, text);
+		if (text.startsWith('&')) return roles.slice(0, MENTION_MATCHES_MAX);
 		const lower = text.toLowerCase();
 		const exact = lower.trimEnd();
 		const scored = this.host.people
@@ -337,7 +356,13 @@ export class DraftField {
 				return undefined;
 			})
 			.filter((entry) => entry !== undefined);
-		return scored.sort((a, b) => a.rank - b.rank).map((entry) => entry.person).slice(0, MENTION_MATCHES_MAX);
+		const people = scored.sort((a, b) => a.rank - b.rank).map((entry) => entry.person);
+		const exactRoles = roles.filter((suggestion) => exact && suggestion.role.toLowerCase() === exact);
+		const otherRoles = roles.filter((suggestion) => !exactRoles.includes(suggestion));
+		const named = people.filter((_, index) => scored[index].rank === 0);
+		const rest = people.slice(named.length);
+		const roleCount = Math.min(otherRoles.length, ROLE_MATCHES_MAX);
+		return [...named, ...exactRoles, ...rest.slice(0, Math.max(0, MENTION_MATCHES_MAX - named.length - exactRoles.length - roleCount)), ...otherRoles.slice(0, roleCount)].slice(0, MENTION_MATCHES_MAX);
 	}
 
 	/** Closes whichever picker is open. */
@@ -362,7 +387,8 @@ export class DraftField {
 		if (!field) return false;
 		const { parts, caret, anchor } = readDraft(field);
 		if (caret === undefined || (anchor !== undefined && anchor !== caret)) return false;
-		const reverted = unchip(parts, caret, (part) => mentionLabel(this.chipMention(part)));
+		// A role's chip goes back to what it's written as, `@&role`, so it can become a chip again.
+		const reverted = unchip(parts, caret, (part) => (part.role ? chipText(part) : mentionLabel(this.chipMention(part))));
 		if (!reverted) return false;
 		this.draw(field, reverted.parts, reverted.caret);
 		this.commit(field, reverted.parts, true);
@@ -375,7 +401,7 @@ export class DraftField {
 		const field = this.element;
 		if (!field) return;
 		const { parts, caret } = readDraft(field);
-		const collapsed = collapseMentions(parts, this.host.people, { caret: caret ?? draftLength(parts), final, isUser: this.isUser, rooms: this.roomIds });
+		const collapsed = collapseMentions(parts, this.host.people, { caret: caret ?? draftLength(parts), final, isUser: this.isUser, rooms: this.roomIds, roles: this.roleIds });
 		if (collapsed.changed) this.draw(field, collapsed.parts, caret === undefined ? undefined : collapsed.caret);
 		this.commit(field, collapsed.parts, collapsed.changed || draftText(collapsed.parts) !== this.host.value);
 	}
@@ -385,7 +411,7 @@ export class DraftField {
 		const text = draftText(parts);
 		this.shown = { field: root, text };
 		this.empty = parts.length === 0;
-		const mentioned = draftMentions(parts);
+		const mentioned = draftMentions(parts, this.roleMembers);
 		if (mentioned.join('\u0000') !== this.host.mentions.join('\u0000')) this.host.mentions = mentioned;
 		if (this.empty && root.childNodes.length > 0) root.replaceChildren();
 		if (this.host.value !== text) this.host.value = text;
@@ -401,8 +427,12 @@ export class DraftField {
 		if (caret !== undefined) placeCaret(root, caret);
 	}
 
+	/** Who a role's chip mentions: everyone else here who holds it, as the room lists them. */
+	private roleMembers = (role: string): string[] => this.roles.find((suggestion) => suggestion.role === role)?.members ?? [];
+
 	/** What a chip names, as the Mention component every rendered mention uses. */
 	private chipMention(part: DraftChip): Mention {
+		if (part.role) return { target: { kind: 'role', id: part.id }, hash: false };
 		if (part.room) return { target: directory.resolveRoom(part.id) ?? { kind: 'room', id: part.id, title: part.id }, hash: true };
 		const person = this.host.people.find((entry) => entry.id === part.id) ?? directory.person({ user_id: part.id });
 		const target: Mention['target'] = { kind: 'user', id: part.id, name: person?.name?.trim() || part.id, me: directory.isMe(part.id) };
@@ -418,11 +448,28 @@ export class DraftField {
 		element.className = mentionClass(mention);
 		element.contentEditable = 'false';
 		if (part.room) element.dataset.roomId = part.id;
+		else if (part.role) element.dataset.role = part.id;
 		else element.dataset.userId = part.id;
-		if (label !== draftText([part])) element.title = draftText([part]);
+		if (part.role) element.title = roleChipTip(this.roleMembers(part.id).length, part.id);
+		else if (label !== draftText([part])) element.title = draftText([part]);
 		element.textContent = label;
 		return element;
 	}
+}
+
+/** The chip a field's element draws, if it is one. */
+function chipOf(element: HTMLElement): DraftChip | undefined {
+	const { userId, roomId, role } = element.dataset;
+	if (userId) return { id: userId };
+	if (roomId) return { id: roomId, room: true };
+	if (role) return { id: role, role: true };
+	return undefined;
+}
+
+/** A role chip's tooltip in the field: who sending it mentions. */
+function roleChipTip(count: number, role: string): string {
+	if (count === 0) return `No one else here has the role ${role}`;
+	return `Mentions ${count === 1 ? 'the 1 person' : `all ${count} people`} here with the role ${role}`;
 }
 
 /**
@@ -453,12 +500,10 @@ function readDraft(root: HTMLElement): { parts: DraftPart[]; caret: number | und
 				if (child === anchorNode) anchor = length + anchorOffset;
 				text(child.textContent ?? '');
 			} else if (child instanceof HTMLElement) {
-				if (child.dataset.userId) {
-					parts.push({ id: child.dataset.userId });
-					length += child.dataset.userId.length + 1;
-				} else if (child.dataset.roomId) {
-					parts.push({ id: child.dataset.roomId, room: true });
-					length += child.dataset.roomId.length + 1;
+				const chip = chipOf(child);
+				if (chip) {
+					parts.push(chip);
+					length += partLength(chip);
 				} else if (child.tagName === 'BR') {
 					// A break that ends its block is the browser's placeholder for an empty line, not a line.
 					if (index < node.childNodes.length - 1) text('\n');
@@ -483,7 +528,8 @@ function placeCaret(root: HTMLElement, caret: number): void {
 	let offset = 0;
 	let placed = false;
 	for (const [index, node] of [...root.childNodes].entries()) {
-		const length = node.nodeType === Node.TEXT_NODE ? (node.textContent ?? '').length : node instanceof HTMLElement && (node.dataset.userId ?? node.dataset.roomId) ? (node.dataset.userId ?? node.dataset.roomId)!.length + 1 : 0;
+		const chip = node instanceof HTMLElement ? chipOf(node) : undefined;
+		const length = node.nodeType === Node.TEXT_NODE ? (node.textContent ?? '').length : chip ? partLength(chip) : 0;
 		if (node.nodeType === Node.TEXT_NODE && caret <= offset + length) {
 			range.setStart(node, caret - offset);
 			placed = true;
