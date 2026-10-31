@@ -3,7 +3,7 @@
 	import { resolve } from '$app/paths';
 	import { historySettings, RETENTIONS, storageUsed } from '$lib/history/settings.svelte';
 	import { MEDIA_POLICIES, mediaSettings, parseMediaOrigins } from '$lib/ui/media-settings.svelte';
-	import { appearanceSettings, sanitizeFontFamily, type FontBrowserState, type ThemeMode } from '$lib/ui/appearance.svelte';
+	import { appearanceSettings, cssForTheme, parseThemeCss, THEME_CSS_MAX, THEMES, type ThemeId, type ThemeMode } from '$lib/ui/appearance.svelte';
 	import type { NotificationPermissionState, NotificationTestResult } from '$lib/ui/notifications';
 	import Button from '$lib/design/components/Button.svelte';
 	import Callout from '$lib/design/components/Callout.svelte';
@@ -17,9 +17,6 @@
 	import StatusPicker from './StatusPicker.svelte';
 	import { NOTIFY_SCOPES, notifyScopeNotes, pushWake } from '$lib/ui/notify-scopes';
 	import type { WebPushPreference } from '$lib/ui/web-push';
-	import FontFamilyField from './FontFamilyField.svelte';
-
-	type LocalFontAccessWindow = Window & { queryLocalFonts?: () => Promise<Array<{ family: string }>> };
 
 	interface Props {
 		open?: boolean;
@@ -67,23 +64,22 @@
 	let { open = $bindable(false), section: preferencesSection = $bindable('profile'), profile, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, status, onexport, serverHost, mediaHosts = [], onclosed }: Props = $props();
 
 	const SECTIONS = [
-		// Its tab names it already: no heading over your status, but for screen readers.
-		{ value: 'profile', label: 'Profile', id: 'ap-pref-profile', heading: false },
-		{ value: 'notifications', label: 'Notifications', hint: 'Choose when Apron can interrupt you.', id: 'ap-pref-notifications' },
-		{ value: 'appearance', label: 'Appearance', hint: 'Adjust the theme and reading fonts on this device.', id: 'ap-pref-appearance' },
-		{ value: 'media', label: 'Media', hint: 'Where images and avatars load from. Each site sees what you load.', id: 'ap-pref-media' },
-		{ value: 'history', label: 'History', hint: 'What this device keeps of your chats.', id: 'ap-pref-history' }
+		{ value: 'profile', label: 'Profile', id: 'ap-pref-profile' },
+		{ value: 'notifications', label: 'Notifications', id: 'ap-pref-notifications' },
+		{ value: 'appearance', label: 'Appearance', id: 'ap-pref-appearance' },
+		{ value: 'media', label: 'Media', id: 'ap-pref-media' },
+		{ value: 'history', label: 'History', id: 'ap-pref-history' }
 	];
 	/** While push is on, checked scopes this server doesn't push say they are desktop only. */
 	let scopeNotes = $derived(notifyScopeNotes(notifyScopes, webPush?.offered ?? [], webPush?.enabled === true));
 	/** Push is on, but `wake` (the checked scopes the server pushes) is empty: it wakes for nothing. */
 	let pushesNothing = $derived(pushWake(notifyScopes, webPush?.offered ?? [])?.length === 0);
-	let interfaceFontDraft = $state('');
-	let chatFontDraft = $state('');
-	let monoFontDraft = $state('');
-	let localFontFamilies = $state<string[]>([]);
-	let fontBrowserState = $state<FontBrowserState>('idle');
-	let fontError = $state('');
+	/** The theme's CSS as edited; applying it makes it the custom theme. */
+	let themeDraft = $state('');
+	let themeError = $state('');
+	/** Why the CSS as typed isn't on show, while it doesn't read. */
+	let draftError = $state('');
+	let themeEdited = $derived(themeDraft !== cssForTheme(appearanceSettings.current));
 	let testNotificationStatus = $state<'idle' | 'sending' | NotificationTestResult>('idle');
 	/** What the last export saved. */
 	let exportNote = $state<string | undefined>();
@@ -115,18 +111,18 @@
 	 * (push, §4.9), with why not. `action` turns push on here when it could be.
 	 */
 	let notificationsNote = $derived.by((): Note & { action?: string } => {
-		if (notificationPermission === 'denied') return { text: 'Notifications are blocked by your browser. Allow them in this site’s browser settings, then try again.', tone: 'err' };
-		if (!notificationsSupported) return { text: 'Notifications aren’t available here. Use a supported browser over HTTPS or localhost.' };
-		if (!notificationsEnabled) return { text: notificationPermission === 'granted' ? 'Off.' : 'Turning this on will ask your browser for permission.' };
-		const open = 'On · alerts while Apron is open.';
-		if (!webPush) return { text: `${open} This server doesn’t alert when it’s closed.`, tone: 'ok' };
-		if (webPush.signIn) return { text: `${open} Sign in to be alerted when it’s closed, too.`, tone: 'ok' };
+		if (notificationPermission === 'denied') return { text: 'Blocked by your browser. Allow notifications in its site settings.', tone: 'err' };
+		if (!notificationsSupported) return { text: 'Not available here. Use a supported browser over HTTPS.' };
+		if (!notificationsEnabled) return { text: notificationPermission === 'granted' ? 'Off.' : 'Your browser will ask for permission.' };
+		const open = 'On while Apron is open.';
+		if (!webPush) return { text: `${open} This server can’t alert when it’s closed.`, tone: 'ok' };
+		if (webPush.signIn) return { text: `${open} Sign in to be alerted when it’s closed.`, tone: 'ok' };
 		if (webPush.error) return { text: webPush.error, tone: 'err' };
-		if (!webPush.supported) return { text: webPush.homeScreen ? `${open} To be alerted when it’s closed, add Apron to your Home Screen.` : `${open} This browser can’t alert when it’s closed.`, tone: 'ok' };
-		if (webPush.heldBy) return { text: `${open} When it’s closed, this browser alerts for one server at a time: now ${webPush.heldBy}.`, tone: 'ok', action: 'Alert for this server instead' };
-		if (webPush.enabled && pushesNothing) return { text: `${open} This server sends none of your choices above when it’s closed.`, tone: 'ok' };
-		if (webPush.enabled) return { text: 'On · alerts on this device, even when Apron is closed.', tone: 'ok' };
-		return { text: `${open} Not yet when it’s closed.`, tone: 'ok', action: 'Alert when it’s closed, too' };
+		if (!webPush.supported) return { text: webPush.homeScreen ? `${open} Add it to your Home Screen to be alerted when it’s closed.` : `${open} This browser can’t alert when it’s closed.`, tone: 'ok' };
+		if (webPush.heldBy) return { text: `${open} When it’s closed, this browser alerts only for ${webPush.heldBy}.`, tone: 'ok', action: 'Alert for this server instead' };
+		if (webPush.enabled && pushesNothing) return { text: `${open} None of your choices below alert when it’s closed.`, tone: 'ok' };
+		if (webPush.enabled) return { text: 'On, even when Apron is closed.', tone: 'ok' };
+		return { text: open, tone: 'ok', action: 'Alert when it’s closed, too' };
 	});
 	let notificationsLocked = $derived(!notificationsEnabled && (!notificationsSupported || notificationPermission === 'denied'));
 	/** What the test notification did. */
@@ -156,16 +152,13 @@
 		const changed = Object.keys(now).find((key) => now[key] !== before[key] && now[key] !== undefined);
 		if (changed) announcement = now[changed]!;
 	});
-	/** Each time it opens, the font drafts start from what is saved, and earlier results clear. */
+	/** Each time it opens, the theme's CSS starts from what is saved, and earlier results clear. */
 	$effect(() => {
 		if (!open) return;
 		untrack(() => {
-			interfaceFontDraft = appearanceSettings.current.interfaceFont;
-			chatFontDraft = appearanceSettings.current.chatFont;
-			monoFontDraft = appearanceSettings.current.monoFont;
-			localFontFamilies = [];
-			fontBrowserState = typeof window !== 'undefined' && typeof (window as LocalFontAccessWindow).queryLocalFonts === 'function' ? 'idle' : 'unsupported';
-			fontError = '';
+			themeDraft = cssForTheme(appearanceSettings.current);
+			themeError = '';
+			draftError = '';
 			testNotificationStatus = 'idle';
 			exportNote = undefined;
 		});
@@ -205,56 +198,56 @@
 	function setThemeMode(mode: string): void {
 		if (mode !== 'system' && mode !== 'light' && mode !== 'dark') return;
 		appearanceSettings.update({ ...appearanceSettings.current, mode: mode as ThemeMode });
+		// Custom CSS being edited stays on show in the new mode.
+		if (themeEdited) appearanceSettings.preview(themeDraft);
 	}
 
-	function saveFonts(event: SubmitEvent): void {
+	/**
+	 * A theme applies at once. Custom shows its CSS: the saved custom theme, or,
+	 * the first time, the CSS of the theme it was chosen from.
+	 */
+	function chooseTheme(theme: string): void {
+		if (theme !== 'custom' && !THEMES.some((premade) => premade.id === theme)) return;
+		const customCss = theme === 'custom' ? appearanceSettings.current.customCss || cssForTheme(appearanceSettings.current) : appearanceSettings.current.customCss;
+		appearanceSettings.update({ ...appearanceSettings.current, theme: theme as ThemeId, customCss });
+		themeDraft = cssForTheme(appearanceSettings.current);
+		// A saved custom theme that doesn't read (edited in storage) applies nothing, and says why.
+		themeError = theme === 'custom' ? (parseThemeCss(customCss).error ?? '') : '';
+		draftError = '';
+	}
+
+	/** Edited CSS becomes the custom theme. */
+	function applyTheme(event: SubmitEvent): void {
 		event.preventDefault();
-		const interfaceFont = sanitizeFontFamily(interfaceFontDraft);
-		const chatFont = sanitizeFontFamily(chatFontDraft);
-		const monoFont = sanitizeFontFamily(monoFontDraft);
-		if ((interfaceFontDraft.trim() && !interfaceFont) || (chatFontDraft.trim() && !chatFont) || (monoFontDraft.trim() && !monoFont)) {
-			fontError = 'Enter a font family name using letters, numbers, spaces, hyphens, periods, or underscores.';
+		const { error } = parseThemeCss(themeDraft);
+		if (error) {
+			themeError = error;
 			return;
 		}
-		appearanceSettings.update({ ...appearanceSettings.current, interfaceFont, chatFont, monoFont });
-		fontError = '';
+		appearanceSettings.update({ ...appearanceSettings.current, theme: 'custom', customCss: themeDraft });
+		themeError = '';
+		draftError = '';
 	}
 
-	function resetFonts(): void {
-		interfaceFontDraft = '';
-		chatFontDraft = '';
-		monoFontDraft = '';
-		fontError = '';
-		appearanceSettings.update({ ...appearanceSettings.current, interfaceFont: '', chatFont: '', monoFont: '' });
+	/**
+	 * The CSS shows as it's typed, whenever it reads; Apply saves it. While it doesn't, the last that did stays on
+	 * show, and the error says why, quietly (it's announced on Apply, not on every keystroke).
+	 */
+	function editTheme(): void {
+		themeError = '';
+		draftError = appearanceSettings.preview(themeDraft) ?? '';
 	}
 
-	/** Called from the font menu’s button so font access has direct user activation. */
-	function loadFontsFromUserAction(): void {
-		if (fontBrowserState === 'error') fontBrowserState = 'idle';
-		if (fontBrowserState === 'idle') void browseLocalFonts();
-	}
-
-	async function browseLocalFonts(): Promise<void> {
-		if (fontBrowserState !== 'idle') return;
-		const queryLocalFonts = (window as LocalFontAccessWindow).queryLocalFonts;
-		if (!queryLocalFonts) {
-			fontBrowserState = 'unsupported';
-			return;
-		}
-		fontBrowserState = 'loading';
-		try {
-			const fonts = await queryLocalFonts.call(window);
-			const families = fonts.map((font) => sanitizeFontFamily(font.family)).filter((family) => family !== '');
-			localFontFamilies = [...new Set(families)].sort((a, b) => a.localeCompare(b));
-			fontBrowserState = localFontFamilies.length ? 'ready' : 'empty';
-		} catch (cause) {
-			fontBrowserState = cause instanceof DOMException && cause.name === 'NotAllowedError' ? 'denied' : 'error';
-		}
+	function discardTheme(): void {
+		themeDraft = cssForTheme(appearanceSettings.current);
+		themeError = '';
+		draftError = '';
+		appearanceSettings.revert();
 	}
 
 	function preferencesClosed(): void {
-		localFontFamilies = [];
-		fontBrowserState = 'idle';
+		// Edits not applied go with the dialog.
+		if (themeEdited) discardTheme();
 		onclosed?.();
 	}
 </script>
@@ -268,20 +261,7 @@
 			{/if}
 			{@render profile?.()}
 		{:else if preferencesSection === 'notifications'}
-			{#if pause}
-				<PauseNotifications until={pause.until} {onpause} {onresume} />
-			{/if}
-			<div class="ap-pref-scopes">
-				<CheckList
-					label="Notify me about"
-					options={NOTIFY_SCOPES.map((scope) => ({ value: scope.value, title: scope.title, ...(scopeNotes[scope.value] ? { note: scopeNotes[scope.value] } : {}) }))}
-					value={notifyScopes}
-					min={1}
-					onchange={onnotifyscopes}
-				/>
-				<p class="ap-pref-help">Whether Apron is open or closed. At least one stays on; the switch below turns notifications off.</p>
-			</div>
-			<SettingRow title="Notifications" hint="Alerts on this device while you’re away from Apron, and when it’s closed where your browser and this server can." class="ap-pref-notifications">
+			<SettingRow title="Notifications" class="ap-pref-notifications">
 				<p class={['ap-pref-note', notificationsNote.tone === 'ok' && 'ap-tone-ok', notificationsNote.tone === 'err' && 'ap-tone-danger']} id="ap-pref-notifications-note">{notificationsNote.text}</p>
 				<p class="ap-pref-test">
 					{#if notificationsNote.action}<Button size="sm" variant="ghost" label={notificationsNote.action} onclick={onwebpush} />{/if}
@@ -310,6 +290,19 @@
 					</Callout>
 				</div>
 			{/if}
+			{#if pause}
+				<PauseNotifications until={pause.until} {onpause} {onresume} />
+			{/if}
+			<div class="ap-pref-scopes">
+				<CheckList
+					label="Notify me about"
+					options={NOTIFY_SCOPES.map((scope) => ({ value: scope.value, title: scope.title, ...(scopeNotes[scope.value] ? { note: scopeNotes[scope.value] } : {}) }))}
+					value={notifyScopes}
+					min={1}
+					onchange={onnotifyscopes}
+				/>
+				<p class="ap-pref-help">Whether Apron is open or closed. At least one stays on; the switch above turns notifications off.</p>
+			</div>
 		{:else if preferencesSection === 'media'}
 			<SettingRow title="Load images from" for="ap-media-policy" hint={mediaNote} hintTestid="media-note" class="ap-pref-media-setting">
 				{#snippet control()}
@@ -318,7 +311,7 @@
 					</select>
 				{/snippet}
 			</SettingRow>
-			<SettingRow title="Trusted origins" for="ap-media-sites" hint="One per line, such as cdn.example.com." stacked class="ap-pref-media-sites">
+			<SettingRow title="Trusted origins" for="ap-media-sites" hint="One per line, such as cdn.example.com. Each site sees what you load." stacked class="ap-pref-media-sites">
 				{#if mediaHosts.length}<p class="ap-form-hint" data-testid="media-server-origins">Includes origins trusted by the server: {mediaHosts.join(', ')}</p>{/if}
 				{#snippet control()}
 					<textarea id="ap-media-sites" class="ap-field ap-pref-sites" rows="4" spellcheck="false" autocomplete="off" value={addedSites} onchange={(event) => mediaSettings.update(mediaSettings.policy, parseMediaOrigins(event.currentTarget.value))} data-testid="media-sites"></textarea>
@@ -346,7 +339,7 @@
 				{/snippet}
 			</SettingRow>
 		{:else}
-			<SettingRow title="Theme" for="ap-theme-mode" hint="System follows your operating system’s light or dark preference." class="ap-pref-theme-setting">
+			<SettingRow title="Mode" for="ap-theme-mode" hint="System follows your operating system’s light or dark preference." class="ap-pref-theme-setting">
 				{#snippet control()}
 					<select id="ap-theme-mode" class="ap-field ap-pref-select" value={appearanceSettings.current.mode} onchange={(event) => setThemeMode(event.currentTarget.value)}>
 						<option value="system">System</option>
@@ -355,37 +348,35 @@
 					</select>
 				{/snippet}
 			</SettingRow>
-			<SettingRow title="Fonts" badge="Experimental" hint="Customize the interface, chat, and monospace fonts on this device. Font choices are an experiment and will be replaced by a choice of themes." stacked class="ap-pref-font-setting">
+			<SettingRow title="Theme" for="ap-theme" hint="Fonts and other design tokens, over either mode. The first time, Custom starts from the theme you had." class="ap-pref-theme-setting">
 				{#snippet control()}
-					<p class="ap-pref-help ap-font-access-status" id="ap-font-access-status" role="status" aria-live="polite">
-						{#if fontBrowserState === 'unsupported'}
-							Installed-font suggestions aren’t supported here; type a font name manually.
-						{:else if fontBrowserState === 'denied'}
-							Font access was denied; allow it in browser site settings or type a font name manually.
-						{:else if fontBrowserState === 'error'}
-							Couldn’t load installed fonts; you can still type a name manually.
-						{:else if fontBrowserState === 'empty'}
-							No font families were available to this site.
-						{:else if fontBrowserState === 'loading'}
-							Loading installed-font suggestions…
-						{:else if fontBrowserState === 'ready'}
-							Type to filter {localFontFamilies.length} installed font families. Only your chosen names are saved.
-						{:else}
-							Click Load installed fonts to request permission and filter suggestions. Manual entry always works.
-						{/if}
-					</p>
-					<form class="ap-pref-fonts" onsubmit={saveFonts}>
-						<FontFamilyField id="ap-interface-font" label="Interface font" placeholder="System UI stack" hint="Applies to the app interface. Leave blank for the browser’s system UI font." bind:value={interfaceFontDraft} fonts={localFontFamilies} fontState={fontBrowserState} fallback="var(--font-sans)" onloadfonts={loadFontsFromUserAction} />
-						<FontFamilyField id="ap-chat-font" label="Chat font" placeholder="Use interface font" hint="Optional font for message text. Leave blank to match the interface." bind:value={chatFontDraft} fonts={localFontFamilies} fontState={fontBrowserState} fallback="var(--font-chat)" onloadfonts={loadFontsFromUserAction} />
-						<FontFamilyField id="ap-mono-font" label="Monospace font" placeholder="System monospace" hint="Used for code, embeds, and command text. Leave blank for the system stack." bind:value={monoFontDraft} fonts={localFontFamilies} fontState={fontBrowserState} fallback="var(--font-mono)" onloadfonts={loadFontsFromUserAction} />
-						{#if fontError}<p class="ap-pref-note ap-tone-danger" role="alert">{fontError}</p>{/if}
-						<div class="ap-pref-font-actions">
-							<Button size="sm" variant="ghost" label="Reset fonts" onclick={resetFonts} />
-							<Button type="submit" size="sm" variant="primary" label="Apply fonts" />
-						</div>
-					</form>
+					<select
+						id="ap-theme"
+						class="ap-field ap-pref-select"
+						value={appearanceSettings.current.theme}
+						onchange={(event) => chooseTheme(event.currentTarget.value)}
+					>
+						{#each THEMES as theme (theme.id)}<option value={theme.id}>{theme.name}</option>{/each}
+						<option value="custom">Custom</option>
+					</select>
 				{/snippet}
 			</SettingRow>
+			{#if appearanceSettings.current.theme === 'custom'}
+				<SettingRow title="Theme CSS" for="ap-theme-css" stacked class="ap-pref-theme-css">
+					<p class="ap-form-hint" id="ap-theme-css-hint">Edits show as you type; Apply keeps them. Only <code>--token: value;</code> declarations are read, colors can be <code>light-dark(light, dark)</code>, and nothing loads with <code>url()</code>.</p>
+					{#snippet control()}
+						<form onsubmit={applyTheme}>
+							<textarea id="ap-theme-css" class="ap-field ap-pref-css" rows="12" spellcheck="false" autocomplete="off" maxlength={THEME_CSS_MAX} aria-describedby={['ap-theme-css-hint', (themeError || draftError) && 'ap-theme-css-error'].filter(Boolean).join(' ')} aria-invalid={themeError || draftError ? 'true' : undefined} bind:value={themeDraft} oninput={editTheme} data-testid="theme-css"></textarea>
+							{#if themeError}<p class="ap-pref-note ap-tone-danger" id="ap-theme-css-error" role="alert">{themeError}</p>
+							{:else if draftError}<p class="ap-pref-note" id="ap-theme-css-error">Not showing yet: {draftError}</p>{/if}
+							<div class="ap-pref-theme-actions">
+								<Button size="sm" variant="ghost" label="Discard changes" disabled={!themeEdited} onclick={discardTheme} />
+								<Button type="submit" size="sm" variant="primary" label="Apply" disabled={!themeEdited} />
+							</div>
+						</form>
+					{/snippet}
+				</SettingRow>
+			{/if}
 		{/if}
 	</SettingsSections>
 </Dialog>

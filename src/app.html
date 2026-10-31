@@ -7,19 +7,15 @@
 		<meta name="theme-color" content="#15151f" media="(prefers-color-scheme: dark)" />
 		<meta name="theme-color" content="#f8f6f3" media="(prefers-color-scheme: light)" />
 		<script>
-			// The saved theme and fonts, before the first paint; appearance.svelte.ts applies
-			// (and validates) them again once the app loads. Keep the two in step.
+			// The saved mode and theme's tokens, before the first paint; appearance.svelte.ts
+			// applies (and validates) them again once the app loads. Keep the two in step.
 			try {
 				const saved = JSON.parse(localStorage.getItem('apron.appearance') || '{}');
 				const root = document.documentElement;
 				if (saved.mode === 'light' || saved.mode === 'dark') root.dataset.theme = saved.mode;
-				const font = (property, family, fallback) => {
-					family = typeof family === 'string' ? family.trim() : '';
-					if (family && family.length <= 64 && /^[\p{L}\p{N} _.-]*$/u.test(family)) root.style.setProperty(property, `"${family}", ${fallback}`);
-				};
-				font('--font-sans', saved.interfaceFont, 'var(--font-sans-system)');
-				font('--font-chat', saved.chatFont, 'var(--font-sans)');
-				font('--font-mono', saved.monoFont, 'var(--font-mono-system)');
+				for (const [name, value] of Array.isArray(saved.vars) ? saved.vars : []) {
+					if (typeof name === 'string' && /^--[A-Za-z0-9_-]+$/.test(name) && typeof value === 'string' && !/[\\{};!@]|\b(?:url|src|image|image-set|cross-fade|element)\s*\(/i.test(value)) root.style.setProperty(name, value);
+				}
 			} catch {}
 		</script>
 		<link rel="manifest" href="%sveltekit.assets%/manifest.webmanifest" />

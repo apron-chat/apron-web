@@ -1,35 +1,160 @@
 import { loadAppearance, saveAppearance } from './storage';
+import { basesError, deriveTokens, forMode } from './theme-colors';
 
 export type ThemeMode = 'system' | 'light' | 'dark';
-/** Where the installed-font suggestions stand (the Local Font Access API asks permission). */
-export type FontBrowserState = 'idle' | 'loading' | 'ready' | 'unsupported' | 'denied' | 'error' | 'empty';
+/** A premade theme's id, or `custom` for the CSS written in Preferences. */
+export type ThemeId = (typeof THEMES)[number]['id'] | 'custom';
+/** A theme as the custom properties it sets on the root, in order, each name once. */
+export type ThemeVars = Array<[name: string, value: string]>;
 
 export interface AppearancePreferences {
 	mode: ThemeMode;
-	interfaceFont: string;
-	chatFont: string;
-	monoFont: string;
+	theme: ThemeId;
+	/** The custom theme's CSS, kept while a premade theme is chosen too. */
+	customCss: string;
 }
 
-export const DEFAULT_APPEARANCE: AppearancePreferences = { mode: 'system', interfaceFont: '', chatFont: '', monoFont: '' };
+/** The longest custom theme kept, in characters. */
+export const THEME_CSS_MAX = 4000;
+const THEME_VARS_MAX = 100;
+/**
+ * Values that would load something: a theme only sets tokens, so it fetches
+ * nothing beyond Apron's own fonts. app.html repeats this; keep the two in step.
+ */
+export const UNSAFE_VALUE = /[\\{};!@]|\b(?:url|src|image|image-set|cross-fade|element)\s*\(/i;
+
+/** What a theme without colors of its own shows for them, commented out, so a custom theme starts from them. */
+const COLOR_EXAMPLE = `/* Base colors, as light-dark(light, dark): the rest of the palette follows from them.
+	--base-ground: light-dark(#f8f6f3, #15151f);
+	--base-ink: light-dark(#1c1f33, #ece9e4);
+	--base-accent: light-dark(#a83c14, #f28a3c);
+	--base-link: light-dark(#2c56b6, #8fb0f5);
+	Any other token in tokens.css can be set too, such as --line-strong. */`;
+
+/** A theme's CSS: the font tokens first, then its colors, so a custom theme starts from both. */
+function themeCss(fonts: { sans: string; chat: string; mono: string }, colors = COLOR_EXAMPLE): string {
+	return `:root {
+	/* Interface */
+	--font-sans: ${fonts.sans};
+	/* Messages */
+	--font-chat: ${fonts.chat};
+	/* Code, embeds and commands */
+	--font-mono: ${fonts.mono};
+	${colors}
+}
+`;
+}
+
+/**
+ * The premade themes, each a different look: the tuned Apron palette, a warm
+ * graphite one in Recursive (which Apron carries, fonts.css), a pink one, and
+ * high contrast, black on white like a block print, for e-ink too.
+ */
+export const THEMES = [
+	{ id: 'apron', name: 'Apron', css: themeCss({ sans: 'var(--font-sans-system)', chat: 'var(--font-sans)', mono: 'var(--font-mono-system)' }) },
+	{
+		id: 'ferrous',
+		name: 'Ferrous',
+		css: themeCss(
+			{
+				sans: '"Recursive Sans Casual Static", "Apron Recursive Casual", var(--font-sans-system)',
+				chat: 'var(--font-sans)',
+				mono: '"RecMonoCasual Nerd Font", "Rec Mono Casual", "Apron Rec Mono Casual", var(--font-mono-system)'
+			},
+			`/* Graphite and cream, the accent the brightest cream: base colors, as light-dark(light, dark). */
+	--base-ground: light-dark(#f2efe8, #292929);
+	--base-ink: light-dark(#2a2926, #d7d3c8);
+	--base-accent: light-dark(#2a2926, #f0e9d8);
+	--base-link: light-dark(#3f5468, #a9b6c4);`
+		)
+	},
+	{
+		id: 'gumball',
+		name: 'Gumball',
+		css: themeCss(
+			{ sans: '"Nunito", "Apron Nunito", var(--font-sans-system)', chat: 'var(--font-sans)', mono: 'var(--font-mono-system)' },
+			`/* Cotton candy: pink and plum, sky-blue links: base colors, as light-dark(light, dark). */
+	--base-ground: light-dark(#fff6fb, #251a35);
+	--base-ink: light-dark(#3a2e5c, #f3eaff);
+	--base-accent: light-dark(#c93a7e, #ff8cc6);
+	--base-link: light-dark(#2f6fd6, #8fc4ff);
+	/* The sidebar in lavender (navy at night), raised things in white, and softer lines than the bases give */
+	--bg-rail: light-dark(#ddd6f2, #141a36);
+	--bg-000: light-dark(#ebe6fb, #1a2142);
+	--bg-200: light-dark(#ffffff, #2f2242);
+	--bg-300: light-dark(#ffe3f0, #3b2b52);
+	--line: light-dark(#f0dbe8, #3e3058);
+	--line-strong: light-dark(#9a7a94, #8e7fae);
+	--ink-muted: light-dark(#6f638f, #b9abd8);
+	--accent-soft: light-dark(#ffd9ec, #4b2a52);
+	--denim-soft: light-dark(#dcebff, #24345c);`
+		)
+	},
+	{
+		id: 'linocut',
+		name: 'Linocut (high contrast)',
+		css: themeCss(
+			{ sans: 'var(--font-sans-system)', chat: 'var(--font-sans)', mono: 'var(--font-mono-system)' },
+			`/* Full-strength text on white or black: base colors, as light-dark(light, dark). */
+	--base-ground: light-dark(#ffffff, #000000);
+	--base-ink: light-dark(#000000, #ffffff);
+	--base-accent: light-dark(#8a2c08, #ff9a4d);
+	--base-link: light-dark(#1b3a8f, #b3cbff);
+	/* Firmer than the bases give */
+	--ink-muted: light-dark(#33353f, #d6d4de);
+	--line: light-dark(#8f8a82, #5c5c6e);
+	--line-strong: light-dark(#3d3a35, #c8c8d4);`
+		)
+	}
+] as const;
+
+export const DEFAULT_APPEARANCE: AppearancePreferences = { mode: 'system', theme: 'apron', customCss: '' };
 
 /** One browser-local appearance preference set, shared by the shell and Preferences dialog. */
 export class AppearanceSettings {
 	current = $state<AppearancePreferences>({ ...DEFAULT_APPEARANCE });
 
 	load(): void {
-		this.current = decodeAppearance(loadAppearance());
-		applyAppearance(this.current);
+		const stored = loadAppearance();
+		this.current = decodeAppearance(stored);
+		// What app.html set before the first paint is the theme's to replace.
+		const painted = storedVars(stored);
+		applied = painted.map(([name]) => name);
+		const vars = applyAppearance(this.current);
+		// Saved again when what app.html paints first isn't this theme as it is now: saved before themes (as fonts), or
+		// saved by an earlier version of the theme.
+		if (stored && typeof stored === 'object' && (!('theme' in stored) || JSON.stringify(painted) !== JSON.stringify(vars))) saveAppearance({ ...this.current, vars });
 	}
 
 	update(next: AppearancePreferences): void {
 		this.current = decodeAppearance(next);
+		saveAppearance({ ...this.current, vars: applyAppearance(this.current) });
+	}
+
+	/** Shows custom CSS as it is edited, without saving it; `revert` goes back to what is saved. Why not, when it doesn't read. */
+	preview(css: string): string | undefined {
+		const { error } = parseThemeCss(css);
+		if (error) return error;
+		applyAppearance({ ...this.current, theme: 'custom', customCss: css });
+		return undefined;
+	}
+
+	revert(): void {
 		applyAppearance(this.current);
-		saveAppearance(this.current);
 	}
 }
 
 export const appearanceSettings = new AppearanceSettings();
+
+/** The theme's tokens on the root now, by name; and the mode and tokens last applied, which needn't be again. */
+let applied: string[] = [];
+let appliedKey = '';
+
+/** The tokens a saved appearance carries for app.html, those that are pairs of strings. */
+function storedVars(stored: unknown): ThemeVars {
+	const vars = stored && typeof stored === 'object' ? (stored as Record<string, unknown>).vars : undefined;
+	return Array.isArray(vars) ? vars.filter((v): v is [string, string] => Array.isArray(v) && typeof v[0] === 'string' && typeof v[1] === 'string') : [];
+}
 
 /** Reject CSS syntax; accept a single installed family name, not a raw font-family declaration. */
 export function sanitizeFontFamily(value: unknown): string {
@@ -38,38 +163,95 @@ export function sanitizeFontFamily(value: unknown): string {
 	return family.length <= 64 && /^[\p{L}\p{N} _.-]*$/u.test(family) ? family : '';
 }
 
+/** The CSS a choice of theme stands for: a premade theme's, or the custom one. */
+export function cssForTheme(preferences: AppearancePreferences): string {
+	return preferences.theme === 'custom' ? preferences.customCss : (THEMES.find((theme) => theme.id === preferences.theme) ?? THEMES[0]).css;
+}
+
+/**
+ * Reads a theme: custom property declarations (`--name: value;`), on their own
+ * or in one `:root { … }` block, with comments. Anything else is an error, and
+ * so is a value that would load something (`url()`, `@import`). Base colors
+ * (theme-colors.ts) bring the palette they give.
+ */
+export function parseThemeCss(css: string): { vars: ThemeVars; error?: string } {
+	const fail = (error: string) => ({ vars: [], error });
+	if (css.length > THEME_CSS_MAX) return fail(`A theme can be at most ${THEME_CSS_MAX} characters.`);
+	let body = css.replace(/\/\*[\s\S]*?\*\//g, ' ').trim();
+	if (body.includes('/*')) return fail('A comment is missing its closing */.');
+	const block = /^:root\s*\{([\s\S]*)\}$/.exec(body);
+	if (block) body = block[1];
+	const vars = new Map<string, string>();
+	for (const part of body.split(';')) {
+		const declaration = part.trim();
+		if (!declaration) continue;
+		const quoted = `“${declaration.length > 40 ? `${declaration.slice(0, 40)}…` : declaration}”`;
+		const match = /^(--[A-Za-z0-9_-]+)\s*:\s*([\s\S]*)$/.exec(declaration);
+		if (!match) return fail(`Expected a token such as --font-sans: value; at ${quoted}.`);
+		const value = match[2].replace(/\s+/g, ' ').trim();
+		if (!value) return fail(`${match[1]} needs a value.`);
+		if (UNSAFE_VALUE.test(value)) return fail(`${match[1]} can’t use url(), @, braces, backslashes or !important.`);
+		const bare = value.replace(/"[^"]*"|'[^']*'/g, '');
+		if (/["']/.test(bare)) return fail(`${match[1]} has an unclosed quote.`);
+		// The browser drops a value whose brackets don't pair, so it would apply as nothing.
+		let depth = 0;
+		for (const c of bare) if ((depth += c === '(' ? 1 : c === ')' ? -1 : 0) < 0) break;
+		if (depth !== 0) return fail(`${match[1]} has a bracket that isn’t closed or opened.`);
+		vars.delete(match[1]);
+		vars.set(match[1], value);
+	}
+	if (vars.size > THEME_VARS_MAX) return fail(`A theme can set at most ${THEME_VARS_MAX} tokens.`);
+	const bases = basesError(vars);
+	if (bases) return fail(bases);
+	// The palette the base colors give comes first, so a token the theme sets itself wins.
+	return { vars: [...deriveTokens(vars).filter(([name]) => !vars.has(name)), ...vars] };
+}
+
 export function decodeAppearance(value: unknown): AppearancePreferences {
 	if (!value || typeof value !== 'object') return { ...DEFAULT_APPEARANCE };
 	const record = value as Record<string, unknown>;
-	return {
-		mode: record.mode === 'light' || record.mode === 'dark' ? record.mode : 'system',
-		interfaceFont: sanitizeFontFamily(record.interfaceFont),
-		chatFont: sanitizeFontFamily(record.chatFont),
-		monoFont: sanitizeFontFamily(record.monoFont)
-	};
+	const mode = record.mode === 'light' || record.mode === 'dark' ? record.mode : 'system';
+	const customCss = typeof record.customCss === 'string' && record.customCss.length <= THEME_CSS_MAX ? record.customCss : '';
+	if (record.theme === 'custom' || THEMES.some((theme) => theme.id === record.theme)) return { mode, theme: record.theme as ThemeId, customCss };
+	// Saved before themes: the fonts chosen then, as a custom theme.
+	const [sans, chat, mono] = [record.interfaceFont, record.chatFont, record.monoFont].map(sanitizeFontFamily);
+	if (sans || chat || mono) {
+		const font = (family: string, fallback: string) => (family ? `"${family}", ${fallback}` : fallback);
+		return {
+			mode,
+			theme: 'custom',
+			customCss: themeCss({ sans: font(sans, 'var(--font-sans-system)'), chat: font(chat, 'var(--font-sans)'), mono: font(mono, 'var(--font-mono-system)') })
+		};
+	}
+	return { mode, theme: DEFAULT_APPEARANCE.theme, customCss };
 }
 
-function applyAppearance(preferences: AppearancePreferences): void {
-	if (typeof document === 'undefined') return;
+/** Sets the mode and the theme's tokens on the root, and returns the tokens. */
+function applyAppearance(preferences: AppearancePreferences): ThemeVars {
+	const { vars } = parseThemeCss(cssForTheme(preferences));
+	if (typeof document === 'undefined') return vars;
+	// Unchanged (a keystroke in a comment): restyling the page again would change nothing.
+	const key = JSON.stringify([preferences.mode, vars]);
+	if (key === appliedKey) return vars;
+	appliedKey = key;
 	const root = document.documentElement;
 	if (preferences.mode === 'system') delete root.dataset.theme;
 	else root.dataset.theme = preferences.mode;
-	setFont(root, '--font-sans', preferences.interfaceFont, 'var(--font-sans-system)');
-	setFont(root, '--font-chat', preferences.chatFont, 'var(--font-sans)');
-	setFont(root, '--font-mono', preferences.monoFont, 'var(--font-mono-system)');
-	// The browser's own chrome takes the chosen theme's ground too; System restores app.html's. Only a chosen theme
-	// reads it: reading computed style here would lay out the page before it has rendered.
-	const ground = preferences.mode === 'system' ? '' : getComputedStyle(root).getPropertyValue('--bg-100').trim();
+	// Only the theme's own tokens go, never what else sets on the root (the keyboard's --app-height and --app-top).
+	const names = new Set(vars.map(([name]) => name));
+	for (const name of applied) if (!names.has(name)) root.style.removeProperty(name);
+	for (const [name, value] of vars) root.style.setProperty(name, value);
+	applied = [...names];
+	// The browser's own chrome takes the theme's ground, each of app.html's tags its mode's half, or with a mode chosen,
+	// that mode's ground; System and no ground of the theme's restores app.html's. tokens.css's is read only for a chosen
+	// mode: reading computed style here would lay out the page before it has rendered.
+	const ground = vars.find(([name]) => name === '--bg-100')?.[1];
+	const tuned = !ground && preferences.mode !== 'system' ? getComputedStyle(root).getPropertyValue('--bg-100').trim() : '';
 	for (const meta of document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')) {
 		meta.dataset.system ??= meta.content;
-		meta.content = !ground ? meta.dataset.system : ground;
+		const mode = preferences.mode !== 'system' ? preferences.mode : (meta.getAttribute('media') ?? '').includes('light') ? 'light' : 'dark';
+		const color = ground ? forMode(ground, mode) : tuned;
+		meta.content = color && !color.includes('var(') ? color : meta.dataset.system;
 	}
-}
-
-function setFont(root: HTMLElement, property: string, family: string, fallback: string): void {
-	if (!family) {
-		root.style.removeProperty(property);
-		return;
-	}
-	root.style.setProperty(property, `"${family}", ${fallback}`);
+	return vars;
 }

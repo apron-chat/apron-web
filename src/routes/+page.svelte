@@ -85,7 +85,7 @@
 	import { historySettings } from '$lib/history/settings.svelte';
 	import { mediaAskClick } from '$lib/ui/media-ask';
 	import { mediaSettings } from '$lib/ui/media-settings.svelte';
-	import { preferencesOpener } from '$lib/ui/preferences.svelte';
+	import { onlyPreferencesDiffer, preferencesOpener } from '$lib/ui/preferences.svelte';
 	import { buildRoomTimeline, newDividerBefore, steady, threadEntries, threadStartedFrom, threadDescriptionFor, threadTitleFor, type ThreadEntry, type TimelineItem } from '$lib/ui/timeline';
 	import { takeSignInLink } from '$lib/ui/sign-in-link';
 	import { SignInLinks } from '$lib/ui/link-controller.svelte';
@@ -1142,7 +1142,9 @@
 		// Taken, and scrubbed from the address bar, before anything else can read or keep the URL.
 		const signInLink = previewMode ? undefined : takeSignInLink(window.location, scrubUrl);
 		// A link pasted into this tab later is a same-document fragment change: take (and scrub) it too.
-		const hashChanged = () => {
+		const hashChanged = (event: HashChangeEvent) => {
+			// Preferences opening, closing or changing section (`ProfileBar`) doesn't move the page.
+			if (onlyPreferencesDiffer(event.oldURL, event.newURL)) return;
 			const link = previewMode ? undefined : takeSignInLink(window.location, scrubUrl);
 			if (link) {
 				links.follow(link);

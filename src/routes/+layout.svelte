@@ -4,6 +4,7 @@
 	import { prefetchLazy } from '$lib/ui/lazy.svelte';
 	import '$lib/design/tokens.css';
 	import '$lib/design/apron.css';
+	import '$lib/design/fonts.css';
 	import '../app.css';
 	import favicon from '$lib/assets/favicon.svg';
 	import EmojiPopover from '$lib/components/EmojiPopover.svelte';
