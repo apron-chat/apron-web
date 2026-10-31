@@ -19,7 +19,7 @@
 	import { SettleFlag } from '$lib/ui/settle-flag';
 	import type { Scheme } from '$lib/ui/sign-in';
 	import JumpBar from '$lib/components/JumpBar.svelte';
-	import Message from '$lib/design/components/Message.svelte';
+	import TimelineMessage from '$lib/components/TimelineMessage.svelte';
 	import EmbedItem from '$lib/components/embeds/Embed.svelte';
 	import type { MessageEmbed, MessageHandlers, MessageTestids } from '$lib/design/components/types';
 	import { linkedRoomIn, messageView, sourceEmbed, type LinkedRoom, type MessageCaps, type MessageContext, type MessageView } from '$lib/ui/message-view';
@@ -3196,21 +3196,26 @@
 							<SystemLine timestamp={idMillis(item.logId)} timelineItem testid={activeThread ? 'thread-renamed' : 'room-renamed'}>{#if item.title}{what} renamed to <span class="ap-msg-text">“{item.title}”</span>{:else}{what} name cleared{/if}</SystemLine>
 						{:else}
 							{@const event = item.event}
-							{@const view = messageView(event, {
-								grouped: item.grouped,
-								reactions: reactionsFor(event),
-								mention: mentionsMe(event, session.you),
-								pinged: mentions.pinged.includes(event.message_id),
-								highlighted: highlightedId === event.message_id,
-								selecting: selection.active,
-								selected: selection.has(event.message_id),
-								editing: editingId === event.message_id,
-								caps: capsFor(event)
-							}, messageContext)}
 							{#if event.message_id === newDividerAt}
 								<TimelineDivider kind="new" testid="new-divider" />
 							{/if}
-							<Message {view} on={messageHandlers} testids={MESSAGE_TESTIDS} editor={view.editing && messageEditor.component ? editMessage : undefined} embed={messageEmbed} />
+							<TimelineMessage
+								row={() => messageView(item.event, {
+									grouped: item.grouped,
+									reactions: reactionsFor(item.event),
+									mention: mentionsMe(item.event, session.you),
+									pinged: mentions.pinged.includes(item.event.message_id),
+									highlighted: highlightedId === item.event.message_id,
+									selecting: selection.active,
+									selected: selection.has(item.event.message_id),
+									editing: editingId === item.event.message_id,
+									caps: capsFor(item.event)
+								}, messageContext)}
+								on={messageHandlers}
+								testids={MESSAGE_TESTIDS}
+								editor={(view) => (view.editing && messageEditor.component ? editMessage : undefined)}
+								embed={messageEmbed}
+							/>
 						{/if}
 					{/each}
 				{/if}
