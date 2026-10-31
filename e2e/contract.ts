@@ -366,6 +366,11 @@ export const SCENES: Scene[] = [
 			// With `status`, a status to choose, do not disturb among them.
 			await preferences.getByRole('button', { name: /status/i }).click();
 			await look();
+			// Notifications, a press away in the section navigation.
+			await page.keyboard.press('Escape');
+			await preferences.getByRole('navigation', { name: 'Preference sections' }).getByRole('button', { name: 'Notifications', exact: true }).click();
+			await expect(preferences.getByRole('switch', { name: 'Notifications' })).toBeVisible();
+			await look();
 		}
 	},
 	{
