@@ -524,8 +524,10 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-roomhead-private .ap-lock { color: var(--private); }
 /* Other rooms catching up, with this one shown as it is (`updating`): a short accent glint running along the header's foot. */
 .ap-roomhead-updating { position: absolute; inset-inline: 0; bottom: 0; height: 2px; overflow: hidden; pointer-events: none; animation: ap-roomhead-updating-in var(--duration-medium) ease-out; }
-.ap-roomhead-updating::after { content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 40%; background: linear-gradient(90deg, transparent, var(--accent), transparent); animation: ap-roomhead-updating 1.4s ease-in-out infinite; }
+.ap-roomhead-updating::after { content: ''; position: absolute; top: 0; bottom: 0; inset-inline-start: 0; width: 40%; background: linear-gradient(90deg, transparent, var(--accent), transparent); animation: ap-roomhead-updating 1.4s ease-in-out infinite; }
 @keyframes ap-roomhead-updating { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+:where([dir='rtl']) .ap-roomhead-updating::after { animation-name: ap-roomhead-updating-rtl; }
+@keyframes ap-roomhead-updating-rtl { from { transform: translateX(100%); } to { transform: translateX(-250%); } }
 @keyframes ap-roomhead-updating-in { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .ap-roomhead-updating { animation: none; } .ap-roomhead-updating::after { width: 100%; opacity: var(--opacity-dim); animation: none; } }
 .ap-roomhead-text { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: var(--space-3); }
@@ -1238,11 +1240,12 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 /* A notice in the pill's place (a wait the server asked for) floats the same way, its × still pressable. */
 :is(.ap-tlstatus, .ap-tlstatus-float) .ap-wait { box-shadow: var(--shadow-float); pointer-events: auto; }
 @keyframes ap-tlstatus-in { from { opacity: 0; transform: translate(-50%, 4px); } }
-/* Older messages loading (`top`): sticky at the top, where the floating day shows (FloatingDay steps aside meanwhile),
-   zero-height, so nothing moves; read back to the top, it covers the first day's divider (its margin's depth) for that moment. */
-.ap-tlstatus-top { position: sticky; top: calc(var(--space-6) - 3px); z-index: var(--z-float); height: 0; display: flex; align-items: flex-start; justify-content: center; pointer-events: none; }
-.ap-tlstatus-top .ap-tlstatus-pill { white-space: nowrap; animation: ap-tlstatus-top-in var(--duration-medium) ease-out; }
-@keyframes ap-tlstatus-top-in { from { opacity: 0; transform: translateY(-4px); } }
+/* Older messages loading (`top`): a zero-height anchor just before the timeline, the pill floating over the top of
+   what's shown, where the floating day shows (FloatingDay steps aside meanwhile), so nothing moves; read back to the
+   top, it covers the first day's divider (its margin's depth) for that moment. */
+.ap-tlstatus-top { position: relative; z-index: var(--z-float); height: 0; pointer-events: none; }
+.ap-tlstatus-top .ap-tlstatus-pill { position: absolute; left: 50%; top: calc(var(--space-6) - 3px); transform: translateX(-50%); white-space: nowrap; animation: ap-tlstatus-top-in var(--duration-medium) ease-out; }
+@keyframes ap-tlstatus-top-in { from { opacity: 0; transform: translate(-50%, -4px); } }
 .ap-tlload { display: flex; flex-direction: column; justify-content: flex-end; min-height: 100%; box-sizing: border-box; }
 .ap-skel-rows { display: flex; flex-direction: column; gap: var(--space-1); }
 .ap-skel-row { display: flex; gap: var(--space-3); padding: var(--space-2) var(--space-4); }

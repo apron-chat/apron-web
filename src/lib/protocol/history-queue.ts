@@ -69,8 +69,9 @@ export class HistoryQueue {
 	/** Pumps again when a wait that held a job back is over but no longer the connection's (`limited`). */
 	private wake?: ReturnType<typeof setTimeout>;
 	/**
-	 * The room whose page, one that went first, was just answered: its next page goes before the other rooms', though
-	 * it's asked for only once the answer is read, a moment after the slot is free. Kept for that moment.
+	 * The room whose page, one that went first, was just answered: its next page goes before the other rooms' (but not
+	 * before another the reader waits for), though it's asked for only once the answer is read, a moment after the
+	 * slot is free. Kept for that moment.
 	 */
 	private keptFor?: string;
 
@@ -116,19 +117,15 @@ export class HistoryQueue {
 			let next: HistoryJob | undefined;
 			for (const job of this.jobs.values()) {
 				if (job.requestId !== undefined) continue;
-				if (this.keptFor !== undefined) {
-					if (job.roomId !== this.keptFor) continue;
-					this.keptFor = undefined;
+				if (urgent(job) || job.roomId === this.keptFor) {
 					next = job;
 					break;
 				}
-				if (urgent(job)) {
-					next = job;
-					break;
-				}
-				next ??= job;
+				// While the slot is kept, only what the reader waits for goes: a thread opened meanwhile, say.
+				if (this.keptFor === undefined) next ??= job;
 			}
 			if (!next) return;
+			if (next.roomId === this.keptFor) this.keptFor = undefined;
 			this.send(next);
 			out += 1;
 		}

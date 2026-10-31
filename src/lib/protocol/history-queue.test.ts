@@ -61,6 +61,34 @@ describe('the history queue', () => {
 		}
 	});
 
+	it('keeps the slot for the next page of one that went first, asked once its answer is read, then frees it', async () => {
+		const { queue, sent, state, rooms } = connection();
+		state.active = 'general';
+		const pages = (left: number): Promise<unknown> => queue.request('general', { room_id: 'general' }).promise.then(() => (left > 1 ? pages(left - 1) : undefined));
+		void pages(3);
+		void queue.request('ops', { room_id: 'ops' }).promise;
+		for (let page = 0; page < 3; page++) {
+			sent.at(-1)!.resolve({});
+			await settle();
+		}
+		// Each next page is asked for in its answer's callback, a turn after the slot is free, and still goes first.
+		expect(rooms()).toEqual(['general', 'general', 'general', 'ops']);
+	});
+
+	it('keeps it from other rooms only, not from what the reader waits for, such as a thread opened meanwhile', async () => {
+		const { queue, sent, state, rooms } = connection();
+		state.active = 'general';
+		const pages = (left: number): Promise<unknown> => queue.request('general', { room_id: 'general' }).promise.then(() => (left > 1 ? pages(left - 1) : undefined));
+		void pages(3);
+		void queue.request('ops', { room_id: 'ops' }).promise;
+		void queue.request('thread', { room_id: 'thread' }, { retry: true }).promise;
+		for (let page = 0; page < 4; page++) {
+			sent.at(-1)!.resolve({});
+			await settle();
+		}
+		expect(rooms()).toEqual(['general', 'thread', 'general', 'general', 'ops']);
+	});
+
 	it('has as many out as it may', async () => {
 		const { queue, sent, rooms } = connection(2);
 		for (const room of ['a', 'b', 'c']) queue.request(room, { room_id: room });

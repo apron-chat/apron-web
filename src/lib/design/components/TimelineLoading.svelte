@@ -13,8 +13,8 @@
 		 */
 		float?: boolean;
 		/**
-		 * At the top instead, for older messages loading above those shown: placed first in the timeline, it stays
-		 * just under the floating day while reading back, and takes no space either.
+		 * At the top instead, for older messages loading above those shown: placed just before the timeline, outside
+		 * it, it floats over the top of what's shown, where the floating day goes, and takes no space either.
 		 */
 		top?: boolean;
 		/** In place of the pill, such as a <RateLimitNotice> while the load waits for the server; it says its own status. */
