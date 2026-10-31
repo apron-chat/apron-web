@@ -80,6 +80,12 @@ async function measure(browser, url, probe, { cpu, path, reducedMotion }) {
 		});
 		if (probe.knobs) await page.addInitScript((knobs) => ((/** @type {any} */ (window)).__APRON_PREVIEW__ = knobs), probe.knobs);
 		const metrics = async () => Object.fromEntries((await cdp.send('Performance.getMetrics')).metrics.map((m) => [m.name, m.value]));
+		// After a full collection: what the page keeps. Before it, the heap reads whatever garbage the last
+		// collection left, which follows when V8 ran it (a change that allocates less can read 80% higher).
+		const retainedHeapMB = async () => {
+			await cdp.send('HeapProfiler.collectGarbage');
+			return (await metrics()).JSHeapUsedSize / 1048576;
+		};
 		const t0 = Date.now();
 		await page.goto(new URL(path, url.endsWith('/') ? url : `${url}/`).href);
 		await page.waitForSelector(READY, { timeout: 30000 });
@@ -112,7 +118,7 @@ async function measure(browser, url, probe, { cpu, path, reducedMotion }) {
 				styleMs: m.RecalcStyleDuration * 1000,
 				layouts: m.LayoutCount,
 				styleRecalcs: m.RecalcStyleCount,
-				heapMB: m.JSHeapUsedSize / 1048576
+				heapMB: await retainedHeapMB()
 			};
 		}
 		if (probe.setup) await probe.setup(page);
