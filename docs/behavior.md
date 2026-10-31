@@ -211,8 +211,7 @@ joins and leaves again (or leaves and comes back) in between shows on neither
 side, and a run that nets to nothing shows no line at all: "Ada and Bob joined
 · Carol left", and past three names "Ada, Bob, and 4 others joined", with
 everyone in the tooltip. A record joining more than 20 users at once is a
-baseline, not an event, and gets no line. Someone you added this session reads
-"You added Ada" in place of joining: "You added Ada · Bob joined". Names render like any other user,
+baseline, not an event, and gets no line. Names render like any other user,
 with the `@user_id` when someone else shows under the same name. The lines
 never count as unread or mention you, and a message after one starts a new
 sender group.
@@ -250,9 +249,8 @@ who aren't members yet, but you and the system identities, narrowed by a name
 or `@user_id` typed; when none of them matches, the `@user_id` typed is offered
 to add by it. **Add** sends `room_join` with each picked `user_id` in turn; one
 the server refuses doesn't stop the rest, stays picked, and the dialog says
-why. Those added are said in the room's timeline, as their join's line: "You
-added Ada" rather than "Ada joined" (remembered for the session only, since the
-membership record doesn't say who added them). Pressing a member's row
+why. Those added show in the room's timeline as any join does ("Ada joined"),
+not in the panel. Pressing a member's row
 anywhere drops down its menu beneath it (a right-click, the context menu key or a
 long press opens it where that was): **Profile** opens their profile card;
 **Direct message** (not to a system identity) opens the private conversation you

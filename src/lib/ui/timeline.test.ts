@@ -329,7 +329,7 @@ describe('join and leave lines', () => {
 	/** Each item as a short label: a message by sender (`+` when grouped), a line by who joined and left. */
 	const shape = (items: TimelineItem[]) => items.map((item) => {
 		if (item.kind === 'message') return `${item.event.from.user_id}${item.grouped ? '+' : ''}`;
-		if (item.kind === 'members') return `${item.added.length ? `you+${item.added.map((user) => user.user_id).join(',')} ` : ''}+${item.joined.map((user) => user.user_id).join(',')}/-${item.left.map((user) => user.user_id).join(',')}`;
+		if (item.kind === 'members') return `+${item.joined.map((user) => user.user_id).join(',')}/-${item.left.map((user) => user.user_id).join(',')}`;
 		return item.kind;
 	});
 
@@ -400,20 +400,6 @@ describe('join and leave lines', () => {
 		});
 		expect(shape(items)).toEqual(['date', 'alice', '+bob,carol,erin/-dave']);
 		expect(shape(buildRoomTimeline({ messages: [message(0, 'alice')], threads: [], memberships: [baseline], now }))).toEqual(['date', 'alice']);
-	});
-
-	it('says the first join since you added someone as yours, not one from before or a later one', () => {
-		// Asked when the room's latest membership record was Bob's leave.
-		const added = new Map([['bob', String(base + 1500)], ['carol', String(base + 1500)]]);
-		const items = buildRoomTimeline({
-			messages: [message(0, 'alice'), message(4000, 'alice'), message(6000, 'alice')],
-			threads: [],
-			// Bob joined before you asked, and again after the join you asked for; Carol's is the one asked for; Dave joined himself.
-			memberships: [joins(1000, ['bob', true], ['dave', true]), joins(1500, ['bob', false]), joins(2500, ['bob', true], ['carol', true]), joins(5000, ['bob', false]), joins(7000, ['bob', true])],
-			added,
-			now
-		});
-		expect(shape(items)).toEqual(['date', 'alice', 'you+bob,carol +dave/-', 'alice', '+/-bob', 'alice', '+bob/-']);
 	});
 
 	it('orders memberships that history delivered out of order by log_id', () => {

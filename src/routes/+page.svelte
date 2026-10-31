@@ -47,7 +47,6 @@
 	import TypingIndicator from '$lib/design/components/TypingIndicator.svelte';
 	import NoticeLine from '$lib/components/NoticeLine.svelte';
 	import MembershipLine from '$lib/components/MembershipLine.svelte';
-	import { addedTo } from '$lib/ui/added.svelte';
 	import PrivateIntro from '$lib/design/components/PrivateIntro.svelte';
 	import AddedBanner from '$lib/design/components/AddedBanner.svelte';
 	import { ArrivalWatch, addRoomMembers, othersIn, reachesStart } from '$lib/ui/private-rooms';
@@ -520,7 +519,7 @@
 	let messages = $derived(timelineMessages(paneRoom));
 	let timeline = $derived(activeThread
 		? buildThreadTimeline({ messages, renames: paneRoom?.renames, notices: paneRoom?.notices })
-		: buildRoomTimeline({ messages, threads, notices: paneRoom?.notices, memberships: paneRoom?.timeline.memberships, added: addedTo(paneRoom?.id) }));
+		: buildRoomTimeline({ messages, threads, notices: paneRoom?.notices, memberships: paneRoom?.timeline.memberships }));
 	let shownTimeline = $derived(reveal.hidden > 0 ? timeline.slice(Math.min(reveal.hidden, timeline.length)) : timeline);
 	/** The pane is live: its room is listed, and no sign-in is under way. */
 	let paneReady = $derived(Boolean(paneRoom && session.ready && !snapshot.authBusy));
@@ -3137,7 +3136,7 @@
 						{:else if item.kind === 'notice'}
 							<NoticeLine notice={item.notice} onopenroom={openMentionedRoom} />
 						{:else if item.kind === 'members'}
-							<MembershipLine joined={item.joined} left={item.left} added={item.added} logId={item.logId} />
+							<MembershipLine joined={item.joined} left={item.left} logId={item.logId} />
 						{:else if item.kind === 'renamed'}
 							<SystemLine timestamp={idMillis(item.logId)} timelineItem testid="thread-renamed">{#if item.title}Thread renamed to <span class="ap-msg-text">“{item.title}”</span>{:else}Thread name cleared{/if}</SystemLine>
 						{:else}

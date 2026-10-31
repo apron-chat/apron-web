@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { MembershipRecord } from '$lib/protocol/reducer';
-import { isBaseline, listNames, membershipSummary, MembershipRun, netMemberships } from './membership';
+import { isBaseline, listNames, membershipSummary, netMemberships } from './membership';
 
 let nextLog = 1000;
 const record = (...entries: [string, boolean][]): MembershipRecord => ({
@@ -14,7 +14,7 @@ const ids = (net: { joined: { user_id: string }[]; left: { user_id: string }[] }
 describe('netting a run', () => {
 	it('lists joins and leaves in the order each user first appears, none for no records', () => {
 		expect(ids(netMemberships([record(['ada', true]), record(['carol', false]), record(['bob', true])]))).toEqual({ joined: ['ada', 'bob'], left: ['carol'] });
-		expect(netMemberships([])).toEqual({ joined: [], left: [], added: [] });
+		expect(netMemberships([])).toEqual({ joined: [], left: [] });
 	});
 
 	it('drops a user who joins and leaves again, and one who leaves and comes back', () => {
@@ -31,18 +31,6 @@ describe('netting a run', () => {
 		const renamed: MembershipRecord = { log_id: String(nextLog++), entries: [{ user: { user_id: 'ada', name: 'Ada L.' }, joined: false }] };
 		const net = netMemberships([record(['ada', false]), { log_id: String(nextLog++), entries: [{ user: { user_id: 'ada', name: 'Ada' }, joined: true }] }, renamed]);
 		expect(net.left).toEqual([{ user_id: 'ada', name: 'Ada L.' }]);
-	});
-});
-
-describe('those you added', () => {
-	it('lists a join you added apart, until a later entry for them in the run', () => {
-		const run = new MembershipRun(record(['ada', true], ['bob', true]), new Set(['ada']));
-		expect(run.net().added.map((user) => user.user_id)).toEqual(['ada']);
-		expect(run.net().joined.map((user) => user.user_id)).toEqual(['bob']);
-		run.add(record(['ada', false]));
-		run.add(record(['ada', true]));
-		expect(run.net().added).toEqual([]);
-		expect(run.net().joined.map((user) => user.user_id)).toEqual(['ada', 'bob']);
 	});
 });
 
@@ -71,9 +59,6 @@ describe('wording', () => {
 		expect(membershipSummary([], ['Bob'])).toEqual({ text: 'Bob left' });
 		expect(membershipSummary(['Ada', 'Bob'], ['Carol'])).toEqual({ text: 'Ada and Bob joined · Carol left' });
 		expect(membershipSummary([], []).text).toBe('');
-		// Those you added come first, said as yours.
-		expect(membershipSummary(['Ada'], ['Carol'], ['Dee'])).toEqual({ text: 'You added Dee · Ada joined · Carol left' });
-		expect(membershipSummary([], [], ['Dee', 'Eve', 'Fay', 'Gus'])).toEqual({ text: 'You added Dee, Eve, and 2 others', title: 'You added: Dee, Eve, Fay, Gus' });
 		// Every name is spelled out in the title, only when the line counts some.
 		expect(membershipSummary(['Ada', 'Bob', 'Carol'], []).title).toBeUndefined();
 		expect(membershipSummary(['Ada', 'Bob', 'Carol', 'Dan', 'Eve', 'Fay'], ['Gus'])).toEqual({

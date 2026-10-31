@@ -3,7 +3,6 @@
 	import type { PickPerson } from '$lib/design/components/types';
 	import type { ChatClient, RoomSnapshot } from '$lib/protocol/client';
 	import { isSystemId } from '$lib/protocol/types';
-	import { noteAdded } from '$lib/ui/added.svelte';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { faceOf } from '$lib/ui/faces';
 	import { hueOf } from '$lib/ui/messages';
@@ -15,7 +14,7 @@
 	 * The member list's +: adds the people picked to the open room or thread (`room_join` with each `user_id`, §4.2.2),
 	 * in the design system's AddMembersForm, from the people the session knows who aren't members yet, or by a
 	 * `@user_id` typed whole. One the server refuses doesn't stop the rest, and stays picked, with why. Those added
-	 * are said in the timeline, at their joins ("You added Bo"), not here.
+	 * show in the timeline as their joins do.
 	 */
 	interface Props {
 		client: ChatClient;
@@ -62,11 +61,9 @@
 		const roomId = room.id;
 		saving = true;
 		error = undefined;
-		const after = room.timeline.memberships.at(-1)?.log_id;
 		const refused = await addMembers(client, roomId, ids);
 		saving = false;
 		const name = (userId: string) => directory.name({ user_id: userId });
-		for (const id of ids) if (!refused.some((refusal) => refusal.userId === id)) noteAdded(roomId, id, after);
 		chosenIds = refused.map(({ userId }) => userId);
 		if (refused.length) error = couldNotAdd(refused, name);
 		else open = false;

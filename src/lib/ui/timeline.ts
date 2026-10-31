@@ -63,7 +63,7 @@ export type TimelineItem =
 	| { kind: 'renamed'; key: string; logId: string; title: string }
 	| { kind: 'notice'; key: string; notice: Notice }
 	/** Consecutive memberships netted out (see `MembershipRun`); `logId` is the last one's. */
-	| { kind: 'members'; key: string; logId: string; joined: Identity[]; left: Identity[]; added: Identity[] };
+	| { kind: 'members'; key: string; logId: string; joined: Identity[]; left: Identity[] };
 
 /**
  * The rooms the sidebar lists at the top level: joined rooms without a
@@ -312,11 +312,6 @@ export interface RoomTimelineInput {
 	notices?: readonly Notice[];
 	/** The room's membership records (§4.2.2), ascending by `log_id`. */
 	memberships?: readonly MembershipRecord[];
-	/**
-	 * Per `user_id` you added to the room, its latest membership `log_id` when you asked: their first join past it
-	 * reads as one you added.
-	 */
-	added?: ReadonlyMap<string, string | undefined>;
 	now?: Date;
 }
 
@@ -344,7 +339,7 @@ function noticeQueue(notices: readonly Notice[]): (before?: string) => Notice[] 
  * make one line, netted out: a run that nets to nothing leaves no line and
  * does not break a sender's group. Baseline records are skipped (`isBaseline`).
  */
-export function buildRoomTimeline({ messages, threads, notices = [], memberships = [], added, now = new Date() }: RoomTimelineInput): TimelineItem[] {
+export function buildRoomTimeline({ messages, threads, notices = [], memberships = [], now = new Date() }: RoomTimelineInput): TimelineItem[] {
 	// Cards merge in by anchor; one without an anchor goes last.
 	const floating = [...threads];
 	floating.sort((a, b) => (a.anchor === undefined ? 1 : b.anchor === undefined ? -1 : compareLogIds(a.anchor, b.anchor)));
@@ -357,12 +352,12 @@ export function buildRoomTimeline({ messages, threads, notices = [], memberships
 	let runDay = '';
 	const closeRun = () => {
 		if (!run) return;
-		const { joined, left, added } = run.net();
+		const { joined, left } = run.net();
 		const logId = run.lastLogId, key = `members:${run.firstLogId}`;
 		run = undefined;
-		if (!joined.length && !left.length && !added.length) return;
+		if (!joined.length && !left.length) return;
 		pushDate(runDay, () => dayLabelOf(logId, now));
-		items.push({ kind: 'members', key, logId, joined, left, added });
+		items.push({ kind: 'members', key, logId, joined, left });
 		previous = undefined;
 	};
 	const pushDate = (day: string, label: () => string) => {
@@ -379,29 +374,14 @@ export function buildRoomTimeline({ messages, threads, notices = [], memberships
 		items.push({ kind: 'thread', key: `thread:${entry.id}`, entry });
 		previous = undefined;
 	};
-	/** Those you added whose join has been seen: only the first join since you asked is yours. */
-	const claimed = new Set<string>();
-	const addedIn = (record: MembershipRecord): Set<string> | undefined => {
-		if (!added?.size) return undefined;
-		const ids = new Set<string>();
-		for (const { user, joined } of record.entries) {
-			if (!joined || !added.has(user.user_id) || claimed.has(user.user_id)) continue;
-			const after = added.get(user.user_id);
-			if (after !== undefined && compareLogIds(record.log_id, after) <= 0) continue;
-			claimed.add(user.user_id);
-			ids.add(user.user_id);
-		}
-		return ids;
-	};
 	const pushMembership = (record: MembershipRecord) => {
-		const byYou = addedIn(record);
 		if (isBaseline(record)) return;
 		const day = dayKeyOf(record.log_id);
 		// A date divider breaks a run: the day's first line comes after it.
 		if (run && day !== runDay) closeRun();
-		if (run) run.add(record, byYou);
+		if (run) run.add(record);
 		else {
-			run = new MembershipRun(record, byYou);
+			run = new MembershipRun(record);
 			runDay = day;
 		}
 	};
