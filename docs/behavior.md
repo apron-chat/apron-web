@@ -718,17 +718,21 @@ that isn't open after 30 seconds, is dropped. Browsers without
 push say so; iPhone and iPad Safari say to add Apron to the Home Screen first.
 
 **Appearance** picks a light or dark mode
-over the system's, and a theme: Apron (the system fonts), Ferrous (Recursive
-Sans Casual and Rec Mono Casual), Newsprint (serif messages), Terminal
-(monospace throughout), or Custom. Custom shows its CSS, starting from the
-theme chosen before: the interface, message and code fonts as design tokens
-(`--font-sans`, `--font-chat`, `--font-mono`), then the main colors, commented
-out, as `light-dark(light, dark)` pairs, and any other token. Edits show as
-they're typed, whenever they read, and Apply keeps them; Discard, or closing
-Preferences, goes back to what was kept. A premade theme hides it and keeps it
-for next time.
-Only `--token: value;` declarations are read, alone or in one `:root` block,
-and none may load anything (`url()`, `@import`), so a theme's fonts must be
+over the system's, and a theme: Apron (the system fonts and Apron's own
+palette), Ferrous (graphite and cream, in Recursive Sans Casual and Rec Mono
+Casual), Chalk (high contrast), or Custom. Apron carries Recursive, cut to
+those two faces, and loads it only for a theme that uses it, after a copy
+installed on the device. Custom shows its CSS, starting from the theme chosen
+before: the interface, message and code fonts as design tokens (`--font-sans`,
+`--font-chat`, `--font-mono`), then its base colors (`--base-ground`,
+`--base-ink`, `--base-accent`, `--base-link`), each `#hex` or
+`light-dark(#hex, #hex)` for light and dark mode at once. The rest of the
+palette (grounds, lines, muted text, the soft tints) is mixed from those, and
+any token set on its own wins. Edits show as they're typed, whenever they read,
+and Apply keeps them; Discard, or closing Preferences, goes back to what was
+kept. A premade theme hides it and keeps it for next time. Only
+`--token: value;` declarations are read, alone or in one `:root` block, and
+none may load anything (`url()`, `@import`): a font that isn't Apron's must be
 installed.
 Fonts chosen one by one before themes become a custom theme. All of these stay
 on this device; settings aren't synced.

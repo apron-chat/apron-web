@@ -160,7 +160,7 @@ what the last ready session had, so controls don't blink out with a short drop,
 and `reconnectQuiet` and `stalled` count from the client's `retryingSince`, when
 it began trying where someone could see it, not from the drop), `MentionTracker`,
 `IncomingMessageTracker` (new messages from others, for notifications),
-`AppearanceSettings` (light or dark, and the theme: the premade ones, and reading a custom one's tokens),
+`AppearanceSettings` (light or dark, and the theme: the premade ones, and reading a custom one's tokens; `theme-colors.ts` mixes a palette from a theme's base colors, and `src/lib/design/fonts.css` carries Recursive for the themes that name it),
 `UnreadTracker`, `ReadPositions` (how far you have read each room and thread,
 kept on this device: where the New divider goes and the pane opens), `MessageSelection`, `FeedbackState`, `SidebarLayout`,
 `PaneDrafts` (the composer's text and reply per room and thread),

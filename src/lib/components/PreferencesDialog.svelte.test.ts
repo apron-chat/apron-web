@@ -148,13 +148,13 @@ describe('PreferencesDialog', () => {
 
 		expect(css()).toBeNull();
 		choose('ferrous');
-		expect(root.style.getPropertyValue('--font-mono')).toBe('"RecMonoCasual Nerd Font", "Rec Mono Casual", var(--font-mono-system)');
+		expect(root.style.getPropertyValue('--font-mono')).toBe('"RecMonoCasual Nerd Font", "Rec Mono Casual", "Apron Rec Mono Casual", var(--font-mono-system)');
 		expect(css()).toBeNull();
 
 		choose('custom');
 		expect(appearanceSettings.current.theme).toBe('custom');
 		expect(css()!.value).toContain('Recursive Sans Casual Static');
-		expect(root.style.getPropertyValue('--font-mono')).toBe('"RecMonoCasual Nerd Font", "Rec Mono Casual", var(--font-mono-system)');
+		expect(root.style.getPropertyValue('--font-mono')).toBe('"RecMonoCasual Nerd Font", "Rec Mono Casual", "Apron Rec Mono Casual", var(--font-mono-system)');
 		expect(apply().disabled).toBe(true);
 
 		// CSS that doesn't read says why, and changes nothing.
@@ -171,7 +171,7 @@ describe('PreferencesDialog', () => {
 		expect(appearanceSettings.current.customCss).toContain('Recursive Sans Casual Static');
 		[...document.querySelectorAll<HTMLButtonElement>('.ap-pref-theme-actions button')].find((button) => button.textContent === 'Discard changes')!.click();
 		flushSync();
-		expect(root.style.getPropertyValue('--accent')).toBe('');
+		expect(root.style.getPropertyValue('--accent')).toBe('light-dark(#2a2926, #f0e9d8)');
 		expect(root.style.getPropertyValue('--font-mono')).not.toBe('');
 
 		edit('--accent: #3cb4f2;');

@@ -24,14 +24,15 @@ describe('appearance preferences', () => {
 		expect(decodeAppearance({ mode: 'dark', interfaceFont: '', chatFont: '', monoFont: '' })).toEqual({ ...DEFAULT_APPEARANCE, mode: 'dark' });
 	});
 
-	it('sets Ferrous in Recursive and Rec Mono, and every premade theme reads cleanly', () => {
-		const ferrous = parseThemeCss(THEMES.find((theme) => theme.id === 'ferrous')!.css);
-		expect(ferrous.vars).toEqual([
-			['--font-sans', '"Recursive Sans Casual Static", "Recursive", var(--font-sans-system)'],
-			['--font-chat', 'var(--font-sans)'],
-			['--font-mono', '"RecMonoCasual Nerd Font", "Rec Mono Casual", var(--font-mono-system)']
-		]);
-		for (const theme of THEMES) expect(parseThemeCss(theme.css).error).toBeUndefined();
+	it('sets Ferrous in Recursive, graphite and cream from its base colors, and every premade theme reads cleanly', () => {
+		const ferrous = new Map(parseThemeCss(THEMES.find((theme) => theme.id === 'ferrous')!.css).vars);
+		expect(ferrous.get('--font-sans')).toBe('"Recursive Sans Casual Static", "Apron Recursive Casual", var(--font-sans-system)');
+		expect(ferrous.get('--font-mono')).toBe('"RecMonoCasual Nerd Font", "Rec Mono Casual", "Apron Rec Mono Casual", var(--font-mono-system)');
+		expect(ferrous.get('--bg-100')).toBe('light-dark(#f2efe8, #292929)');
+		expect(ferrous.get('--accent')).toBe('light-dark(#2a2926, #f0e9d8)');
+		for (const theme of THEMES) expect(parseThemeCss(theme.css).error, theme.id).toBeUndefined();
+		// The default keeps tokens.css's tuned palette: its colors are only an example, commented out.
+		expect(parseThemeCss(THEMES[0].css).vars.map(([name]) => name)).toEqual(['--font-sans', '--font-chat', '--font-mono']);
 		expect(cssForTheme({ mode: 'system', theme: 'custom', customCss: '--accent: red;' })).toBe('--accent: red;');
 	});
 
@@ -67,6 +68,8 @@ describe('theme CSS', () => {
 			'--a: u\\72l(x);',
 			'@import "x.css"; --a: b;',
 			'--a: b; /* open',
+			'--base-ground: red; --base-ink: #fff;',
+			'--base-ground: light-dark(#fff, #000);',
 			'x'.repeat(THEME_CSS_MAX + 1)
 		]) {
 			expect(parseThemeCss(css), css).toMatchObject({ vars: [], error: expect.any(String) });

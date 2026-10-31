@@ -1,4 +1,5 @@
 import { loadAppearance, saveAppearance } from './storage';
+import { basesError, deriveTokens } from './theme-colors';
 
 export type ThemeMode = 'system' | 'light' | 'dark';
 /** A premade theme's id, or `custom` for the CSS written in Preferences. */
@@ -17,13 +18,21 @@ export interface AppearancePreferences {
 export const THEME_CSS_MAX = 4000;
 const THEME_VARS_MAX = 100;
 /**
- * Values that would load something: a theme only sets tokens, so Apron still
- * fetches no fonts or images for one. app.html repeats this; keep the two in step.
+ * Values that would load something: a theme only sets tokens, so it fetches
+ * nothing beyond Apron's own fonts. app.html repeats this; keep the two in step.
  */
 const UNSAFE_VALUE = /[\\{};!@]|\b(?:url|src|image|image-set|cross-fade|element)\s*\(/i;
 
-/** A theme's CSS: the font tokens first, so a custom theme starts from them. */
-function themeCss(fonts: { sans: string; chat: string; mono: string }): string {
+/** What a theme without colors of its own shows for them, commented out, so a custom theme starts from them. */
+const COLOR_EXAMPLE = `/* Base colors, as light-dark(light, dark): the rest of the palette follows from them.
+	--base-ground: light-dark(#f8f6f3, #15151f);
+	--base-ink: light-dark(#1c1f33, #ece9e4);
+	--base-accent: light-dark(#a83c14, #f28a3c);
+	--base-link: light-dark(#2c56b6, #8fb0f5);
+	Any other token in tokens.css can be set too, such as --line-strong. */`;
+
+/** A theme's CSS: the font tokens first, then its colors, so a custom theme starts from both. */
+function themeCss(fonts: { sans: string; chat: string; mono: string }, colors = COLOR_EXAMPLE): string {
 	return `:root {
 	/* Interface */
 	--font-sans: ${fonts.sans};
@@ -31,37 +40,49 @@ function themeCss(fonts: { sans: string; chat: string; mono: string }): string {
 	--font-chat: ${fonts.chat};
 	/* Code, embeds and commands */
 	--font-mono: ${fonts.mono};
-	/* Colors, light and dark at once as light-dark(light, dark). Any token in tokens.css works.
-	--bg-100: light-dark(#f8f6f3, #15151f);
-	--ink: light-dark(#1c1f33, #ece9e4);
-	--ink-muted: light-dark(#5b5d6c, #a8a6b2);
-	--line-strong: light-dark(#7c776f, #6d6d80);
-	--accent: light-dark(#a83c14, #f28a3c);
-	--on-accent: light-dark(#ffffff, #1c0f07);
-	--denim: light-dark(#2c56b6, #8fb0f5);
-	*/
+	${colors}
 }
 `;
 }
 
-/** Apron ships no font files: a theme names installed faces, in front of the system stacks. */
+/**
+ * The premade themes, each a different look: the tuned Apron palette, a warm
+ * graphite one in Recursive (which Apron carries, fonts.css), and high contrast.
+ */
 export const THEMES = [
 	{ id: 'apron', name: 'Apron', css: themeCss({ sans: 'var(--font-sans-system)', chat: 'var(--font-sans)', mono: 'var(--font-mono-system)' }) },
 	{
 		id: 'ferrous',
 		name: 'Ferrous',
-		css: themeCss({
-			sans: '"Recursive Sans Casual Static", "Recursive", var(--font-sans-system)',
-			chat: 'var(--font-sans)',
-			mono: '"RecMonoCasual Nerd Font", "Rec Mono Casual", var(--font-mono-system)'
-		})
+		css: themeCss(
+			{
+				sans: '"Recursive Sans Casual Static", "Apron Recursive Casual", var(--font-sans-system)',
+				chat: 'var(--font-sans)',
+				mono: '"RecMonoCasual Nerd Font", "Rec Mono Casual", "Apron Rec Mono Casual", var(--font-mono-system)'
+			},
+			`/* Graphite and cream, the accent the brightest cream: base colors, as light-dark(light, dark). */
+	--base-ground: light-dark(#f2efe8, #292929);
+	--base-ink: light-dark(#2a2926, #d7d3c8);
+	--base-accent: light-dark(#2a2926, #f0e9d8);
+	--base-link: light-dark(#3f5468, #a9b6c4);`
+		)
 	},
 	{
-		id: 'newsprint',
-		name: 'Newsprint',
-		css: themeCss({ sans: 'var(--font-sans-system)', chat: 'ui-serif, "New York", "Iowan Old Style", Charter, Georgia, "Times New Roman", serif', mono: 'var(--font-mono-system)' })
-	},
-	{ id: 'terminal', name: 'Terminal', css: themeCss({ sans: 'var(--font-mono-system)', chat: 'var(--font-sans)', mono: 'var(--font-mono-system)' }) }
+		id: 'chalk',
+		name: 'Chalk (high contrast)',
+		css: themeCss(
+			{ sans: 'var(--font-sans-system)', chat: 'var(--font-sans)', mono: 'var(--font-mono-system)' },
+			`/* Full-strength text on white or black: base colors, as light-dark(light, dark). */
+	--base-ground: light-dark(#ffffff, #000000);
+	--base-ink: light-dark(#000000, #ffffff);
+	--base-accent: light-dark(#8a2c08, #ff9a4d);
+	--base-link: light-dark(#1b3a8f, #b3cbff);
+	/* Firmer than the bases give */
+	--ink-muted: light-dark(#33353f, #d6d4de);
+	--line: light-dark(#8f8a82, #5c5c6e);
+	--line-strong: light-dark(#3d3a35, #c8c8d4);`
+		)
+	}
 ] as const;
 
 export const DEFAULT_APPEARANCE: AppearancePreferences = { mode: 'system', theme: 'apron', customCss: '' };
@@ -112,7 +133,8 @@ export function cssForTheme(preferences: AppearancePreferences): string {
 /**
  * Reads a theme: custom property declarations (`--name: value;`), on their own
  * or in one `:root { … }` block, with comments. Anything else is an error, and
- * so is a value that would load something (`url()`, `@import`).
+ * so is a value that would load something (`url()`, `@import`). Base colors
+ * (theme-colors.ts) bring the palette they give.
  */
 export function parseThemeCss(css: string): { vars: ThemeVars; error?: string } {
 	const fail = (error: string) => ({ vars: [], error });
@@ -136,7 +158,10 @@ export function parseThemeCss(css: string): { vars: ThemeVars; error?: string } 
 		vars.set(match[1], value);
 	}
 	if (vars.size > THEME_VARS_MAX) return fail(`A theme can set at most ${THEME_VARS_MAX} tokens.`);
-	return { vars: [...vars] };
+	const bases = basesError(vars);
+	if (bases) return fail(bases);
+	// The palette the base colors give comes first, so a token the theme sets itself wins.
+	return { vars: [...deriveTokens(vars).filter(([name]) => !vars.has(name)), ...vars] };
 }
 
 export function decodeAppearance(value: unknown): AppearancePreferences {
