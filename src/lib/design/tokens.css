@@ -72,8 +72,8 @@
 	--opacity-disabled: 0.5; /* a control that can't be used now, whatever it is */
 	--opacity-dim: 0.6;      /* content that's there but recedes: offline members, an offline backend, a terminal's dim text */
 
-	/* Type: system faces only; Apron ships no font files. A font chosen in
-	   Preferences goes in front of the system stack (appearance.svelte.ts). */
+	/* Type: system faces by default; Apron carries only Recursive and Nunito, for the themes that name them (fonts.css). A theme chosen in
+	   Preferences sets these, naming installed faces in front of the system stacks (appearance.svelte.ts). */
 	--font-sans-system: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 	--font-mono-system: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
 	--font-sans: var(--font-sans-system);
