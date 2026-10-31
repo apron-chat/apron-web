@@ -83,7 +83,7 @@ export default {
 			name: 'preferences',
 			steps: async (p) => {
 				await roomsPane(p);
-				await pressButton(p, 'Open preferences');
+				await pressButton(p, /^Open preferences/);
 				await wait(p, 400);
 			}
 		},
@@ -91,7 +91,7 @@ export default {
 			name: 'preferences-scrolled',
 			viewports: ['desktop'],
 			steps: async (p) => {
-				await pressButton(p, 'Open preferences');
+				await pressButton(p, /^Open preferences/);
 				await wait(p, 300);
 				await scrollDialogToEnd(p);
 				await wait(p, 200);
@@ -340,7 +340,7 @@ export default {
 		{ name: 'member-list-hide', action: (p) => button(p, 'Hide member list').click() },
 		{ name: 'member-list-overlay-open', viewport: VIEWPORTS.tablet, action: (p) => p.getByRole('button', { name: /member list/i }).first().click() },
 		{ name: 'open-thread', settle: 1000, action: (p) => roomList(p).getByText('Deploy checklist', { exact: true }).first().click() },
-		{ name: 'open-preferences', settle: 800, action: (p) => button(p, 'Open preferences').click() },
+		{ name: 'open-preferences', settle: 800, action: (p) => button(p, /^Open preferences/).click() },
 		{
 			name: 'scroll-timeline',
 			settle: 500,
