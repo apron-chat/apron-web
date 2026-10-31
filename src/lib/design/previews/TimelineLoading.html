@@ -1,4 +1,4 @@
-<!-- @dsCard group="Timeline" height=360 subtitle="Loading messages with placeholder rows, then checking for new messages, floating over what is already shown" -->
+<!-- @dsCard group="Timeline" height=360 subtitle="Loading messages with placeholder rows, then checking for new messages, floating over what is already shown, then older messages loading at the top while reading back" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>TimelineLoading</title></head>
@@ -15,6 +15,10 @@
   shown.appendChild(list);
   var foot = document.createElement('div'); shown.appendChild(foot);
   A.render(A.TimelineLoading, foot, { label: 'Checking for new messages…', float: true });
+  // Reading back: older messages load above, the pill at the top taking no space either.
+  var back = pane();
+  A.render(A.TimelineLoading, back, { label: 'Loading earlier messages…', top: true });
+  back.insertAdjacentHTML('beforeend', '<p style="margin:0;padding:40px 16px 8px;color:var(--ink)">Kicking off the migration.</p><p style="margin:0;padding:8px 16px;color:var(--ink)">Shipping the fix tonight.</p>');
 </script>
 </body>
 </html>

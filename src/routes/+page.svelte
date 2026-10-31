@@ -514,6 +514,27 @@
 	// to the tab) shows nothing.
 	$effect(() => checking.set(!session.reconnectQuiet && !session.waitingToReconnect && (paneCatchingUp || quietReconnect)));
 	$effect(() => () => checking.dispose());
+	/**
+	 * Other rooms are still catching up while this one is shown as it is: the room header's thin moving line
+	 * (`updating`), not the pill, since nothing on screen is out of date; once the pill is gone, so the two don't
+	 * show together. Not for rooms held by a history wait, whose recovery fetches nothing until it's over. Through a
+	 * quiet reconnect's first moments, like the pill, nothing.
+	 */
+	let updatingShown = $state(false);
+	const updating = new SettleFlag((on) => (updatingShown = on));
+	$effect(() => updating.set(Boolean(paneRoom) && !paneCatchingUp && !checkingShown && !session.reconnectQuiet && !session.waitingToReconnect && session.rooms.some((room) => room.id !== paneRoom?.id && room.recovering && !room.limited)));
+	$effect(() => () => updating.dispose());
+	/** Older messages load above those shown, reading back: a pill at the top of the timeline says so. */
+	let olderShown = $state(false);
+	/** The room or thread whose older messages the pill is for: switched away from, it doesn't linger over the next. */
+	let olderFor = $state<string | undefined>();
+	const older = new SettleFlag((on) => {
+		olderShown = on;
+		olderFor = on ? olderSource?.id : undefined;
+	});
+	$effect(() => older.set(Boolean(olderSource?.loadingOlder)));
+	let olderLoading = $derived(olderShown && olderFor !== undefined && olderFor === olderSource?.id);
+	$effect(() => () => older.dispose());
 	/** Nothing held to show while the room's threads are listed: placeholders, so its messages and thread cards appear together. */
 	let paneHeldBack = $derived(awaitingThreads && !activeThread && !session.activeRoomHeld);
 	let messages = $derived(timelineMessages(paneRoom));
@@ -3072,6 +3093,7 @@
 				replyCount={activeThread ? threadReplyCount : undefined}
 				moreReplies={Boolean(activeThread && threadRoom?.olderAvailable)}
 				waiting={Boolean(historyWait)}
+				updating={updatingShown && !checkingShown}
 				canEdit={canEditPane}
 				editDisabled={!paneReady}
 				canLeave={session.canManageRooms && !session.readOnly && Boolean(paneRoom?.joined)}
@@ -3117,8 +3139,10 @@
 				{/key}
 			{/if}
 
+			<!-- Outside the log, so it's announced once as a status rather than as an entry each time older messages load. -->
+			{#if olderLoading}<TimelineLoading top label={activeThread ? 'Loading earlier replies…' : 'Loading earlier messages…'} />{/if}
 			<div class="ap-timeline" bind:this={messageScroll} onscroll={trackScroll} data-testid="message-list" role="log" aria-live="polite" aria-label={`${activeThread ? threadTitle(activeThread) : activeRoom.title} messages`}>
-				<FloatingDayPill label={floatingDay.label} shown={floatingDay.shown} testid="floating-day" />
+				<FloatingDayPill label={floatingDay.label} shown={floatingDay.shown && !olderLoading} testid="floating-day" />
 				{#if snapshot.showReconnectDivider}
 					<TimelineDivider kind="gap" testid="reconnect-divider" />
 				{/if}

@@ -401,15 +401,32 @@ describe('after a reconnect', () => {
 			expect(history()).toEqual(['general', 'eng']);
 		});
 
+		it('catches it up page after page, without the other rooms\u2019 pages in between', async () => {
+			const again = await reconnected();
+			await again.reply('room_list', { joined: [record('general', 10, 19), record('ops', 20, 29), record('quiet', 30, 39), record('eng', 40, 49)], users: [] });
+			// Listed again, it opens again, as the page does.
+			client.selectRoom('eng');
+			// general's resume was out first; then eng's, three pages of what came while away.
+			await again.reply('history', { more: false, latest_log_id: '19', history_log_id: '10' });
+			for (const last of ['42', '44']) {
+				await again.reply('history', { messages: [], first_log_id: last, last_log_id: last, more: true, latest_log_id: '49', history_log_id: '40' });
+				await settle();
+			}
+			expect(history()).toEqual(['general', 'eng', 'eng', 'eng']);
+			await again.reply('history', { more: false, latest_log_id: '49', history_log_id: '40' });
+			await settle();
+			// Then the slot is anyone's.
+			expect(history()).toEqual(['general', 'eng', 'eng', 'eng', 'ops']);
+		});
+
 		it('lets go of it once the listing leaves it out, so the room open instead goes first', async () => {
 			const again = await reconnected();
 			// Removed from eng while away; general, open in its place, has two pages to catch up.
 			await again.reply('room_list', { joined: [record('general', 10, 19), record('ops', 20, 29), record('quiet', 30, 39)], users: [] });
 			expect(snapshot.activeRoom).toBe('general');
 			await again.reply('history', { messages: [], first_log_id: '12', last_log_id: '12', more: true, latest_log_id: '19', history_log_id: '10' });
-			expect(history().at(-1)).toBe('ops');
-			await again.reply('history', { more: false, latest_log_id: '29', history_log_id: '20' });
-			expect(history().at(-1)).toBe('general');
+			await settle();
+			expect(history()).toEqual(['general', 'general']);
 		});
 	});
 
