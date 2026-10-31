@@ -61,6 +61,36 @@ export function countsOf(result, probes) {
 const round = (x) => Math.round(x * 10) / 10;
 
 /**
+ * Every run's counts per probe, with their medians and spread, to diff between machines (`qa budget --out`):
+ * the budget's metrics, plus `calls` and `chunks` (calls by chunk) when they were counted. Timings are left out.
+ */
+export function samplesOf(result, probes) {
+	const label = result.labels[0];
+	const probesOut = {};
+	for (const probe of probes) {
+		const { samples, stats } = result.probes[probe.name][label];
+		const metrics = [...(probe.action ? INTERACTION : LOAD), ...('calls' in samples[0] ? ['calls'] : [])];
+		probesOut[probe.name] = Object.fromEntries(metrics.map((m) => [m, { median: round(stats[m].median), min: round(stats[m].min), max: round(stats[m].max), runs: samples.map((s) => round(s[m])) }]));
+		if (samples[0].chunks) {
+			const names = [...new Set(samples.flatMap((s) => Object.keys(s.chunks)))].sort();
+			probesOut[probe.name].chunks = Object.fromEntries(names.map((n) => [n, samples.map((s) => s.chunks[n] ?? 0)]));
+		}
+	}
+	return probesOut;
+}
+
+/** Per probe and metric, `median [min–max]` over the runs, marking with `*` any metric that varied between them. */
+export function formatSamples(probes) {
+	const metrics = [...new Set(Object.values(probes).flatMap((p) => Object.keys(p).filter((k) => k !== 'chunks')))];
+	const cell = (s) => (s ? `${s.median}${s.min === s.max ? '' : ` [${s.min}–${s.max}]*`}` : '');
+	const body = Object.entries(probes).map(([name, p]) => [name, ...metrics.map((m) => cell(p[m]))]);
+	const head = ['probe', ...metrics];
+	const widths = head.map((_, i) => Math.max(...[head, ...body].map((r) => r[i].length)));
+	const line = (r) => r.map((c, i) => c.padEnd(widths[i])).join('  ').trimEnd();
+	return [line(head), ...body.map(line)].join('\n');
+}
+
+/**
  * Each metric of `counts` against `budget`: `over` past its slack, `under` well below it (worth locking in
  * with `--update`), else `ok`. Metrics missing from the baseline are `new`.
  */

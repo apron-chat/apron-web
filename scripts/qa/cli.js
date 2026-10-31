@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { dirname, join, relative, resolve } from 'node:path';
 import { ab } from './lib/ab.js';
 import { int, list, parseArgs } from './lib/args.js';
-import { compareBudget, countsOf, formatBudget, readBudget, shardOf, writeBudget } from './lib/budget.js';
+import { compareBudget, countsOf, formatBudget, formatSamples, readBudget, samplesOf, shardOf, writeBudget } from './lib/budget.js';
 import { launch } from './lib/browser.js';
 import { compareDirs, diffDirs, formatDiff, summarize } from './lib/images.js';
 import { extractInteropContract, interopDir } from './lib/interop-contract.js';
@@ -38,6 +38,8 @@ const HELP = `npm run qa -- <command> [options]
   budget --build <dir>   Check a preview build's counts (layouts, style recalcs, DOM nodes, requests,
                          bytes) per perf probe against scripts/qa/perf-budget.json; exits 1 when one is
                          over. --update rewrites the baseline. [--runs 3] [--cpu 4] [--only p] [--shard i/n]
+                         [--out file.json]: every run's counts, to diff between machines.
+                         Prototype: --calls also counts JS function calls per probe (V8 precise coverage).
   prof --url A --url B   CPU-profile page load; biggest per-function changes. [--runs 6] [--cpu 4]
   sheet <spec.json>      Render hand-picked before/after panels (title, note, crop box, scale) to a PNG.
                          [--out <spec>.png]
@@ -51,7 +53,7 @@ const HELP = `npm run qa -- <command> [options]
 Filters match any part of a shot id, <scene>--<viewport>--<theme>; commas give several.
 Chromium: QA_CHROMIUM, else playwright-core's build under PLAYWRIGHT_BROWSERS_PATH.`;
 
-const BOOLEAN = ['perf', 'recheck', 'rebuild', 'install', 'keep', 'clean', 'all', 'help', 'check', 'update'];
+const BOOLEAN = ['perf', 'recheck', 'rebuild', 'install', 'keep', 'clean', 'all', 'help', 'check', 'update', 'calls'];
 const MULTI = ['url', 'label', 'build', 'suite', 'filter', 'only'];
 
 async function main() {
@@ -135,7 +137,7 @@ async function main() {
 			const browser = await launch();
 			let result;
 			try {
-				result = await runPerf({ browser, urls, labels, runs: int(o.runs, 5), cpu: int(o.cpu, 4), probes, path: suite.path, builds: o.build ?? [] });
+				result = await runPerf({ browser, urls, labels, runs: int(o.runs, 5), cpu: int(o.cpu, 4), probes, path: suite.path, builds: o.build ?? [], calls: !!o.calls });
 			} finally {
 				await browser.close();
 			}
@@ -162,16 +164,26 @@ async function main() {
 			const server = await serveDir(dir);
 			const browser = await launch();
 			let result;
+			const started = Date.now();
 			try {
 				// Under reduced motion, so an animation's layouts don't count once per frame drawn: a faster runner
 				// draws more frames, and the count would go with it.
-				result = await runPerf({ browser, urls: [server.url], labels: ['now'], runs, cpu, reducedMotion: 'reduce', probes, path: suite.path, builds: index === 1 ? [dir] : [] });
+				result = await runPerf({ browser, urls: [server.url], labels: ['now'], runs, cpu, reducedMotion: 'reduce', probes, path: suite.path, builds: index === 1 ? [dir] : [], chunkBuilds: [dir], calls: !!o.calls });
 			} finally {
 				await browser.close();
 				await server.close();
 			}
 			const path = join(repo, 'scripts/qa/perf-budget.json');
 			const counts = countsOf(result, probes);
+			if (o.calls) console.log(`${formatSamples(samplesOf(result, probes))}\n`);
+			if (o.out) {
+				const out = resolve(o.out);
+				mkdirSync(dirname(out), { recursive: true });
+				const { cpus, loadavg } = await import('node:os');
+				const meta = { calls: !!o.calls, runs, cpu, shard: `${index}/${count}`, seconds: Math.round((Date.now() - started) / 1000), chromium: browser.version(), cpus: cpus().length, cpuModel: cpus()[0]?.model, loadavg: result.loadavg };
+				writeFileSync(out, `${JSON.stringify({ ...meta, probes: samplesOf(result, probes), bundle: counts.bundle }, null, 1)}\n`);
+				console.log(`json: ${relative(process.cwd(), out)}`);
+			}
 			if (o.update) {
 				writeBudget(path, counts, { runs, cpu });
 				console.log(`wrote ${relative(process.cwd(), path)}`);

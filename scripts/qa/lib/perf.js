@@ -15,10 +15,12 @@ const READY = '[data-testid=message-list] .ap-msg';
  * measures the load, as the built-in `load` probe does. `knobs` set the preview's memory server
  * (`PreviewKnobs`), e.g. many rooms or long histories; `budget: false` leaves a probe whose counts follow
  * the machine's speed out of `qa budget`. Suites export theirs as `interactions`;
- * `selectProbes` picks them.
+ * `selectProbes` picks them. `calls` adds each probe's JS function calls (see `measure`), named by chunk from
+ * `chunkBuilds` (the served builds' directories).
  */
-export async function runPerf({ browser, urls, labels = urls, runs = 5, cpu = 4, reducedMotion, probes, path = '/__preview', builds = [], log = console.log }) {
+export async function runPerf({ browser, urls, labels = urls, runs = 5, cpu = 4, reducedMotion, probes, path = '/__preview', builds = [], chunkBuilds = builds, calls = false, log = console.log }) {
 	const all = probes;
+	const chunkNames = urls.map((_, i) => chunkNamesOf(chunkBuilds[i]));
 	const start = loadavg();
 	if (start[0] > cpus().length * 0.75)
 		log(`qa perf: load average ${start[0].toFixed(1)} on ${cpus().length} CPUs; the machine is busy, so read the spread before the medians.`);
@@ -29,13 +31,14 @@ export async function runPerf({ browser, urls, labels = urls, runs = 5, cpu = 4,
 		for (const probe of all) {
 			const order = urls.map((_, i) => (i + unit) % urls.length);
 			unit++;
-			for (const i of order) samples[probe.name][labels[i]].push(await measure(browser, urls[i], probe, { cpu, path, reducedMotion }));
+			for (const i of order) samples[probe.name][labels[i]].push(await measure(browser, urls[i], probe, { cpu, path, reducedMotion, calls, chunkNames: chunkNames[i] }));
 		}
 		log(`perf run ${run + 1}/${runs} done`);
 	}
 	const result = {
 		runs,
 		cpu,
+		calls,
 		labels,
 		urls,
 		loadavg: { start, end: loadavg() },
@@ -59,8 +62,12 @@ export function selectProbes(suite, only = []) {
 	return only.length ? all.filter((p) => only.includes(p.name)) : all;
 }
 
-/** Opens a throttled page on `url` and measures one probe. */
-async function measure(browser, url, probe, { cpu, path, reducedMotion }) {
+/**
+ * Opens a throttled page on `url` and measures one probe. With `calls`, also counts the JS functions the
+ * page's own scripts call in the window (`calls`, and `chunks`: the same by chunk), from V8's precise coverage:
+ * a count that follows only what the code does, not how fast the machine does it.
+ */
+async function measure(browser, url, probe, { cpu, path, reducedMotion, calls, chunkNames }) {
 	const context = await browser.newContext({ viewport: probe.viewport ?? DESKTOP, colorScheme: 'dark', deviceScaleFactor: 1, reducedMotion });
 	try {
 		const page = await context.newPage();
@@ -86,6 +93,13 @@ async function measure(browser, url, probe, { cpu, path, reducedMotion }) {
 			await cdp.send('HeapProfiler.collectGarbage');
 			return (await metrics()).JSHeapUsedSize / 1048576;
 		};
+		// Started before the navigation, it counts from the page's first script: the renderer that loads the page
+		// is the one the blank page had, so the coverage carries over.
+		if (calls) {
+			await cdp.send('Profiler.enable');
+			await cdp.send('Profiler.startPreciseCoverage', { callCount: true, detailed: false });
+		}
+		const origin = new URL(url).origin;
 		const t0 = Date.now();
 		await page.goto(new URL(path, url.endsWith('/') ? url : `${url}/`).href);
 		await page.waitForSelector(READY, { timeout: 30000 });
@@ -93,6 +107,7 @@ async function measure(browser, url, probe, { cpu, path, reducedMotion }) {
 		await page.waitForTimeout(1200);
 		if (!probe.action) {
 			const m = await metrics();
+			const counted = calls ? await callCounts(cdp, origin, chunkNames) : {};
 			const nav = await page.evaluate(() => {
 				const w = /** @type {any} */ (window);
 				const n = /** @type {PerformanceNavigationTiming} */ (performance.getEntriesByType('navigation')[0]);
@@ -118,6 +133,7 @@ async function measure(browser, url, probe, { cpu, path, reducedMotion }) {
 				styleMs: m.RecalcStyleDuration * 1000,
 				layouts: m.LayoutCount,
 				styleRecalcs: m.RecalcStyleCount,
+				...counted,
 				heapMB: await retainedHeapMB()
 			};
 		}
@@ -134,10 +150,13 @@ async function measure(browser, url, probe, { cpu, path, reducedMotion }) {
 			};
 			w.__raf = requestAnimationFrame(tick);
 		});
+		// Taking the coverage resets its counters, so what the next take returns is the action's alone.
+		if (calls) await cdp.send('Profiler.takePreciseCoverage');
 		const before = await metrics();
 		await probe.action(page);
 		await page.waitForTimeout(probe.settle ?? 600);
 		const after = await metrics();
+		const counted = calls ? await callCounts(cdp, origin, chunkNames) : {};
 		const frames = await page.evaluate(() => {
 			const w = /** @type {any} */ (window);
 			cancelAnimationFrame(w.__raf);
@@ -153,12 +172,56 @@ async function measure(browser, url, probe, { cpu, path, reducedMotion }) {
 			layoutMs: (after.LayoutDuration - before.LayoutDuration) * 1000,
 			styleMs: (after.RecalcStyleDuration - before.RecalcStyleDuration) * 1000,
 			layouts: after.LayoutCount - before.LayoutCount,
-			styleRecalcs: after.RecalcStyleCount - before.RecalcStyleCount
+			styleRecalcs: after.RecalcStyleCount - before.RecalcStyleCount,
+			...counted
 		};
 	} finally {
 		await context.close().catch(() => {});
 	}
 }
+
+/**
+ * Function calls since the last take, summed over the scripts the page's origin served (Playwright's own
+ * injected scripts have no URL and don't count), in all and by chunk. A function counts once per call; one
+ * that never ran counts 0.
+ */
+async function callCounts(cdp, origin, chunkNames = new Map()) {
+	const { result } = await cdp.send('Profiler.takePreciseCoverage');
+	/** @type {Record<string, number>} */
+	const chunks = {};
+	let total = 0;
+	for (const script of result) {
+		if (!script.url.startsWith(`${origin}/`)) continue;
+		const file = new URL(script.url).pathname.slice(1);
+		const name = file.endsWith('.js') ? (chunkNames.get(file) ?? file.split('/').pop()) : 'inline';
+		const n = script.functions.reduce((sum, f) => sum + f.ranges[0].count, 0);
+		total += n;
+		chunks[name] = (chunks[name] ?? 0) + n;
+	}
+	if (!total) throw new Error('precise coverage counted no calls in the page: did the navigation move it to another renderer?');
+	return { calls: total, chunks };
+}
+
+/**
+ * Stable names for a build's JS chunks, from the Vite manifest SvelteKit leaves in `.svelte-kit` (`index-client`,
+ * `on-demand`, `nodes/2`…), where file names change with every hash. Used only when the manifest's files are
+ * the ones `buildDir` holds; otherwise chunks go by file name.
+ */
+export function chunkNamesOf(buildDir) {
+	/** @type {Map<string, string>} */
+	const names = new Map();
+	const manifest = join(repoRootOf(buildDir), '.svelte-kit/output/client/.vite/manifest.json');
+	if (!buildDir || !existsSync(manifest)) return names;
+	for (const [key, entry] of Object.entries(JSON.parse(readFileSync(manifest, 'utf8')))) {
+		if (!entry.file?.endsWith('.js') || !existsSync(join(buildDir, entry.file))) continue;
+		const vendor = key.startsWith('node_modules/') ? `${key.split('/')[1].startsWith('@') ? key.split('/').slice(1, 3).join('/') : key.split('/')[1]}:` : '';
+		names.set(entry.file, `${vendor}${entry.name ?? entry.file}`);
+	}
+	return names;
+}
+
+/** The checkout a build directory belongs to: its parent, where `vite build` writes `build/` beside `.svelte-kit/`. */
+const repoRootOf = (buildDir) => join(buildDir ?? '.', '..');
 
 const median = (xs) => {
 	const s = xs.filter((x) => Number.isFinite(x)).sort((a, b) => a - b);
@@ -171,7 +234,7 @@ const median = (xs) => {
 function stats(rows) {
 	if (!rows.length) return {};
 	return Object.fromEntries(
-		Object.keys(rows[0]).map((k) => {
+		Object.keys(rows[0]).filter((k) => typeof rows[0][k] === 'number').map((k) => {
 			const xs = rows.map((r) => r[k]).filter((x) => Number.isFinite(x));
 			return [k, { median: median(xs), min: Math.min(...xs), max: Math.max(...xs), n: xs.length }];
 		})
