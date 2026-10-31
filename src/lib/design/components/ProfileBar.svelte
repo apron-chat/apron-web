@@ -44,7 +44,7 @@
 <div class={['ap-profile', className]}>
 	{@render children?.()}
 	<button type="button" class={['ap-profile-me', open && 'ap-profile-open']} bind:this={button} aria-haspopup="dialog"
-		aria-label="Open preferences.{paused ? ` Notifications paused ${paused}.` : ''} Your profile on {backend || 'this backend'}: {label}{statusWords ? `, ${statusWords}` : ''}"
+		aria-label="{paused ? `Open preferences. Notifications paused ${paused}.` : 'Open preferences.'} Your profile on {backend || 'this backend'}: {label}{statusWords ? `, ${statusWords}` : ''}"
 		title={paused ? `Profile and preferences · notifications paused ${paused}` : 'Profile and preferences'} onclick={onopen}>
 		{#if avatar}{@render avatar()}{:else}<Avatar name={you?.name || uid(you) || '?'} src={you?.avatar} {status} {statusLabel} />{/if}
 		<span class="ap-profile-text">
