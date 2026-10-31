@@ -81,6 +81,18 @@ export interface ArchiveFile {
 	text: string;
 	rooms: number;
 	messages: number;
+	/** The private rooms left out (`privateRooms` false), threads in them not counted. */
+	privateLeftOut: number;
+}
+
+export interface ExportOptions {
+	/** When it was saved: now, unless said. */
+	now?: Date;
+	/**
+	 * Private rooms (§4.2.4) and the threads in them go too. Without, they and their records are left out, and so is
+	 * anyone known only from them.
+	 */
+	privateRooms?: boolean;
 }
 
 /** Why a file couldn't be read as an archive, in words to show. */
@@ -95,9 +107,10 @@ export class ArchiveError extends Error {
  * The archive of what a client stored from `url`: the rooms it shows and the rooms those are threads of, each
  * with where its unbroken stretch of records starts (`syncs`, ARCHIVE.md §3.1), and the records in those
  * stretches. A message outside them goes only when a message in them replies to it. Statuses aren't kept:
- * they are about now.
+ * they are about now. Private rooms go only with `privateRooms`.
  */
-export function exportArchive(url: string, snapshot: ClientSnapshot, stored: StoredRecords, syncs: readonly RoomSync[], now = new Date()): ArchiveFile {
+export function exportArchive(url: string, snapshot: ClientSnapshot, stored: StoredRecords, syncs: readonly RoomSync[], options: ExportOptions = {}): ArchiveFile {
+	const { now = new Date(), privateRooms = true } = options;
 	const records = new Map(stored.rooms.map((record) => [record.room_id, record]));
 	const shown = new Map(snapshot.rooms.map((room) => [room.id, room]));
 	const sync = new Map(syncs.map((room) => [room.id, room]));
@@ -105,6 +118,21 @@ export function exportArchive(url: string, snapshot: ClientSnapshot, stored: Sto
 	const listed = new Set(shown.keys());
 	for (const id of [...listed]) {
 		for (let parent = recordOf(id).parent_room_id; parent !== undefined && !listed.has(parent); parent = recordOf(parent).parent_room_id) listed.add(parent);
+	}
+	// A private room, and a thread in one: a thread is as private as the room it is in.
+	const isPrivate = (id: string): boolean => {
+		for (let at: string | undefined = id, depth = 0; at !== undefined && depth < 64; at = recordOf(at).parent_room_id, depth++) {
+			if (recordOf(at).private === true || shown.get(at)?.private === true) return true;
+		}
+		return false;
+	};
+	let privateLeftOut = 0;
+	if (!privateRooms) {
+		for (const id of [...listed]) {
+			if (!isPrivate(id)) continue;
+			listed.delete(id);
+			if (recordOf(id).parent_room_id === undefined) privateLeftOut++;
+		}
 	}
 	// Without capability `history` there is no lower bound to give: what arrived live is all there is.
 	const paged = snapshot.capabilities.history;
@@ -118,8 +146,17 @@ export function exportArchive(url: string, snapshot: ClientSnapshot, stored: Sto
 	const kept = stored.messages.filter((message) => within(message.room_id, message.log_id));
 	const keptIds = new Set(kept.map((message) => message.message_id));
 	const replied = new Set(kept.flatMap((message) => (message.reply_to ? [message.reply_to.message_id] : [])));
-	const references = stored.messages.filter((message) => !keptIds.has(message.message_id) && replied.has(message.message_id));
+	// A reply's message goes with it, but not out of a room left out.
+	const references = stored.messages.filter((message) => !keptIds.has(message.message_id) && replied.has(message.message_id) && (privateRooms || !isPrivate(message.room_id)));
 	const homes = new Map(kept.map((message) => [message.message_id, message.room_id]));
+	/** Everyone the rooms that go show: you, their members, and who wrote, reacted or came and went in them. */
+	const seen = new Set<string>([
+		...(snapshot.you ? [snapshot.you.user_id] : []),
+		...[...listed].flatMap((id) => shown.get(id)?.members?.map((member) => member.user_id) ?? []),
+		...[...references, ...kept].map((message) => message.from.user_id),
+		...stored.reactions.filter((set) => homes.has(set.message_id) && within(homes.get(set.message_id)!, set.log_id)).map((set) => set.from.user_id),
+		...stored.memberships.filter((entry) => within(entry.room_id, entry.log_id)).map((entry) => entry.user.user_id)
+	]);
 
 	const lines: string[] = [];
 	const origins = [serverOrigin(url), ...serverMedia(snapshot.server).origins].filter((origin): origin is string => origin !== undefined);
@@ -139,7 +176,7 @@ export function exportArchive(url: string, snapshot: ClientSnapshot, stored: Sto
 	lines.push(JSON.stringify({
 		joined: rooms.filter((id) => shown.get(id)?.joined).map(listing),
 		not_joined: rooms.filter((id) => !shown.get(id)?.joined).map(listing),
-		users: Object.values(snapshot.users).map(withoutStatus)
+		users: Object.values(snapshot.users).filter((user) => privateRooms || seen.has(user.user_id)).map(withoutStatus)
 	}));
 
 	// The records, one per line, in `log_id` order.
@@ -166,7 +203,7 @@ export function exportArchive(url: string, snapshot: ClientSnapshot, stored: Sto
 	logged.sort((a, b) => compareLogIds(a.log_id, b.log_id));
 	for (const { line } of logged) lines.push(JSON.stringify(line));
 
-	return { name: archiveFileName(url, now), text: lines.join('\n') + '\n', rooms: listed.size, messages: kept.length };
+	return { name: archiveFileName(url, now), text: lines.join('\n') + '\n', rooms: listed.size, messages: kept.length, privateLeftOut };
 }
 
 /**

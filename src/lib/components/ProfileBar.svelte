@@ -106,12 +106,18 @@
 
 	/**
 	 * Preferences' Export: what the client has stored, saved as a file, unless there is nothing yet. The threads
-	 * listed but never opened load their newest messages first, so none of them is saved empty.
+	 * listed but never opened load their newest messages first, so none of them is saved empty: those in private
+	 * rooms only when private rooms go too.
 	 */
-	async function exportChats(): Promise<{ name: string; rooms: number; messages: number } | undefined> {
-		const unopened = client.snapshot().rooms.filter((room) => room.parentRoomId !== undefined && !room.loaded && !room.resumed);
+	async function exportChats(options: { privateRooms: boolean }): Promise<{ name: string; rooms: number; messages: number; privateLeftOut: number } | undefined> {
+		const rooms = new Map(client.snapshot().rooms.map((room) => [room.id, room]));
+		const inPrivate = (id: string): boolean => {
+			for (let at: string | undefined = id, depth = 0; at !== undefined && depth < 64; at = rooms.get(at)?.parentRoomId, depth++) if (rooms.get(at)?.private === true) return true;
+			return false;
+		};
+		const unopened = [...rooms.values()].filter((room) => room.parentRoomId !== undefined && !room.loaded && !room.resumed && (options.privateRooms || !inPrivate(room.id)));
 		await Promise.allSettled(unopened.map((room) => client.loadRoom(room.id)));
-		const file = exportArchive(client.url, client.snapshot(), client.storedRecords(), client.roomSyncs());
+		const file = exportArchive(client.url, client.snapshot(), client.storedRecords(), client.roomSyncs(), options);
 		if (file.rooms === 0) return undefined;
 		const url = URL.createObjectURL(new Blob([file.text], { type: 'application/jsonl' }));
 		const link = Object.assign(document.createElement('a'), { href: url, download: file.name });

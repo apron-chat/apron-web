@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { flushSync, tick } from 'svelte';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import PreferencesDialog from './PreferencesDialog.svelte';
 import { render, cleanup } from '$lib/test/dom';
 
@@ -61,6 +61,29 @@ describe('PreferencesDialog', () => {
 		expect(pushed).toBe(1);
 	});
 
+
+	it('exports without private rooms unless Include private rooms is checked, and says how many were left out', async () => {
+		const onexport = vi.fn(async ({ privateRooms }: { privateRooms: boolean }) => ({ name: 'apron-chat.example-2026-10-30.jsonl', rooms: 3, messages: 10, privateLeftOut: privateRooms ? 0 : 2 }));
+		render(PreferencesDialog, notificationProps({ section: 'history', onexport }));
+		const box = document.querySelector<HTMLInputElement>('[data-testid="export-private"]')!;
+		expect(box.checked).toBe(false);
+		expect(box.closest('label')?.textContent?.trim()).toBe('Include private rooms');
+		const note = async () => {
+			const calls = onexport.mock.calls.length;
+			document.querySelector<HTMLButtonElement>('[data-testid="export-chats"]')!.click();
+			await vi.waitFor(() => expect(onexport).toHaveBeenCalledTimes(calls + 1));
+			await tick();
+			flushSync();
+			return document.querySelector('.ap-pref-note')?.textContent;
+		};
+		expect(await note()).toBe('Saved apron-chat.example-2026-10-30.jsonl: 10 messages in 3 rooms; 2 private rooms left out.');
+		expect(onexport).toHaveBeenLastCalledWith({ privateRooms: false });
+		box.click();
+		flushSync();
+		expect(await note()).toBe('Saved apron-chat.example-2026-10-30.jsonl: 10 messages in 3 rooms.');
+		expect(onexport).toHaveBeenLastCalledWith({ privateRooms: true });
+		cleanup();
+	});
 
 	it('says the status picker\'s answer in its one live region', async () => {
 		const props = $state({

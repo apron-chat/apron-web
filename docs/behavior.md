@@ -702,8 +702,9 @@ font choice is marked experimental, to be replaced by a choice of themes. All
 of these stay on this device; settings aren't synced.
 
 **History** keeps what a signed-in session has loaded on this device, for
-**30 days** unless changed (a day, a week, a year, everything loaded, or not at
-all), and with it how far each joined room is caught up. The next visit shows it
+**30 days** unless **Retention** says otherwise (a day, a week, a year,
+forever, or not at all; its note says only that signing out deletes
+stored history), and with it how far each joined room is caught up. The next visit shows it
 at once and goes on as a reconnect does: each room asks the server only for what
 came after its checkpoint (§4.3.5), and the joined listing only for rooms that
 changed since (`latest_log_id`, §4.2.1); a thread opened again goes on from
@@ -761,7 +762,12 @@ each message's reactions, and the join and leave records, with who you are and
 the users as they were, without their statuses. A quoted message from before
 that, or from another room, goes along only as the quote. Threads listed but
 never opened load their newest page first; older messages of a room are in the
-export only once scrolled back to (or restored on this device). **Open an export** opens `/archive` in a new tab, where a
+export only once scrolled back to (or restored on this device). Private rooms
+(§4.2.4) and the threads in them go only with **Include private rooms**
+checked, which is off each time Preferences opens: without it they, their
+records and anyone known only from them are left out, the threads in them
+aren't loaded first, and the note under Export says how many private rooms
+were left out. **Open an export** opens `/archive` in a new tab, where a
 chosen or dropped export opens in this same app, read-only, against a server in
 the page that serves only that file: it signs in as the export's `you`, as a
 guest who may only read (`ext:permissions` `write: false`), lists its
@@ -1348,11 +1354,12 @@ first, since the server deletes its content. A message's last embed has no (x)
 when there is no text (delete the message instead), nor does an upload still
 being written.
 
-Media loads from where Preferences, under **Media**, says. **This server and
+Media loads from where Preferences, under **Media**, says. **Server and
 trusted sites**, the default, loads it from the chat server's own origin, the
-origins the server names with `ext:media` (Preferences names them, such as
-`media.apron.chat (trusted by the server)`), and the **Trusted origins** listed
-under it (hosts or URLs, one per line, kept as `https:` origins). **Any site**
+origins the server names with `ext:media` (named above the **Trusted
+origins** field, as "Includes origins trusted by the server: media.apron.chat"),
+and the trusted origins listed in that field (hosts or URLs, one per line, kept
+as `https:` origins). **Any site**
 loads it from anywhere; the trusted origins stay listed for when the default is
 chosen again. Earlier versions' choices carry over: Default, This server only and
 This server and sites I add become the default, their sites kept as trusted

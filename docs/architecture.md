@@ -493,7 +493,9 @@ specifies. `archive.ts` writes and reads it: `exportArchive` takes a
 `ChatClient`'s `storedRecords()` (the `ProtocolStore`'s records, which
 `records()` returns as the store keeps them: one per key, and every membership
 logged), its `roomSyncs()` and its snapshot, and writes a header line, one
-`room_list`-shaped line listing the shown rooms (and their parents) with each
+`room_list`-shaped line listing the shown rooms (and their parents; private
+rooms, the threads in them and anyone known only from them only with
+`privateRooms`) with each
 one's `history_log_id` set to where its unbroken stretch of records starts (the
 oldest page it loaded, `olderBefore`, or its retention floor), then each record
 in a stretch, one per line in `log_id` order, as a `history` result would carry
