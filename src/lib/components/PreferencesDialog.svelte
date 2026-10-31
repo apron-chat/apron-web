@@ -114,18 +114,18 @@
 	 * (push, §4.9), with why not. `action` turns push on here when it could be.
 	 */
 	let notificationsNote = $derived.by((): Note & { action?: string } => {
-		if (notificationPermission === 'denied') return { text: 'Notifications are blocked by your browser. Allow them in this site’s browser settings, then try again.', tone: 'err' };
-		if (!notificationsSupported) return { text: 'Notifications aren’t available here. Use a supported browser over HTTPS or localhost.' };
-		if (!notificationsEnabled) return { text: notificationPermission === 'granted' ? 'Off.' : 'Turning this on will ask your browser for permission.' };
-		const open = 'On · alerts while Apron is open.';
-		if (!webPush) return { text: `${open} This server doesn’t alert when it’s closed.`, tone: 'ok' };
-		if (webPush.signIn) return { text: `${open} Sign in to be alerted when it’s closed, too.`, tone: 'ok' };
+		if (notificationPermission === 'denied') return { text: 'Blocked by your browser. Allow notifications in its site settings.', tone: 'err' };
+		if (!notificationsSupported) return { text: 'Not available here. Use a supported browser over HTTPS.' };
+		if (!notificationsEnabled) return { text: notificationPermission === 'granted' ? 'Off.' : 'Your browser will ask for permission.' };
+		const open = 'On while Apron is open.';
+		if (!webPush) return { text: `${open} This server can’t alert when it’s closed.`, tone: 'ok' };
+		if (webPush.signIn) return { text: `${open} Sign in to be alerted when it’s closed.`, tone: 'ok' };
 		if (webPush.error) return { text: webPush.error, tone: 'err' };
-		if (!webPush.supported) return { text: webPush.homeScreen ? `${open} To be alerted when it’s closed, add Apron to your Home Screen.` : `${open} This browser can’t alert when it’s closed.`, tone: 'ok' };
-		if (webPush.heldBy) return { text: `${open} When it’s closed, this browser alerts for one server at a time: now ${webPush.heldBy}.`, tone: 'ok', action: 'Alert for this server instead' };
-		if (webPush.enabled && pushesNothing) return { text: `${open} This server sends none of your choices below when it’s closed.`, tone: 'ok' };
-		if (webPush.enabled) return { text: 'On · alerts on this device, even when Apron is closed.', tone: 'ok' };
-		return { text: `${open} Not yet when it’s closed.`, tone: 'ok', action: 'Alert when it’s closed, too' };
+		if (!webPush.supported) return { text: webPush.homeScreen ? `${open} Add it to your Home Screen to be alerted when it’s closed.` : `${open} This browser can’t alert when it’s closed.`, tone: 'ok' };
+		if (webPush.heldBy) return { text: `${open} When it’s closed, this browser alerts only for ${webPush.heldBy}.`, tone: 'ok', action: 'Alert for this server instead' };
+		if (webPush.enabled && pushesNothing) return { text: `${open} None of your choices below alert when it’s closed.`, tone: 'ok' };
+		if (webPush.enabled) return { text: 'On, even when Apron is closed.', tone: 'ok' };
+		return { text: open, tone: 'ok', action: 'Alert when it’s closed, too' };
 	});
 	let notificationsLocked = $derived(!notificationsEnabled && (!notificationsSupported || notificationPermission === 'denied'));
 	/** What the test notification did. */
@@ -267,7 +267,7 @@
 			{/if}
 			{@render profile?.()}
 		{:else if preferencesSection === 'notifications'}
-			<SettingRow title="Notifications" hint="Alerts on this device while you’re away from Apron, and when it’s closed where your browser and this server can." class="ap-pref-notifications">
+			<SettingRow title="Notifications" class="ap-pref-notifications">
 				<p class={['ap-pref-note', notificationsNote.tone === 'ok' && 'ap-tone-ok', notificationsNote.tone === 'err' && 'ap-tone-danger']} id="ap-pref-notifications-note">{notificationsNote.text}</p>
 				<p class="ap-pref-test">
 					{#if notificationsNote.action}<Button size="sm" variant="ghost" label={notificationsNote.action} onclick={onwebpush} />{/if}
