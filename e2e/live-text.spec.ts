@@ -143,6 +143,67 @@ test.describe('a terminal embed, expanded', () => {
 	});
 });
 
+test.describe('a terminal embed, expanded, scrolled back', () => {
+	test.use(DEVICES.desktop);
+
+	/** `count` numbered lines, as a long run prints them. */
+	const lines = (count: number, from = 1) => Array.from({ length: count }, (_, i) => `line ${String(from + i).padStart(3, '0')}\r\n`).join('');
+
+	test('keeps what scrolled off the top, to scroll back to with the wheel and the keys, and follows new output only at the foot', async ({ preview, page }) => {
+		await page.setViewportSize({ width: 1280, height: 900 });
+		await preview.open();
+		const id = await preview.startLive('general', 'ada', 'terminal', { title: 'long run' });
+		const terminal = terminalOf(preview);
+		await preview.liveWrite(id, lines(120));
+		// The message: a glance at the last 40 rows, with nothing kept above them, and the wheel scrolls the page.
+		await expect(terminal.locator('.xterm-rows')).toContainText('line 120');
+		await expect(terminal.locator('.xterm-rows')).not.toContainText('line 080');
+		await terminal.getByRole('button', { name: 'Expand terminal' }).click();
+		const viewer = page.getByRole('dialog', { name: 'long run' });
+		const rows = viewer.locator('.ap-termviewer-screen .xterm-rows');
+		const first = async () => (await rows.locator('> div').first().innerText()).trim();
+		// Opened after the run, it shows all of it, at the foot.
+		await expect(rows).toContainText('line 120');
+		expect(await first()).toBe('line 082');
+		await expect(viewer.getByRole('button', { name: 'Close' })).toBeFocused();
+		// The whole 80 by 40 screen still fits: the stage doesn't scroll up and down, only the lines do.
+		const stage = viewer.locator('.ap-termviewer-stage');
+		expect(await stage.evaluate((box) => box.scrollHeight > box.clientHeight)).toBe(false);
+
+		// The wheel, over the screen: back through the lines kept, the page and the stage staying put.
+		const screen = viewer.locator('.ap-termviewer-screen');
+		await screen.hover();
+		await page.mouse.wheel(0, -400);
+		await expect.poll(first).not.toBe('line 082');
+		const back = await first();
+		expect(back < 'line 082').toBe(true);
+		// New output while scrolled back leaves the reader where they are.
+		await preview.liveWrite(id, lines(5, 121));
+		await expect(terminal.locator('.xterm-rows')).toContainText('line 125');
+		await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+		expect(await first()).toBe(back);
+		// The keys, with focus still on Close: Home to the first line, End back to the foot.
+		await page.keyboard.press('Home');
+		await expect.poll(first).toBe('line 001');
+		await expect(viewer).toBeVisible();
+		await page.keyboard.press('PageDown');
+		await expect.poll(first).toBe('line 040');
+		await page.keyboard.press('End');
+		await expect.poll(first).toBe('line 087');
+		// At the foot, it follows.
+		await preview.liveWrite(id, lines(3, 126));
+		await expect.poll(first).toBe('line 090');
+		await expect(rows).toContainText('line 128');
+		// Nothing can be typed into it, and Escape still closes it after a click on the screen.
+		await screen.click();
+		await page.keyboard.type('rm -rf /');
+		await expect(rows).not.toContainText('rm -rf');
+		await page.keyboard.press('Escape');
+		await expect(viewer).toBeHidden();
+		expect(await preview.liveReads(id)).toBe(1);
+	});
+});
+
 test.describe('a terminal embed, expanded on a phone', () => {
 	test.use(DEVICES.phone);
 
@@ -181,6 +242,48 @@ test.describe('a terminal embed, expanded on a phone', () => {
 		expect(inline).toBeLessThan(13);
 		const scrolls = await page.locator('.ap-termviewer-stage').evaluate((box) => box.scrollWidth > box.clientWidth);
 		expect(scrolls).toBe(false);
+	});
+});
+
+test.describe('a terminal embed, expanded on a phone on its side, scrolled back', () => {
+	test.use(DEVICES.phone);
+
+	test('scrolls the lines kept and the screen as one: at the screen’s foot to start, back by a swipe, to the top with Home', async ({ preview, page }) => {
+		await page.setViewportSize({ width: 844, height: 390 });
+		await preview.open();
+		const id = await preview.startLive('general', 'ada', 'terminal', { title: 'long run' });
+		const terminal = terminalOf(preview);
+		await preview.liveWrite(id, Array.from({ length: 120 }, (_, i) => `line ${String(i + 1).padStart(3, '0')}\r\n`).join(''));
+		await expect(terminal.locator('.xterm-rows')).toContainText('line 120');
+		await terminal.getByRole('button', { name: 'Expand terminal' }).tap();
+		const viewer = page.getByRole('dialog', { name: 'long run' });
+		const screen = viewer.locator('.ap-termviewer-screen');
+		const stage = viewer.locator('.ap-termviewer-stage');
+		await expect(screen.locator('.xterm-rows')).toContainText('line 120');
+		await expect(screen).toHaveAttribute('data-font-size', '13');
+		/** How far the stage is from its foot, and the first line xterm shows. */
+		const where = () => stage.evaluate((box) => ({ foot: Math.round(box.scrollHeight - box.clientHeight - box.scrollTop), first: (box.querySelector('.xterm-rows > div') as HTMLElement).innerText.trim() }));
+		// The 40 rows are taller than the stage: it opens at their foot, on the newest line.
+		await expect.poll(where).toEqual({ foot: 0, first: 'line 082' });
+		// A swipe down the screen goes back through the lines kept, the stage staying at the foot.
+		const box = (await screen.boundingBox())!;
+		const cdp = await page.context().newCDPSession(page);
+		const x = box.x + box.width / 2;
+		const at = (y: number) => [{ x, y }];
+		await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: at(120) });
+		for (let y = 140; y <= 300; y += 20) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: at(y) });
+		await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+		await expect.poll(async () => (await where()).first).not.toBe('line 082');
+		const back = await where();
+		expect(back.foot).toBe(0);
+		expect(back.first < 'line 082').toBe(true);
+		// Home: the first line, the stage at its top; End: back to the foot of both.
+		await page.keyboard.press('Home');
+		await expect.poll(where).toEqual({ foot: expect.any(Number), first: 'line 001' });
+		expect(await stage.evaluate((box) => box.scrollTop)).toBe(0);
+		await page.keyboard.press('End');
+		await expect.poll(where).toEqual({ foot: 0, first: 'line 082' });
+		expect(await page.evaluate(() => document.scrollingElement!.scrollWidth - document.scrollingElement!.clientWidth)).toBeLessThanOrEqual(0);
 	});
 });
 
