@@ -30,7 +30,7 @@ describe('messageLog', () => {
 			'',
 			`> **Ben** · ${time(pods)}`,
 			'>',
-			'> _↪ **Ada Lovelace**: Deploy is green, rolling to prod now._',
+			'> > ↪ **Ada Lovelace**: Deploy is green, rolling to prod now.',
 			'>',
 			'> Worker pods are restarting in a loop.',
 			'>',
@@ -42,7 +42,7 @@ describe('messageLog', () => {
 			'',
 			`> **Cy** · ${time(rollback)}`,
 			'>',
-			'> _↪ **Ben**: Worker pods are restarting in a loop._',
+			'> > ↪ **Ben**: Worker pods are restarting in a loop.',
 			'>',
 			'> Rolled back worker to 1.8.3.',
 			'',
@@ -60,11 +60,21 @@ describe('messageLog', () => {
 		const plain = { ...at(3, 'ben', 'run `make` _now_', { body: { text: 'run `make` _now_', format: 'plain' } }), message_id: 'c', log_id: 'c' };
 		const lookup = (id: string) => (id === 'old' ? earlier : undefined);
 		expect(messageLog([answer, orphan, plain, echo], { nameOf, lookup })).toBe([
-			'> **Ben**', '>', '> _↪ **Cy**: Who owns the queue client?_', '>', '> I do.', '',
-			'> **Ada Lovelace**', '>', '> _↪ (an earlier message)_', '>', '> Agreed.', '',
+			'> **Ben**', '>', '> > ↪ **Cy**: Who owns the queue client?', '>', '> I do.', '',
+			'> **Ada Lovelace**', '>', '> > ↪ _(an earlier message)_', '>', '> Agreed.', '',
 			'> **Ben**', '>', '> run `make` _now_', '',
-			'> **Cy**', '>', '> _↪ **Ben**: run \\`make\\` \\_now\\__', '>', '> It’s mine.',
+			'> **Cy**', '>', '> > ↪ **Ben**: run \\`make\\` \\_now\\_', '>', '> It’s mine.',
 		].join('\n'));
+	});
+
+	it('ends a reply’s snippet in … wherever it leaves later lines out, and leaves a mid-line > as written', () => {
+		const plan = { ...at(0, 'ada', 'Two options:\n\n- popup -> passkey\n- copy a code'), message_id: 'p', log_id: 'p' };
+		const pick = { ...at(10, 'ben', 'The first.', { reply_to: { message_id: 'p' } }), message_id: 'q', log_id: 'q' };
+		const arrow = { ...at(11, 'cy', 'popup -> passkey'), message_id: 'r', log_id: 'r' };
+		const agree = { ...at(20, 'ada', 'Yes.', { reply_to: { message_id: 'r' } }), message_id: 's', log_id: 's' };
+		const log = messageLog([plan, pick, arrow, agree], { nameOf });
+		expect(log).toContain('> > ↪ **Ada Lovelace**: Two options:…\n');
+		expect(log).toContain('> > ↪ **Cy**: popup -> passkey\n');
 	});
 
 	it('notes deleted and attachment-only messages, and keeps a name’s Markdown inert', () => {
@@ -150,10 +160,10 @@ describe('messageLog', () => {
 	});
 
 	it('renders as HTML for a rich paste, its images shown', () => {
-		const html = messageLogHtml('> **Cy**\n>\n> _↪ **Ben**: hi_\n>\n> ok\n>\n> ![shot](https://media.example/f/a)');
+		const html = messageLogHtml('> **Cy**\n>\n> > ↪ **Ben**: hi\n>\n> ok\n>\n> ![shot](https://media.example/f/a)');
 		expect(html).toContain('<blockquote>');
 		expect(html).toContain('<strong>Cy</strong>');
-		expect(html).toContain('<em>↪ <strong>Ben</strong>: hi</em>');
+		expect(html).toContain('<blockquote>\n<p>↪ <strong>Ben</strong>: hi</p>\n</blockquote>');
 		expect(html).toContain('<img src="https://media.example/f/a" alt="shot"');
 	});
 
