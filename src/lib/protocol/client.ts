@@ -2250,10 +2250,11 @@ export class ChatClient {
 	/**
 	 * Advances your read cursor in a room (capability `activity`, §4.6) to a
 	 * message, if that is further than the cursor already is. The server
-	 * syncs it to your other connections.
+	 * syncs it to your other connections. Only for an account: a guest's
+	 * would be dropped by the server, so it costs a frame for nothing.
 	 */
 	markRead(roomId: string, messageId: string): void {
-		if (roomId === DEFAULT_ROOM_ID || !this.authenticated || !this.hasCap('activity') || !isLogId(messageId)) return;
+		if (roomId === DEFAULT_ROOM_ID || !this.authenticated || !this.registeredSession || !this.hasCap('activity') || !isLogId(messageId)) return;
 		const current = this.readCursor(roomId);
 		if (current !== undefined && compareLogIds(messageId, current) <= 0) return;
 		this.setReadCursor(roomId, this.you!.user_id, messageId);
