@@ -420,25 +420,28 @@
 	<!-- No status dot: the status is chosen just above it. -->
 	<Avatar name={draft || you?.user_id || '?'} hue={hueOf(you?.user_id)} src={avatar} size="lg" />
 {/snippet}
+{#snippet signinHint()}
+	{#if passkeyError}
+		<span class="ap-form-hint ap-tone-danger" role="alert">{passkeyError}</span>
+	{:else if passkeyNotice}
+		<span class="ap-form-hint ap-tone-ok" role="status">{passkeyNotice}</span>
+	{:else if passkeyUnavailable && canUsePasskey && !canUseEmail && !canUseExternal}
+		<span class="ap-form-hint">{passkeyUnavailable}</span>
+	{:else if wayBack}
+		<span class="ap-form-hint">{session.signedInWith === 'token' ? 'Only this browser’s saved session gets you back into this account.' : 'This server doesn’t sign in the way you joined.'} Add {wayBackWords(wayBack)} to sign in anywhere.</span>
+	{:else if session.passkeySession}
+		<span class="ap-form-hint">{canUseEmail || canUseExternal ? 'You can sign in to this account anywhere.' : 'You sign in to this account with a passkey.'}</span>
+	{:else}
+		<span class="ap-form-hint">You’re a guest here. Sign in to keep your name and rooms.</span>
+	{/if}
+{/snippet}
 {#snippet signin()}
 	{#if snapshot.authBusy && !addEmail?.busy}
 		<span class="ap-form-hint" role="status"><TypingDots /> {snapshot.passkeyBusy ? 'Confirm on your device…' : 'Signing in…'}</span>
 	{:else}
 		<!-- How this session signs in comes first, then what you can do about it. -->
-		{#if passkeyError}
-			<span class="ap-form-hint ap-tone-danger" role="alert">{passkeyError}</span>
-		{:else if passkeyNotice}
-			<span class="ap-form-hint ap-tone-ok" role="status">{passkeyNotice}</span>
-		{:else if passkeyUnavailable && canUsePasskey && !canUseEmail && !canUseExternal}
-			<span class="ap-form-hint">{passkeyUnavailable}</span>
-		{:else if wayBack}
-			<span class="ap-form-hint">{session.signedInWith === 'token' ? 'Only this browser’s saved session gets you back into this account.' : 'This server doesn’t sign in the way you joined.'} Add {wayBackWords(wayBack)} to sign in anywhere.</span>
-		{:else if session.passkeySession}
-			<span class="ap-form-hint">{canUseEmail || canUseExternal ? 'You can sign in to this account anywhere.' : 'You sign in to this account with a passkey.'}</span>
-		{:else}
-			<span class="ap-form-hint">You’re a guest here. Sign in to keep your name and rooms.</span>
-		{/if}
 		{#if session.passkeySession}
+			{@render signinHint()}
 			<!-- A registered account: a passkey registered or an email code presented here adds to it (§4.10, §4.11). -->
 			<span class="ap-profedit-buttons">
 				{#if canUsePasskey && you}
@@ -452,8 +455,9 @@
 				{/if}
 			</span>
 		{:else}
-			<!-- A guest: signing in, as the composer offers it where guests can't post; the connect screen picks the way. -->
-			<span class="ap-profedit-buttons">
+			<!-- A guest: signing in, as the composer offers it where guests can't post, at the row's end; the connect screen picks the way. -->
+			<span class="ap-profedit-inline">
+				{@render signinHint()}
 				<button class="ap-btn ap-btn-primary ap-btn-sm" type="button" disabled={status === 'saving'} onclick={() => signIn()}>Sign in</button>
 			</span>
 		{/if}

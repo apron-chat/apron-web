@@ -977,10 +977,13 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-profedit:not([role='dialog']) .ap-fieldlabel { font-size: var(--text-field); line-height: var(--leading-field); color: var(--ink); }
 .ap-profedit:not([role='dialog']) .ap-profedit-fields { max-width: var(--pref-note-w); }
 .ap-profedit:not([role='dialog']) .ap-profedit-signin > * { max-width: var(--pref-panel-w); }
-/* Signing out: how this session is signed in, the button at the end, in the danger tone. */
-.ap-profedit-signout { flex-direction: row; align-items: center; justify-content: space-between; gap: var(--space-3); }
-.ap-profedit-signout .ap-form-hint { margin: 0; min-width: 0; overflow-wrap: anywhere; }
-.ap-profedit-signout .ap-btn { flex: none; color: var(--danger); }
+/* Signing out, and a guest's Sign in: how this session signs in, the button at the end (Sign out's in the danger tone). */
+.ap-profedit-signout, .ap-profedit-inline { flex-direction: row; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.ap-profedit-inline { display: flex; }
+.ap-profedit:not([role='dialog']) .ap-profedit-signin > .ap-profedit-inline { max-width: none; }
+.ap-profedit-signout .ap-form-hint, .ap-profedit-inline .ap-form-hint { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.ap-profedit-signout .ap-btn, .ap-profedit-inline .ap-btn { flex: none; }
+.ap-profedit-signout .ap-btn { color: var(--danger); }
 
 /* Motion — short and soft; all of it off when the viewer asks */
 .ap-btn, .ap-room, .ap-thread, .ap-msg, .ap-rail-tile, .ap-actions-btn, .ap-profile-me, .ap-jumpbar-btn, .ap-composer, .ap-field { transition: background-color var(--duration-fast) ease, border-color var(--duration-fast) ease, border-radius var(--duration-slow) ease, color var(--duration-fast) ease; }

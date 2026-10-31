@@ -1442,7 +1442,7 @@ and **Revert** and **Save** only while the name or bio differs from what the
 server keeps (Preferences stays open; "Saved." says so a moment); the Sign-in
 row, which says how this session signs in first; and, for an account, "Signed in
 to … as …" with **Sign out** at the end, in the danger tone. A guest's Sign-in
-row is **Sign in** alone, as the composer offers it where guests can't post: the
+row is **Sign in** alone, at the end of its hint's line, as the composer offers it where guests can't post: the
 connect screen, at the way the server signs in first, whatever the server's
 `auth` lists (as the composer's). An account's offers, where the server's `auth` lists them,
 **Add passkey**, **Add email** and **Add external sign-in**, and the row after
