@@ -435,13 +435,20 @@ const SCAN_BATCH = 500;
  * of this device looks through. `stop` ends it early, between batches.
  */
 export async function scanMessages(db: IDBDatabase, visit: (message: MessageRecord) => void, stop: () => boolean = () => false): Promise<void> {
-	let range: IDBKeyRange | undefined;
-	for (;;) {
-		const rows = await done(db.transaction('records').objectStore('records').getAll(range, SCAN_BATCH)) as RecordRow[];
+	const read = (range?: IDBKeyRange) => done(db.transaction('records').objectStore('records').getAll(range, SCAN_BATCH)) as Promise<RecordRow[]>;
+	let reading: Promise<RecordRow[]> | undefined = read();
+	while (reading) {
+		const rows = await reading;
+		// The next batch is read while this one is looked through, rather than after: the scan waits on each read
+		// about as long as it takes to look through one.
+		const last = rows.at(-1);
+		reading = rows.length < SCAN_BATCH || !last ? undefined : read(IDBKeyRange.lowerBound([last.room, last.log, last.kind, last.id], true));
 		for (const row of rows) if (row.kind === 'm') visit(row.value as MessageRecord);
-		if (rows.length < SCAN_BATCH || stop()) return;
-		const last = rows.at(-1)!;
-		range = IDBKeyRange.lowerBound([last.room, last.log, last.kind, last.id], true);
+		if (reading && stop()) {
+			// Ended early: the read under way is of no use, nor is how it ends.
+			reading.catch(() => undefined);
+			return;
+		}
 	}
 }
 
