@@ -57,6 +57,11 @@
 		 * while nothing is loaded. Absent where there is nothing to export from.
 		 */
 		onexport?: (options: { privateRooms: boolean }) => Promise<{ name: string; rooms: number; messages: number; privateLeftOut: number } | undefined>;
+		/**
+		 * Read Receipts on this device, where the server shows a private room's members each other's read cursors
+		 * (`ext.settings.read_receipts`): off, yours aren't sent there and theirs aren't shown.
+		 */
+		readReceipts?: { on: boolean; onchange: (on: boolean) => void };
 		/** The host of the server connected to, which media always loads from. */
 		serverHost?: string;
 		/** The sites this server names for its media (`ext:media`), as hosts: trusted with it. */
@@ -64,7 +69,7 @@
 		onclosed?: () => void;
 	}
 
-	let { open = $bindable(false), section: preferencesSection = $bindable('profile'), profile, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, status, onexport, serverHost, mediaHosts = [], onclosed }: Props = $props();
+	let { open = $bindable(false), section: preferencesSection = $bindable('profile'), profile, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, status, onexport, readReceipts, serverHost, mediaHosts = [], onclosed }: Props = $props();
 
 	const SECTIONS = [
 		// Its tab names it already: no heading over your status, but for screen readers.
@@ -265,6 +270,14 @@
 		{#if preferencesSection === 'profile'}
 			{#if status}
 				<StatusPicker status={status.value} accepted={status.accepted} unsupported={status.unsupported} onchoose={status.onchoose} onunsupported={status.onunsupported} onannounce={(text) => (statusAnswer = text)} disabled={status.disabled} />
+			{/if}
+			{#if readReceipts}
+				{@const receipts = readReceipts}
+				<SettingRow title="Read Receipts" hint="See how far others have read in private rooms, and let them see how far you have. Sent while you’re online, not while invisible." class="ap-pref-receipts">
+					{#snippet control()}
+						<Switch checked={receipts.on} label="Read Receipts" onchange={receipts.onchange} />
+					{/snippet}
+				</SettingRow>
 			{/if}
 			{@render profile?.()}
 		{:else if preferencesSection === 'notifications'}

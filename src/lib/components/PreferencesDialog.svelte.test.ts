@@ -63,6 +63,20 @@ describe('PreferencesDialog', () => {
 	});
 
 
+	it('offers Read Receipts in Profile only where the server shows them, and hands the switch to the caller', () => {
+		render(PreferencesDialog, notificationProps({ section: 'profile' }));
+		expect(document.querySelector('[role="switch"][aria-label="Read Receipts"]')).toBeNull();
+		cleanup();
+		const onchange = vi.fn();
+		render(PreferencesDialog, notificationProps({ section: 'profile', readReceipts: { on: true, onchange } }));
+		const toggle = document.querySelector<HTMLButtonElement>('[role="switch"][aria-label="Read Receipts"]')!;
+		expect(toggle.getAttribute('aria-checked')).toBe('true');
+		expect(toggle.closest('.ap-pref-receipts')?.textContent).toContain('Sent while you’re online, not while invisible.');
+		toggle.click();
+		expect(onchange).toHaveBeenCalledWith(false);
+		cleanup();
+	});
+
 	it('exports without private rooms unless Include private rooms is checked, and says how many were left out', async () => {
 		const onexport = vi.fn(async ({ privateRooms }: { privateRooms: boolean }) => ({ name: 'apron-chat.example-2026-10-30.jsonl', rooms: 3, messages: 10, privateLeftOut: privateRooms ? 0 : 2 }));
 		render(PreferencesDialog, notificationProps({ section: 'history', onexport }));

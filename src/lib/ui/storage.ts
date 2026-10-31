@@ -41,6 +41,8 @@ const KEY = {
 	historyRetention: 'apron.historyRetention',
 	/** Where images and other media load from (`$lib/ui/media-settings`): `{policy, origins}`. */
 	media: 'apron.media',
+	/** Read Receipts (`ext.settings.read_receipts`) turned off on this device: `'off'`, else absent. */
+	readReceipts: 'apron.readReceipts',
 	/** app.html reads this one too, to apply the theme before the app loads. */
 	appearance: 'apron.appearance'
 } as const;
@@ -513,4 +515,15 @@ export function loadMediaSettings(): unknown {
 
 export function saveMediaSettings(value: { policy: string; origins: readonly string[] }): void {
 	write(KEY.media, JSON.stringify(value));
+}
+
+export const READ_RECEIPTS_KEY = KEY.readReceipts;
+
+/** Whether Read Receipts are on on this device: on unless turned off. */
+export function loadReadReceipts(): boolean {
+	return read(KEY.readReceipts) !== 'off';
+}
+
+export function saveReadReceipts(on: boolean): void {
+	write(KEY.readReceipts, on ? 'on' : 'off');
 }

@@ -5,7 +5,8 @@
 	import { pausedUntilLabel } from '$lib/ui/pause';
 	import { isJsonObject } from '$lib/protocol/types';
 	import { shownPerson } from '$lib/protocol/plain-text';
-	import { bioOf, cleanBio, keepsBio, MAX_BIO_CHARS, serverMedia, type ChatClient, type OperationHandle } from '$lib/protocol/client';
+	import { bioOf, cleanBio, keepsBio, MAX_BIO_CHARS, serverMedia, serverSettings, type ChatClient, type OperationHandle } from '$lib/protocol/client';
+	import { receiptSettings } from '$lib/ui/receipt-settings.svelte';
 	import { addError, passkeyMessage, statusLabel, wayBackNudge, wayBackWords } from '$lib/ui/connection';
 	import { returnUrl } from '$lib/ui/sign-in-link';
 	import { directory } from '$lib/ui/directory.svelte';
@@ -563,6 +564,7 @@
 			{onnotifications} {onnotifyscopes} {ontestnotifications} {webPush} {onwebpush} {oninstallapp} {pause} {onpause} {onresume}
 			status={canSetStatus ? { value: you?.status, accepted: session.server?.status ?? [], unsupported, onchoose: chooseStatus, onunsupported: noteUnsupported, disabled: !connected } : undefined}
 			onexport={exportChats}
+			readReceipts={serverSettings(session.server).read_receipts === 'private' && session.passkeySession ? { on: receiptSettings.on, onchange: (on: boolean) => receiptSettings.set(on) } : undefined}
 			mediaHosts={serverMedia(session.server).origins.map((origin) => new URL(origin).host)}
 			serverHost={serverHost}
 			onclosed={() => preferencesTrigger?.focus()}
