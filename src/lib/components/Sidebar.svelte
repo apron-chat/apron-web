@@ -455,8 +455,22 @@
 		saveSidebarFolds([...next]);
 	}
 	const newsIn = (id: string) => (unread[id] ?? 0) > 0 || (mentions[id] ?? 0) > 0;
+	/**
+	 * Each room's threads, in the order of `session.rooms`: grouped once per snapshot, where each row looking
+	 * through every room for its own would take rooms × rooms for the list.
+	 */
+	let threadsOf = $derived.by(() => {
+		const byParent = new Map<string, RoomSnapshot[]>();
+		for (const room of session.rooms) {
+			if (room.parentRoomId === undefined) continue;
+			const list = byParent.get(room.parentRoomId);
+			if (list) list.push(room);
+			else byParent.set(room.parentRoomId, [room]);
+		}
+		return byParent;
+	});
 	/** News in the room, or in a thread of it you've joined (as `threadsWithNews` counts them, without building their entries). */
-	const hasNews = (room: RoomSnapshot) => newsIn(room.id) || session.rooms.some((thread) => thread.parentRoomId === room.id && thread.joined && newsIn(thread.id));
+	const hasNews = (room: RoomSnapshot) => newsIn(room.id) || (threadsOf.get(room.id) ?? []).some((thread) => thread.joined && newsIn(thread.id));
 	const shown = (list: RoomSnapshot[], key: string) => (folds.has(key) ? list.filter((room) => room.id === session.activeRoomId || hasNews(room)) : list);
 	let listError = $state('');
 	let createOpen = $state(false);
@@ -540,7 +554,7 @@
 		<ThreadList roomId={room.id} roomTitle={room.title} {threads} others={otherThreads} {activeThread} {mentions} {unread} muted={session.snapshot.roomMutes} canJoin={!session.readOnly && session.canManageRooms} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
 	{:else}
 		<!-- Under a room that isn't open (or is folded, when its row has a … that unfolds it), only its joined threads with news, so activity there isn't missed; and the one open in it, which stays while you read it. -->
-		{@const news = threadsWithNews(session.rooms, room.id, unread, mentions)}
+		{@const news = threadsWithNews(threadsOf.get(room.id) ?? [], room.id, unread, mentions)}
 		{@const kept = active ? threads.filter((entry) => entry.id === activeThread || news.some((other) => other.id === entry.id)) : news}
 		{#if kept.length > 0}
 			<ThreadList roomId={room.id} roomTitle={room.title} threads={kept} others={[]} activeThread={active ? activeThread : undefined} {mentions} {unread} muted={session.snapshot.roomMutes} canJoin={!session.readOnly && session.canManageRooms} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
