@@ -29,6 +29,22 @@ const SLACK = {
 /** The highest value `metric` may reach against a baseline of `base`. */
 export const limitOf = (metric, base) => base + Math.max(SLACK[metric].abs, base * SLACK[metric].rel);
 
+/**
+ * Shard `index` of `count` (from 1) of the probes, for checking the budget on several machines at once: each
+ * probe on one, the busy ones (`knobs`, a slow load) spread out first. The same split on every machine.
+ */
+export function shardOf(probes, index, count) {
+	const cost = (p) => (p.knobs ? 3 : 1);
+	const load = Array(count).fill(0);
+	const shard = new Map();
+	for (const p of [...probes].sort((a, b) => cost(b) - cost(a))) {
+		const lightest = load.indexOf(Math.min(...load));
+		load[lightest] += cost(p);
+		shard.set(p, lightest + 1);
+	}
+	return probes.filter((p) => shard.get(p) === index);
+}
+
 /** A perf result (one URL) reduced to the budget's shape: each probe's counted metrics (medians), and bundle sizes. */
 export function countsOf(result, probes) {
 	const label = result.labels[0];

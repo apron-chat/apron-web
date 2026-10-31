@@ -66,7 +66,8 @@ Timings swing by tens of percent between runs and machines; counts don't. `qa bu
 and runs every perf probe (3 runs, medians, under reduced motion so animations don't count per frame), then checks the counts against `scripts/qa/perf-budget.json`:
 layouts and style recalcs per probe; requests, startup JS, DOM nodes and heap per load; gzipped bundle sizes.
 Each may go a little over its baseline (a few layouts or style recalcs, 1% of bytes), and no further. CI runs it
-on every pull request (`perf-budget` in `.github/workflows/ci.yml`).
+on every pull request (`perf-budget` in `.github/workflows/ci.yml`), split across three runners with
+`--shard 1/3` to `3/3`: each checks its share of the probes, and the first the bundle's size.
 
 ```sh
 APRON_PREVIEW=1 npm run build && npm run qa -- budget         # check the build in build/
