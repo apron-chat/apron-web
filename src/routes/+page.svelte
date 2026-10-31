@@ -88,6 +88,7 @@
 	import { historySettings } from '$lib/history/settings.svelte';
 	import { mediaAskClick } from '$lib/ui/media-ask';
 	import { mediaSettings } from '$lib/ui/media-settings.svelte';
+	import { receiptSettings } from '$lib/ui/receipt-settings.svelte';
 	import { onlyPreferencesDiffer, preferencesOpener } from '$lib/ui/preferences.svelte';
 	import { buildRoomTimeline, newDividerBefore, steady, threadEntries, threadStartedFrom, threadDescriptionFor, threadTitleFor, type ThreadEntry, type TimelineItem } from '$lib/ui/timeline';
 	import { takeSignInLink } from '$lib/ui/sign-in-link';
@@ -292,6 +293,8 @@
 	const previewMode = untrack(() => webSocketFactory !== undefined);
 
 	let client = $state<ChatClient | undefined>();
+	// Read Receipts on this device: off, your cursor in a private room isn't sent where the server would show it.
+	$effect(() => client?.setReadReceipts(receiptSettings.on));
 	let serverInput = $state('');
 	let displayName = $state('');
 	/** The `user_id`s the composer's chips mention (§3.5), sent as `body.mentions`. */
@@ -559,7 +562,8 @@
 	 * shown that each has read through, by `message_id`. Empty, and the same map, wherever there are none.
 	 */
 	let receipts = $derived.by(() => {
-		const placed = receiptsByMessage(shownTimeline, paneRoom?.private ? paneRoom : undefined, session.you?.user_id);
+		// Read Receipts turned off here: others' aren't shown either.
+		const placed = receiptsByMessage(shownTimeline, paneRoom?.private && receiptSettings.on ? paneRoom : undefined, session.you?.user_id);
 		return placed.size ? new Map([...placed].map(([messageId, people]) => [messageId, people.map((person) => faceOf(person, false))])) : NO_RECEIPTS;
 	});
 	/** The pane is live: its room is listed, and no sign-in is under way. */
@@ -1180,6 +1184,7 @@
 		if (!previewMode) pushSettings.load();
 		// Where images load from holds for an export read here too.
 		mediaSettings.load();
+		receiptSettings.load();
 		webPushAvailable = webPushSupported();
 		runsInstalled = isStandalone();
 		// Push turned on or off, and descriptions put away, in another tab apply here too.
@@ -1189,6 +1194,7 @@
 			// Not keeping history, or keeping less, chosen in another tab: this one stops or prunes too.
 			historySettings.storageChanged(event.key);
 			mediaSettings.storageChanged(event.key);
+			receiptSettings.storageChanged(event.key);
 			if (event.key === NOTIFY_SCOPES_KEY) notifyScopesSaved += 1;
 			// A description put away or brought back in another tab is here too.
 			if (event.key === HIDDEN_DESCRIPTIONS_KEY) hiddenDescriptions = loadHiddenDescriptions();

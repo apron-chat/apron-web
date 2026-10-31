@@ -271,4 +271,21 @@ describe('read receipts', () => {
 		expect(snapshot.rooms.find((entry) => entry.id === 'general')).not.toHaveProperty('readers');
 		started.client.stop();
 	});
+
+	it('sends no cursor in a private room with Read Receipts off, while still keeping it here and syncing public rooms', async () => {
+		await socket.greet(['history', 'rooms', 'activity', 'ext:settings'], { ...account, room: secret, ext: settings('private') });
+		await socket.reply('history', { more: false, latest_log_id: '10', history_log_id: '10' });
+		client.setReadReceipts(false);
+		socket.sent = [];
+		client.markRead('private_1', '31');
+		vi.advanceTimersByTime(20_000);
+		expect(socket.sent.filter((frame) => frame.method === 'activity')).toEqual([]);
+		expect(snapshot.rooms.find((entry) => entry.id === 'private_1')?.readMessageId).toBe('31');
+		client.markRead('general', '40');
+		expect(socket.sent.filter((frame) => frame.method === 'activity')).toEqual([{ method: 'activity', params: { room_id: 'general', read_message_id: '40' } }]);
+		// Back on: the next one goes.
+		client.setReadReceipts(true);
+		client.markRead('private_1', '32');
+		expect(socket.sent.filter((frame) => frame.method === 'activity').at(-1)).toEqual({ method: 'activity', params: { room_id: 'private_1', read_message_id: '32' } });
+	});
 });

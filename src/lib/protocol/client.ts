@@ -224,6 +224,8 @@ export class ChatClient {
 	private greatestLogId?: string;
 	/** Read cursors per room, per user (§4.6). */
 	private readonly reads = new Map<string, Map<string, string>>();
+	/** Read Receipts turned off on this device (`setReadReceipts`): your cursor in a private room stays here. */
+	private receiptsOff = false;
 	private readonly uploads = new Map<string, UploadState>();
 	/** Rooms whose `members` the server truncated (§4.2.1): the total it gave with them. */
 	private readonly memberCounts = new Map<string, number>();
@@ -2261,7 +2263,7 @@ export class ChatClient {
 		this.setReadCursor(roomId, this.you!.user_id, messageId);
 		// The cursor still moves here (the page reads it, with what it keeps itself); a
 		// server that keeps no read cursors (`ext:settings`) would only be charged a frame for it.
-		if (serverSettings(this.server).read_cursors) this.sendReadCursor(roomId, messageId);
+		if (serverSettings(this.server).read_cursors && !this.withholdsRead(roomId)) this.sendReadCursor(roomId, messageId);
 		this.emit();
 	}
 
@@ -2299,8 +2301,21 @@ export class ChatClient {
 			}
 			this.readWaiting.delete(room);
 			this.readSentAt.set(room, this.now());
-			if (serverSettings(this.server).read_cursors) this.sendFrame({ method: 'activity', params: { room_id: room, read_message_id: waiting.messageId } });
+			if (serverSettings(this.server).read_cursors && !this.withholdsRead(room)) this.sendFrame({ method: 'activity', params: { room_id: room, read_message_id: waiting.messageId } });
 		}
+	}
+
+	/**
+	 * Read Receipts on this device: off, your read cursor in a private room is not sent where the server shows it to
+	 * the other members (`ext.settings.read_receipts` `'private'`). It still moves here, and elsewhere still syncs.
+	 */
+	setReadReceipts(on: boolean): void {
+		this.receiptsOff = !on;
+	}
+
+	/** Your cursor in `roomId` stays here: Read Receipts are off, and the server would show it to the room's members. */
+	private withholdsRead(roomId: string): boolean {
+		return this.receiptsOff && this.store.room(roomId)?.private === true && serverSettings(this.server).read_receipts === 'private';
 	}
 
 	/** Forgets the read cursors sent and waiting, as for another account. */
