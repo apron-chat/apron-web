@@ -1,10 +1,12 @@
 /**
- * HTTP side of embeds (PROTOCOL.md §4.8.3, §4.8.5): writing an upload or a
- * stream's content to its `write_url`, reading a live stream, and deciding
- * which embed URLs are safe to load. Media loads only from the chat server's
- * own origin and the origins it names (`ext:media`, EXT.md §6), streams only
- * from its own; links may point anywhere `http(s)`.
+ * HTTP side of embeds (PROTOCOL.md §4.8.3): writing an upload's content to
+ * its `write_url`, and deciding which embed URLs are safe to load. Media
+ * loads only from the chat server's own origin and the origins it names
+ * (`ext:media`, EXT.md §6), live text (`live-text.ts`) only from its own;
+ * links may point anywhere `http(s)`.
  */
+
+import { withoutBidiOverrides } from './plain-text';
 
 /** The HTTP origin of a WebSocket server URL (`wss://chat.example/ws` → `https://chat.example`). */
 export function serverOrigin(webSocketUrl: string): string | undefined {
@@ -31,9 +33,9 @@ export function safeLink(value: unknown): string | undefined {
 const DATA_IMAGE = /^data:image\/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
 
 /**
- * Media (images, video, audio) and streams the client may load: the chat
- * server's origin only (§4.8.1, §4.8.5: clients SHOULD NOT load `og` media or
- * stream URLs from other origins), plus small inline images.
+ * Media (images, video, audio) and live text the client may load: the chat
+ * server's origin only (§4.8.1, §4.8.3: clients SHOULD NOT load `og` media or
+ * live text URLs from other origins), plus small inline images.
  */
 export function sameOriginMedia(value: unknown, origin: string | undefined): string | undefined {
 	if (typeof value !== 'string') return undefined;
@@ -78,7 +80,7 @@ export function embedMedia(value: unknown, origin: string | undefined, trusted: 
 }
 
 /**
- * An avatar to show (§4.8.6): `https:` URLs, small image data URLs, and
+ * An avatar to show (§4.8.7): `https:` URLs, small image data URLs, and
  * files the chat server hosts. Loaded as images only.
  */
 export function safeAvatar(value: unknown, origin: string | undefined): string | undefined {
@@ -143,23 +145,18 @@ function writeError(status: number): string {
 }
 
 /**
- * Reads a live stream (§4.8.5): `GET url` returns the kept text, then more
- * as it arrives, and ends with the stream. `onText` receives the whole text
- * read so far on this connection; a reader that reconnects replaces what it
- * showed. Resolves when the stream ends.
+ * What a message's embeds are, in a word, for a preview of a message with no text (a quote, a thread's last
+ * message, a notification): live text still being appended, a terminal by its title, else an attachment.
+ * Undefined without any.
  */
-export async function readStream(url: string, onText: (text: string) => void, signal?: AbortSignal): Promise<void> {
-	const response = await fetch(url, { cache: 'no-store', credentials: 'omit', ...(signal ? { signal } : {}) });
-	if (!response.ok || !response.body) throw new Error(`The stream is not available (${response.status})`);
-	const reader = response.body.getReader();
-	const decoder = new TextDecoder();
-	let text = '';
-	for (;;) {
-		const { done, value } = await reader.read();
-		if (done) break;
-		text += decoder.decode(value, { stream: true });
-		onText(text);
+export function embedsLabel(embeds: unknown): string | undefined {
+	const entries = (Array.isArray(embeds) ? embeds : []).filter((entry): entry is Record<string, unknown> => entry !== null && typeof entry === 'object' && typeof entry.kind === 'string');
+	if (!entries.length) return undefined;
+	if (entries.some((entry) => entry.kind === 'append')) return 'Live text';
+	const terminal = entries.find((entry) => entry.kind === 'terminal');
+	if (terminal) {
+		const title = typeof terminal.title === 'string' ? withoutBidiOverrides(terminal.title).replace(/\s+/g, ' ').trim() : '';
+		return title ? `Terminal: ${title}` : 'Terminal';
 	}
-	text += decoder.decode();
-	onText(text);
+	return 'Attachment';
 }

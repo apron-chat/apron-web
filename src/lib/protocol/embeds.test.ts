@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ANY_ORIGIN, embedMedia, parseOrigins, safeAvatar, safeLink, sameOriginMedia, serverOrigin } from './embeds';
+import { ANY_ORIGIN, embedMedia, embedsLabel, parseOrigins, safeAvatar, safeLink, sameOriginMedia, serverOrigin } from './embeds';
 
 describe('embed URL policy', () => {
 	it('loads media only from the chat server and links only over http(s)', () => {
@@ -27,7 +27,17 @@ describe('embed URL policy', () => {
 		expect(embedMedia('https://tracker.example/pixel.gif', 'https://server.apron.chat', [ANY_ORIGIN])).toBe('https://tracker.example/pixel.gif');
 		expect(embedMedia('http://tracker.example/pixel.gif', 'https://server.apron.chat', [ANY_ORIGIN])).toBe('http://tracker.example/pixel.gif');
 		expect(embedMedia('ftp://tracker.example/pixel.gif', 'https://server.apron.chat', [ANY_ORIGIN])).toBeUndefined();
-		// Streams stay on the chat server.
+		// Live text stays on the chat server.
 		expect(sameOriginMedia('https://media.apron.chat/f/abc', 'https://server.apron.chat')).toBeUndefined();
+	});
+});
+
+describe('embedsLabel', () => {
+	it('says what a message without text carries: live text, a terminal by its title, else an attachment', () => {
+		expect(embedsLabel([{ kind: 'terminal', url: 'https://chat.example/t/1' }, { kind: 'append' }])).toBe('Live text');
+		expect(embedsLabel([{ kind: 'upload' }, { kind: 'terminal', title: '  make\u202E  test ' }])).toBe('Terminal: make test');
+		expect(embedsLabel([{ kind: 'terminal', output: 'ok' }])).toBe('Terminal');
+		expect(embedsLabel([{ kind: 'upload', title: 'a.png' }])).toBe('Attachment');
+		expect([embedsLabel([]), embedsLabel(undefined), embedsLabel([7, { title: 'no kind' }])]).toEqual([undefined, undefined, undefined]);
 	});
 });

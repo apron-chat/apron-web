@@ -185,7 +185,7 @@ function addressOf(url: string): string {
 }
 
 /**
- * A browser-only Apron protocol v9 session; instantiate one per mounted UI.
+ * A browser-only Apron protocol v10 session; instantiate one per mounted UI.
  *
  * State model: one store of room records, message snapshots, reaction sets,
  * and memberships shared by every room (PROTOCOL.md §2), projected per visible
@@ -1040,7 +1040,7 @@ export class ChatClient {
 			stage = 'begin';
 			begun = await this.passkeyBegin(action, requested);
 			stage = 'browser';
-			credential = await requestPasskey(action, begun.options, controller.signal, requested);
+			credential = await requestPasskey(action, begun.options, controller.signal, this.serverUrl, requested);
 			stage = 'finish';
 			if (controller.signal.aborted || connection !== this.connectionId) throw new Error('Connection changed; try again');
 			return await this.passkeyFinish(action, begun, credential, controller, connection, requested);

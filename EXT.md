@@ -43,7 +43,8 @@ the fallback of that capability:
 
 Some features have no capability:
 
-- apron-web renders `stream` embeds that it receives. It never creates them.
+- apron-web renders `terminal` and `append` embeds (live text) that it receives. It never creates them; a
+  server's `/embed-terminal` and `/embed-append` commands do, for a client that types them.
 - `server.push` enables Web Push, for accounts that are not guests.
 - `server.auth` enables passkeys, and email and external sign-in.
 - `server.title`, `description` and `avatar`
@@ -187,8 +188,8 @@ Defined in [EXTENSIONS.md](https://github.com/shazow/apron/blob/main/EXTENSIONS.
 ### 6.1 apron-web
 
 - apron-web loads `og` media from `origins`, besides the server's own origin.
-  Streams load from the server's own origin only
-  ([§4.8.5](https://github.com/shazow/apron/blob/main/PROTOCOL.md#485-embedstream)).
+  Live text loads from the server's own origin only
+  ([§4.8.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#483-writes)).
 - apron-web re-encodes every photo, which drops its metadata, as WebP, or as
   JPEG where the browser cannot encode WebP. It scales an image to the smaller
   of 2048 pixels and `max_side`, and steps the quality down to fit

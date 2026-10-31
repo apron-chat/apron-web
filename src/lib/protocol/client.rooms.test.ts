@@ -32,7 +32,7 @@ const room = (id: string) => snapshot.rooms.find((candidate) => candidate.id ===
 
 async function authenticate(caps: string[]): Promise<void> {
 	socket.open();
-	socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: caps } });
+	socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: caps } });
 	await socket.reply('auth', { you: { user_id: 'guest_1', name: 'Guest' } });
 }
 
@@ -44,7 +44,7 @@ function reconnect(): void {
 describe('the joined set (cap rooms)', () => {
 	it('lists the joined rooms with their members right behind auth, threads included, then follows room_update', async () => {
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['rooms'] } });
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['rooms'] } });
 		// Auth is a barrier (§3.2): the listing goes out before its result.
 		expect(socket.sent.map((frame) => frame.method)).toEqual(['auth', 'room_list']);
 		expect(socket.request('room_list').params).toEqual({ filter: 'joined', members: true });
@@ -141,7 +141,7 @@ describe('the joined set (cap rooms)', () => {
 
 	it('keeps a failed auth\'s word and shows no rooms, whether the listing behind it is denied or answered', async () => {
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['rooms'] } });
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['rooms'] } });
 		socket.receive({ id: socket.request('auth').id, error: { code: -32001, message: 'Guests are not accepted right now' } });
 		await settle();
 		// Denied, as the requests behind a failed auth are (§3.2): the listing's own error is not reported.
@@ -156,7 +156,7 @@ describe('the joined set (cap rooms)', () => {
 		client.retryNow();
 		socket = FakeSocket.latest();
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['rooms'] } });
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['rooms'] } });
 		socket.receive({ id: socket.request('auth').id, error: { code: -32001, message: 'Guests are not accepted right now' } });
 		await settle();
 		socket.receive({ id: socket.request('room_list').id, result: { joined: [{ room_id: 'general', title: 'General' }] } });
@@ -222,7 +222,7 @@ describe('transient notices', () => {
 	it('shows a welcome sent before auth in the first room, and lets the next connection\'s welcome replace it', async () => {
 		const welcome = (text: string) => ({ method: 'message', params: { from: { user_id: '~private', name: 'Only you' }, body: { text } } });
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['rooms'] } });
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['rooms'] } });
 		// Notifications may come before auth (§3.2); with no room yet, it waits for one (Appendix B).
 		socket.receive(welcome('Guests can read along.'));
 		await socket.reply('auth', { you: { user_id: 'guest_1', name: 'Guest' } });
@@ -235,7 +235,7 @@ describe('transient notices', () => {
 		vi.advanceTimersByTime(5_000);
 		socket = FakeSocket.latest();
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['rooms'] } });
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['rooms'] } });
 		socket.receive(welcome('Guests can read along, again.'));
 		await socket.reply('auth', { you: { user_id: 'guest_1', name: 'Guest' } });
 		await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General' }] });
@@ -528,7 +528,7 @@ describe('room records and membership', () => {
 		// Your own join and leave are unaffected, and a new server frame tries again.
 		quiet(client.leaveRoom('general'));
 		expect(socket.request('room_leave').params).toEqual({ room_id: 'general' });
-		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['rooms'] } });
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['rooms'] } });
 		expect(snapshot.memberChangesUnsupported).toBeUndefined();
 	});
 
@@ -537,7 +537,7 @@ describe('room records and membership', () => {
 		expect(client.message('50')).toBeUndefined();
 		expect(room('general')?.notices.map((notice) => notice.body?.text)).toEqual(['Just you']);
 		// Nor one in a history page.
-		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['rooms', 'history'] } });
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['rooms', 'history'] } });
 		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'ops', log_id: '80', title: 'Ops', latest_log_id: '82', history_log_id: '80' }] } });
 		const request = socket.request('history');
 		socket.receive({ id: request.id, result: { messages: [

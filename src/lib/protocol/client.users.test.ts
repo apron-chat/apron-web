@@ -144,9 +144,9 @@ describe('your own user', () => {
 
 	it('keeps the server frame\'s title, description and avatar as strings (§3.1)', async () => {
 		await socket.greet(['rooms'], { you: { user_id: 'guest_1' } });
-		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: [], title: 'Work', description: 'The **team**', avatar: 'https://chat.example/icon.png' } });
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: [], title: 'Work', description: 'The **team**', avatar: 'https://chat.example/icon.png' } });
 		expect(snapshot.server).toMatchObject({ title: 'Work', description: 'The **team**', avatar: 'https://chat.example/icon.png' });
-		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: [], title: 7 } });
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: [], title: 7 } });
 		expect(snapshot.server).not.toHaveProperty('title');
 		expect(snapshot.server).not.toHaveProperty('avatar');
 	});
@@ -182,7 +182,7 @@ describe('your own user', () => {
 describe('a guest that signs in to an existing account, as others see it', () => {
 	it('shows the guest leaving and the account arriving as two people, without an alias', async () => {
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['rooms', 'status'] } });
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['rooms', 'status'] } });
 		await socket.reply('auth', { you: { user_id: 'bo' } });
 		await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General', latest_log_id: '10', members: [{ user_id: 'bo' }, { user_id: 'guest_7', name: 'Guest 7', status: 'online' }] }] });
 		const members = () => snapshot.rooms.find((room) => room.id === 'general')?.members?.map((member) => member.user_id);

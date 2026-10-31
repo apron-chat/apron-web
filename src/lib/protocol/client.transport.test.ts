@@ -98,7 +98,7 @@ describe('reconnects', () => {
 		vi.advanceTimersByTime(5_000);
 		const next = latest();
 		next.open();
-		next.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: [] } });
+		next.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: [] } });
 		quiet(client.send('general', 'queued'));
 		expect(next.sent.some((frame) => frame.method === 'message')).toBe(false);
 		next.receive({ id: next.request('auth').id, result: { you: { user_id: 'guest_2' } } });
@@ -181,7 +181,7 @@ describe('a guest sign-in refused with retry_after', () => {
 	it('is tried again on a new connection once the wait is over, rather than staying signed in as no one', async () => {
 		const socket = FakeSocket.latest();
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['rooms'] } });
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['rooms'] } });
 		const auth = socket.request('auth');
 		expect(auth.params).toEqual(expect.objectContaining({ scheme: 'guest' }));
 		socket.receive({ id: auth.id, error: { code: -32002, message: 'Authentication attempts limited', data: { retry_after: 5 } } });
@@ -206,7 +206,7 @@ describe('a guest sign-in refused with retry_after', () => {
 	it('leaves any other refusal as it was: no reconnect loop on a server that will not have guests', async () => {
 		const socket = FakeSocket.latest();
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['rooms'] } });
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['rooms'] } });
 		socket.receive({ id: socket.request('auth').id, error: { code: -32001, message: 'Guests are not admitted' } });
 		await settle();
 		expect(socket.readyState).toBe(FakeSocket.OPEN);
@@ -302,7 +302,7 @@ describe('liveness pings', () => {
 		const send = first.send.bind(first);
 		first.send = (data: string) => { raw.push(data); send(data); };
 		first.open();
-		first.receive({ method: 'server', params: { apron: 9, auth: ['token'], capabilities: [], ping: 30 } });
+		first.receive({ method: 'server', params: { apron: 10, auth: ['token'], capabilities: [], ping: 30 } });
 		// No guest scheme and no token: the client never authenticates, and still pings (§1).
 		expect(pings(first)).toBe(0);
 		vi.advanceTimersByTime(30_000);
@@ -324,13 +324,13 @@ describe('liveness pings', () => {
 		const { client } = startClient();
 		const first = latest();
 		first.open();
-		first.receive({ method: 'server', params: { apron: 9, auth: ['token'], capabilities: [], ping: 30 } });
+		first.receive({ method: 'server', params: { apron: 10, auth: ['token'], capabilities: [], ping: 30 } });
 		client.restart();
 		vi.advanceTimersByTime(0);
 		const second = latest();
 		expect(second).not.toBe(first);
 		second.open();
-		second.receive({ method: 'server', params: { apron: 9, auth: ['token'], capabilities: [], ping: 30 } });
+		second.receive({ method: 'server', params: { apron: 10, auth: ['token'], capabilities: [], ping: 30 } });
 		vi.advanceTimersByTime(30_000);
 		expect(pings(second)).toBe(1);
 		expect(pings(first)).toBe(0);
@@ -342,12 +342,12 @@ describe('liveness pings', () => {
 		const first = latest();
 		first.open();
 		// Stuck before signing in (no scheme to use): Try Again replaces it.
-		first.receive({ method: 'server', params: { apron: 9, auth: ['token'], capabilities: [], ping: 30 } });
+		first.receive({ method: 'server', params: { apron: 10, auth: ['token'], capabilities: [], ping: 30 } });
 		client.retryNow();
 		const second = latest();
 		expect(second).not.toBe(first);
 		second.open();
-		second.receive({ method: 'server', params: { apron: 9, auth: ['token'], capabilities: [], ping: 30 } });
+		second.receive({ method: 'server', params: { apron: 10, auth: ['token'], capabilities: [], ping: 30 } });
 		vi.advanceTimersByTime(30_000);
 		expect(pings(second)).toBe(1);
 		expect(pings(first)).toBe(0);
@@ -499,10 +499,10 @@ describe('liveness pings', () => {
 	it('follows a replacing server frame to its new interval, or to none where it does not ask', async () => {
 		const { client } = startClient();
 		await latest().greet([], { ping: 30 });
-		latest().receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['rooms'], ping: 10 } });
+		latest().receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['rooms'], ping: 10 } });
 		vi.advanceTimersByTime(10_000);
 		expect(pings(latest())).toBe(1);
-		latest().receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['rooms'] } });
+		latest().receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['rooms'] } });
 		vi.advanceTimersByTime(300_000);
 		expect(pings(latest())).toBe(1);
 	});
@@ -773,7 +773,7 @@ describe('recovery and reconnect policies', () => {
 describe('capability gating', () => {
 	it('derives feature flags from the latest server frame', () => {
 		// Unknown capabilities are ignored.
-		const server = { apron: 9, auth: ['guest'], capabilities: ['history', 'reactions', 'activity', 'command', 'frobnicate', 'ext:irc'] };
+		const server = { apron: 10, auth: ['guest'], capabilities: ['history', 'reactions', 'activity', 'command', 'frobnicate', 'ext:irc'] };
 		const flags = capabilitiesOf(server);
 		expect(flags).toMatchObject({ history: true, reactions: true, activity: true, command: true, edit: false, rooms: false, ext: false });
 		expect(flags).not.toHaveProperty('frobnicate');

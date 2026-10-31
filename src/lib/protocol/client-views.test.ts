@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { bioOf, cleanBio, keepsBio, MAX_BIO_CHARS, mediaLimit, peopleTitle, serverLook, serverMedia, serverSettings, yourPermissions } from './client-views';
 import type { ServerParams } from './types';
 
-const server = (capabilities: string[], ext?: ServerParams['ext']): ServerParams => ({ apron: 9, capabilities, auth: ['guest'], ...(ext ? { ext } : {}) });
+const server = (capabilities: string[], ext?: ServerParams['ext']): ServerParams => ({ apron: 10, capabilities, auth: ['guest'], ...(ext ? { ext } : {}) });
 
 describe('serverMedia (ext:media)', () => {
 	const media = {
@@ -73,21 +73,21 @@ describe('serverSettings (ext:settings)', () => {
 
 describe('serverLook (§3.1)', () => {
 	it('reads title, description and avatar as strings, the avatar only from where avatars load (§4.8.6)', () => {
-		const frame = { apron: 9, auth: ['guest'], title: '  Work chat ', description: 'Where **we** talk.', avatar: 'https://cdn.example/icon.png' };
+		const frame = { apron: 10, auth: ['guest'], title: '  Work chat ', description: 'Where **we** talk.', avatar: 'https://cdn.example/icon.png' };
 		expect(serverLook(frame, 'wss://chat.example/ws')).toEqual({ title: 'Work chat', description: 'Where **we** talk.', avatar: 'https://cdn.example/icon.png' });
 		expect(serverLook({ ...frame, avatar: '/icon.png' }, 'wss://chat.example/ws').avatar).toBeUndefined();
 		expect(serverLook({ ...frame, avatar: 'https://chat.example/icon.svg' }, 'wss://chat.example/ws').avatar).toBe('https://chat.example/icon.svg');
 		expect(serverLook({ ...frame, avatar: 'http://chat.example/icon.png' }, 'wss://chat.example/ws').avatar).toBeUndefined();
 		expect(serverLook({ ...frame, avatar: 'javascript:alert(1)' }, 'wss://chat.example/ws').avatar).toBeUndefined();
-		expect(serverLook({ apron: 9, auth: [], title: ' ', description: 7 } as never, 'wss://chat.example/')).toEqual({});
+		expect(serverLook({ apron: 10, auth: [], title: ' ', description: 7 } as never, 'wss://chat.example/')).toEqual({});
 		expect(serverLook(undefined, undefined)).toEqual({});
 	});
 
 	it('shows the title and description without bidi embeddings and overrides (§3.5.2), the frame kept as sent', () => {
-		const frame = { apron: 9, auth: ['guest'], title: 'Mock\u202E Chat', description: 'Where\u202A **we** talk.' };
+		const frame = { apron: 10, auth: ['guest'], title: 'Mock\u202E Chat', description: 'Where\u202A **we** talk.' };
 		expect(serverLook(frame, 'wss://chat.example/')).toEqual({ title: 'Mock Chat', description: 'Where **we** talk.' });
 		expect(frame.title).toBe('Mock\u202E Chat');
-		expect(serverLook({ apron: 9, auth: [], title: '\u202E' }, 'wss://chat.example/')).toEqual({});
+		expect(serverLook({ apron: 10, auth: [], title: '\u202E' }, 'wss://chat.example/')).toEqual({});
 	});
 });
 

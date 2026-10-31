@@ -14,13 +14,16 @@ export interface EmbedTile {
 
 /**
  * A message's embed as an editor tile: an upload as its picture, its audio,
- * or a file card under its title; anything else (a link preview, a stream, a
- * frame) as a card named by its title or address. Media load only from where
- * the timeline would load them (`gate`).
+ * or a file card under its title; live text (a terminal's output, or text
+ * appended to the body) as a card saying which, under its title; anything
+ * else (a link preview, a frame) as a card named by its title or address.
+ * Media load only from where the timeline would load them (`gate`).
  */
 export function embedTile(embed: Embed, gate: MediaGate): EmbedTile {
 	const og = embed.og ?? {};
 	const url = safeLink(embed.url);
+	if (embed.kind === 'terminal') return { kind: 'link', name: embed.title || 'Terminal', detail: typeof embed.output === 'string' ? 'Terminal output' : 'Live terminal', renamable: false };
+	if (embed.kind === 'append') return { kind: 'link', name: 'Live text', detail: 'Still arriving', renamable: false };
 	if (embed.kind !== 'upload') {
 		const host = url ? new URL(url).host : undefined;
 		return { kind: 'link', name: og.title || embed.title || host || embed.kind, detail: host ?? kindName(embed.kind), renamable: false };
@@ -45,5 +48,17 @@ function fileKind(name: string): string {
 }
 
 function kindName(kind: string): string {
-	return kind === 'stream' ? 'Live text' : kind === 'iframe' ? 'Embedded page' : kind === 'html' ? 'Embedded content' : 'Link';
+	return kind === 'iframe' ? 'Embedded page' : kind === 'html' ? 'Embedded content' : 'Link';
+}
+
+/**
+ * What to ask before removing one of your embeds, where something goes with it: an upload's file, a terminal's
+ * output (and, while it's live, the program's output stops showing), and live text being appended to the body,
+ * which a save without it ends there (§4.8.3), dropping what had arrived. Nothing for anything else.
+ */
+export function removeEmbedQuestion(embed: Embed): string | undefined {
+	if (embed.kind === 'upload') return 'Remove this attachment? Its file will be deleted.';
+	if (embed.kind === 'terminal') return typeof embed.output === 'string' ? 'Remove this terminal? Its output will be deleted.' : 'Stop this live terminal? Its output so far will be deleted.';
+	if (embed.kind === 'append') return 'Stop this live text? The text that has arrived so far will be dropped.';
+	return undefined;
 }

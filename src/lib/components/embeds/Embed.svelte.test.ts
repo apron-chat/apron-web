@@ -61,3 +61,22 @@ describe('an iframe embed (§4.8)', () => {
 		expect(frame.getAttribute('allow')).toBe('');
 	});
 });
+
+describe('an embed of a kind this client doesn’t know (§3.5.2)', () => {
+	const card = (box: HTMLElement) => ({
+		kind: box.querySelector('.ap-embed-fallback .ap-embed-kind')?.textContent,
+		title: box.querySelector('.ap-embed-fallback .ap-embed-title')?.textContent,
+		link: box.querySelector<HTMLAnchorElement>('.ap-embed-fallback a')?.href,
+		detail: box.querySelector('.ap-embed-fallback .ap-embed-detail')?.textContent
+	});
+
+	it('is a labeled card: its kind, plus its title and a link to its url', () => {
+		expect(card(show({ kind: 'poll', title: 'Lunch?', url: 'https://chat.example/poll/7' }))).toEqual({ kind: 'poll', title: 'Lunch?', link: 'https://chat.example/poll/7', detail: undefined });
+	});
+
+	it('shows what it has of them, and no `text` field, which no embed carries', () => {
+		expect(card(show({ kind: 'calendar', title: 'Standup', text: 'not shown' }))).toEqual({ kind: 'calendar', title: 'Standup', link: undefined, detail: 'This client can’t display this embed.' });
+		expect(card(show({ kind: 'x-widget', url: 'https://chat.example/w/1' }))).toEqual({ kind: 'x-widget', title: undefined, link: 'https://chat.example/w/1', detail: undefined });
+		expect(card(show({ kind: 'stream', text: 'not shown either' }))).toEqual({ kind: 'stream', title: undefined, link: undefined, detail: 'This client can’t display this embed.' });
+	});
+});

@@ -57,10 +57,10 @@ export default defineConfig(({ command }) => {
 					target: 'ws://127.0.0.1:8080',
 					ws: true
 				},
-				// Upload, file, and stream URLs the Go server mints from this host.
+				// Upload, file, and live text URLs the Go server mints from this host.
 				'/write/': 'http://127.0.0.1:8080',
 				'/files/': 'http://127.0.0.1:8080',
-				'/streams/': 'http://127.0.0.1:8080'
+				'/live/': 'http://127.0.0.1:8080'
 			}
 		}
 	};

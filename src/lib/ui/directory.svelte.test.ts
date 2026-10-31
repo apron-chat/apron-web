@@ -194,7 +194,7 @@ describe('directory', () => {
 		const home: Identity = { user_id: 'di', name: 'Di', avatar: 'https://example.com/di.png' };
 		const image = () => directory.mediaGate.src('https://gravatar.example/x.png');
 		const plain: Identity = { user_id: 'ed', name: 'Ed', avatar: 'http://gravatar.example/ed.png' };
-		directory.apply(snapshot([ada, away, home, plain], { server: { apron: 9, auth: ['guest'], capabilities: ['ext:media'], ext: { media: { origins: ['https://media.example'] } } } }), 'https://example.com');
+		directory.apply(snapshot([ada, away, home, plain], { server: { apron: 10, auth: ['guest'], capabilities: ['ext:media'], ext: { media: { origins: ['https://media.example'] } } } }), 'https://example.com');
 		try {
 			// Server and trusted sites: the server's own and those it names; anything else in the timeline asks.
 			mediaSettings.update('trusted', []);

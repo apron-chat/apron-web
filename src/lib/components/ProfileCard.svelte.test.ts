@@ -29,7 +29,7 @@ function render(userId: string, users: Identity[], you: Identity = ada, room?: R
 		recordedUsers: Object.fromEntries(recorded.map((user) => [user.user_id, user])), userAliases: {}, ...fields
 	};
 	directory.apply(snapshot, undefined);
-	const session = { snapshot, canManageRooms: false, server: { apron: 9, auth: ['guest'], capabilities } } as unknown as SessionView;
+	const session = { snapshot, canManageRooms: false, server: { apron: 10, auth: ['guest'], capabilities } } as unknown as SessionView;
 	dom.render(ProfileCard, { client: undefined, session, room, canChange: false, canMention: false, onmention: () => undefined });
 	const anchor = document.createElement('button');
 	document.body.appendChild(anchor);
@@ -153,7 +153,7 @@ describe('ProfileCard Message', () => {
 		const rooms = options.rooms ?? [];
 		const snapshot: ClientSnapshot = { ...blankSnapshot(), authenticated: true, you, rooms, users: { ada, bob, [you.user_id]: you } };
 		directory.apply(snapshot, undefined);
-		const session = { snapshot, rooms, you, canManageRooms: true, server: { apron: 9, auth: ['guest'], capabilities: ['rooms'] } } as unknown as SessionView;
+		const session = { snapshot, rooms, you, canManageRooms: true, server: { apron: 10, auth: ['guest'], capabilities: ['rooms'] } } as unknown as SessionView;
 		const created = { room_id: 'p2' };
 		const client = {
 			createRoom: vi.fn(() => ({ id: 'c1', promise: Promise.resolve(created) })),

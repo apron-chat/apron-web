@@ -127,6 +127,7 @@
 	--sidebar-w: 248px;
 	--timeline-max-w: 760px;
 	--embed-max-w: 480px;
+	--embed-terminal-w: 652px; /* a terminal embed: 80 columns at its largest font (13px), and its margins */
 	--embed-max-h: 360px;
 	--iframe-max-h: 480px;
 	--rail-tile: 40px;  /* a backend's tile; the rail's own width, --rail-w, is in rail.css, the design bundle's alone */
