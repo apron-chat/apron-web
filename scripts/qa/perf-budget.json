@@ -5,31 +5,35 @@
 	"probes": {
 		"load": {
 			"requests": 22,
-			"startupJsKB": 995.9,
+			"startupJsKB": 996.1,
 			"domNodes": 540,
-			"layouts": 15,
-			"styleRecalcs": 37,
-			"heapMB": 9.6
+			"layouts": 13,
+			"styleRecalcs": 21,
+			"heapMB": 9.5
 		},
 		"load-busy": {
 			"requests": 20,
-			"startupJsKB": 968.5,
+			"startupJsKB": 968.8,
 			"domNodes": 1196,
-			"layouts": 54,
-			"styleRecalcs": 198,
-			"heapMB": 10.8
+			"layouts": 53,
+			"styleRecalcs": 62,
+			"heapMB": 10.6
 		},
 		"switch-room-busy": {
-			"layouts": 6,
-			"styleRecalcs": 20
+			"layouts": 5,
+			"styleRecalcs": 15
 		},
 		"send-message-busy": {
 			"layouts": 39,
-			"styleRecalcs": 24
+			"styleRecalcs": 15
 		},
 		"sidebar-collapse": {
 			"layouts": 4,
-			"styleRecalcs": 21
+			"styleRecalcs": 5
+		},
+		"member-list-hide": {
+			"layouts": 1,
+			"styleRecalcs": 5
 		},
 		"member-list-overlay-open": {
 			"layouts": 1,
@@ -37,19 +41,19 @@
 		},
 		"open-thread": {
 			"layouts": 5,
-			"styleRecalcs": 19
+			"styleRecalcs": 15
 		},
 		"open-preferences": {
 			"layouts": 1,
 			"styleRecalcs": 7
 		},
 		"scroll-timeline": {
-			"layouts": 9,
-			"styleRecalcs": 9
+			"layouts": 8,
+			"styleRecalcs": 8
 		},
 		"type-composer": {
-			"layouts": 36,
-			"styleRecalcs": 8
+			"layouts": 37,
+			"styleRecalcs": 7
 		},
 		"hover-messages": {
 			"layouts": 7,
@@ -57,7 +61,7 @@
 		}
 	},
 	"bundle": {
-		"jsGzipKB": 503.5,
-		"cssGzipKB": 21.6
+		"jsGzipKB": 503.6,
+		"cssGzipKB": 21.7
 	}
 }
