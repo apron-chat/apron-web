@@ -132,6 +132,13 @@ export interface RoomSnapshot {
 	/** Your read cursor in this room (§4.6), as the server last reported or you advanced it. */
 	readMessageId?: string;
 	/**
+	 * The other members' read cursors in a private room, where the server
+	 * shows read receipts (`ext.settings.read_receipts` `'private'`): each
+	 * reader's `user_id` and the message they read through, by `user_id`.
+	 * Absent elsewhere, and while nobody else's is known.
+	 */
+	readers?: ReadonlyArray<{ user_id: string; message_id: string }>;
+	/**
 	 * The room's members (§4.2.2): started from a complete `members` listing
 	 * (`room_list` with `members`, or `room_update` `joined`) and kept current by
 	 * the memberships received live and in history. Each is the listed or

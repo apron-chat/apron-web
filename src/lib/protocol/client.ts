@@ -811,6 +811,7 @@ export class ChatClient {
 					...(this.hasOlderRecords(room) ? { olderAvailable: true } : {}),
 					...(room.loadingOlder ? { loadingOlder: true } : {}),
 					...(this.readCursor(room.id) !== undefined ? { readMessageId: this.readCursor(room.id) } : {}),
+					...(record?.private === true ? this.readersOf(room.id) : {}),
 					...(members ? { members } : {}),
 					...(this.memberCounts.has(room.id) ? { memberCount: this.memberCounts.get(room.id) } : {}),
 					notices: this.notices.get(room.id) ?? NO_NOTICES
@@ -2250,10 +2251,11 @@ export class ChatClient {
 	/**
 	 * Advances your read cursor in a room (capability `activity`, §4.6) to a
 	 * message, if that is further than the cursor already is. The server
-	 * syncs it to your other connections.
+	 * syncs it to your other connections. Only for an account: a guest's
+	 * would be dropped by the server, so it costs a frame for nothing.
 	 */
 	markRead(roomId: string, messageId: string): void {
-		if (roomId === DEFAULT_ROOM_ID || !this.authenticated || !this.hasCap('activity') || !isLogId(messageId)) return;
+		if (roomId === DEFAULT_ROOM_ID || !this.authenticated || !this.registeredSession || !this.hasCap('activity') || !isLogId(messageId)) return;
 		const current = this.readCursor(roomId);
 		if (current !== undefined && compareLogIds(messageId, current) <= 0) return;
 		this.setReadCursor(roomId, this.you!.user_id, messageId);
@@ -3609,6 +3611,20 @@ export class ChatClient {
 	/** Remembers the greatest `log_id` received: where a notice sits in its room's timeline. */
 	private observeLogId(logId: unknown): void {
 		if (isLogId(logId) && (this.greatestLogId === undefined || compareLogIds(logId, this.greatestLogId) > 0)) this.greatestLogId = logId;
+	}
+
+	/**
+	 * Read receipts (`ext.settings.read_receipts` `'private'`): the others'
+	 * read cursors in a private room, by `user_id`, for the room snapshot.
+	 */
+	private readersOf(roomId: string): { readers?: Array<{ user_id: string; message_id: string }> } {
+		if (serverSettings(this.server).read_receipts !== 'private') return {};
+		const you = this.you?.user_id;
+		const readers = [...(this.reads.get(roomId) ?? [])]
+			.filter(([userId]) => userId !== you)
+			.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+			.map(([user_id, message_id]) => ({ user_id, message_id }));
+		return readers.length ? { readers } : {};
 	}
 
 	private readCursor(roomId: string): string | undefined {
