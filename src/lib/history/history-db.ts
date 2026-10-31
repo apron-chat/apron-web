@@ -371,8 +371,12 @@ export async function writeHistory(db: IDBDatabase, write: HistoryWrite, kept: R
 			for (const set of room.reactions) records.put(reactionRow(set, room.room));
 		} else {
 			// Over what is kept below `from`: an earlier snapshot of a message or set there is replaced, not kept beside.
+			// A creation is its message's only snapshot, as with a change: there is none to look up, one request each.
 			records.delete(IDBKeyRange.bound([room.room, room.from], [room.room, []]));
-			for (const message of room.messages) await replace(messageRow(message), true);
+			for (const message of room.messages) {
+				if (message.log_id === message.message_id) records.put(messageRow(message));
+				else await replace(messageRow(message), true);
+			}
 			for (const set of room.reactions) await replace(reactionRow(set, room.room), true);
 		}
 		for (const entry of room.memberships) records.put(membershipRow(entry));
