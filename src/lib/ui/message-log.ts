@@ -1,10 +1,11 @@
 import { ANY_ORIGIN, safeLink } from '$lib/protocol/embeds';
 import { renderMarkdown } from '$lib/protocol/markdown';
+import { cleanPlainText } from '$lib/protocol/plain-text';
 import { compareLogIds, type ReactionSummary } from '$lib/protocol/reducer';
 import type { Embed, Identity, MessageRecord } from '$lib/protocol/types';
 import { directory } from './directory.svelte';
 import { mediaGate, type MediaGate } from './media-gate';
-import { embedsOf, messageSnippet, senderName, textOf } from './messages';
+import { embedsOf, messageSnippet, plainTextOf, senderName, textOf } from './messages';
 import { dayKeyOf, idMillis, idTime, isGrouped } from './time';
 
 export interface MessageLogOptions {
@@ -26,7 +27,7 @@ const dayFormat = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: '
 const dayYearFormat = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' });
 
 /** Characters that would turn a name or a quoted snippet into Markdown syntax. */
-const INLINE_SYNTAX = /[\\`*_[\]<>~]/g;
+const INLINE_SYNTAX = /[\\`*_[\]<~]/g;
 
 const inline = (text: string) => text.replace(INLINE_SYNTAX, '\\$&');
 
@@ -36,8 +37,9 @@ const inline = (text: string) => text.replace(INLINE_SYNTAX, '\\$&');
  * as a paragraph of its own: the first with the full date (`Thursday, Oct 29,
  * 2026 at 6:51 PM`) as an anchor, and the day again wherever it changes.
  * Consecutive messages from one sender a few minutes apart share a quote, as
- * the timeline groups them. A reply opens with one italic line naming what it
- * answers (`↪ Ada: Deploy is green…`). A message with reactions opens a
+ * the timeline groups them. A reply opens with a one-line quote of what it
+ * answers (`> ↪ **Ada**: Deploy is green…`), its `…` saying the snippet
+ * leaves some out. A message with reactions opens a
  * quote of its own, its header listing them (`(👍 from Bob, Andy; 👎 from
  * Alice)`), so they can't be taken for another message's. Where the log
  * skips messages of `order`, a line between the quotes says how many
@@ -147,10 +149,17 @@ function imageOf(embed: Embed): string | undefined {
 	return `![${alt}](${url.replace(/[()]/g, (paren) => (paren === '(' ? '%28' : '%29'))})`;
 }
 
-/** A reply's line: who it answers and the first line of what they wrote, or a note when that message isn't here. */
+/** A reply's line, quoted: who it answers and the first line of what they wrote, or a note when that message isn't here. */
 function replyLine(id: string, byId: Map<string, MessageRecord>, lookup: MessageLogOptions['lookup'], nameOf: (event: MessageRecord) => string): string {
 	const target = byId.get(id) ?? lookup?.(id);
-	if (!target) return '_↪ (an earlier message)_';
-	if (target.deleted) return '_↪ (a deleted message)_';
-	return `_↪ **${inline(nameOf(target))}**: ${inline(messageSnippet(target))}_`;
+	if (!target) return '> ↪ _(an earlier message)_';
+	if (target.deleted) return '> ↪ _(a deleted message)_';
+	return `> ↪ **${inline(nameOf(target))}**: ${inline(replySnippet(target))}`;
+}
+
+/** The first line of a reply's target, as `messageSnippet` cuts it, ending in `…` wherever it leaves later lines out too. */
+function replySnippet(target: MessageRecord): string {
+	const snippet = messageSnippet(target);
+	const lines = cleanPlainText(plainTextOf(target)).split('\n').filter((line) => line.trim()).length;
+	return lines > 1 && !snippet.endsWith('…') ? `${snippet}…` : snippet;
 }
