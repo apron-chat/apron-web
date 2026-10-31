@@ -1,0 +1,18 @@
+<!-- @dsCard group="Embeds" height=260 subtitle="Media from a site not trusted, waiting for a click: Load it this once, or Always load from its site" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>MediaAsk</title></head>
+<body>
+<div id="root" class="ap-stack"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(C, props) { return A.render(C, root, props || {}); }
+  function noop() {}
+  // In a message, where an image would be; plain http can't be trusted, so it offers Load alone.
+  add(A.MediaAsk, { what: 'Build chart', host: 'cdn.example.com', onload: noop, ontrust: noop });
+  add(A.MediaAsk, { what: 'Image', host: 'plain.example', onload: noop });
+  // A link preview whose picture waits.
+  add(A.EmbedCard, { kind: 'link', url: 'https://news.example/story', og: { site_name: 'News', title: 'A story worth a picture', description: 'Its picture is on a site this viewer doesn\'t trust yet.', image: { alt: 'Photo', ask: { host: 'images.news.example', onload: noop, ontrust: noop } } } });
+</script>
+</body>
+</html>

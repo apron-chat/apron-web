@@ -1,8 +1,10 @@
 <script lang="ts">
 	/* upload (§4.8.4, writes §4.8.3): pending while url is absent; og.video / og.audio / og.image preview; else a file card.
-	   Its `class` and `testid` go on whichever of those shows. */
+	   A preview that waits for a click (its `ask`) shows under the file card as a MediaAsk. Its `class` and `testid` go on
+	   whichever of those shows, or on what holds the file card and the ask. */
 	import FileIcon from '@lucide/svelte/icons/file';
 	import FileX from '@lucide/svelte/icons/file-x';
+	import MediaAsk from './MediaAsk.svelte';
 	import type { EmbedComponentProps } from './types';
 	import { ogRatio, plainClick, safeHttp } from './util';
 
@@ -13,6 +15,8 @@
 	const video = $derived(og.video && safeHttp(og.video.url));
 	const audio = $derived(og.audio && safeHttp(og.audio.url));
 	const image = $derived(og.image && safeHttp(og.image.url));
+	/** The preview that waits for a click, the one that would show first: none while one may load. */
+	const ask = $derived(video || audio || image ? undefined : og.video?.ask ? { ...og.video.ask, what: 'Video' } : og.audio?.ask ? { ...og.audio.ask, what: 'Audio' } : og.image?.ask ? { ...og.image.ask, what: og.image.alt || 'Image' } : undefined);
 	const pending = $derived(failed ? (typeof failed === 'string' ? `Upload failed · ${failed}` : 'Upload failed') : `${detail ? `${detail} · ` : ''}${pct != null ? `Uploading · ${pct}%` : 'Uploading…'}`);
 </script>
 
@@ -45,12 +49,22 @@
 			onclick={(event) => { if (onview && plainClick(event)) { event.preventDefault(); onview(event); } }}><img class="ap-embed-media" src={image} alt={og.image?.alt || ''} loading="lazy" style={ogRatio(og.image)} /></a>
 		<figcaption class="ap-embed-caption">{title}</figcaption>
 	</figure>
+{:else if ask}
+	<div data-testid={testid} class={['ap-embed-held', className]}>
+		{@render file(undefined, undefined)}
+		<!-- spread: what Load and Always load do, and what waits: MediaAsk's own props -->
+		<MediaAsk {...ask} />
+	</div>
 {:else}
-	<a href={url} download={title} target="_blank" rel="noreferrer noopener" data-testid={testid} class={['ap-embed', 'ap-embed-card', 'ap-embed-file', className]}>
+	{@render file(className, testid)}
+{/if}
+
+{#snippet file(fileClass: EmbedComponentProps['class'], fileTestid: string | undefined)}
+	<a href={url} download={title} target="_blank" rel="noreferrer noopener" data-testid={fileTestid} class={['ap-embed', 'ap-embed-card', 'ap-embed-file', fileClass]}>
 		{@render glyph()}
 		<span class="ap-embed-cardtext">
 			<span class="ap-embed-title">{title}</span>
 			{#if og.description || detail}<span class="ap-embed-detail">{og.description || detail}</span>{/if}
 		</span>
 	</a>
-{/if}
+{/snippet}

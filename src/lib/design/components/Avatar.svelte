@@ -1,6 +1,6 @@
 <script lang="ts">
 	import StatusDot from './StatusDot.svelte';
-	import type { Presence } from './types';
+	import type { Presence, MediaSrc } from './types';
 	import { initials, presence } from './util';
 
 	/**
@@ -13,7 +13,7 @@
 	interface Props {
 		name?: string;
 		user_id?: string;
-		src?: string;
+		src?: MediaSrc;
 		size?: 'lg' | 'md' | 'sm' | 'xs';
 		/** The initials' tint, 0–360. */
 		hue?: number;

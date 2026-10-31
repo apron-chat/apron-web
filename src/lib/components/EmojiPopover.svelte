@@ -4,6 +4,7 @@
 	import { currentTheme, pickerColors, placePicker } from '$lib/ui/emoji';
 	import { emojiPicker, loadEmojiMart } from '$lib/ui/emoji-picker.svelte';
 	import { customEmoji } from '$lib/ui/custom-emoji.svelte';
+	import { directory } from '$lib/ui/directory.svelte';
 	import { pickerCategories } from '$lib/ui/emoji';
 	import EmojiPopover from '$lib/design/components/EmojiPopover.svelte';
 
@@ -49,7 +50,7 @@
 	});
 
 	/** The custom emoji the picker offers (none `hidden`), in emoji-mart's categories, and the key each of its IDs picks. */
-	let custom = $derived(pickerCategories(customEmoji.catalog, (emoji) => customEmoji.image(emoji).src));
+	let custom = $derived(pickerCategories(customEmoji.catalog, (emoji) => directory.mediaGate.src(customEmoji.image(emoji).src)));
 
 	// Builds the picker for each request, once emoji-mart has loaded, and again when the custom emoji arrive.
 	$effect(() => {

@@ -30,7 +30,7 @@ describe('messageLog', () => {
 			'',
 			`> **Ben** · ${time(pods)}`,
 			'>',
-			'> _↪ **Ada Lovelace**: Deploy is green, rolling to prod now._',
+			'> > ↪ **Ada Lovelace**: Deploy is green, rolling to prod now.',
 			'>',
 			'> Worker pods are restarting in a loop.',
 			'>',
@@ -42,7 +42,7 @@ describe('messageLog', () => {
 			'',
 			`> **Cy** · ${time(rollback)}`,
 			'>',
-			'> _↪ **Ben**: Worker pods are restarting in a loop._',
+			'> > ↪ **Ben**: Worker pods are restarting in a loop.',
 			'>',
 			'> Rolled back worker to 1.8.3.',
 			'',
@@ -60,11 +60,21 @@ describe('messageLog', () => {
 		const plain = { ...at(3, 'ben', 'run `make` _now_', { body: { text: 'run `make` _now_', format: 'plain' } }), message_id: 'c', log_id: 'c' };
 		const lookup = (id: string) => (id === 'old' ? earlier : undefined);
 		expect(messageLog([answer, orphan, plain, echo], { nameOf, lookup })).toBe([
-			'> **Ben**', '>', '> _↪ **Cy**: Who owns the queue client?_', '>', '> I do.', '',
-			'> **Ada Lovelace**', '>', '> _↪ (an earlier message)_', '>', '> Agreed.', '',
+			'> **Ben**', '>', '> > ↪ **Cy**: Who owns the queue client?', '>', '> I do.', '',
+			'> **Ada Lovelace**', '>', '> > ↪ _(an earlier message)_', '>', '> Agreed.', '',
 			'> **Ben**', '>', '> run `make` _now_', '',
-			'> **Cy**', '>', '> _↪ **Ben**: run \\`make\\` \\_now\\__', '>', '> It’s mine.',
+			'> **Cy**', '>', '> > ↪ **Ben**: run \\`make\\` \\_now\\_', '>', '> It’s mine.',
 		].join('\n'));
+	});
+
+	it('ends a reply’s snippet in … wherever it leaves later lines out, and leaves a mid-line > as written', () => {
+		const plan = { ...at(0, 'ada', 'Two options:\n\n- popup -> passkey\n- copy a code'), message_id: 'p', log_id: 'p' };
+		const pick = { ...at(10, 'ben', 'The first.', { reply_to: { message_id: 'p' } }), message_id: 'q', log_id: 'q' };
+		const arrow = { ...at(11, 'cy', 'popup -> passkey'), message_id: 'r', log_id: 'r' };
+		const agree = { ...at(20, 'ada', 'Yes.', { reply_to: { message_id: 'r' } }), message_id: 's', log_id: 's' };
+		const log = messageLog([plan, pick, arrow, agree], { nameOf });
+		expect(log).toContain('> > ↪ **Ada Lovelace**: Two options:…\n');
+		expect(log).toContain('> > ↪ **Cy**: popup -> passkey\n');
 	});
 
 	it('notes deleted and attachment-only messages, and keeps a name’s Markdown inert', () => {
@@ -73,6 +83,44 @@ describe('messageLog', () => {
 		const gone = id(at(0, 'ben', '', { deleted: true, body: undefined }), 'd');
 		const starry = id(at(0, '*star*', 'hi'), 's');
 		expect(messageLog([upload, gone, starry], { nameOf })).toBe('> **Ada Lovelace**\n>\n> _(attachment)_\n\n> **Ben**\n>\n> _(deleted)_\n\n> **\\*star\\***\n>\n> hi');
+	});
+
+	it('lists a message’s reactions after its sender’s name, heading it and the message after on their own', () => {
+		const first = at(0, 'ada', 'One.');
+		const second = at(1, 'ada', 'Two.');
+		const third = at(2, 'ada', 'Three.');
+		const fourth = at(3, 'ada', 'Four.');
+		const user = (id: string) => ({ user_id: id });
+		const summary = (emoji: string, users: string[], count = users.length) => ({ emoji, count, user_ids: users, users: users.map(user), mine: false });
+		const reactions = (event: MessageRecord) => event === second
+			? [summary('👍', ['ben', 'cy']), summary('👎', ['ada']), summary('🎉', [], 0), summary(':party_parrot:', ['ben'], 3)]
+			: event === third ? [summary('👀', [], 2)] : undefined;
+		const time = (event: MessageRecord) => idTime(event.message_id);
+		expect(messageLog([first, second, third, fourth], { nameOf, now, reactions, reactorName: (who) => names[who.user_id] })).toBe([
+			`> **Ada Lovelace** · Friday, Oct 30, 2026 at ${time(first)}`, '>', '> One.', '',
+			`> **Ada Lovelace** · ${time(second)} (👍 from Ben, Cy; 👎 from Ada Lovelace; :party\\_parrot: from Ben, 2 more)`, '>', '> Two.', '',
+			`> **Ada Lovelace** · ${time(third)} (👀 from 2 people)`, '>', '> Three.', '',
+			`> **Ada Lovelace** · ${time(fourth)}`, '>', '> Four.',
+		].join('\n'));
+	});
+
+	it('says how many messages a gap leaves out, and heads the message after it', () => {
+		const ids = ['1', '2', '3', '4', '5', '6'];
+		const message = (id: string, text: string) => ({ ...at(Number(id), 'ada', text), message_id: id, log_id: id });
+		const order = ids.map((id) => String(new Date(2026, 9, 30, 14, Number(id)).getTime()));
+		const [one, three, four, six] = [message('1', 'One.'), message('3', 'Three.'), message('4', 'Four.'), message('6', 'Six.')].map((event, index) => ({ ...event, message_id: order[[0, 2, 3, 5][index]] }));
+		const time = (event: MessageRecord) => idTime(event.message_id);
+		expect(messageLog([one, three, four, six], { nameOf, now, order })).toBe([
+			`> **Ada Lovelace** · Friday, Oct 30, 2026 at ${time(one)}`, '>', '> One.', '',
+			'_(1 message omitted)_', '',
+			`> **Ada Lovelace** · ${time(three)}`, '>', '> Three.', '>', '> Four.', '',
+			'_(1 message omitted)_', '',
+			`> **Ada Lovelace** · ${time(six)}`, '>', '> Six.',
+		].join('\n'));
+		expect(messageLog([one, four], { nameOf, now, order })).toContain('\n\n_(2 messages omitted)_\n\n');
+		// Without `order`, or for a message it doesn't list, nothing is said to be left out.
+		expect(messageLog([one, six], { nameOf, now })).not.toContain('omitted');
+		expect(messageLog([one, message('x', 'Elsewhere.')], { nameOf, now, order })).not.toContain('omitted');
 	});
 
 	it('keeps a sender’s messages a few minutes apart in one quote', () => {
@@ -112,10 +160,10 @@ describe('messageLog', () => {
 	});
 
 	it('renders as HTML for a rich paste, its images shown', () => {
-		const html = messageLogHtml('> **Cy**\n>\n> _↪ **Ben**: hi_\n>\n> ok\n>\n> ![shot](https://media.example/f/a)');
+		const html = messageLogHtml('> **Cy**\n>\n> > ↪ **Ben**: hi\n>\n> ok\n>\n> ![shot](https://media.example/f/a)');
 		expect(html).toContain('<blockquote>');
 		expect(html).toContain('<strong>Cy</strong>');
-		expect(html).toContain('<em>↪ <strong>Ben</strong>: hi</em>');
+		expect(html).toContain('<blockquote>\n<p>↪ <strong>Ben</strong>: hi</p>\n</blockquote>');
 		expect(html).toContain('<img src="https://media.example/f/a" alt="shot"');
 	});
 

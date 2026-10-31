@@ -1,7 +1,7 @@
-import DOMPurify from 'dompurify';
 import MarkdownIt from 'markdown-it';
 import { emojiKeySegments } from './custom-emoji';
 import { withoutBidiOverrides } from './plain-text';
+import { canSanitize, NOWHERE, sanitizeHtml, type MediaCheck } from './sanitize';
 
 /**
  * A body's `markdown` format is CommonMark (§3.5). This renders CommonMark
@@ -24,50 +24,6 @@ md.core.ruler.push('align_class', (state) => {
 // Wide tables scroll inside the message rather than widening it.
 md.renderer.rules.table_open = () => '<div class="ap-table"><table>\n';
 md.renderer.rules.table_close = () => '</table></div>\n';
-
-/**
- * The only markup a body may hold once rendered: what the CommonMark above
- * produces, plus the links and mention chips added to it. Raw HTML never gets
- * this far; sanitizing last also covers everything done after rendering.
- */
-const ALLOWED = {
-	ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 's', 'code', 'pre', 'blockquote', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'a', 'img', 'div', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'span', 'button'],
-	ALLOWED_ATTR: ['href', 'title', 'src', 'alt', 'start', 'class', 'rel', 'target', 'type', 'data-user-id', 'data-room-id'],
-	ALLOW_DATA_ATTR: false,
-	// DOMPurify's own list of URL schemes, and Apron links' (Appendix A.4), which the page opens itself.
-	ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|matrix|apron):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i
-};
-
-/** A custom emoji's `style`, as `customEmojiTag` writes it: its aspect ratio, and nothing else. */
-const EMOJI_STYLE = /^aspect-ratio: \d+(?:\.\d+)? \/ \d+(?:\.\d+)?$/;
-
-// The one `style` let through: a custom emoji's aspect ratio (`ext:emoji`), on its own image.
-if (DOMPurify.isSupported) {
-	DOMPurify.addHook('uponSanitizeAttribute', (node, data) => {
-		if (data.attrName === 'style' && node.nodeName === 'IMG' && (node as Element).classList.contains('ap-cemoji') && EMOJI_STYLE.test(data.attrValue)) data.forceKeepAttr = true;
-	});
-}
-
-/** Sanitized markup kept for reuse, by the markup it was made from, least recently used first. */
-const SANITIZED_SIZE = 1000;
-const sanitized = new Map<string, string>();
-
-/**
- * The markup, sanitized. DOMPurify parses every call into a document of its own, and the same body is sanitized
- * each time its row renders (a room reopened, a held view replaced by the live one, a reply's quote); the same
- * markup always sanitizes to the same result, so each is kept.
- */
-function sanitize(html: string): string {
-	let clean = sanitized.get(html);
-	if (clean !== undefined) {
-		sanitized.delete(html);
-	} else {
-		clean = DOMPurify.sanitize(html, ALLOWED);
-		if (sanitized.size >= SANITIZED_SIZE) sanitized.delete(sanitized.keys().next().value!);
-	}
-	sanitized.set(html, clean);
-	return clean;
-}
 
 /**
  * What a prefixed ID in text names (Appendix A.3): `@id` a known user,
@@ -114,8 +70,6 @@ export interface CustomEmojiImage {
 /** Says how to draw a key (`:name:`), or nothing to leave it text. */
 export type EmojiResolver = (key: string) => CustomEmojiImage | undefined;
 
-/** The URL an image in a message loads from, where it may load from it; nothing shows it as a link instead. */
-export type ImageResolver = (src: string) => string | undefined;
 
 /** Someone a composer can mention: a room member or a recent sender. */
 export interface MentionPerson {
@@ -190,30 +144,16 @@ function markdown(source: string): string {
  * every render here, it shows the text without bidi embeddings and overrides
  * (§3.5.2); the text itself stays as written.
  */
-export function renderMarkdown(text: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver, resolveLink?: LinkResolver, resolveEmoji?: EmojiResolver, resolveImage?: ImageResolver): string {
+export function renderMarkdown(text: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver, resolveLink?: LinkResolver, resolveEmoji?: EmojiResolver, media: MediaCheck = NOWHERE): string {
 	const source = withoutBidiOverrides(text);
-	if (!DOMPurify.isSupported) return linkifyText(escapeHtml(source), resolve, resolveRoom, false, resolveLink, resolveEmoji);
-	return sanitize(linkText(withImages(markdown(source), resolveImage), resolve, resolveRoom, resolveLink, resolveEmoji));
-}
-
-/** An image as markdown-it writes one (`![alt](src "title")`): its `src`, `alt` and `title`, escaped. */
-const IMAGE = /<img src="([^"]*)" alt="([^"]*)"(?: title="([^"]*)")?>/g;
-
-/**
- * Rendered markdown with each image that may not load (`resolveImage`, none without one) as a link to it, showing
- * its alt text, else its URL: loading it would tell its site who reads the message (PROTOCOL.md §5.5).
- */
-function withImages(html: string, resolveImage: ImageResolver | undefined): string {
-	return html.replace(IMAGE, (image, src: string, alt: string, title: string | undefined) => {
-		if (resolveImage?.(unescapeHtml(src)) !== undefined) return image;
-		return `<a href="${src}"${title === undefined ? '' : ` title="${title}"`}>${alt || src}</a>`;
-	});
+	if (!canSanitize) return linkifyText(escapeHtml(source), resolve, resolveRoom, false, resolveLink, resolveEmoji);
+	return sanitizeHtml(linkText(markdown(source), resolve, resolveRoom, resolveLink, resolveEmoji), 'message', media);
 }
 
 /** A plain body as HTML: escaped, with bare links and mentions linked. Line breaks are kept by CSS (`pre-wrap`). */
-export function renderPlain(source: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver, resolveLink?: LinkResolver, resolveEmoji?: EmojiResolver): string {
+export function renderPlain(source: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver, resolveLink?: LinkResolver, resolveEmoji?: EmojiResolver, media: MediaCheck = NOWHERE): string {
 	const html = linkifyText(escapeHtml(withoutBidiOverrides(source)), resolve, resolveRoom, false, resolveLink, resolveEmoji);
-	return DOMPurify.isSupported ? sanitize(html) : html;
+	return canSanitize ? sanitizeHtml(html, 'message', media) : html;
 }
 
 /**
@@ -224,7 +164,7 @@ export function renderPlain(source: string, resolve?: MentionResolver, resolveRo
  */
 export function renderBio(source: string): string {
 	const html = linkifyText(escapeHtml(withoutBidiOverrides(source)), undefined, undefined, true);
-	return DOMPurify.isSupported ? sanitize(html) : html;
+	return canSanitize ? sanitizeHtml(html, 'message', NOWHERE) : html;
 }
 
 /**

@@ -33,15 +33,15 @@ describe('SelectionBar', () => {
 		expect(buttons()).toEqual(['Select between', 'Cancel', 'New thread']);
 	});
 
-	it('offers Copy log, and says Copied only once the copy worked', async () => {
+	it('offers Copy to clipboard, and says Copied only once the copy worked', async () => {
 		const oncopy = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
 		render({ oncopy });
-		expect(buttons()).toEqual(['Cancel', 'Copy log']);
+		expect(buttons()).toEqual(['Cancel', 'Copy to clipboard']);
 		const copy = () => [...document.querySelectorAll('button')].find((button) => button.textContent !== 'Cancel') as HTMLButtonElement;
 		copy().click();
 		await vi.waitFor(() => expect(oncopy).toHaveBeenCalledTimes(1));
 		flushSync();
-		expect(buttons()).toEqual(['Cancel', 'Copy log']);
+		expect(buttons()).toEqual(['Cancel', 'Copy to clipboard']);
 		copy().click();
 		await vi.waitFor(() => expect(buttons()).toEqual(['Cancel', 'Copied']));
 	});

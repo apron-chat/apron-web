@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { NARROW_MAX } from './breakpoints';
 import { parseCatalog } from '$lib/protocol/custom-emoji';
 import { currentTheme, PICKER_HEIGHT, PICKER_MIN_HEIGHT, PICKER_WIDTH, pickerCategories, pickerColors, placePicker, rgbTriple } from './emoji';
+import { media } from '$lib/test/media';
 
 const desktop = { width: 1280, height: 800 };
 /** A 28px trigger with its top-left corner at (left, top). */
@@ -104,13 +105,13 @@ describe('custom emoji in the picker (ext:emoji)', () => {
 			':old:': { url: 'https://e.example/3', hidden: true },
 			':Parrot2:': { url: 'https://e.example/4', category: 'Parrots' }
 		}, undefined);
-		const { categories, keys } = pickerCategories(catalog, (emoji) => emoji.url);
+		const { categories, keys } = pickerCategories(catalog, (emoji) => media(emoji.url));
 		expect(categories.map((category) => [category.name, category.emojis.map((emoji) => emoji.id)])).toEqual([
 			['Parrots', ['apron-partyparrot', 'apron-Parrot2']], ['This server', ['apron-shipit']]
 		]);
 		expect(categories[1].emojis[0]).toEqual({ id: 'apron-shipit', name: 'Squirrel in a hat', keywords: ['shipit', 'Squirrel in a hat'], skins: [{ src: 'https://e.example/2', native: ':shipit:' }] });
 		expect(keys.get('apron-Parrot2')).toBe(':Parrot2:');
-		expect(pickerCategories(undefined, () => '')).toEqual({ categories: [], keys: new Map() });
+		expect(pickerCategories(undefined, () => undefined)).toEqual({ categories: [], keys: new Map() });
 	});
 });
 

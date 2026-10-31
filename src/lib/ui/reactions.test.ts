@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ReactionSummary } from '$lib/protocol/client';
 import { reactionChips, reactorsOf, whoReacted } from './reactions';
+import { media } from '$lib/test/media';
 
 /** The words as read, without the isolates around each name. */
 const read = (text: string) => text.replace(/[\u2068\u2069]/g, '');
@@ -47,7 +48,7 @@ describe('reaction chips', () => {
 });
 
 describe('reaction keys (§4.7, ext:emoji)', () => {
-	const image = { src: 'https://chat.example/e/parrot.gif', alt: 'Party parrot' };
+	const image = { src: media('https://chat.example/e/parrot.gif'), alt: 'Party parrot' };
 	const keyImage = (key: string) => (key === ':partyparrot:' ? image : undefined);
 
 	it('shows a key the catalog has as its image, its alt in the tooltip, and any other key as a placeholder with the key there', () => {

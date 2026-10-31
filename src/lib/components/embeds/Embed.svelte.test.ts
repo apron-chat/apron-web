@@ -30,7 +30,8 @@ describe('an html embed (§4.8)', () => {
 		expect(box.querySelector('[style]')).toBeNull();
 		expect(markup).not.toMatch(/\bon[a-z]+=/i);
 		expect(markup).not.toContain('javascript:');
-		expect(box.querySelector('img')?.getAttribute('src')).toBe('x');
+		// An image from nowhere media may load from (with no server known here, anywhere) isn't loaded.
+		expect(box.querySelector('img')).toBeNull();
 	});
 
 	it('opens every link in a new tab, without a referrer or a handle back to the chat', () => {

@@ -1,8 +1,11 @@
-import { safeLink } from '$lib/protocol/embeds';
+import { ANY_ORIGIN, safeLink } from '$lib/protocol/embeds';
 import { renderMarkdown } from '$lib/protocol/markdown';
-import { compareLogIds } from '$lib/protocol/reducer';
-import type { Embed, MessageRecord } from '$lib/protocol/types';
-import { embedsOf, messageSnippet, senderName, textOf } from './messages';
+import { cleanPlainText } from '$lib/protocol/plain-text';
+import { compareLogIds, type ReactionSummary } from '$lib/protocol/reducer';
+import type { Embed, Identity, MessageRecord } from '$lib/protocol/types';
+import { directory } from './directory.svelte';
+import { mediaGate, type MediaGate } from './media-gate';
+import { embedsOf, messageSnippet, plainTextOf, senderName, textOf } from './messages';
 import { dayKeyOf, idMillis, idTime, isGrouped } from './time';
 
 export interface MessageLogOptions {
@@ -12,13 +15,19 @@ export interface MessageLogOptions {
 	lookup?: (id: string) => MessageRecord | undefined;
 	/** Which year is "this year", so a date leaves it out. */
 	now?: Date;
+	/** A message's reactions, to list after its sender's name; none without it. */
+	reactions?: (event: MessageRecord) => readonly ReactionSummary[] | undefined;
+	/** The name shown for someone who reacted; the directory's by default. */
+	reactorName?: (user: Identity) => string;
+	/** Every message's ID in the conversation, in order, so a gap between two in the log can say how many it leaves out. */
+	order?: readonly string[];
 }
 
 const dayFormat = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
 const dayYearFormat = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' });
 
 /** Characters that would turn a name or a quoted snippet into Markdown syntax. */
-const INLINE_SYNTAX = /[\\`*_[\]<>~]/g;
+const INLINE_SYNTAX = /[\\`*_[\]<~]/g;
 
 const inline = (text: string) => text.replace(INLINE_SYNTAX, '\\$&');
 
@@ -28,42 +37,67 @@ const inline = (text: string) => text.replace(INLINE_SYNTAX, '\\$&');
  * as a paragraph of its own: the first with the full date (`Thursday, Oct 29,
  * 2026 at 6:51 PM`) as an anchor, and the day again wherever it changes.
  * Consecutive messages from one sender a few minutes apart share a quote, as
- * the timeline groups them. A reply opens with one italic line naming what it
- * answers (`↪ Ada: Deploy is green…`). Bodies are copied as written, Markdown
- * and all, with each uploaded image after as a Markdown image; other
- * attachments and link previews are left out, and a message with nothing else
- * shows reads "(attachment)". `messages` are taken in the order given, each
- * once: where one comes more than once (edited, or an upload finishing), its
- * latest snapshot (by `log_id`) stands where it first came.
+ * the timeline groups them. A reply opens with a one-line quote of what it
+ * answers (`> ↪ **Ada**: Deploy is green…`), its `…` saying the snippet
+ * leaves some out. A message with reactions opens a
+ * quote of its own, its header listing them (`(👍 from Bob, Andy; 👎 from
+ * Alice)`), so they can't be taken for another message's. Where the log
+ * skips messages of `order`, a line between the quotes says how many
+ * (`_(3 messages omitted)_`), and the next message heads its own. Bodies are
+ * copied as written, Markdown and all, with each uploaded image after as a
+ * Markdown image; other attachments and link previews are left out, and a
+ * message with nothing else shows reads "(attachment)". `messages` are taken
+ * in the order given, each once: where one comes more than once (edited, or
+ * an upload finishing), its latest snapshot (by `log_id`) stands where it
+ * first came.
  */
 export function messageLog(messages: readonly MessageRecord[], options: MessageLogOptions = {}): string {
 	const nameOf = options.nameOf ?? senderName;
+	const reactorName = options.reactorName ?? ((user: Identity) => directory.name(user));
 	const now = options.now ?? new Date();
 	const byId = new Map<string, MessageRecord>();
 	for (const event of messages) {
 		const kept = byId.get(event.message_id);
 		if (!kept || compareLogIds(event.log_id, kept.log_id) >= 0) byId.set(event.message_id, event);
 	}
-	// Each run's paragraphs: its header, then each message's reply line and body.
-	const runs: string[][] = [];
+	const position = new Map(options.order?.map((id, index) => [id, index]));
+	// Each run's paragraphs (its header, then each message's reply line and body), or a note of messages left out.
+	const runs: (string[] | string)[] = [];
 	let previous: MessageRecord | undefined;
+	let previousReacted = false;
 	let lastDay: string | undefined;
 	for (const event of byId.values()) {
 		const day = dayKeyOf(event.message_id);
 		const newDay = Boolean(day) && day !== lastDay;
-		if (!runs.length || !isGrouped(previous, event) || newDay) {
+		const reacted = event.deleted ? '' : reactionsOf(options.reactions?.(event), reactorName);
+		const omitted = previous ? (position.get(event.message_id) ?? 0) - (position.get(previous.message_id) ?? Infinity) - 1 : 0;
+		if (omitted > 0) runs.push(`_(${omitted === 1 ? '1 message' : `${omitted} messages`} omitted)_`);
+		// A message after a reacted one heads its own quote too, so the reactions read as that one's alone.
+		if (!runs.length || !isGrouped(previous, event) || newDay || reacted || previousReacted || omitted > 0) {
 			// The first date carries its year whenever it is; later ones only when it isn't `now`'s.
 			const date = newDay ? dayOf(event.message_id, lastDay === undefined ? undefined : now) : '';
 			const when = [date, idTime(event.message_id)].filter(Boolean).join(' at ');
-			runs.push([`**${inline(nameOf(event))}**${when ? ` · ${when}` : ''}`]);
+			runs.push([`**${inline(nameOf(event))}**${when ? ` · ${when}` : ''}${reacted ? ` (${reacted})` : ''}`]);
 		}
 		if (day) lastDay = day;
-		const run = runs[runs.length - 1];
+		const run = runs[runs.length - 1] as string[];
 		if (event.reply_to && !event.deleted) run.push(replyLine(event.reply_to.message_id, byId, options.lookup, nameOf));
 		run.push(bodyOf(event));
 		previous = event;
+		previousReacted = Boolean(reacted);
 	}
-	return runs.map((run) => quoted(run.join('\n\n'))).join('\n\n');
+	return runs.map((run) => (typeof run === 'string' ? run : quoted(run.join('\n\n')))).join('\n\n');
+}
+
+/** Reactions as a header lists them, `👍 from Bob, Andy; 👎 from Alice`, or empty for none. */
+function reactionsOf(summaries: readonly ReactionSummary[] | undefined, nameOf: (user: Identity) => string): string {
+	return (summaries ?? []).filter((summary) => summary.count > 0).map((summary) => {
+		const names = summary.users.map((user) => inline(nameOf(user)));
+		// Reactors this client has no identity for are counted, not named.
+		const unnamed = summary.count - names.length;
+		if (unnamed > 0) names.push(names.length ? `${unnamed} more` : `${unnamed} ${unnamed === 1 ? 'person' : 'people'}`);
+		return `${inline(summary.emoji)} from ${names.join(', ')}`;
+	}).join('; ');
 }
 
 /** Text as a block quote: each line behind `> `, and a bare `>` for a blank one so the quote runs on. */
@@ -79,12 +113,18 @@ function dayOf(id: string, now: Date | undefined): string {
 }
 
 /**
+ * Where a pasted log's images load from: anywhere, since it goes only to the clipboard, never into this page, and
+ * whatever it is pasted into loads it, or not, as that app chooses.
+ */
+const PASTED: MediaGate = mediaGate(undefined, [ANY_ORIGIN]);
+
+/**
  * The log as HTML, for a rich paste: the Markdown rendered as a message is,
  * except that its images show (a paste is the reader's to load), with
  * mentions left as written.
  */
 export function messageLogHtml(log: string): string {
-	return renderMarkdown(log, undefined, undefined, undefined, undefined, (src) => src);
+	return renderMarkdown(log, undefined, undefined, undefined, undefined, PASTED);
 }
 
 /** What a log shows for a message's body: its text as written and its images, or a note when it has neither. */
@@ -109,10 +149,17 @@ function imageOf(embed: Embed): string | undefined {
 	return `![${alt}](${url.replace(/[()]/g, (paren) => (paren === '(' ? '%28' : '%29'))})`;
 }
 
-/** A reply's line: who it answers and the first line of what they wrote, or a note when that message isn't here. */
+/** A reply's line, quoted: who it answers and the first line of what they wrote, or a note when that message isn't here. */
 function replyLine(id: string, byId: Map<string, MessageRecord>, lookup: MessageLogOptions['lookup'], nameOf: (event: MessageRecord) => string): string {
 	const target = byId.get(id) ?? lookup?.(id);
-	if (!target) return '_↪ (an earlier message)_';
-	if (target.deleted) return '_↪ (a deleted message)_';
-	return `_↪ **${inline(nameOf(target))}**: ${inline(messageSnippet(target))}_`;
+	if (!target) return '> ↪ _(an earlier message)_';
+	if (target.deleted) return '> ↪ _(a deleted message)_';
+	return `> ↪ **${inline(nameOf(target))}**: ${inline(replySnippet(target))}`;
+}
+
+/** The first line of a reply's target, as `messageSnippet` cuts it, ending in `…` wherever it leaves later lines out too. */
+function replySnippet(target: MessageRecord): string {
+	const snippet = messageSnippet(target);
+	const lines = cleanPlainText(plainTextOf(target)).split('\n').filter((line) => line.trim()).length;
+	return lines > 1 && !snippet.endsWith('…') ? `${snippet}…` : snippet;
 }
