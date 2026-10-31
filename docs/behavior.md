@@ -203,7 +203,7 @@ a room like any message; one for a room you haven't joined also shows as a
 notice where you are. `~server`, `~room`, and `~private` are sender scopes, not rooms (Appendix A.1); a
 room ID starting with `@` or `~` is an ordinary room.
 
-Joins and leaves show in a room's timeline as the quietest system line, at
+Joins and leaves show in a room's or thread's timeline, private or not, as the quietest system line, at
 each membership record's `log_id` among the messages: "Ada joined", with the
 time on hover. Records with nothing else between them (a message, a card, a
 notice, or a date divider) make one line, netted out per user, so someone who
@@ -214,7 +214,9 @@ everyone in the tooltip. A record joining more than 20 users at once is a
 baseline, not an event, and gets no line. Names render like any other user,
 with the `@user_id` when someone else shows under the same name. The lines
 never count as unread or mention you, and a message after one starts a new
-sender group.
+sender group. A title change, in a room or thread, private or not, gets a
+system line at its room record's `log_id`: "Room renamed to “Ops”" (or
+"Thread renamed to …", or "… name cleared"), which also ends a run of joins.
 
 On wide screens the rooms list is a column beside the conversation: drag its
 inner border (its right one, or its left under a right-to-left layout, where
