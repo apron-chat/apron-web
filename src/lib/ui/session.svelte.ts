@@ -13,6 +13,9 @@ const RECONNECT_STALL_MS = 10_000;
  */
 export const RECONNECT_QUIET_MS = 1_500;
 
+/** A live room with nothing to show yet: recovering, or not loaded on this connection. Not once loading failed. */
+const showsNothingYet = (live: RoomSnapshot): boolean => live.timeline.order.length === 0 && !live.recoveryError && (!live.loaded || live.recovering);
+
 export const blankSnapshot = (): ClientSnapshot => ({
 	status: 'idle', authenticated: false, capabilities: capabilitiesOf(undefined), rooms: [], pending: [], typing: [], users: {}, recordedUsers: {}, userAliases: {}, uploads: {}, threadDirectory: {}, showReconnectDivider: false
 });
@@ -58,7 +61,9 @@ export class SessionView {
 	 * sign-in, a stalled reconnect). The page shows placeholders then, not "Not signed in" or "No rooms yet".
 	 */
 	readonly starting = $derived(!this.snapshot.roomsListed && this.snapshot.status !== 'offline' && !this.snapshot.signInNeeded && !this.reconnectNeedsAttention && !this.reconnectError);
-	private readonly holding = $derived(Boolean(this.held) && (!this.ready || this.snapshot.rooms.length === 0) && this.snapshot.status !== 'offline');
+	// `held` is read last: hold() replaces it with each snapshot, and a ready session with its rooms listed, which
+	// doesn't depend on it then, isn't marked to be checked again (with everything that reads the rooms) each time.
+	private readonly holding = $derived((!this.ready || this.snapshot.rooms.length === 0) && this.snapshot.status !== 'offline' && Boolean(this.held));
 	readonly rooms = $derived(this.snapshot.rooms.length ? this.snapshot.rooms : this.holding ? this.held!.rooms : []);
 	readonly activeRoomId = $derived(this.snapshot.rooms.length ? this.snapshot.activeRoom : this.holding ? this.held!.activeRoom : undefined);
 	readonly you = $derived(this.snapshot.you ?? (this.holding ? this.held!.you : undefined));
@@ -92,8 +97,11 @@ export class SessionView {
 	 */
 	private readonly standIn = $derived.by(() => {
 		const live = this.rooms.find((room) => room.id === this.activeRoomId);
-		const copy = live && this.held?.rooms.find((room) => room.id === live.id);
-		if (!live || !copy || live === copy) return undefined;
+		// Only a room with nothing to show yet, or waiting for its threads, has a stand-in: the held view isn't read
+		// otherwise, so replacing it (each snapshot) doesn't mark the open room, and all that reads it, to check again.
+		if (!live || (!showsNothingYet(live) && this.awaitingThreads !== live.id)) return undefined;
+		const copy = this.held?.rooms.find((room) => room.id === live.id);
+		if (!copy || live === copy) return undefined;
 		return this.heldCopy(live) ?? (this.awaitingThreads === live.id ? copy : undefined);
 	});
 
@@ -104,7 +112,7 @@ export class SessionView {
 	 * history arrives, as it does the open room's. Not once loading failed.
 	 */
 	heldCopy(live: RoomSnapshot | undefined): RoomSnapshot | undefined {
-		if (!live || live.timeline.order.length > 0 || live.recoveryError || (live.loaded && !live.recovering)) return undefined;
+		if (!live || !showsNothingYet(live)) return undefined;
 		const copy = this.held?.rooms.find((room) => room.id === live.id);
 		return copy && copy !== live ? copy : undefined;
 	}
