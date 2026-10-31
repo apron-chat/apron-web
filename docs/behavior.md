@@ -1433,21 +1433,20 @@ Your profile is the first section of **Preferences**, which the profile bar at
 the foot of the sidebar opens (one button: your avatar and name, a line under it
 that says notifications are paused, else something to do such as "Add a
 sign-in", else your status, else your `@user_id`, and a gear). The section has
-your status at the top (with capability `status`), then rows like the other
-sections': your avatar; your **Display name** (the ID under it, "Your ID is
-@ada. It's permanent.") and bio, with **Revert** and **Save** only while they
-differ from what the server keeps (Preferences stays open; "Saved." says so a
-moment); the Sign-in row, which says how this session signs in first; and, for
-an account, "Signed in to … as …" with **Sign out** at the end, in the danger
-tone. For a guest, the Sign-in row keeps this identity (**Add email**, **Add
-external sign-in**) apart from signing in to an account ("Have an account?"
-then the ways the server signs in). That row offers, where the server's `auth` lists them,
-**Sign in with a passkey**, **Sign in with email**, **Sign in externally**,
-**Add email** and **Add external sign-in** to a guest, and **Add passkey**,
-**Add email**, **Add external sign-in** and **Sign out** to a registered
-account. A guest's Add email proposes and approves on the guest's connection,
-which adds the address to the guest's account (§4.11); Sign in with email is a
-sign-in to the address's own account. Adding needs the
+no heading of its own (its tab names it): your status at the top (with
+capability `status`), then rows like the other sections': your avatar, in a
+column beside your **Display name** (the ID under it, "User ID assigned by
+server: @ada") and bio, with **Upload** across the avatar's lower edge (dimmed,
+"Not supported on this server" on hover, where the server takes no uploads),
+and **Revert** and **Save** only while the name or bio differs from what the
+server keeps (Preferences stays open; "Saved." says so a moment); the Sign-in
+row, which says how this session signs in first; and, for an account, "Signed in
+to … as …" with **Sign out** at the end, in the danger tone. A guest's Sign-in
+row is **Sign in** alone, as the composer offers it where guests can't post: the
+connect screen, at the way the server signs in first. An account's offers, where the server's `auth` lists them,
+**Add passkey**, **Add email** and **Add external sign-in**, and the row after
+it **Sign out**. Add email proposes and approves on the account's connection,
+which adds the address to the account (§4.11). Adding needs the
 scheme in `auth`, since adding is a way back in and a scheme listed only in
 `signup` doesn't sign in (the spec doesn't say whether servers may allow
 adding such a scheme; this client doesn't offer it). With the Go reference server, open

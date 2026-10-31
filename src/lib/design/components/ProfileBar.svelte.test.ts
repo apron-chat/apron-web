@@ -45,7 +45,7 @@ describe('ProfileEditor', () => {
 		expect(document.querySelector('form')?.getAttribute('role')).toBeNull();
 		const input = document.querySelector<HTMLInputElement>('input[type="file"]')!;
 		const picked = vi.spyOn(input, 'click');
-		dom.button('Add avatar').click();
+		dom.button('Upload an avatar').click();
 		expect(picked).toHaveBeenCalledOnce();
 		const file = new File(['png'], 'face.png', { type: 'image/png' });
 		Object.defineProperty(input, 'files', { configurable: true, value: [file] });

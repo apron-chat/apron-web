@@ -51,8 +51,7 @@
 		onresume: () => Promise<void> | void;
 		/** Signing out starts a different session: the page drops what it held from this one. */
 		onsignout: SignOutHandler;
-		/** Sign-in lives on the connect screen; this opens it with the handle typed here. */
-		/** Opens the connect screen to sign in with `scheme`, carrying a handle typed here. */
+		/** Opens the connect screen to sign in, with `scheme` or the way the server offers first, carrying a name typed here. */
 		onsignin: (name?: string, scheme?: 'webauthn' | 'email' | 'external') => void;
 	}
 	let { client, session, backendLabel, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, onsignout, onsignin }: Props = $props();
@@ -259,7 +258,7 @@
 	 * Signing in happens on the connect screen, which carries a handle typed
 	 * here along so it is applied once the passkey or email signs in.
 	 */
-	function signIn(scheme: 'webauthn' | 'email' | 'external' = 'webauthn'): void {
+	function signIn(scheme?: 'webauthn' | 'email' | 'external'): void {
 		const chosen = chosenName();
 		preferencesOpen = false;
 		onsignin(chosen, scheme);
@@ -434,7 +433,7 @@
 		{:else if session.passkeySession}
 			<span class="ap-form-hint">{canUseEmail || canUseExternal ? 'You can sign in to this account anywhere.' : 'You sign in to this account with a passkey.'}</span>
 		{:else}
-			<span class="ap-form-hint">You’re a guest here.{(canUseEmail || canUseExternal) && you ? ' Keep this identity by adding a way to sign in, or sign in to an account.' : ' Sign in to an account to keep your name and rooms.'}</span>
+			<span class="ap-form-hint">You’re a guest here. Sign in to keep your name and rooms.</span>
 		{/if}
 		{#if session.passkeySession}
 			<!-- A registered account: a passkey registered or an email code presented here adds to it (§4.10, §4.11). -->
@@ -450,28 +449,9 @@
 				{/if}
 			</span>
 		{:else}
-			<!-- A guest: keeping this identity (adding an address to it, if the server allows, §4.11), apart from signing in to an account. -->
-			{#if you && !addEmail && (canUseEmail || canUseExternal)}
-				<span class="ap-profedit-buttons" role="group" aria-label="Keep this identity">
-					{#if canUseEmail}
-						<button class="ap-btn ap-btn-sm" type="button" title="Keep this identity: add an email address to it, if the server allows" disabled={!connected || status === 'saving'} onclick={() => (addEmail = { scheme: 'email', step: 'address', email: '', code: '', busy: false, error: '' })}>Add email</button>
-					{/if}
-					{#if canUseExternal}
-						<button class="ap-btn ap-btn-sm" type="button" title="Keep this identity: add an external sign-in to it, if the server allows" disabled={!connected || status === 'saving'} onclick={addExternal}>Add external sign-in</button>
-					{/if}
-				</span>
-			{/if}
-			<span class="ap-profedit-buttons ap-profedit-signin-account" role="group" aria-label="Sign in to an account">
-				<span class="ap-form-hint">Have an account?</span>
-				{#if canUsePasskey}
-					<button class="ap-btn ap-btn-sm ap-btn-ghost" type="button" disabled={!!passkeyUnavailable || status === 'saving'} onclick={() => signIn('webauthn')}>Sign in with a passkey</button>
-				{/if}
-				{#if canUseEmail}
-					<button class="ap-btn ap-btn-sm ap-btn-ghost" type="button" disabled={status === 'saving'} onclick={() => signIn('email')}>Sign in with email</button>
-				{/if}
-				{#if canUseExternal}
-					<button class="ap-btn ap-btn-sm ap-btn-ghost" type="button" disabled={status === 'saving'} onclick={() => signIn('external')}>Sign in externally</button>
-				{/if}
+			<!-- A guest: signing in, as the composer offers it where guests can't post; the connect screen picks the way. -->
+			<span class="ap-profedit-buttons">
+				<button class="ap-btn ap-btn-primary ap-btn-sm" type="button" disabled={status === 'saving'} onclick={() => signIn()}>Sign in</button>
 			</span>
 		{/if}
 		{#if addEmail}

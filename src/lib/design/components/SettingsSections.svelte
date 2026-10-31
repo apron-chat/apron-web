@@ -3,8 +3,11 @@
 	import type { ClassValue } from 'svelte/elements';
 
 	interface Props {
-		/** Each section: its nav label, which also heads it, the line under the heading, and the heading's id. */
-		sections: Array<{ value: string; label: string; hint?: string; id: string }>;
+		/**
+		 * Each section: its nav label, which also heads it, the line under the heading, and the heading's id.
+		 * `heading: false` keeps the heading for screen readers only, where the open tab says it already.
+		 */
+		sections: Array<{ value: string; label: string; hint?: string; id: string; heading?: boolean }>;
 		/** The open section's `value`: `bind:current`. */
 		current: string;
 		/** The open section's settings, such as SettingRows, under its heading. */
@@ -31,8 +34,8 @@
 	{#each sections as section (section.value)}
 		{#if section.value === current}
 			<section class="ap-preferences-content" aria-labelledby={section.id}>
-				<h3 id={section.id}>{section.label}</h3>
-				{#if section.hint}<p class="ap-form-hint">{section.hint}</p>{/if}
+				<h3 id={section.id} class={section.heading === false ? 'ap-sr' : undefined}>{section.label}</h3>
+				{#if section.hint && section.heading !== false}<p class="ap-form-hint">{section.hint}</p>{/if}
 				{@render children?.()}
 			</section>
 		{/if}

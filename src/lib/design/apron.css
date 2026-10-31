@@ -8,7 +8,7 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
    neighbours. A field rings its own border, which takes the color too (.ap-field); the composer and a message being
    edited light their frame instead, and a panel's handle its border. */
 :where(.ap-btn, .ap-embed-remove, .ap-link, .ap-dialog-titlebtn, .ap-thread, .ap-composer-field, .ap-embed-card, .ap-embed-url, .ap-actions-btn, .ap-jumpbar-btn, .ap-jumpfab, .ap-sect-toggle, .ap-roomhead-back, .ap-roomhead-crumb, .ap-profile-me, .ap-shell-sidehead-return, .ap-shell-sidehead-open, .ap-field, .ap-reply, .ap-choice-item, .ap-msg-check, .ap-msg-who, .ap-member-who, .ap-iconbtn, .ap-foldpill, .ap-rchip, .ap-rpick, .ap-switch, .ap-description-toggle, .ap-attachment-rename, .ap-viewer-btn, .ap-embed-ogcard, .ap-embed-imagelink, button.ap-mention, a.ap-linkchip, .ap-pick-chip-remove):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
-:where(.ap-room, .ap-room-exit, .ap-room-join, .ap-menu-item, .ap-seg-item, .ap-connect-recent-item, .ap-font-option, .ap-font-load, .ap-preferences-nav button):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset-inset); }
+:where(.ap-room, .ap-room-exit, .ap-room-join, .ap-menu-item, .ap-seg-item, .ap-connect-recent-item, .ap-font-option, .ap-font-load, .ap-preferences-nav button, .ap-profedit-upload):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset-inset); }
 /* The people picker's field rings itself while its input has the keyboard, as a field does. */
 .ap-pick-field:has(.ap-pick-input:focus-visible) { outline: var(--focus-ring); outline-offset: var(--focus-offset); border-color: var(--focus); }
 /* Disabled — one fade, whatever the control. */
@@ -952,6 +952,14 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-profedit { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); }
 .ap-profedit-group { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
 .ap-profedit-top { flex-direction: row; align-items: center; }
+/* Your avatar beside your name: a column of its own, Upload across the circle's lower edge. */
+.ap-profedit-identity { flex-direction: row; align-items: flex-start; gap: var(--space-4); }
+.ap-profedit-avcol { flex: none; display: flex; flex-direction: column; align-items: center; gap: var(--space-1); padding-top: var(--space-1); }
+.ap-profedit-avwrap { position: relative; display: block; border-radius: var(--radius-full); overflow: hidden; }
+.ap-profedit-upload { position: absolute; inset: auto 0 0; height: 20px; padding: 0 0 2px; border: 0; background: color-mix(in srgb, var(--ink) 62%, transparent); color: var(--bg-000); font: inherit; font-size: var(--text-xs); line-height: var(--leading-sm); font-weight: 600; cursor: pointer; }
+.ap-profedit-upload:hover:not(:disabled):not([aria-disabled='true']) { background: color-mix(in srgb, var(--ink) 80%, transparent); }
+.ap-profedit-upload:is(:disabled, [aria-disabled='true']) { cursor: not-allowed; opacity: var(--opacity-disabled); }
+.ap-profedit-fields { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-3); }
 .ap-profedit-av { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); min-width: 0; }
 /* A field and the line about it, close together: the line belongs to it, not to what follows. */
 .ap-profedit-field { display: flex; flex-direction: column; gap: var(--space-1); }
@@ -967,7 +975,8 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-profedit:not([role='dialog']) { gap: 0; padding: 0; }
 .ap-profedit:not([role='dialog']) > .ap-profedit-group { padding: var(--space-4) 0; border-top: 0; border-bottom: 1px solid var(--line); }
 .ap-profedit:not([role='dialog']) .ap-fieldlabel { font-size: var(--text-field); line-height: var(--leading-field); color: var(--ink); }
-.ap-profedit:not([role='dialog']) :is(.ap-profedit-fields, .ap-profedit-signin) { max-width: var(--pref-note-w); }
+.ap-profedit:not([role='dialog']) .ap-profedit-fields { max-width: var(--pref-note-w); }
+.ap-profedit:not([role='dialog']) .ap-profedit-signin > * { max-width: var(--pref-panel-w); }
 /* Signing out: how this session is signed in, the button at the end, in the danger tone. */
 .ap-profedit-signout { flex-direction: row; align-items: center; justify-content: space-between; gap: var(--space-3); }
 .ap-profedit-signout .ap-form-hint { margin: 0; min-width: 0; overflow-wrap: anywhere; }
@@ -1378,6 +1387,8 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-preferences-content { padding: var(--space-6); overflow-y: auto; }
 .ap-preferences-content > h3 { margin: 0; font-size: var(--text-body); line-height: var(--leading-field); }
 .ap-preferences-content > p { margin: var(--space-1) 0 var(--space-4); }
+/* A section whose heading is for screen readers only starts with its first row, unruled above. */
+.ap-preferences-content > h3.ap-sr ~ div:first-of-type { border-top: 0; padding-top: 0; }
 /* On a phone the sections are tabs across the top, so a section has the dialog's whole width. */
 /* A choice is as wide as its longest option, beside what it does; on a phone, under it, full width (below). */
 .ap-pref-setting .ap-pref-select { flex: none; width: auto; max-width: 100%; }

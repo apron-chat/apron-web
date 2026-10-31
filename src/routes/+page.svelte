@@ -3083,7 +3083,7 @@
 			notificationsEnabled={notificationsActive} notificationsSupported={notificationState !== 'unsupported'} notificationPermission={notificationState} notifyScopes={notifyScopes} onnotifications={toggleNotifications} onnotifyscopes={setNotifyScopes} ontestnotifications={testNotifications}
 			webPush={webPushKey(session.server) ? { supported: webPushAvailable, homeScreen: !webPushAvailable && needsHomeScreen(), enabled: webPushActive && !webPushHeldBy, ...(webPushHeldBy ? { heldBy: webPushHeldBy } : {}), ...(webPushServerKey ? {} : { signIn: true }), offered: webPushOffered, installable: canOfferInstall(installPrompt), ...(webPushError && webPushServerKey ? { error: webPushError } : {}) } : undefined} onwebpush={pushHere} oninstallapp={installApp}
 			pause={canPause ? { ...(pausedUntil !== undefined && isPaused(pausedUntil) ? { until: pausedUntil } : {}) } : undefined} onpause={pauseNotifications} onresume={() => client?.setMute(false) ?? Promise.resolve()}
-			onsignin={(name, scheme) => openConnect({ scheme: scheme ?? 'webauthn', name })}
+			onsignin={(name, scheme) => openConnect(scheme ? { scheme, name } : { signIn: true, name })}
 			returnTo={activeRoom ? (activeThread ? threadTitle(activeThread) : activeRoom.title) : undefined} onreturn={closeRooms}
 			onroom={chooseRoom} onthread={chooseThread} onopenthread={openThreadCard} onjoin={joinRoom} onleavethread={leaveThread} oncreateroom={(roomId, options) => { pendingJoin = roomId; pendingPrivate = options.private; }} onnewthread={newThreadInRoom} onsignout={signedOut}
 			onnewprivate={canStartPrivate ? () => (newPrivateOpen = true) : undefined}

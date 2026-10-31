@@ -67,7 +67,8 @@
 	let { open = $bindable(false), section: preferencesSection = $bindable('profile'), profile, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, status, onexport, serverHost, mediaHosts = [], onclosed }: Props = $props();
 
 	const SECTIONS = [
-		{ value: 'profile', label: 'Profile', hint: 'How you show on this server, and how you sign in.', id: 'ap-pref-profile' },
+		// Its tab names it already: no heading over your status, but for screen readers.
+		{ value: 'profile', label: 'Profile', id: 'ap-pref-profile', heading: false },
 		{ value: 'notifications', label: 'Notifications', hint: 'Choose when Apron can interrupt you.', id: 'ap-pref-notifications' },
 		{ value: 'appearance', label: 'Appearance', hint: 'Adjust the theme and reading fonts on this device.', id: 'ap-pref-appearance' },
 		{ value: 'media', label: 'Media', hint: 'Where images and avatars load from. Each site sees what you load.', id: 'ap-pref-media' },

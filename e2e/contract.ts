@@ -390,7 +390,8 @@ export const SCENES: Scene[] = [
 			const { page } = preview;
 			await page.getByRole('button', { name: /^Open preferences/ }).click();
 			await look();
-			await page.getByRole('dialog', { name: 'Preferences' }).getByRole('button', { name: 'Sign in with a passkey', exact: true }).click();
+			// A guest's Profile offers Sign in, as the composer does where guests can't post.
+			await page.getByRole('dialog', { name: 'Preferences' }).getByRole('button', { name: 'Sign in', exact: true }).click();
 			const card = page.getByRole('form', { name: 'Sign in' });
 			await expect(card).toBeVisible();
 			await look();

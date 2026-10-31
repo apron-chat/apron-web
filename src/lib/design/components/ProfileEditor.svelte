@@ -102,50 +102,50 @@
 
 <!-- svelte-ignore a11y_no_noninteractive_element_to_interactive_role -->
 <form role={dialog ? 'dialog' : undefined} aria-label={dialog ? 'Edit profile' : undefined} class={['ap-profedit', className]} onsubmit={save}>
-	<div class="ap-profedit-group ap-profedit-top">
-		{#if face}{@render face()}{:else}<Avatar name={name || userId} src={avatar} size="lg" />{/if}
-		<div class="ap-profedit-av">
-			{#if canUpload}
-				<span class="ap-profedit-avbtns">
-					<Button size="sm" data-testid={changeAvatarTestid} disabled={saving || Boolean(avatarBusy) || offline} onclick={() => fileInput?.click()} label={avatarBusy === 'uploading' ? 'Uploading…' : hasAvatar ? 'Change avatar' : 'Add avatar'} />
-					{#if hasAvatar && onremoveavatar}
-						<button type="button" class="ap-link ap-profedit-remove" data-testid={removeAvatarTestid} disabled={Boolean(avatarBusy) || offline} onclick={onremoveavatar}>Remove</button>
-					{/if}
-				</span>
-				{#if onavatarfile}<input class="ap-sr" type="file" accept="image/*" tabindex="-1" aria-hidden="true" data-testid={avatarFileTestid} bind:this={fileInput} onchange={(e) => picked(e.currentTarget)} />{/if}
-			{:else if avatar && onremoveavatar}
-				<button type="button" class="ap-link ap-profedit-remove" disabled={Boolean(avatarBusy) || offline} onclick={onremoveavatar}>Remove avatar</button>
-			{:else}
-				<span class="ap-form-hint">This server doesn’t support profile pictures.</span>
+	<div class="ap-profedit-group ap-profedit-identity">
+		<!-- Your avatar, in a column of its own beside your name: Upload on its lower edge, which says why where the server takes none. -->
+		<div class="ap-profedit-avcol">
+			<span class="ap-profedit-avwrap">
+				{#if face}{@render face()}{:else}<Avatar name={name || userId} src={avatar} size="lg" />{/if}
+				{#if canUpload}
+					<button type="button" class="ap-profedit-upload" data-testid={changeAvatarTestid} aria-label={hasAvatar ? 'Upload a new avatar' : 'Upload an avatar'} disabled={saving || Boolean(avatarBusy) || offline} onclick={() => fileInput?.click()}>{avatarBusy === 'uploading' ? '…' : 'Upload'}</button>
+				{:else}
+					<button type="button" class="ap-profedit-upload" data-testid={changeAvatarTestid} aria-disabled="true" aria-label="Upload an avatar: not supported on this server" title="Not supported on this server">Upload</button>
+				{/if}
+			</span>
+			{#if canUpload && onavatarfile}<input class="ap-sr" type="file" accept="image/*" tabindex="-1" aria-hidden="true" data-testid={avatarFileTestid} bind:this={fileInput} onchange={(e) => picked(e.currentTarget)} />{/if}
+			{#if hasAvatar && onremoveavatar && (canUpload || avatar)}
+				<button type="button" class="ap-link ap-profedit-remove" data-testid={removeAvatarTestid} disabled={Boolean(avatarBusy) || offline} onclick={onremoveavatar}>Remove</button>
 			{/if}
-			{#if avatarError}<span class="ap-form-hint ap-tone-danger" role="alert">{avatarError}</span>{/if}
+			{#if avatarBusy === 'uploading'}<span class="ap-form-hint" role="status">Uploading…</span>{/if}
 		</div>
-	</div>
-	<div class="ap-profedit-group ap-profedit-fields">
-		<div class="ap-profedit-field">
-			<label class="ap-fieldlabel">Display name
-				<input class="ap-field" data-testid={nameTestid} bind:value={() => name, (v) => { name = v; oninput?.(v); }} disabled={saving} maxlength="64" autocomplete="nickname" spellcheck="false" dir="auto" />
-			</label>
-			<!-- ap-profedit-hint: apron-server-go's interop suite reads your ID by `.ap-profedit-hint code`: the code holds the ID alone, its @ drawn before it. -->
-			<p class="ap-form-hint ap-profedit-hint">Your ID is <code>{userId}</code>. It’s permanent.</p>
-		</div>
-		{#if status === 'altered'}<p class="ap-form-note" role="status">The server saved your name as “{serverName}”.</p>{/if}
-		{#if status === 'declined'}<p class="ap-form-note ap-tone-danger" role="alert">{declinedNote ?? 'The server declined this name. Your old one is still in use.'}</p>{/if}
-		{#if maxBio !== undefined}
-			<label class="ap-fieldlabel"><span class="ap-fieldlabel-row"><span>Bio</span><span class={['ap-fieldlabel-hint', bioOver && 'ap-tone-danger']}>{bioLength}/{maxBio}</span></span>
-				<textarea class="ap-field ap-field-multi" aria-label="Bio" aria-invalid={bioOver} data-testid={bioTestid} rows="4" bind:value={bio} disabled={saving} spellcheck="true" dir="auto" placeholder="A few words about you, in plain text"></textarea>
-			</label>
-			{#if bioError}<p class="ap-form-note ap-tone-danger" role="alert">{bioError}</p>{/if}
-		{/if}
-		{#if dirty || saving || oncancel}
-			<div class="ap-profedit-actions">
-				{#if oncancel}<Button variant="ghost" size="sm" onclick={oncancel} disabled={saving} label={status === 'altered' ? 'Close' : 'Cancel'} />{/if}
-				{#if onrevert && dirty}<Button variant="ghost" size="sm" onclick={onrevert} disabled={saving} label="Revert" />{/if}
-				<Button type="submit" variant="primary" size="sm" disabled={saving || !name.trim() || bioOver} label={saving ? 'Saving…' : 'Save'} />
+		<div class="ap-profedit-fields">
+			{#if avatarError}<p class="ap-form-note ap-tone-danger" role="alert">{avatarError}</p>{/if}
+			<div class="ap-profedit-field">
+				<label class="ap-fieldlabel">Display name
+					<input class="ap-field" data-testid={nameTestid} bind:value={() => name, (v) => { name = v; oninput?.(v); }} disabled={saving} maxlength="64" autocomplete="nickname" spellcheck="false" dir="auto" />
+				</label>
+				<!-- ap-profedit-hint: apron-server-go's interop suite reads your ID by `.ap-profedit-hint code`: the code holds the ID alone, its @ drawn before it. -->
+				<p class="ap-form-hint ap-profedit-hint">User ID assigned by server: <code>{userId}</code></p>
 			</div>
-		{:else if status === 'saved'}
-			<p class="ap-form-note ap-tone-ok ap-profedit-saved" role="status">Saved.</p>
-		{/if}
+			{#if status === 'altered'}<p class="ap-form-note" role="status">The server saved your name as “{serverName}”.</p>{/if}
+			{#if status === 'declined'}<p class="ap-form-note ap-tone-danger" role="alert">{declinedNote ?? 'The server declined this name. Your old one is still in use.'}</p>{/if}
+			{#if maxBio !== undefined}
+				<label class="ap-fieldlabel"><span class="ap-fieldlabel-row"><span>Bio</span><span class={['ap-fieldlabel-hint', bioOver && 'ap-tone-danger']}>{bioLength}/{maxBio}</span></span>
+					<textarea class="ap-field ap-field-multi" aria-label="Bio" aria-invalid={bioOver} data-testid={bioTestid} rows="4" bind:value={bio} disabled={saving} spellcheck="true" dir="auto" placeholder="A few words about you, in plain text"></textarea>
+				</label>
+				{#if bioError}<p class="ap-form-note ap-tone-danger" role="alert">{bioError}</p>{/if}
+			{/if}
+			{#if dirty || saving || oncancel}
+				<div class="ap-profedit-actions">
+					{#if oncancel}<Button variant="ghost" size="sm" onclick={oncancel} disabled={saving} label={status === 'altered' ? 'Close' : 'Cancel'} />{/if}
+					{#if onrevert && dirty}<Button variant="ghost" size="sm" onclick={onrevert} disabled={saving} label="Revert" />{/if}
+					<Button type="submit" variant="primary" size="sm" disabled={saving || !name.trim() || bioOver} label={saving ? 'Saving…' : 'Save'} />
+				</div>
+			{:else if status === 'saved'}
+				<p class="ap-form-note ap-tone-ok ap-profedit-saved" role="status">Saved.</p>
+			{/if}
+		</div>
 	</div>
 	{#if signin}
 		<div class="ap-profedit-group ap-profedit-signin" role="group" aria-label="Sign-in">
