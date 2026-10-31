@@ -7,6 +7,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { dirname, join, relative, resolve } from 'node:path';
 import { ab } from './lib/ab.js';
 import { int, list, parseArgs } from './lib/args.js';
+import { compareBudget, countsOf, formatBudget, readBudget, writeBudget } from './lib/budget.js';
 import { launch } from './lib/browser.js';
 import { compareDirs, diffDirs, formatDiff, summarize } from './lib/images.js';
 import { extractInteropContract, interopDir } from './lib/interop-contract.js';
@@ -34,6 +35,9 @@ const HELP = `npm run qa -- <command> [options]
   perf --url A --url B   Load and interaction metrics, strictly interleaved; medians and spread.
                          [--label a --label b] [--runs 5] [--cpu 4] [--suite main] [--only load,type-composer]
                          [--build dirA --build dirB] [--out file.json]
+  budget --build <dir>   Check a preview build's counts (layouts, style recalcs, DOM nodes, requests,
+                         bytes) per perf probe against scripts/qa/perf-budget.json; exits 1 when one is
+                         over. --update rewrites the baseline. [--runs 3] [--cpu 4] [--only p]
   prof --url A --url B   CPU-profile page load; biggest per-function changes. [--runs 6] [--cpu 4]
   sheet <spec.json>      Render hand-picked before/after panels (title, note, crop box, scale) to a PNG.
                          [--out <spec>.png]
@@ -47,7 +51,7 @@ const HELP = `npm run qa -- <command> [options]
 Filters match any part of a shot id, <scene>--<viewport>--<theme>; commas give several.
 Chromium: QA_CHROMIUM, else playwright-core's build under PLAYWRIGHT_BROWSERS_PATH.`;
 
-const BOOLEAN = ['perf', 'recheck', 'rebuild', 'install', 'keep', 'clean', 'all', 'help', 'check'];
+const BOOLEAN = ['perf', 'recheck', 'rebuild', 'install', 'keep', 'clean', 'all', 'help', 'check', 'update'];
 const MULTI = ['url', 'label', 'build', 'suite', 'filter', 'only'];
 
 async function main() {
@@ -141,6 +145,38 @@ async function main() {
 			console.log(formatPerf(result));
 			console.log(`json: ${relative(process.cwd(), out)}`);
 			return 0;
+		}
+		case 'budget': {
+			const dir = o.build?.[0] ?? 'build';
+			if (!existsSync(join(dir, '__preview.html'))) throw new Error(`budget needs a preview build: no ${join(dir, '__preview.html')} (APRON_PREVIEW=1 npm run build)`);
+			const suite = await loadSuite('main');
+			const probes = selectProbes(suite, list(o.only)).filter((p) => p.budget !== false);
+			const runs = int(o.runs, 3);
+			const cpu = int(o.cpu, 4);
+			const server = await serveDir(dir);
+			const browser = await launch();
+			let result;
+			try {
+				// Under reduced motion, so an animation's layouts don't count once per frame drawn: a faster runner
+				// draws more frames, and the count would go with it.
+				result = await runPerf({ browser, urls: [server.url], labels: ['now'], runs, cpu, reducedMotion: 'reduce', probes, path: suite.path, builds: [dir] });
+			} finally {
+				await browser.close();
+				await server.close();
+			}
+			const path = join(repo, 'scripts/qa/perf-budget.json');
+			const counts = countsOf(result, probes);
+			if (o.update) {
+				writeBudget(path, counts, { runs, cpu });
+				console.log(`wrote ${relative(process.cwd(), path)}`);
+				return 0;
+			}
+			const rows = compareBudget(counts, readBudget(path));
+			console.log(formatBudget(rows));
+			const over = rows.filter((r) => r.status === 'over');
+			if (over.length) console.log(`\n${over.length} over budget. If that cost is meant, run \`npm run qa -- budget --update\` and commit scripts/qa/perf-budget.json with the change.`);
+			else if (rows.some((r) => r.status === 'under')) console.log('\nSome counts are well under budget: `npm run qa -- budget --update` locks the gain in.');
+			return over.length ? 1 : 0;
 		}
 		case 'prof': {
 			const urls = o.url ?? [];

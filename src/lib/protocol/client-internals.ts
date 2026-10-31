@@ -16,7 +16,7 @@ import {
 	type ReactionSet,
 	type RpcError
 } from './types';
-import { DEFAULT_ROOM_ID, type LimitScope, type Notice, type OperationHandle } from './client-types';
+import { DEFAULT_ROOM_ID, type LimitScope, type Notice, type OperationHandle, type RoomSnapshot } from './client-types';
 
 /**
  * How a room is in the client's rooms: `joined` (visible and live; without capability
@@ -65,6 +65,8 @@ export interface RoomState {
 	dirty: boolean;
 	/** The connection on which a room without a record last recovered from a message's position. */
 	recoveredOn?: number;
+	/** The room as the last snapshot published it (`sameRoomSnapshot`). */
+	published?: RoomSnapshot;
 }
 
 export function newRoomState(id: string, kind: RoomKind = 'joined'): RoomState {

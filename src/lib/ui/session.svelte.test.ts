@@ -291,3 +291,57 @@ describe('SessionView quiet moments', () => {
 		session.dispose();
 	});
 });
+
+describe('SessionView, snapshot by snapshot', () => {
+	const server = { apron: 9, auth: ['token'], capabilities: ['history', 'rooms'] };
+	const live = (rooms: RoomSnapshot[], fields: Partial<ClientSnapshot> = {}) => ready({ server, capabilities: capabilitiesOf(server), rooms, activeRoom: 'general', ...fields });
+
+	it('checks again only what reads a part that changed', () => {
+		const general = room('general', ['1']);
+		const ops = room('ops', ['2']);
+		const session = new SessionView();
+		const chat = client();
+		session.apply(live([general, ops]), chat);
+		const seen = { rooms: 0, activeRoomId: 0, capabilities: 0, general: 0, ops: 0 };
+		const cleanup = $effect.root(() => {
+			$effect(() => void (session.rooms, seen.rooms++));
+			$effect(() => void (session.activeRoomId, seen.activeRoomId++));
+			$effect(() => void (session.capabilities, seen.capabilities++));
+			$effect(() => void (session.room('general'), seen.general++));
+			$effect(() => void (session.room('ops'), seen.ops++));
+		});
+		flushSync();
+		expect(seen).toEqual({ rooms: 1, activeRoomId: 1, capabilities: 1, general: 1, ops: 1 });
+
+		// A new snapshot saying the same, in fresh lists and objects, as the client makes each one.
+		session.apply(live([general, ops], { pending: [] }), chat);
+		flushSync();
+		expect(seen).toEqual({ rooms: 1, activeRoomId: 1, capabilities: 1, general: 1, ops: 1 });
+
+		// A message in ops: the rooms and ops change, not general.
+		const opsAfter = room('ops', ['2', '3']);
+		session.apply(live([general, opsAfter]), chat);
+		flushSync();
+		expect(seen).toEqual({ rooms: 2, activeRoomId: 1, capabilities: 1, general: 1, ops: 2 });
+		expect(session.room('ops')).toBe(opsAfter);
+		expect(session.room('general')).toBe(general);
+
+		// Ops left: gone from the rooms, and from room().
+		session.apply(live([general]), chat);
+		flushSync();
+		expect(session.room('ops')).toBeUndefined();
+		expect(seen.ops).toBe(3);
+		cleanup();
+	});
+
+	it('gives the held rooms by id while it shows them', () => {
+		const session = new SessionView();
+		session.prime(kept);
+		flushSync();
+		expect(session.room('thread_1')).toBe(kept.rooms[1]);
+		session.apply(live([room('general', ['1', '2', '4'])]), client());
+		flushSync();
+		expect(session.room('general')?.timeline.order).toEqual(['1', '2', '4']);
+		expect(session.room('thread_1')).toBeUndefined();
+	});
+});

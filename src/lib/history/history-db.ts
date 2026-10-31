@@ -371,8 +371,12 @@ export async function writeHistory(db: IDBDatabase, write: HistoryWrite, kept: R
 			for (const set of room.reactions) records.put(reactionRow(set, room.room));
 		} else {
 			// Over what is kept below `from`: an earlier snapshot of a message or set there is replaced, not kept beside.
+			// A creation is its message's only snapshot, as with a change: there is none to look up, one request each.
 			records.delete(IDBKeyRange.bound([room.room, room.from], [room.room, []]));
-			for (const message of room.messages) await replace(messageRow(message), true);
+			for (const message of room.messages) {
+				if (message.log_id === message.message_id) records.put(messageRow(message));
+				else await replace(messageRow(message), true);
+			}
 			for (const set of room.reactions) await replace(reactionRow(set, room.room), true);
 		}
 		for (const entry of room.memberships) records.put(membershipRow(entry));
@@ -404,13 +408,15 @@ export async function pruneHistory(db: IDBDatabase, cutoff: number): Promise<{ f
 	const finished = committed(transaction);
 	const records = transaction.objectStore('records');
 	const rooms = await done(transaction.objectStore('rooms').getAll()) as RoomRow[];
-	let pruned = false;
-	for (const { room, sync } of rooms) {
-		if (!timeLike(sync)) continue;
+	// Every room's at once, not one after another: each request waits its turn on a busy page, as one loading does,
+	// and the transaction holds up every other read and write of what is kept until it is done.
+	const counts = rooms.filter(({ sync }) => timeLike(sync)).map(({ room }) => {
 		const range = roomRange(room, cutoff);
-		if (await done(records.count(range))) pruned = true;
+		const counted = done(records.count(range));
 		records.delete(range);
-	}
+		return counted;
+	});
+	const pruned = (await Promise.all(counts)).some((count) => count > 0);
 	// A new version, so another tab paging what it restored from here knows it changed.
 	const meta = transaction.objectStore('meta');
 	const row = pruned ? await done(meta.get(META)) as MetaRow | undefined : undefined;
@@ -435,13 +441,20 @@ const SCAN_BATCH = 500;
  * of this device looks through. `stop` ends it early, between batches.
  */
 export async function scanMessages(db: IDBDatabase, visit: (message: MessageRecord) => void, stop: () => boolean = () => false): Promise<void> {
-	let range: IDBKeyRange | undefined;
-	for (;;) {
-		const rows = await done(db.transaction('records').objectStore('records').getAll(range, SCAN_BATCH)) as RecordRow[];
+	const read = (range?: IDBKeyRange) => done(db.transaction('records').objectStore('records').getAll(range, SCAN_BATCH)) as Promise<RecordRow[]>;
+	let reading: Promise<RecordRow[]> | undefined = read();
+	while (reading) {
+		const rows: RecordRow[] = await reading;
+		// The next batch is read while this one is looked through, rather than after: the scan waits on each read
+		// about as long as it takes to look through one.
+		const last = rows.at(-1);
+		reading = rows.length < SCAN_BATCH || !last ? undefined : read(IDBKeyRange.lowerBound([last.room, last.log, last.kind, last.id], true));
 		for (const row of rows) if (row.kind === 'm') visit(row.value as MessageRecord);
-		if (rows.length < SCAN_BATCH || stop()) return;
-		const last = rows.at(-1)!;
-		range = IDBKeyRange.lowerBound([last.room, last.log, last.kind, last.id], true);
+		if (reading && stop()) {
+			// Ended early: the read under way is of no use, nor is how it ends.
+			reading.catch(() => undefined);
+			return;
+		}
 	}
 }
 

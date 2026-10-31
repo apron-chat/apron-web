@@ -90,41 +90,42 @@ test.describe('ext:permissions and ext:settings', () => {
 	test.describe('a guest who may not write', () => {
 		test.use({ knobs: { seed: 'rich', permissions: { write: false } } });
 
-		test('reads, with sign-in offered in place of the composer, and no reactions or joins', async ({ preview, page }) => {
-			await preview.open();
-			const bar = page.locator('.ap-composer-readonly');
-			await expect(bar).toContainText('You’re reading as a guest');
-			await expect(bar.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
-			await expect(preview.composer()).toHaveCount(0);
-			const welcome = page.locator(`article[data-message-id="${WELCOME}"]`);
-			await welcome.hover();
-			await expect(welcome.getByRole('button', { name: 'React', exact: true })).toHaveCount(0);
-			await expect(page.getByRole('button', { name: 'Add member', exact: true })).toHaveCount(0);
-			// Other Rooms, open from the start, opens a room to read rather than joining it, so it says no Join.
-			await expect(page.getByTestId('room-directory')).toContainText('Design reviews');
-			await expect(page.getByTestId('room-directory').getByRole('button', { name: /^Join/ })).toHaveCount(0);
-			for (const topic of await page.getByTestId('room-directory').locator('.ap-room-topic').allTextContents()) expect(topic).not.toMatch(/Join|Open/);
-		});
-
-		test('selects messages to copy to the clipboard, with nothing to move them to, and leaves select mode once copied', async ({ preview, page, context }) => {
+		test('reads, with sign-in offered in place of the composer and no reactions or joins; copies a selection, with nothing to move it to; reads a room it hasn’t joined by its link', async ({ preview, page, context }) => {
 			await context.grantPermissions(['clipboard-read', 'clipboard-write']);
 			await preview.open();
-			await page.locator(`article[data-message-id="${WELCOME}"]`).click({ modifiers: ['Shift'] });
-			const bar = page.getByTestId('selection-bar');
-			await expect(bar).toContainText('1 message selected');
-			await expect(bar.getByRole('button')).toHaveText(['Cancel', 'Copy to clipboard']);
-			await bar.getByRole('button', { name: 'Copy to clipboard', exact: true }).click();
-			// Copied, select mode ends.
-			await expect(bar).toHaveCount(0);
-			expect(await page.evaluate(() => navigator.clipboard.readText())).toMatch(/^> \*\*.+\*\* · \w+day, \w{3} \d+, \d{4} at /);
-		});
 
-				test('reads the messages of a room it hasn’t joined, opened by its link', async ({ preview, page }) => {
-			await preview.open();
-			await preview.post('design', 'ada', 'The new palette is up for review.');
-			await page.evaluate(() => { location.hash = '#room=design'; });
-			await expect(preview.message('The new palette is up for review.')).toBeVisible();
-			expect((await preview.sent('room_join')).filter((p) => p.room_id === 'design')).toEqual([]);
+			await test.step('reads, with sign-in offered in place of the composer, and no reactions or joins', async () => {
+				const bar = page.locator('.ap-composer-readonly');
+				await expect(bar).toContainText('You’re reading as a guest');
+				await expect(bar.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
+				await expect(preview.composer()).toHaveCount(0);
+				const welcome = page.locator(`article[data-message-id="${WELCOME}"]`);
+				await welcome.hover();
+				await expect(welcome.getByRole('button', { name: 'React', exact: true })).toHaveCount(0);
+				await expect(page.getByRole('button', { name: 'Add member', exact: true })).toHaveCount(0);
+				// Other Rooms, open from the start, opens a room to read rather than joining it, so it says no Join.
+				await expect(page.getByTestId('room-directory')).toContainText('Design reviews');
+				await expect(page.getByTestId('room-directory').getByRole('button', { name: /^Join/ })).toHaveCount(0);
+				for (const topic of await page.getByTestId('room-directory').locator('.ap-room-topic').allTextContents()) expect(topic).not.toMatch(/Join|Open/);
+			});
+
+			await test.step('selects messages to copy to the clipboard, with nothing to move them to, and leaves select mode once copied', async () => {
+				await page.locator(`article[data-message-id="${WELCOME}"]`).click({ modifiers: ['Shift'] });
+				const bar = page.getByTestId('selection-bar');
+				await expect(bar).toContainText('1 message selected');
+				await expect(bar.getByRole('button')).toHaveText(['Cancel', 'Copy to clipboard']);
+				await bar.getByRole('button', { name: 'Copy to clipboard', exact: true }).click();
+				// Copied, select mode ends.
+				await expect(bar).toHaveCount(0);
+				expect(await page.evaluate(() => navigator.clipboard.readText())).toMatch(/^> \*\*.+\*\* · \w+day, \w{3} \d+, \d{4} at /);
+			});
+
+			await test.step('reads the messages of a room it hasn’t joined, opened by its link', async () => {
+				await preview.post('design', 'ada', 'The new palette is up for review.');
+				await page.evaluate(() => { location.hash = '#room=design'; });
+				await expect(preview.message('The new palette is up for review.')).toBeVisible();
+				expect((await preview.sent('room_join')).filter((p) => p.room_id === 'design')).toEqual([]);
+			});
 		});
 	});
 
@@ -231,73 +232,74 @@ test.describe('ext:permissions and ext:settings', () => {
 test.describe('custom emoji (ext:emoji) and reaction keys (§4.7)', () => {
 	test.use({ knobs: EMOJI });
 
-	test('render in text as their images, scanned left to right, never in code', async ({ preview, page }) => {
+	// The picker reacts first: it checks that your reactions are exactly the one picked.
+	test('render in text, are offered in the picker and the composer\'s :shortcode list, and show in reactions, each reaction toggled as written', async ({ preview, page }) => {
 		await preview.open();
-		await preview.post('general', 'ada', 'Shipped :partyparrot: at 12:30:wide: and `:partyparrot:`, but :nope:');
-		const message = preview.message('Shipped');
-		const parrot = message.locator('.ap-msg-text img.ap-cemoji[alt=":partyparrot:"]');
-		await expect(parrot).toHaveCount(1);
-		// The browser suite prefers reduced motion: the still copy shows.
-		await expect(parrot).toHaveAttribute('src', BLUE);
-		const wide = message.locator('img.ap-cemoji[alt="A wide one"]');
-		await expect(wide).toHaveAttribute('style', 'aspect-ratio: 64 / 32');
-		await expect(wide).toHaveAttribute('title', 'A wide one');
-		await expect(message.locator('.ap-msg-text')).toContainText('12:30');
-		await expect(message.locator('code')).toHaveText(':partyparrot:');
-		await expect(message.locator('.ap-msg-text')).toContainText(':nope:');
-		// The image is taller than nothing, and no taller than its line.
-		const box = await parrot.boundingBox();
-		expect(box!.height).toBeGreaterThan(10);
-		expect(box!.height).toBeLessThan(40);
-		await expect(page.locator('img.ap-cemoji[alt=":secret:"]')).toHaveCount(0);
-	});
 
-	test('show in reactions as images or placeholders, entries differing only in U+FE0F as one, each toggled as written', async ({ preview, page }) => {
-		await preview.open();
-		await preview.reactAs('grace', WELCOME, [':partyparrot:', ':unknown:', '❤']);
-		await preview.reactAs('linus', WELCOME, ['❤️']);
-		const welcome = page.locator(`article[data-message-id="${WELCOME}"]`);
-		const chips = welcome.getByTestId('reaction-chip');
-		await expect(chips).toHaveCount(3);
-		const heart = welcome.locator('[data-testid="reaction-chip"][data-emoji="❤️"]');
-		await expect(heart).toContainText('2');
-		const parrot = welcome.locator('[data-testid="reaction-chip"][data-emoji=":partyparrot:"]');
-		await expect(parrot.locator('img.ap-cemoji')).toHaveAttribute('src', BLUE);
-		await expect(parrot).toHaveAttribute('title', /reacted with :partyparrot:$/);
-		const unknown = welcome.locator('[data-testid="reaction-chip"][data-emoji=":unknown:"]');
-		await expect(unknown.locator('.ap-rchip-placeholder')).toBeVisible();
-		await expect(unknown).toHaveAttribute('title', /reacted with :unknown:$/);
-		// Tapping the placeholder reacts with that same key; the heart with its fully-qualified form.
-		await unknown.click();
-		await preview.waitForSent('reactions', (p) => p.message_id === WELCOME && p.emojis.includes(':unknown:'));
-		await heart.click();
-		await preview.waitForSent('reactions', (p) => p.message_id === WELCOME && p.emojis.includes('❤️'));
-		await expect(heart).toContainText('3');
-	});
+		await test.step('render in text as their images, scanned left to right, never in code', async () => {
+			await preview.post('general', 'ada', 'Shipped :partyparrot: at 12:30:wide: and `:partyparrot:`, but :nope:');
+			const message = preview.message('Shipped');
+			const parrot = message.locator('.ap-msg-text img.ap-cemoji[alt=":partyparrot:"]');
+			await expect(parrot).toHaveCount(1);
+			// The browser suite prefers reduced motion: the still copy shows.
+			await expect(parrot).toHaveAttribute('src', BLUE);
+			const wide = message.locator('img.ap-cemoji[alt="A wide one"]');
+			await expect(wide).toHaveAttribute('style', 'aspect-ratio: 64 / 32');
+			await expect(wide).toHaveAttribute('title', 'A wide one');
+			await expect(message.locator('.ap-msg-text')).toContainText('12:30');
+			await expect(message.locator('code')).toHaveText(':partyparrot:');
+			await expect(message.locator('.ap-msg-text')).toContainText(':nope:');
+			// The image is taller than nothing, and no taller than its line.
+			const box = await parrot.boundingBox();
+			expect(box!.height).toBeGreaterThan(10);
+			expect(box!.height).toBeLessThan(40);
+			await expect(page.locator('img.ap-cemoji[alt=":secret:"]')).toHaveCount(0);
+		});
 
-	test('are offered in the picker, without hidden ones, and a pick reacts with the key', async ({ preview, page }) => {
-		await preview.open();
-		await action(preview, WELCOME, 'React');
-		const picker = page.getByRole('dialog', { name: 'Emoji picker', exact: true });
-		await expect(picker).toHaveAttribute('data-state', 'ready');
-		const search = picker.locator('em-emoji-picker input[type="search"]');
-		await search.fill('secret');
-		await expect(picker.getByRole('button', { name: ':secret:', exact: true })).toHaveCount(0);
-		await search.fill('celebrate');
-		await picker.getByRole('button', { name: ':partyparrot:', exact: true }).first().click();
-		await preview.waitForSent('reactions', (p) => p.message_id === WELCOME && p.emojis.length === 1 && p.emojis[0] === ':partyparrot:');
-		await expect(page.locator(`article[data-message-id="${WELCOME}"] [data-testid="reaction-chip"][data-emoji=":partyparrot:"] img`)).toBeVisible();
-	});
+		await test.step('are offered in the picker, without hidden ones, and a pick reacts with the key', async () => {
+			await action(preview, WELCOME, 'React');
+			const picker = page.getByRole('dialog', { name: 'Emoji picker', exact: true });
+			await expect(picker).toHaveAttribute('data-state', 'ready');
+			const search = picker.locator('em-emoji-picker input[type="search"]');
+			await search.fill('secret');
+			await expect(picker.getByRole('button', { name: ':secret:', exact: true })).toHaveCount(0);
+			await search.fill('celebrate');
+			await picker.getByRole('button', { name: ':partyparrot:', exact: true }).first().click();
+			await preview.waitForSent('reactions', (p) => p.message_id === WELCOME && p.emojis.length === 1 && p.emojis[0] === ':partyparrot:');
+			await expect(page.locator(`article[data-message-id="${WELCOME}"] [data-testid="reaction-chip"][data-emoji=":partyparrot:"] img`)).toBeVisible();
+		});
 
-	test('are offered first by the composer\'s :shortcode list, which inserts the key', async ({ preview, page }) => {
-		await preview.open();
-		await preview.composer().click();
-		await page.keyboard.type(':part');
-		const list = page.getByRole('listbox', { name: 'Emoji suggestions' });
-		await expect(list.getByRole('option').first()).toContainText(':partyparrot:');
-		await expect(list.getByRole('option').first().locator('img.ap-cemoji')).toBeVisible();
-		await page.keyboard.press('Tab');
-		await expect(preview.composer()).toContainText(':partyparrot:');
+		await test.step('show in reactions as images or placeholders, entries differing only in U+FE0F as one, each toggled as written', async () => {
+			await preview.reactAs('grace', WELCOME, [':partyparrot:', ':unknown:', '❤']);
+			await preview.reactAs('linus', WELCOME, ['❤️']);
+			const welcome = page.locator(`article[data-message-id="${WELCOME}"]`);
+			const chips = welcome.getByTestId('reaction-chip');
+			await expect(chips).toHaveCount(3);
+			const heart = welcome.locator('[data-testid="reaction-chip"][data-emoji="❤️"]');
+			await expect(heart).toContainText('2');
+			const parrot = welcome.locator('[data-testid="reaction-chip"][data-emoji=":partyparrot:"]');
+			await expect(parrot.locator('img.ap-cemoji')).toHaveAttribute('src', BLUE);
+			await expect(parrot).toHaveAttribute('title', /reacted with :partyparrot:$/);
+			const unknown = welcome.locator('[data-testid="reaction-chip"][data-emoji=":unknown:"]');
+			await expect(unknown.locator('.ap-rchip-placeholder')).toBeVisible();
+			await expect(unknown).toHaveAttribute('title', /reacted with :unknown:$/);
+			// Tapping the placeholder reacts with that same key; the heart with its fully-qualified form.
+			await unknown.click();
+			await preview.waitForSent('reactions', (p) => p.message_id === WELCOME && p.emojis.includes(':unknown:'));
+			await heart.click();
+			await preview.waitForSent('reactions', (p) => p.message_id === WELCOME && p.emojis.includes('❤️'));
+			await expect(heart).toContainText('3');
+		});
+
+		await test.step('are offered first by the composer\'s :shortcode list, which inserts the key', async () => {
+			await preview.composer().click();
+			await page.keyboard.type(':part');
+			const list = page.getByRole('listbox', { name: 'Emoji suggestions' });
+			await expect(list.getByRole('option').first()).toContainText(':partyparrot:');
+			await expect(list.getByRole('option').first().locator('img.ap-cemoji')).toBeVisible();
+			await page.keyboard.press('Tab');
+			await expect(preview.composer()).toContainText(':partyparrot:');
+		});
 	});
 });
 
@@ -341,49 +343,89 @@ test.describe('text direction (§3.5.2)', () => {
 		}
 	});
 
-	test('drops bidi overrides from what users write, and isolates names from the words around them', async ({ preview, page }) => {
+	test('drops bidi overrides from what users write and shows none anywhere, isolating names, and keeps every character on the wire', async ({ preview, page }) => {
 		await preview.open();
-		await preview.post('general', 'ada', 'See evil‮gnp.exe', { from: { user_id: 'mallory', name: 'Mal‮lory' } });
-		const message = preview.message('See evilgnp.exe');
-		await expect(message).toBeVisible();
-		const sender = message.locator('.ap-msg-sender');
-		await expect(sender).toHaveText('Mallory');
-		expect(await message.innerText()).not.toMatch(/[‪-‮]/);
-		expect(await sender.evaluate((element) => getComputedStyle(element).unicodeBidi)).toBe('plaintext');
-		expect(await message.locator('.ap-msg-text p').evaluate((element) => getComputedStyle(element).unicodeBidi)).toBe('plaintext');
-	});
 
-	test('shows none anywhere: names, roles, bios, titles, descriptions, messages, replies, embeds and the server', async ({ preview, page }) => {
-		await preview.open();
-		const posted = await preview.post('general', 'ada', {
-			text: `Shipped${RLO} it`, format: 'markdown',
-			embeds: [{ kind: 'link', url: 'https://example.com/', og: { title: `Release${RLO} notes`, description: `What${RLO} changed`, site_name: `Exa${RLO}mple` } }]
+		await test.step('drops bidi overrides from what users write, and isolates names from the words around them', async () => {
+			await preview.post('general', 'ada', 'See evil‮gnp.exe', { from: { user_id: 'mallory', name: 'Mal‮lory' } });
+			const message = preview.message('See evilgnp.exe');
+			await expect(message).toBeVisible();
+			const sender = message.locator('.ap-msg-sender');
+			await expect(sender).toHaveText('Mallory');
+			expect(await message.innerText()).not.toMatch(/[‪-‮]/);
+			expect(await sender.evaluate((element) => getComputedStyle(element).unicodeBidi)).toBe('plaintext');
+			expect(await message.locator('.ap-msg-text p').evaluate((element) => getComputedStyle(element).unicodeBidi)).toBe('plaintext');
 		});
-		await preview.post('general', 'grace', `Nice${RLO} work`, { reply_to: { message_id: posted } });
-		await preview.reactAs('ada', WELCOME, ['👍']);
-		await expect(page.locator(`article[data-message-id="${posted}"]`)).toContainText('Release notes');
-		await expect(page.locator('.ap-reply-text').filter({ hasText: 'Shipped it' })).toBeVisible();
-		await expect(page.locator('.ap-shell-sidehead-name')).toHaveText('Mock Chat');
-		await preview.showMembers();
-		await expect(page.getByTestId('room-member-list')).toContainText('Ada Lovelace');
-		expect(await overridesShown(page)).toEqual([]);
 
-		// Ada's profile card: her name, role and bio.
-		await page.getByTestId('message-list').getByRole('button', { name: 'Ada Lovelace', exact: true }).first().click();
-		const card = page.getByTestId('profile-card');
-		await expect(card.getByTestId('profile-bio')).toHaveText('Writes programs');
-		await expect(card).toContainText('admin');
-		expect(await overridesShown(page)).toEqual([]);
-		await page.keyboard.press('Escape');
+		await test.step('shows none anywhere: names, roles, bios, titles, descriptions, messages, replies, embeds and the server', async () => {
+			const posted = await preview.post('general', 'ada', {
+				text: `Shipped${RLO} it`, format: 'markdown',
+				embeds: [{ kind: 'link', url: 'https://example.com/', og: { title: `Release${RLO} notes`, description: `What${RLO} changed`, site_name: `Exa${RLO}mple` } }]
+			});
+			await preview.post('general', 'grace', `Nice${RLO} work`, { reply_to: { message_id: posted } });
+			await preview.reactAs('ada', WELCOME, ['👍']);
+			await expect(page.locator(`article[data-message-id="${posted}"]`)).toContainText('Release notes');
+			await expect(page.locator('.ap-reply-text').filter({ hasText: 'Shipped it' })).toBeVisible();
+			await expect(page.locator('.ap-shell-sidehead-name')).toHaveText('Mock Chat');
+			await preview.showMembers();
+			await expect(page.getByTestId('room-member-list')).toContainText('Ada Lovelace');
+			expect(await overridesShown(page)).toEqual([]);
 
-		// A room's title and description, in the sidebar, the header and the page title; a thread's.
-		await preview.openRoom('engineering');
-		await expect(preview.heading()).toHaveText('engineering');
-		expect(await overridesShown(page)).toEqual([]);
-		await preview.openRoom('general');
-		await preview.openThread('thread_deploy');
-		await expect(preview.heading()).toContainText('Deploy checklist');
-		expect(await overridesShown(page)).toEqual([]);
+			// Ada's profile card: her name, role and bio.
+			await page.getByTestId('message-list').getByRole('button', { name: 'Ada Lovelace', exact: true }).first().click();
+			const card = page.getByTestId('profile-card');
+			await expect(card.getByTestId('profile-bio')).toHaveText('Writes programs');
+			await expect(card).toContainText('admin');
+			expect(await overridesShown(page)).toEqual([]);
+			await page.keyboard.press('Escape');
+
+			// A room's title and description, in the sidebar, the header and the page title; a thread's.
+			await preview.openRoom('engineering');
+			await expect(preview.heading()).toHaveText('engineering');
+			expect(await overridesShown(page)).toEqual([]);
+			await preview.openRoom('general');
+			await preview.openThread('thread_deploy');
+			await expect(preview.heading()).toContainText('Deploy checklist');
+			expect(await overridesShown(page)).toEqual([]);
+		});
+
+		await test.step('keeps every character on the wire: an edit sends back what was written, a room edit its title', async () => {
+			await preview.openRoom('engineering');
+			// Your own message, sent as typed, then edited: the override stays in what is sent.
+			await preview.composer().click();
+			await page.keyboard.insertText(`mine ${RLO}abc`);
+			await page.getByRole('button', { name: 'Send message', exact: true }).click();
+			const sent = await preview.waitForSent('message', (p) => typeof p.body?.text === 'string' && p.body.text.startsWith('mine'));
+			expect(sent.body.text).toBe(`mine ${RLO}abc`);
+			const mine = preview.message('mine abc');
+			await expect(mine).toBeVisible();
+			await expect(async () => {
+				await mine.hover();
+				await expect(mine.getByRole('button', { name: 'Edit message', exact: true })).toBeVisible({ timeout: 1000 });
+			}).toPass();
+			await mine.getByRole('button', { name: 'Edit message', exact: true }).click();
+			const editor = page.getByRole('textbox', { name: 'Edit message', exact: true });
+			await expect(editor).toBeVisible();
+			await editor.press('ControlOrMeta+End');
+			await page.keyboard.insertText(' more');
+			await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+			const edit = await preview.waitForSent('message', (p) => p.message_id !== undefined && typeof p.body?.text === 'string' && p.body.text.endsWith('more'));
+			expect(edit.body.text).toBe(`mine ${RLO}abc more`);
+			await expect(preview.message('mine abc more')).toBeVisible();
+
+			// The room's description changed alone: its title goes back as written.
+			await page.getByTestId('room-actions').click();
+			await page.getByTestId('edit-room').click();
+			const dialog = page.getByRole('dialog', { name: 'Edit room', exact: true });
+			// The editor starts from the title as written.
+			await expect(dialog.getByRole('textbox', { name: 'Room title', exact: true })).toHaveValue(`engi${RLO}neering`);
+			await dialog.getByRole('textbox', { name: /description/i }).fill('About builds, and releases');
+			await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+			const saved = await preview.waitForSent('room_set', (p) => p.room_id === 'engineering');
+			expect(saved.description).toBe('About builds, and releases');
+			expect(saved.title ?? `engi${RLO}neering`).toBe(`engi${RLO}neering`);
+			expect(await overridesShown(page)).toEqual([]);
+		});
 	});
 
 	test('shows none in the server\'s title and description where it is picked', async ({ preview, page }) => {
@@ -392,44 +434,6 @@ test.describe('text direction (§3.5.2)', () => {
 		await preview.openConnect();
 		await expect(page.getByTestId('connect-server')).toContainText('Mock Chat');
 		await expect(page.locator('.ap-connect-server-desc')).toHaveText('Where we talk.');
-		expect(await overridesShown(page)).toEqual([]);
-	});
-
-	test('keeps every character on the wire: an edit sends back what was written, a room edit its title', async ({ preview, page }) => {
-		await preview.open('#room=engineering');
-		// Your own message, sent as typed, then edited: the override stays in what is sent.
-		await preview.composer().click();
-		await page.keyboard.insertText(`mine ${RLO}abc`);
-		await page.getByRole('button', { name: 'Send message', exact: true }).click();
-		const sent = await preview.waitForSent('message', (p) => typeof p.body?.text === 'string' && p.body.text.startsWith('mine'));
-		expect(sent.body.text).toBe(`mine ${RLO}abc`);
-		const mine = preview.message('mine abc');
-		await expect(mine).toBeVisible();
-		await expect(async () => {
-			await mine.hover();
-			await expect(mine.getByRole('button', { name: 'Edit message', exact: true })).toBeVisible({ timeout: 1000 });
-		}).toPass();
-		await mine.getByRole('button', { name: 'Edit message', exact: true }).click();
-		const editor = page.getByRole('textbox', { name: 'Edit message', exact: true });
-		await expect(editor).toBeVisible();
-		await editor.press('ControlOrMeta+End');
-		await page.keyboard.insertText(' more');
-		await page.getByRole('button', { name: 'Save changes', exact: true }).click();
-		const edit = await preview.waitForSent('message', (p) => p.message_id !== undefined && typeof p.body?.text === 'string' && p.body.text.endsWith('more'));
-		expect(edit.body.text).toBe(`mine ${RLO}abc more`);
-		await expect(preview.message('mine abc more')).toBeVisible();
-
-		// The room's description changed alone: its title goes back as written.
-		await page.getByTestId('room-actions').click();
-		await page.getByTestId('edit-room').click();
-		const dialog = page.getByRole('dialog', { name: 'Edit room', exact: true });
-		// The editor starts from the title as written.
-		await expect(dialog.getByRole('textbox', { name: 'Room title', exact: true })).toHaveValue(`engi${RLO}neering`);
-		await dialog.getByRole('textbox', { name: /description/i }).fill('About builds, and releases');
-		await dialog.getByRole('button', { name: 'Save', exact: true }).click();
-		const saved = await preview.waitForSent('room_set', (p) => p.room_id === 'engineering');
-		expect(saved.description).toBe('About builds, and releases');
-		expect(saved.title ?? `engi${RLO}neering`).toBe(`engi${RLO}neering`);
 		expect(await overridesShown(page)).toEqual([]);
 	});
 });
