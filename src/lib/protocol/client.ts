@@ -419,6 +419,8 @@ export class ChatClient {
 	 */
 	private tokenName: { token: string; name: string } | undefined;
 	private activeRoomId?: string;
+	/** The room the reader will see once it's listed again (`awaitRoom`): a reload or reconnect showing it from before. */
+	private awaitedRoomId?: string;
 	private server?: ServerParams;
 	private you?: Identity;
 	private displayName = '';
@@ -492,7 +494,7 @@ export class ChatClient {
 		this.historyQueue = new HistoryQueue({
 			send: (params, allowBeforeAuth) => this.enqueueRequest('history', params, { visible: false, allowBeforeAuth }),
 			limited: () => Boolean(this.limited('history')),
-			activeRoomId: () => this.activeRoomId,
+			activeRoomId: () => (this.rooms.get(this.awaitedRoomId ?? '')?.kind === 'pending' ? this.awaitedRoomId : this.activeRoomId),
 			emit: () => this.emit()
 		}, historyConcurrency);
 		this.webSocketFactory = webSocketFactory;
@@ -693,6 +695,16 @@ export class ChatClient {
 		this.retryingSince = this.now();
 		this.error = undefined;
 		this.connectNow();
+	}
+
+	/**
+	 * The room the UI will select once this connection lists it (or undefined): while it's kept from the last
+	 * connection, not listed yet (`pending`), its history requests go before the other rooms', so what's on screen
+	 * catches up first rather than in the order the rooms were kept. Once listed it's selected, and once the listing
+	 * leaves it out it's gone: either way the active room's go first again.
+	 */
+	awaitRoom(roomId: string | undefined): void {
+		this.awaitedRoomId = roomId;
 	}
 
 	/** Selects the room (or thread) the UI shows; unknown rooms are ignored. */
