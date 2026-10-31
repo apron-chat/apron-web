@@ -86,7 +86,7 @@
 	import { mediaAskClick } from '$lib/ui/media-ask';
 	import { mediaSettings } from '$lib/ui/media-settings.svelte';
 	import { preferencesOpener } from '$lib/ui/preferences.svelte';
-	import { buildRoomTimeline, newDividerBefore, threadEntries, threadStartedFrom, threadDescriptionFor, threadTitleFor } from '$lib/ui/timeline';
+	import { buildRoomTimeline, newDividerBefore, steady, threadEntries, threadStartedFrom, threadDescriptionFor, threadTitleFor, type ThreadEntry, type TimelineItem } from '$lib/ui/timeline';
 	import { takeSignInLink } from '$lib/ui/sign-in-link';
 	import { SignInLinks } from '$lib/ui/link-controller.svelte';
 	import { findProposal } from '$lib/protocol/proposals';
@@ -414,7 +414,9 @@
 	let activeRoom = $derived(session.activeRoom);
 	/** The active room's threads: the joined ones, then those listed as not joined, which get cards too. */
 	let threadSource = $derived(session.threadSource(activeRoom?.id));
-	let threads = $derived(threadEntries(threadSource.rooms, activeRoom?.id, threadSource.directory));
+	// Kept entry by entry while each says the same (`steady`), as the timeline's items are: not state, only what was last worked out.
+	let lastThreads: ThreadEntry[] = [];
+	let threads = $derived((lastThreads = steady(lastThreads, threadEntries(threadSource.rooms, activeRoom?.id, threadSource.directory))));
 	let joinedThreads = $derived(threads.filter((entry) => entry.joined));
 	/** The sidebar lists joined threads, and a thread open without joining while it is open. */
 	let listedThreads = $derived(threads.filter((entry) => entry.joined || entry.id === activeThread));
@@ -542,9 +544,11 @@
 	/** Nothing held to show while the room's threads are listed: placeholders, so its messages and thread cards appear together. */
 	let paneHeldBack = $derived(awaitingThreads && !activeThread && !session.activeRoomHeld);
 	let messages = $derived(timelineMessages(paneRoom));
-	let timeline = $derived(buildRoomTimeline({
+	// Kept item by item while each says the same (`steady`), so a change elsewhere redraws no row: not state, only what was last worked out.
+	let lastTimeline: TimelineItem[] = [];
+	let timeline = $derived((lastTimeline = steady(lastTimeline, buildRoomTimeline({
 		messages, threads: activeThread ? [] : threads, renames: paneRoom?.renames, notices: paneRoom?.notices, memberships: paneRoom?.timeline.memberships
-	}));
+	}))));
 	let shownTimeline = $derived(reveal.hidden > 0 ? timeline.slice(Math.min(reveal.hidden, timeline.length)) : timeline);
 	/** The pane is live: its room is listed, and no sign-in is under way. */
 	let paneReady = $derived(Boolean(paneRoom && session.ready && !snapshot.authBusy));

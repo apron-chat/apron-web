@@ -452,6 +452,37 @@ export function buildRoomTimeline({ messages, threads = [], renames = [], notice
 	return items;
 }
 
+/** The same keys holding the same values, and lists the same items in order: two items or entries that show the same. */
+function sameShallow(a: object, b: object): boolean {
+	if (a === b) return true;
+	const left = a as Record<string, unknown>, right = b as Record<string, unknown>;
+	const keys = Object.keys(left);
+	if (keys.length !== Object.keys(right).length) return false;
+	return keys.every((key) => {
+		const x = left[key], y = right[key];
+		if (x === y) return true;
+		if (Array.isArray(x) && Array.isArray(y)) return x.length === y.length && x.every((item, index) => item === y[index]);
+		// A thread card's entry, worked out afresh with each snapshot.
+		return key === 'entry' && typeof x === 'object' && typeof y === 'object' && x !== null && y !== null && sameShallow(x, y);
+	});
+}
+
+/**
+ * `next`, worked out afresh, with each entry or item that says the same as the one with its id or key in `last`
+ * replaced by that one, and `last` itself while all of them do. Thread entries and timeline items are made anew from
+ * each snapshot, the client's for any room: kept, a message in another room (or a read) doesn't hand every row on
+ * screen a new item to draw again, only those that changed.
+ */
+export function steady<T extends ThreadEntry | TimelineItem>(last: readonly T[], next: T[]): T[] {
+	const keyOf = (value: T): string => ('key' in value ? value.key : value.id);
+	const before = new Map(last.map((value) => [keyOf(value), value]));
+	const kept = next.map((value) => {
+		const old = before.get(keyOf(value));
+		return old && sameShallow(old, value) ? old : value;
+	});
+	return kept.length === last.length && kept.every((value, index) => value === last[index]) ? (last as T[]) : kept;
+}
+
 /**
  * The message the New divider goes above: the first after your read
  * position `after`, unless you wrote it. None while nothing at or before
