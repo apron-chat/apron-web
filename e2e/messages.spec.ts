@@ -15,43 +15,48 @@ async function act(preview: Preview, text: string, action: string): Promise<void
 test.describe('a message row', () => {
 	test.use(DEVICES.desktop);
 
-	test.beforeEach(async ({ preview }) => {
+	// Select mode last, so it can't change what the other steps' clicks do.
+	test('React reacts to that message, an image embed opens full screen, and a shift-click in select mode picks every message between', async ({ preview, page }) => {
 		await preview.open();
-	});
 
-	test('React opens the picker beside it, and a pick reacts to that message', async ({ preview, page }) => {
-		await act(preview, 'Open a thread, react to a message', 'React');
-		const react = preview.message('Open a thread, react to a message').getByRole('button', { name: 'React', exact: true });
-		await expect(react).toHaveAttribute('aria-expanded', 'true');
-		const picker = page.getByRole('dialog', { name: 'Emoji picker', exact: true });
-		await expect(picker).toHaveAttribute('data-state', 'ready');
-		await picker.locator('em-emoji-picker input[type="search"]').fill('tada');
-		await picker.getByRole('button', { name: '🎉', exact: true }).first().click();
-		expect(await preview.waitForSent('reactions')).toMatchObject({ message_id: '1710000000004', emojis: ['🎉'] });
-		await preview.message('Open a thread, react to a message').hover();
-		await expect(react).toHaveAttribute('aria-expanded', 'false');
-		// A right-click on the chip lists who reacted: you.
-		await preview.message('Open a thread, react to a message').getByTestId('reaction-chip').click({ button: 'right' });
-		await expect(page.getByTestId('reactors').getByTestId('reactor')).toHaveCount(1);
-	});
+		await test.step('React opens the picker beside it, and a pick reacts to that message', async () => {
+			await act(preview, 'Open a thread, react to a message', 'React');
+			const react = preview.message('Open a thread, react to a message').getByRole('button', { name: 'React', exact: true });
+			await expect(react).toHaveAttribute('aria-expanded', 'true');
+			const picker = page.getByRole('dialog', { name: 'Emoji picker', exact: true });
+			await expect(picker).toHaveAttribute('data-state', 'ready');
+			await picker.locator('em-emoji-picker input[type="search"]').fill('tada');
+			await picker.getByRole('button', { name: '🎉', exact: true }).first().click();
+			expect(await preview.waitForSent('reactions')).toMatchObject({ message_id: '1710000000004', emojis: ['🎉'] });
+			await preview.message('Open a thread, react to a message').hover();
+			await expect(react).toHaveAttribute('aria-expanded', 'false');
+			// A right-click on the chip lists who reacted: you.
+			await preview.message('Open a thread, react to a message').getByTestId('reaction-chip').click({ button: 'right' });
+			await expect(page.getByTestId('reactors').getByTestId('reactor')).toHaveCount(1);
+			await page.keyboard.press('Escape');
+			await expect(page.getByTestId('reactors')).toHaveCount(0);
+		});
 
-	test('a shift-click in select mode picks every message between', async ({ preview, page }) => {
-		await preview.composer().click();
-		for (const text of ['first of mine', 'second of mine', 'third of mine']) {
-			await page.keyboard.type(text);
-			await page.keyboard.press('Enter');
-			await expect(preview.message(text)).toBeVisible();
-		}
-		await act(preview, 'first of mine', 'More actions');
-		await preview.message('first of mine').getByTestId('select-message').click();
-		await expect(page.getByTestId('selection-bar')).toContainText('1 message selected');
-		await preview.message('third of mine').locator('.ap-msg-text').click({ modifiers: ['Shift'] });
-		await expect(page.getByTestId('selection-bar')).toContainText('3 messages selected');
-	});
+		await test.step('an image embed opens full screen', async () => {
+			await preview.message('Two from the ridge').getByRole('img', { name: /Layered purple hills/ }).click();
+			await expect(page.getByRole('dialog').getByRole('button', { name: 'Next image' })).toBeVisible();
+			await page.keyboard.press('Escape');
+			await expect(page.getByRole('dialog')).toHaveCount(0);
+		});
 
-	test('an image embed opens full screen', async ({ preview, page }) => {
-		await preview.message('Two from the ridge').getByRole('img', { name: /Layered purple hills/ }).click();
-		await expect(page.getByRole('dialog').getByRole('button', { name: 'Next image' })).toBeVisible();
+		await test.step('a shift-click in select mode picks every message between', async () => {
+			await preview.composer().click();
+			for (const text of ['first of mine', 'second of mine', 'third of mine']) {
+				await page.keyboard.type(text);
+				await page.keyboard.press('Enter');
+				await expect(preview.message(text)).toBeVisible();
+			}
+			await act(preview, 'first of mine', 'More actions');
+			await preview.message('first of mine').getByTestId('select-message').click();
+			await expect(page.getByTestId('selection-bar')).toContainText('1 message selected');
+			await preview.message('third of mine').locator('.ap-msg-text').click({ modifiers: ['Shift'] });
+			await expect(page.getByTestId('selection-bar')).toContainText('3 messages selected');
+		});
 	});
 });
 

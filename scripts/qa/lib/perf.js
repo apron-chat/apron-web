@@ -11,10 +11,13 @@ const READY = '[data-testid=message-list] .ap-msg';
  * each URL once, rotating which goes first (AB, BA, AB… for two), so drift in machine load hits all sides
  * alike. Each measurement is a fresh context with the cache disabled and the CPU throttled.
  *
- * A probe is `{ name, viewport?, setup?(page), action(page), settle? }`; the built-in `load` probe only
- * loads. Suites export theirs as `interactions`; `selectProbes` picks them.
+ * A probe is `{ name, viewport?, knobs?, setup?(page), action?(page), settle?, budget? }`: one without an `action`
+ * measures the load, as the built-in `load` probe does. `knobs` set the preview's memory server
+ * (`PreviewKnobs`), e.g. many rooms or long histories; `budget: false` leaves a probe whose counts follow
+ * the machine's speed out of `qa budget`. Suites export theirs as `interactions`;
+ * `selectProbes` picks them.
  */
-export async function runPerf({ browser, urls, labels = urls, runs = 5, cpu = 4, probes, path = '/__preview', builds = [], log = console.log }) {
+export async function runPerf({ browser, urls, labels = urls, runs = 5, cpu = 4, reducedMotion, probes, path = '/__preview', builds = [], log = console.log }) {
 	const all = probes;
 	const start = loadavg();
 	if (start[0] > cpus().length * 0.75)
@@ -26,7 +29,7 @@ export async function runPerf({ browser, urls, labels = urls, runs = 5, cpu = 4,
 		for (const probe of all) {
 			const order = urls.map((_, i) => (i + unit) % urls.length);
 			unit++;
-			for (const i of order) samples[probe.name][labels[i]].push(await measure(browser, urls[i], probe, { cpu, path }));
+			for (const i of order) samples[probe.name][labels[i]].push(await measure(browser, urls[i], probe, { cpu, path, reducedMotion }));
 		}
 		log(`perf run ${run + 1}/${runs} done`);
 	}
@@ -57,8 +60,8 @@ export function selectProbes(suite, only = []) {
 }
 
 /** Opens a throttled page on `url` and measures one probe. */
-async function measure(browser, url, probe, { cpu, path }) {
-	const context = await browser.newContext({ viewport: probe.viewport ?? DESKTOP, colorScheme: 'dark', deviceScaleFactor: 1 });
+async function measure(browser, url, probe, { cpu, path, reducedMotion }) {
+	const context = await browser.newContext({ viewport: probe.viewport ?? DESKTOP, colorScheme: 'dark', deviceScaleFactor: 1, reducedMotion });
 	try {
 		const page = await context.newPage();
 		const cdp = await context.newCDPSession(page);
@@ -75,13 +78,20 @@ async function measure(browser, url, probe, { cpu, path }) {
 			new PerformanceObserver((l) => l.getEntries().forEach((e) => !(/** @type {any} */ (e).hadRecentInput) && (w.__cls += /** @type {any} */ (e).value))).observe({ type: 'layout-shift', buffered: true });
 			new PerformanceObserver((l) => l.getEntries().forEach((e) => w.__longtasks.push(e.duration))).observe({ type: 'longtask', buffered: true });
 		});
+		if (probe.knobs) await page.addInitScript((knobs) => ((/** @type {any} */ (window)).__APRON_PREVIEW__ = knobs), probe.knobs);
 		const metrics = async () => Object.fromEntries((await cdp.send('Performance.getMetrics')).metrics.map((m) => [m.name, m.value]));
+		// After a full collection: what the page keeps. Before it, the heap reads whatever garbage the last
+		// collection left, which follows when V8 ran it (a change that allocates less can read 80% higher).
+		const retainedHeapMB = async () => {
+			await cdp.send('HeapProfiler.collectGarbage');
+			return (await metrics()).JSHeapUsedSize / 1048576;
+		};
 		const t0 = Date.now();
 		await page.goto(new URL(path, url.endsWith('/') ? url : `${url}/`).href);
 		await page.waitForSelector(READY, { timeout: 30000 });
 		const ready = Date.now() - t0;
 		await page.waitForTimeout(1200);
-		if (probe.name === 'load') {
+		if (!probe.action) {
 			const m = await metrics();
 			const nav = await page.evaluate(() => {
 				const w = /** @type {any} */ (window);
@@ -94,6 +104,8 @@ async function measure(browser, url, probe, { cpu, path }) {
 					longTasks: w.__longtasks.length,
 					longTaskMs: w.__longtasks.reduce((a, b) => a + b, 0),
 					requests: performance.getEntriesByType('resource').length,
+					// Uncompressed, as the code the browser parses at startup; `bundle` has the gzipped totals.
+					startupJsKB: /** @type {PerformanceResourceTiming[]} */ (performance.getEntriesByType('resource')).filter((r) => new URL(r.name).pathname.endsWith('.js')).reduce((n, r) => n + r.decodedBodySize, 0) / 1024,
 					domNodes: document.getElementsByTagName('*').length
 				};
 			});
@@ -106,7 +118,7 @@ async function measure(browser, url, probe, { cpu, path }) {
 				styleMs: m.RecalcStyleDuration * 1000,
 				layouts: m.LayoutCount,
 				styleRecalcs: m.RecalcStyleCount,
-				heapMB: m.JSHeapUsedSize / 1048576
+				heapMB: await retainedHeapMB()
 			};
 		}
 		if (probe.setup) await probe.setup(page);

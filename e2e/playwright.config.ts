@@ -7,7 +7,14 @@ import { chromiumPath } from '../scripts/qa/lib/browser.js';
  * driven by Playwright. `npm run e2e` builds and runs it; see scripts/qa/README.md. It runs locally, not in CI.
  *
  * `E2E_URL` tests a build served elsewhere; `E2E_BUILD` serves another build directory (default `build/`).
+ *
+ * `E2E_TIER=short` (`npm run e2e:short`) is the run between iterations: it leaves out the slow files below, the
+ * tests tagged `@full`, and the interop contract. The full run (`npm run e2e`) is for before merging.
  */
+const short = process.env.E2E_TIER === 'short';
+/** Whole files the short run leaves out: layout over many viewports, axe scans, and paths that wait on real timers. */
+const FULL_ONLY = /\/(layout|a11y|background-loading|reconnect|history)\.spec\.ts$/;
+
 export default defineConfig({
 	testDir: '.',
 	testMatch: '*.spec.ts',
@@ -20,11 +27,14 @@ export default defineConfig({
 	timeout: 20_000,
 	expect: { timeout: 5_000 },
 	reporter: [['list'], ['html', { outputFolder: '../.qa/e2e/report', open: 'never' }]],
+	grepInvert: short ? /@full/ : undefined,
 	projects: [
-		{ name: 'app', testIgnore: /contract/ },
+		{ name: 'app', testIgnore: short ? [/contract/, FULL_ONLY] : /contract/ },
 		// The interop contract: the scenes record what they show, then the check reads the records.
-		{ name: 'contract-scenes', testMatch: 'contract-scenes.spec.ts', timeout: 60_000 },
-		{ name: 'contract', testMatch: 'contract.spec.ts', dependencies: ['contract-scenes'] }
+		...(short ? [] : [
+			{ name: 'contract-scenes', testMatch: 'contract-scenes.spec.ts', timeout: 60_000 },
+			{ name: 'contract', testMatch: 'contract.spec.ts', dependencies: ['contract-scenes'] }
+		])
 	],
 	use: {
 		browserName: 'chromium',

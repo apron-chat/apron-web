@@ -5,11 +5,11 @@ import { retryAfterLabel } from '$lib/words';
 export type ConnectionState = 'connected' | 'connecting' | 'reconnecting' | 'offline';
 
 /** The socket is open and the server has accepted our auth; identity kept from a previous connection does not count. */
-export function isSessionReady(snapshot: ClientSnapshot): boolean {
+export function isSessionReady(snapshot: Pick<ClientSnapshot, 'status' | 'authenticated' | 'you'>): boolean {
 	return snapshot.status === 'connected' && snapshot.authenticated && Boolean(snapshot.you);
 }
 
-export function connectionStateOf(snapshot: ClientSnapshot): ConnectionState {
+export function connectionStateOf(snapshot: Pick<ClientSnapshot, 'status' | 'authenticated' | 'you' | 'disconnectedAt'>): ConnectionState {
 	if (isSessionReady(snapshot)) return 'connected';
 	if (snapshot.status === 'offline') return 'offline';
 	if (snapshot.disconnectedAt !== undefined || snapshot.status === 'reconnecting') return 'reconnecting';
@@ -17,7 +17,7 @@ export function connectionStateOf(snapshot: ClientSnapshot): ConnectionState {
 }
 
 /** A transport-level failure during a reconnect is expected noise; anything else (auth refused, bad frames) is worth surfacing. */
-export function reconnectErrorOf(snapshot: ClientSnapshot): string {
+export function reconnectErrorOf(snapshot: Pick<ClientSnapshot, 'error'>): string {
 	return snapshot.error && snapshot.error !== 'WebSocket connection error' ? snapshot.error : '';
 }
 

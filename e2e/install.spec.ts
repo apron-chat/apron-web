@@ -16,10 +16,11 @@ async function offered(page: Page, open: () => Promise<void>, loaded?: () => Pro
 	const prompt = page.getByTestId('install-prompt').locator('visible=true');
 	await page.clock.fastForward(10_000);
 	await expect(prompt).toHaveCount(0);
+	// The clock is fake: poll at once, rather than backing off in real time between its steps.
 	await expect.poll(async () => {
 		await page.clock.fastForward(2_000);
 		return prompt.count();
-	}, { timeout: 15_000 }).toBe(1);
+	}, { timeout: 15_000, intervals: [0] }).toBe(1);
 	return prompt;
 }
 

@@ -61,6 +61,7 @@ import {
 	type RoomListing,
 	type RoomPatch,
 	type RoomResult,
+	type RoomSnapshot,
 	type RoomSync,
 	type SendOptions,
 	type UploadFile,
@@ -136,7 +137,7 @@ import {
 	type TypingState,
 	type ValidHistoryResponse
 } from './client-internals';
-import { capabilitiesOf, peopleTitle, PRIVATE_ROOM, serverAddress, serverSettings, yourPermissions } from './client-views';
+import { capabilitiesOf, peopleTitle, PRIVATE_ROOM, sameRoomSnapshot, serverAddress, serverSettings, yourPermissions } from './client-views';
 import { reactionKey } from './custom-emoji';
 import { HistoryQueue } from './history-queue';
 
@@ -784,7 +785,7 @@ export class ChatClient {
 				const renames = this.store.roomRenames(room.id);
 				const members = this.currentMembers(this.store.members(room.id));
 				const namedForMembers = untitledPrivate(record);
-				return {
+				const next: RoomSnapshot = {
 					id: room.id,
 					title: namedForMembers ? this.membersTitle(members) : roomTitle(room.id, record),
 					...(untitledThread(record) ? { untitled: true as const } : {}),
@@ -814,6 +815,10 @@ export class ChatClient {
 					...(this.memberCounts.has(room.id) ? { memberCount: this.memberCounts.get(room.id) } : {}),
 					notices: this.notices.get(room.id) ?? NO_NOTICES
 				};
+				// The same object while nothing in it changed: the page then redraws only the rooms that did, where a
+				// fresh one for every room on each snapshot (each message, each read) had it redraw them all.
+				if (room.published && sameRoomSnapshot(room.published, next)) return room.published;
+				return (room.published = next);
 			}),
 			activeRoom: this.activeRoomId,
 			pending: [...this.requests.values()]

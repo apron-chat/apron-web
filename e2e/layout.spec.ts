@@ -9,7 +9,8 @@ import { DEVICES, expect, test, type Preview } from './fixtures';
 
 test.use({ knobs: { seed: 'rich' } });
 
-const VIEWPORTS = ['desktop', 'tablet', 'phone', 'phone360', 'phone320'] as const;
+/** The viewports, in groups a window can be resized across: a context's touch and mobile settings stay as it opened. */
+const VIEWPORTS = [['desktop', 'tablet'], ['phone', 'phone360', 'phone320']] as const;
 
 /** Every broken rule in the open timeline and member list, as readable lines (none: `[]`). Runs in the page. */
 function layoutViolations(): string[] {
@@ -100,60 +101,100 @@ async function showMembers(preview: Preview): Promise<void> {
 	await expect(list.locator('li').first()).toBeVisible();
 }
 
+/**
+ * Shuts the member list where it overlays the conversation, as a window that narrow opens with it. Again until it
+ * stays shut: just after a resize the list may still be changing from a column to an overlay, and a look then can
+ * find it hidden a moment before it shows.
+ */
+async function hideMembers(preview: Preview): Promise<void> {
+	const { page } = preview;
+	const list = page.getByTestId('room-member-list');
+	await expect(async () => {
+		if (await list.isVisible()) await preview.press(page.getByRole('button', { name: 'Hide member list', exact: true }));
+		await expect(list).toBeHidden({ timeout: 1_000 });
+	}).toPass();
+}
+
+/** Resizes the window to a device's viewport, its member list shut as a window that narrow opens with it. */
+async function resizeTo(preview: Preview, device: keyof typeof DEVICES): Promise<void> {
+	const { viewport } = DEVICES[device];
+	await preview.page.setViewportSize(viewport);
+	// The page has taken the new width before the list is looked at.
+	await expect.poll(() => preview.page.evaluate(() => innerWidth)).toBe(viewport.width);
+	await hideMembers(preview);
+}
+
 // One theme: the light theme overrides only colors (tokens.css), and apron.css has no theme-specific rules, so
 // the geometry is the same in both.
-for (const viewport of VIEWPORTS) {
-	test.describe(viewport, () => {
-		test.use(DEVICES[viewport]);
+for (const viewports of VIEWPORTS) {
+	test.describe(viewports.join(', '), () => {
+		test.use(DEVICES[viewports[0]]);
 
 		test('long names and four roles keep every message header whole, and the member list fits them', async ({ preview }) => {
 			await preview.open();
-			await expect(preview.message('Long names and four roles')).toBeVisible();
-			// Scrolled to each long-named message in turn, so each one is laid out on screen.
-			for (const text of ['Long names and four roles', 'with an even longer name', 'no spaces to break at', 'the handle tells us apart']) {
-				await preview.message(text).scrollIntoViewIfNeeded();
-				await expectNoViolations(preview, `at ${text}`);
+			for (const viewport of viewports) {
+				await test.step(viewport, async () => {
+					if (viewport !== viewports[0]) await resizeTo(preview, viewport);
+					await expect(preview.message('Long names and four roles')).toBeVisible();
+					// Scrolled to each long-named message in turn, so each one is laid out on screen.
+					for (const text of ['Long names and four roles', 'with an even longer name', 'no spaces to break at', 'the handle tells us apart']) {
+						await preview.message(text).scrollIntoViewIfNeeded();
+						await expectNoViolations(preview, `at ${text} (${viewport})`);
+					}
+					await showMembers(preview);
+					await expect(preview.page.getByTestId('room-member-list').getByText('Wilhelmina Featherstonehaugh-Cholmondeley')).toBeVisible();
+					await expectNoViolations(preview, `with the member list open (${viewport})`);
+				});
 			}
-			await showMembers(preview);
-			await expect(preview.page.getByTestId('room-member-list').getByText('Wilhelmina Featherstonehaugh-Cholmondeley')).toBeVisible();
-			await expectNoViolations(preview, 'with the member list open');
 		});
 	});
 }
 
 test.describe('the member list under 960px', () => {
-	for (const viewport of ['tablet', 'phone', 'phone320'] as const) {
-		test.describe(viewport, () => {
-			test.use(DEVICES[viewport]);
-
-			test('overlays the conversation, inside the screen, rather than squeezing it', async ({ preview, page }) => {
-				await preview.open();
-				const main = page.getByRole('main', { name: 'Conversation' });
-				const before = (await main.boundingBox())!;
-				await showMembers(preview);
-				const list = page.getByTestId('room-member-list');
-				const width = page.viewportSize()!.width;
-				// Once it has slid in.
-				await expect.poll(async () => Math.round((await list.boundingBox())!.x + (await list.boundingBox())!.width), { message: 'the list ends at the right edge' }).toBe(width);
-				const box = (await list.boundingBox())!;
-				const after = (await main.boundingBox())!;
-				expect(after.width, 'the conversation keeps its width').toBeCloseTo(before.width, 0);
-				expect(box.x, 'the list leaves the conversation showing at its left').toBeGreaterThanOrEqual(Math.min(24, width - box.width) - 0.5);
-				expect(box.x).toBeGreaterThan(after.x);
-			});
-		});
+	/** Opens the member list, shut as the window opened: it overlays the conversation, inside the screen, rather than squeezing it. */
+	async function overlays(preview: Preview): Promise<void> {
+		const { page } = preview;
+		const main = page.getByRole('main', { name: 'Conversation' });
+		const before = (await main.boundingBox())!;
+		await showMembers(preview);
+		const list = page.getByTestId('room-member-list');
+		const width = page.viewportSize()!.width;
+		// Once it has slid in.
+		await expect.poll(async () => Math.round((await list.boundingBox())!.x + (await list.boundingBox())!.width), { message: 'the list ends at the right edge' }).toBe(width);
+		const box = (await list.boundingBox())!;
+		const after = (await main.boundingBox())!;
+		expect(after.width, 'the conversation keeps its width').toBeCloseTo(before.width, 0);
+		expect(box.x, 'the list leaves the conversation showing at its left').toBeGreaterThanOrEqual(Math.min(24, width - box.width) - 0.5);
+		expect(box.x).toBeGreaterThan(after.x);
 	}
 
-	test.describe('at 960px and wider', () => {
-		test.use({ viewport: { width: 960, height: 800 } });
+	test.describe('phone, phone320', () => {
+		test.use(DEVICES.phone);
 
-		test('takes a column of its own beside the conversation', async ({ preview, page }) => {
+		test('overlays the conversation, inside the screen, rather than squeezing it', async ({ preview }) => {
 			await preview.open();
-			await showMembers(preview);
-			const main = (await page.getByRole('main', { name: 'Conversation' }).boundingBox())!;
-			const list = (await page.getByTestId('room-member-list').boundingBox())!;
-			expect(list.x, 'the list starts where the conversation ends').toBeGreaterThanOrEqual(main.x + main.width - 1);
-			expect(list.x + list.width).toBeLessThanOrEqual(960 + 0.5);
+			await test.step('phone', () => overlays(preview));
+			await test.step('phone320', async () => {
+				await resizeTo(preview, 'phone320');
+				await overlays(preview);
+			});
+		});
+	});
+
+	test.describe('tablet, and at 960px and wider', () => {
+		test.use(DEVICES.tablet);
+
+		test('overlays the conversation on a tablet, and takes a column of its own beside it from 960px', async ({ preview, page }) => {
+			await preview.open();
+			await test.step('tablet: overlays the conversation, inside the screen, rather than squeezing it', () => overlays(preview));
+			await test.step('at 960px and wider: takes a column of its own beside the conversation', async () => {
+				await page.setViewportSize({ width: 960, height: 800 });
+				await showMembers(preview);
+				const main = (await page.getByRole('main', { name: 'Conversation' }).boundingBox())!;
+				const list = (await page.getByTestId('room-member-list').boundingBox())!;
+				expect(list.x, 'the list starts where the conversation ends').toBeGreaterThanOrEqual(main.x + main.width - 1);
+				expect(list.x + list.width).toBeLessThanOrEqual(960 + 0.5);
+			});
 		});
 	});
 });
@@ -166,10 +207,15 @@ test.describe('the member list under 960px', () => {
 test.describe('the panel toggles', () => {
 	test.use(DEVICES.desktop);
 
-	for (const dir of ['ltr', 'rtl'] as const) {
-		test(`sit at their panels' inner edges, and at the room header's ends once shut (${dir})`, async ({ preview, page }) => {
-			await preview.open();
-			if (dir === 'rtl') await page.evaluate(() => document.documentElement.setAttribute('dir', 'rtl'));
+	test('sit at their panels\' inner edges, and at the room header\'s ends once shut, in either direction', async ({ preview, page }) => {
+		await preview.open();
+		for (const dir of ['ltr', 'rtl'] as const) await test.step(`sit at their panels' inner edges, and at the room header's ends once shut (${dir})`, async () => {
+			if (dir === 'rtl') {
+				// Shown again, as the window opened.
+				await preview.press(page.getByRole('button', { name: 'Show rooms', exact: true }));
+				await expect(page.getByRole('button', { name: 'Hide rooms', exact: true })).toBeVisible();
+				await page.evaluate(() => document.documentElement.setAttribute('dir', 'rtl'));
+			}
 			await showMembers(preview);
 			const width = page.viewportSize()!.width;
 			/** A box's start and end along the line: from the left, or from the right under rtl. */
@@ -211,7 +257,7 @@ test.describe('the panel toggles', () => {
 				expect(box.end).toBeLessThanOrEqual(showMembersToggle.start);
 			}
 		});
-	}
+	});
 });
 
 /**
@@ -222,9 +268,9 @@ test.describe('the panel toggles', () => {
 test.describe('the panel handles', () => {
 	test.use(DEVICES.desktop);
 
-	for (const dir of ['ltr', 'rtl'] as const) {
-		test(`sit on their panels' inner borders, and a drag toward the conversation widens the panel (${dir})`, async ({ preview, page }) => {
-			await preview.open();
+	test('sit on their panels\' inner borders, and a drag toward the conversation widens the panel, in either direction', async ({ preview, page }) => {
+		await preview.open();
+		for (const dir of ['ltr', 'rtl'] as const) await test.step(`sit on their panels' inner borders, and a drag toward the conversation widens the panel (${dir})`, async () => {
 			if (dir === 'rtl') await page.evaluate(() => document.documentElement.setAttribute('dir', 'rtl'));
 			await showMembers(preview);
 			const width = page.viewportSize()!.width;
@@ -284,7 +330,7 @@ test.describe('the panel handles', () => {
 				await expect.poll(() => widthOf(locator), { message: `${panel}: ${toward(panel)} widens` }).toBeCloseTo(before + 16, 0);
 			}
 		});
-	}
+	});
 });
 
 /**
@@ -292,114 +338,121 @@ test.describe('the panel handles', () => {
  * directions and measures the same distances along the line, from its start (the left, or the right under rtl).
  */
 test.describe('right to left', () => {
-	for (const dir of ['ltr', 'rtl'] as const) {
-		test.describe(dir, () => {
-			// With presence, so the member list has sections (Online, Offline) to fold.
-			test.use({ ...DEVICES.desktop, knobs: { seed: 'rich', capabilities: ['status'] } });
+	test.describe('desktop', () => {
+		// With presence, so the member list has sections (Online, Offline) to fold.
+		test.use({ ...DEVICES.desktop, knobs: { seed: 'rich', capabilities: ['status'] } });
 
-			test(`a message header keeps its name and time apart, the time reads as written, and the toolbar sits at the end (${dir})`, async ({ preview, page }) => {
-				await preview.open();
+		test('a message header and the member list measure the same along the line, left to right and right to left', async ({ preview, page }) => {
+			await preview.open();
+			for (const dir of ['ltr', 'rtl'] as const) {
 				if (dir === 'rtl') await page.evaluate(() => document.documentElement.setAttribute('dir', 'rtl'));
-				await page.evaluate(() => document.fonts.ready.then(() => undefined));
-				// The first header with just a name and a time (no badges or handle between them).
-				const head = await page.evaluate(() => {
-					for (const head of document.querySelectorAll('[data-testid=message-list] .ap-msg-head')) {
-						const name = head.querySelector('.ap-msg-sender');
-						const time = head.querySelector('.ap-msg-meta time');
-						if (head.children.length !== 2 || !name || !time?.firstChild || !name.getBoundingClientRect().width) continue;
-						const text = time.textContent ?? '';
-						/** Where a character of the time is drawn, from the left. */
-						const at = (index: number) => {
-							const range = document.createRange();
-							range.setStart(time.firstChild!, index);
-							range.setEnd(time.firstChild!, index + 1);
-							return range.getBoundingClientRect().left;
-						};
-						const box = (el: Element) => ({ left: el.getBoundingClientRect().left, right: el.getBoundingClientRect().right });
-						return { id: head.closest('article')!.getAttribute('data-message-id')!, text, name: box(name), time: box(time), digit: at(text.search(/\d/)), letter: at(text.search(/[AP]M/)) };
-					}
-					return undefined;
+				await test.step(`a message header keeps its name and time apart, the time reads as written, and the toolbar sits at the end (${dir})`, async () => {
+					await page.evaluate(() => document.fonts.ready.then(() => undefined));
+					// The first header with just a name and a time (no badges or handle between them).
+					const head = await page.evaluate(() => {
+						for (const head of document.querySelectorAll('[data-testid=message-list] .ap-msg-head')) {
+							const name = head.querySelector('.ap-msg-sender');
+							const time = head.querySelector('.ap-msg-meta time');
+							if (head.children.length !== 2 || !name || !time?.firstChild || !name.getBoundingClientRect().width) continue;
+							const text = time.textContent ?? '';
+							/** Where a character of the time is drawn, from the left. */
+							const at = (index: number) => {
+								const range = document.createRange();
+								range.setStart(time.firstChild!, index);
+								range.setEnd(time.firstChild!, index + 1);
+								return range.getBoundingClientRect().left;
+							};
+							const box = (el: Element) => ({ left: el.getBoundingClientRect().left, right: el.getBoundingClientRect().right });
+							return { id: head.closest('article')!.getAttribute('data-message-id')!, text, name: box(name), time: box(time), digit: at(text.search(/\d/)), letter: at(text.search(/[AP]M/)) };
+						}
+						return undefined;
+					});
+					expect(head, 'a header with a name and a time').toBeDefined();
+					expect(head!.text).toMatch(/^\d{1,2}:\d{2}\s?[AP]M$/);
+					// The time follows the name a --space-2 along the line: to its right, or to its left under rtl.
+					const gap = dir === 'ltr' ? head!.time.left - head!.name.right : head!.name.left - head!.time.right;
+					expect(gap, 'a --space-2 between the name and the time').toBeCloseTo(8, 0);
+					// "3:42 PM" reads as the locale writes it in either direction, not "PM 3:42".
+					expect(head!.digit, 'the hour before the AM/PM').toBeLessThan(head!.letter);
+
+					// Hovered, its toolbar floats over the message's end, a --space-2 in.
+					const article = page.locator(`article[data-message-id="${head!.id}"]`);
+					await article.hover();
+					const actions = article.locator('.ap-msg-actions');
+					await expect(actions).toBeVisible();
+					const a = (await actions.boundingBox())!;
+					const m = (await article.boundingBox())!;
+					if (dir === 'ltr') expect(m.x + m.width - (a.x + a.width)).toBeCloseTo(8, 0);
+					else expect(a.x - m.x).toBeCloseTo(8, 0);
 				});
-				expect(head, 'a header with a name and a time').toBeDefined();
-				expect(head!.text).toMatch(/^\d{1,2}:\d{2}\s?[AP]M$/);
-				// The time follows the name a --space-2 along the line: to its right, or to its left under rtl.
-				const gap = dir === 'ltr' ? head!.time.left - head!.name.right : head!.name.left - head!.time.right;
-				expect(gap, 'a --space-2 between the name and the time').toBeCloseTo(8, 0);
-				// "3:42 PM" reads as the locale writes it in either direction, not "PM 3:42".
-				expect(head!.digit, 'the hour before the AM/PM').toBeLessThan(head!.letter);
+				await test.step(`the member list keeps "(you)" apart from your name, and a folded section's … sits at its heading's end (${dir})`, async () => {
+					await showMembers(preview);
+					const list = page.getByTestId('room-member-list');
+					const you = list.locator('.ap-member-name small', { hasText: '(you)' });
+					await expect(you).toBeVisible();
+					const name = (await you.locator('xpath=preceding-sibling::*[contains(@class, "ap-member-text")]').boundingBox())!;
+					const mark = (await you.boundingBox())!;
+					const gap = dir === 'ltr' ? mark.x - (name.x + name.width) : name.x - (mark.x + mark.width);
+					expect(gap, '4px between the name and "(you)"').toBeCloseTo(4, 0);
 
-				// Hovered, its toolbar floats over the message's end, a --space-2 in.
-				const article = page.locator(`article[data-message-id="${head!.id}"]`);
-				await article.hover();
-				const actions = article.locator('.ap-msg-actions');
-				await expect(actions).toBeVisible();
-				const a = (await actions.boundingBox())!;
-				const m = (await article.boundingBox())!;
-				if (dir === 'ltr') expect(m.x + m.width - (a.x + a.width)).toBeCloseTo(8, 0);
-				else expect(a.x - m.x).toBeCloseTo(8, 0);
-			});
-
-			test(`the member list keeps "(you)" apart from your name, and a folded section's … sits at its heading's end (${dir})`, async ({ preview, page }) => {
-				await preview.open();
-				if (dir === 'rtl') await page.evaluate(() => document.documentElement.setAttribute('dir', 'rtl'));
-				await showMembers(preview);
-				const list = page.getByTestId('room-member-list');
-				const you = list.locator('.ap-member-name small', { hasText: '(you)' });
-				await expect(you).toBeVisible();
-				const name = (await you.locator('xpath=preceding-sibling::*[contains(@class, "ap-member-text")]').boundingBox())!;
-				const mark = (await you.boundingBox())!;
-				const gap = dir === 'ltr' ? mark.x - (name.x + name.width) : name.x - (mark.x + mark.width);
-				expect(gap, '4px between the name and "(you)"').toBeCloseTo(4, 0);
-
-				// Folded, the heading's … sits at its inline end, past its words: on their right, or their left under rtl.
-				const head = list.locator('.ap-memberlist-sectionhead').first();
-				const toggle = head.locator('.ap-sect-toggle');
-				await preview.press(toggle);
-				await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-				const pill = head.locator('.ap-foldpill');
-				const t = (await toggle.boundingBox())!;
-				const p = (await pill.boundingBox())!;
-				const h = (await head.boundingBox())!;
-				if (dir === 'ltr') expect(p.x).toBeGreaterThan(t.x + t.width);
-				else expect(p.x + p.width).toBeLessThan(t.x);
-				expect(dir === 'ltr' ? h.x + h.width - (p.x + p.width) : p.x - h.x, 'at the end, inside its padding').toBeLessThanOrEqual(8);
-				await preview.press(pill);
-				await expect(toggle).toHaveAttribute('aria-expanded', 'true');
-				await expect(toggle).toBeFocused();
-			});
+					// Folded, the heading's … sits at its inline end, past its words: on their right, or their left under rtl.
+					const head = list.locator('.ap-memberlist-sectionhead').first();
+					const toggle = head.locator('.ap-sect-toggle');
+					await preview.press(toggle);
+					await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+					const pill = head.locator('.ap-foldpill');
+					const t = (await toggle.boundingBox())!;
+					const p = (await pill.boundingBox())!;
+					const h = (await head.boundingBox())!;
+					if (dir === 'ltr') expect(p.x).toBeGreaterThan(t.x + t.width);
+					else expect(p.x + p.width).toBeLessThan(t.x);
+					expect(dir === 'ltr' ? h.x + h.width - (p.x + p.width) : p.x - h.x, 'at the end, inside its padding').toBeLessThanOrEqual(8);
+					await preview.press(pill);
+					await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+					await expect(toggle).toBeFocused();
+				});
+			}
 		});
+	});
 
-		test.describe(`${dir}, under 960px`, () => {
-			test.use(DEVICES.tablet);
+	test.describe('under 960px', () => {
+		test.use(DEVICES.tablet);
 
-			test(`the member list overlays from the window's inline end, below its toggle, its border on its inner edge (${dir})`, async ({ preview, page }) => {
-				await preview.open();
-				if (dir === 'rtl') await page.evaluate(() => document.documentElement.setAttribute('dir', 'rtl'));
-				const width = page.viewportSize()!.width;
-				// The panel itself: shut, it is hidden from everyone, so not found by role unless asked.
-				const list = page.getByRole('complementary', { name: 'Room member list', exact: true, includeHidden: true });
-				const rect = () => list.evaluate((el) => { const r = el.getBoundingClientRect(); return { left: r.left, right: r.right }; });
-				// Shut, it waits past that edge, and the page doesn't scroll sideways for it.
-				const shut = await rect();
-				if (dir === 'ltr') expect(shut.left).toBeGreaterThanOrEqual(width);
-				else expect(shut.right).toBeLessThanOrEqual(0);
-				expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+		test('the member list overlays from the window\'s inline end, below its toggle, its border on its inner edge, left to right and right to left', async ({ preview, page }) => {
+			await preview.open();
+			for (const dir of ['ltr', 'rtl'] as const) {
+				await test.step(`the member list overlays from the window's inline end, below its toggle, its border on its inner edge (${dir})`, async () => {
+					if (dir === 'rtl') {
+						// Shut again, as the window opened.
+						await hideMembers(preview);
+						await page.evaluate(() => document.documentElement.setAttribute('dir', 'rtl'));
+					}
+					const width = page.viewportSize()!.width;
+					// The panel itself: shut, it is hidden from everyone, so not found by role unless asked.
+					const list = page.getByRole('complementary', { name: 'Room member list', exact: true, includeHidden: true });
+					const rect = () => list.evaluate((el) => { const r = el.getBoundingClientRect(); return { left: r.left, right: r.right }; });
+					// Shut, it waits past that edge, and the page doesn't scroll sideways for it.
+					const shut = await rect();
+					if (dir === 'ltr') expect(shut.left).toBeGreaterThanOrEqual(width);
+					else expect(shut.right).toBeLessThanOrEqual(0);
+					expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
 
-				const toggle = page.getByRole('button', { name: /member list/i }).first();
-				const button = (await toggle.boundingBox())!;
-				await showMembers(preview);
-				await expect.poll(async () => Math.round(dir === 'ltr' ? (await rect()).right : (await rect()).left), { message: 'it ends at the inline end' }).toBe(dir === 'ltr' ? width : 0);
-				const open = await rect();
-				expect(open.right - open.left).toBeLessThan(width);
-				// Below the button that opened it, at the same end of the room's header.
-				const middle = button.x + button.width / 2;
-				expect(middle).toBeGreaterThan(open.left);
-				expect(middle).toBeLessThan(open.right);
-				// Its border faces the conversation: its left one, or its right under rtl.
-				const borders = await list.evaluate((el) => ({ left: getComputedStyle(el).borderLeftWidth, right: getComputedStyle(el).borderRightWidth }));
-				expect(borders).toEqual(dir === 'ltr' ? { left: '1px', right: '0px' } : { left: '0px', right: '1px' });
-				expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
-			});
+					const toggle = page.getByRole('button', { name: /member list/i }).first();
+					const button = (await toggle.boundingBox())!;
+					await showMembers(preview);
+					await expect.poll(async () => Math.round(dir === 'ltr' ? (await rect()).right : (await rect()).left), { message: 'it ends at the inline end' }).toBe(dir === 'ltr' ? width : 0);
+					const open = await rect();
+					expect(open.right - open.left).toBeLessThan(width);
+					// Below the button that opened it, at the same end of the room's header.
+					const middle = button.x + button.width / 2;
+					expect(middle).toBeGreaterThan(open.left);
+					expect(middle).toBeLessThan(open.right);
+					// Its border faces the conversation: its left one, or its right under rtl.
+					const borders = await list.evaluate((el) => ({ left: getComputedStyle(el).borderLeftWidth, right: getComputedStyle(el).borderRightWidth }));
+					expect(borders).toEqual(dir === 'ltr' ? { left: '1px', right: '0px' } : { left: '0px', right: '1px' });
+					expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+				});
+			}
 		});
-	}
+	});
 });

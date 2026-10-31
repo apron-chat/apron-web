@@ -146,8 +146,10 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
    can scroll another one under a still pointer, which would look like the one being acted on. */
 .ap-msg:not(.ap-msg-mention, .ap-msg-highlighted, .ap-msg-selected):has(.ap-msg-actions [aria-expanded='true']) { background: var(--hover-soft); }
 .ap-msg:has(.ap-msg-actions [aria-expanded='true']) .ap-msg-hovertime { visibility: visible; }
-.ap-timeline:has(.ap-msg-actions [aria-expanded='true']) .ap-msg:not(.ap-msg-mention, .ap-msg-highlighted, .ap-msg-selected, :has(.ap-msg-actions [aria-expanded='true'])):hover { background: transparent; }
-.ap-timeline:has(.ap-msg-actions [aria-expanded='true']) .ap-msg:not(:has(.ap-msg-actions [aria-expanded='true'])):is(:hover, :focus-within) :is(.ap-msg-actions, .ap-msg-hovertime, .ap-rchip-add) { visibility: hidden; }
+/* `ap-timeline-picking` is the page's to set while one of its rows has the picker open: `:has()` on the timeline
+   instead would have the browser restyle every row on each hover change, as on each step of a wheel scroll. */
+.ap-timeline-picking .ap-msg:not(.ap-msg-mention, .ap-msg-highlighted, .ap-msg-selected, :has(.ap-msg-actions [aria-expanded='true'])):hover { background: transparent; }
+.ap-timeline-picking .ap-msg:not(:has(.ap-msg-actions [aria-expanded='true'])):is(:hover, :focus-within) :is(.ap-msg-actions, .ap-msg-hovertime, .ap-rchip-add) { visibility: hidden; }
 /* On touch a tap shows a message nothing (its toolbar waits for a long press), though touch leaves the row hovered. */
 .ap-msg.ap-msg-dismissed:not(.ap-msg-mention, .ap-msg-highlighted, .ap-msg-selected, :has(.ap-msg-actions [aria-expanded='true'])):hover { background: transparent; }
 .ap-msg.ap-msg-dismissed:not(:has(.ap-msg-actions [aria-expanded='true'])) :is(.ap-msg-actions, .ap-msg-hovertime, .ap-rchip-add) { visibility: hidden; }
@@ -725,6 +727,8 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 }
 @media (prefers-reduced-motion: reduce) {
 	.ap-shell, .ap-shell .ap-shell-side, .ap-shell .ap-memberlist, .ap-shell .ap-roomhead, .ap-shell .ap-memberlist:not(.ap-memberlist-open), .ap-shell-slides .ap-shell-handle, .ap-shell-slides .ap-shell-toggle { transition: none; }
+	/* As specific as the shut panels' and handle's own transitions, which would otherwise still fade and slide them. */
+	.ap-shell-slides.ap-shell-side-shut .ap-shell-side, .ap-shell-slides.ap-shell-members-wide .ap-memberlist, .ap-shell-slides.ap-shell-members-wide:not(.ap-shell-members-open) .ap-memberlist, .ap-shell-slides .ap-shell-handle-right.ap-shell-handle-shut { transition: none; }
 }
 
 /* MemberList — who is in the room (§4.2.1): Online, then Offline (§4.5), each folding away from its heading */
