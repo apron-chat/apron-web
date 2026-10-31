@@ -3,12 +3,14 @@
 	import DesignThreadList from '$lib/design/components/ThreadList.svelte';
 	import type { RoomListing } from '$lib/protocol/client';
 	import { designTitle, inHeldOrder, threadLatest, threadDescriptionText, type ThreadEntry } from '$lib/ui/timeline';
-	import { loadOtherThreadsOpen, saveOtherThreadsOpen } from '$lib/ui/storage';
+	import { loadInactiveThreadsOpen, loadOtherThreadsOpen, saveInactiveThreadsOpen, saveOtherThreadsOpen } from '$lib/ui/storage';
 	import { minuteNow } from '$lib/ui/clock.svelte';
-	import { idAgo, idDateTime, idIso } from '$lib/ui/time';
+	import { idAgo, idDateTime, idIso, idMillis } from '$lib/ui/time';
 
 	/** How many of the threads you haven't joined show before "N more…". */
 	const OTHERS_SHOWN = 3;
+	/** How far a joined thread's last activity can trail the room's latest before it moves down to Inactive: a long weekend. */
+	const INACTIVE_AFTER_MS = 3 * 24 * 60 * 60 * 1000;
 
 	interface Props {
 		/** The room the threads belong to: its `room_id` and title. */
@@ -40,6 +42,7 @@
 	const isMuted = (thread: string) => muted[thread] !== undefined || muted[roomId] !== undefined;
 
 	let othersFolded = $state(!loadOtherThreadsOpen());
+	let inactiveFolded = $state(!loadInactiveThreadsOpen());
 	/** The room whose other threads are all showing, past the first few; another room starts short again. */
 	let allFor = $state<string | undefined>();
 	/**
@@ -55,8 +58,13 @@
 	});
 	function hold(by: keyof typeof holding, on: boolean): void {
 		holding[by] = on;
-		if (holding.pointer || holding.focus) held ??= joined.map((entry) => entry.id);
-		else held = undefined;
+		if (holding.pointer || holding.focus) {
+			held ??= joined.map((entry) => entry.id);
+			heldQuiet ??= new Map(joined.map((entry) => [entry.id, quietNow(entry)]));
+		} else {
+			held = undefined;
+			heldQuiet = undefined;
+		}
 	}
 	function focusIn(event: FocusEvent): void {
 		// A click focuses the row too, and that focus can stay after the pointer leaves: only the keyboard's holds.
@@ -66,6 +74,26 @@
 		const list = event.currentTarget as HTMLElement;
 		if (!(event.relatedTarget instanceof Node && list.contains(event.relatedTarget))) hold('focus', false);
 	}
+	/**
+	 * Joined threads quiet for `INACTIVE_AFTER_MS` before the room's most recently active one, by their latest
+	 * activity, with nothing unread or mentioning you, so nothing is missed by putting them away. Counted from the
+	 * newest rather than from now, so coming back to a server that's been quiet a while doesn't find every thread put
+	 * away. One whose time isn't known stays up top. While the list is held, each stays on its side, as reading one
+	 * with news would otherwise drop its row out from under the click.
+	 */
+	const activeAt = (entry: ThreadEntry) => (entry.activeId !== undefined ? idMillis(entry.activeId) : undefined);
+	let quietSince = $derived(Math.max(...threads.map((entry) => (entry.joined ? (activeAt(entry) ?? 0) : 0)), 0) - INACTIVE_AFTER_MS);
+	let heldQuiet = $state.raw<Map<string, boolean> | undefined>();
+	const hasNews = (thread: string) => (unread[thread] ?? 0) > 0 || (mentions[thread] ?? 0) > 0;
+	function quietNow(entry: ThreadEntry): boolean {
+		const at = activeAt(entry);
+		return at !== undefined && at < quietSince && !hasNews(entry.id);
+	}
+	const isQuiet = (entry: ThreadEntry) => heldQuiet?.get(entry.id) ?? quietNow(entry);
+	let active = $derived(joined.filter((entry) => !isQuiet(entry)));
+	let inactive = $derived(joined.filter(isQuiet));
+	/** All of them, or folded, the open one and any that had news while held there. */
+	let shownInactive = $derived(inactiveFolded ? inactive.filter((entry) => entry.id === activeThread || hasNews(entry.id)) : inactive);
 	/** The thread open without joining: it stays among the others, picked out, rather than looking joined. */
 	let reading = $derived(threads.find((entry) => !entry.joined && entry.id === activeThread));
 	let allOthers = $derived.by((): Other[] => {
@@ -91,7 +119,16 @@
 
 <!-- The design system's ThreadList holds the rows, each a ThreadItem; the app says which threads, and what picking one does. -->
 {#snippet joinedRows()}
-	{#each joined as entry (entry.id)}
+	{#each active as entry (entry.id)}
+		{@render joinedRow(entry)}
+	{/each}
+{/snippet}
+{#snippet inactiveRows()}
+	{#each shownInactive as entry (entry.id)}
+		{@render joinedRow(entry)}
+	{/each}
+{/snippet}
+{#snippet joinedRow(entry: ThreadEntry)}
 		{@const open = activeThread === entry.id}
 		<!-- Its description, then its latest message: both when it has both, each marked so either reads alone, as on its card. One bubble for what's new: unread replies in grey, orange with an @ when they include a mention. A thread with nothing new shows none, and steps back. -->
 		<!-- Leaving is the archive: the thread stops alerting and moves down to Other Threads, on every device. -->
@@ -101,7 +138,6 @@
 			description={threadDescriptionText(entry)} latest={threadLatest(entry)} linesTestid="thread-list" unreadTestid="thread-unread"
 			onselect={() => onthread(entry.id)} onleave={canJoin ? () => onleave(entry.id) : undefined}
 		/>
-	{/each}
 {/snippet}
 {#snippet otherRows()}
 	{#each shownOthers as other (other.id)}
@@ -124,7 +160,12 @@
 	<DesignThreadList
 		testid="thread-list"
 		room={roomTitle}
-		joined={joined.length > 0 ? joinedRows : undefined}
+		joined={active.length > 0 ? joinedRows : undefined}
+		inactive={inactive.length}
+		{inactiveRows}
+		bind:inactiveFolded
+		onfoldinactive={(folded) => saveInactiveThreadsOpen(!folded)}
+		inactiveToggleTestid="inactive-threads"
 		others={allOthers.length}
 		{otherRows}
 		bind:othersFolded

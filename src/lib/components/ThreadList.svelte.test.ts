@@ -213,4 +213,71 @@ describe('ThreadList', () => {
 		expect(titles('button[data-other-thread]')).toEqual(['Linked', 'Offsite']);
 		expect(one('[data-testid="other-threads"]')!.textContent).toContain('2');
 	});
+
+	it('puts joined threads quiet three days longer than the latest under Inactive, folded until opened, keeping news and the open one in view', () => {
+		const ago = (days: number) => String(Date.now() - days * 24 * 60 * 60 * 1000);
+		const threads = [
+			{ ...joined('deploy', 'Deploy'), activeId: ago(1) },
+			{ ...joined('cert', 'Expired cert'), activeId: ago(5) },
+			{ ...joined('retro', 'Retro'), activeId: ago(10) },
+			{ ...joined('hiring', 'Hiring'), activeId: ago(6) },
+			joined('unknown', 'Unknown')
+		];
+		render({ threads, unread: { hiring: 2 } });
+		// News keeps one up top however old; one with no known time stays too.
+		expect(titles('.ap-threads-joined:not(.ap-threads-inactive) button[data-thread]')).toEqual(['Deploy', 'Hiring', 'Unknown']);
+		const heading = one('[data-testid="inactive-threads"]')!;
+		expect(heading.textContent).toContain('Inactive');
+		expect(heading.textContent).toContain('2');
+		expect(heading.getAttribute('aria-expanded')).toBe('false');
+		expect(one('.ap-threads-inactive button[data-thread]')).toBeNull();
+		// Its … shows them, still yours, with Leave; and it stays open.
+		dom.button('Show all Inactive').click();
+		flushSync();
+		expect(titles('.ap-threads-inactive button[data-thread]')).toEqual(['Expired cert', 'Retro']);
+		expect(one('.ap-threads-inactive button[data-leave="retro"]')).not.toBeNull();
+		expect(localStorage.getItem('apron.inactiveThreads')).toBe('open');
+		dom.unmount();
+		localStorage.clear();
+		// Folded, the open one stays in view.
+		render({ threads, activeThread: 'retro' });
+		expect(titles('.ap-threads-inactive button[data-thread]')).toEqual(['Retro']);
+		dom.unmount();
+		// Counted from the latest, not from now: a server quiet a while doesn't put everything away.
+		render({ threads: threads.slice(1, 3) });
+		expect(titles('button[data-thread]')).toEqual(['Expired cert']);
+		expect(one('[data-testid="inactive-threads"]')!.textContent).toContain('1');
+		dom.unmount();
+		// None quiet, no heading.
+		render({ threads: threads.slice(0, 1) });
+		expect(one('[data-testid="inactive-threads"]')).toBeNull();
+	});
+
+	it('keeps a thread on its side while the list is held, so reading an old one with news doesn’t move it from under the click', () => {
+		const old = String(Date.now() - 5 * 24 * 60 * 60 * 1000);
+		const props = $state({
+			roomId: 'general', roomTitle: 'General',
+			threads: [{ ...joined('deploy', 'Deploy'), activeId: String(Date.now()) }, { ...joined('cert', 'Expired cert'), activeId: old }, { ...joined('retro', 'Retro'), activeId: old }],
+			others: [] as RoomListing[], mentions: {} as Record<string, number>, unread: { cert: 1 } as Record<string, number>, canJoin: true,
+			activeThread: undefined as string | undefined,
+			onthread: vi.fn(), onopen: vi.fn(), onjoin: vi.fn(), onleave: vi.fn()
+		});
+		dom.render(ThreadList, props);
+		const up = () => titles('.ap-threads-joined:not(.ap-threads-inactive) button[data-thread]');
+		expect(up()).toEqual(['Deploy', 'Expired cert']);
+		const list = one<HTMLElement>('[data-testid="thread-list"]')!.parentElement!;
+		list.dispatchEvent(new Event('pointerenter'));
+		props.activeThread = 'cert';
+		props.unread = {};
+		// A mention in a held-away one shows, though Inactive is folded.
+		props.mentions = { retro: 1 };
+		flushSync();
+		expect(up()).toEqual(['Deploy', 'Expired cert']);
+		expect(titles('.ap-threads-inactive button[data-thread]')).toEqual(['Retro']);
+		list.dispatchEvent(new Event('pointerleave'));
+		props.mentions = {};
+		flushSync();
+		expect(up()).toEqual(['Deploy']);
+		expect(titles('.ap-threads-inactive button[data-thread]')).toEqual(['Expired cert']);
+	});
 });
