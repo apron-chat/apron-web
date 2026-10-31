@@ -35,7 +35,7 @@ export interface EmbedProps {
 	 * `-title`, `-alt`, `-detail`, `-width` and `-height`, which a viewer reads to page through a timeline's images.
 	 */
 	viewer?: Partial<Omit<MediaItem, 'href'>>;
-	/** terminal (§4.8.6): live while `url` is set and not `done`. Fallback: the text a card without `og` shows, or a terminal's plain text without `attach`. */
+	/** terminal (§4.8.6): live while `url` is set and not `done`. A terminal's plain text without `attach`; on the fallback card, a note in place of a link (EmbedFrame's, for an address it can't use). */
 	text?: string;
 	done?: boolean;
 	/** terminal: what the header says once it isn't live, in place of Finished (such as Ended). */
