@@ -52,26 +52,50 @@ export function editLiveText(kept: string, added: string): string {
 	}
 	if (!added.includes('\b')) return kept + added;
 	// Each backspace removes from what this chunk wrote before it, and once that is gone, from the end of `kept`.
-	let written = '';
+	// What this chunk wrote and kept is runs of `added`, from `starts[i]` to `ends[i]`, joined once at the end:
+	// a string built up and sliced at each backspace would be copied each time, so a chunk would cost its length squared.
+	const starts: number[] = [];
+	const ends: number[] = [];
 	let fromKept = 0;
 	let start = 0;
 	for (let at = added.indexOf('\b'); at !== -1; at = added.indexOf('\b', start)) {
-		written += added.slice(start, at);
-		if (written) written = written.slice(0, lastCodePoint(written));
-		else fromKept++;
+		if (at > start) {
+			starts.push(start);
+			ends.push(at);
+		}
 		start = at + 1;
+		if (!ends.length) {
+			fromKept++;
+			continue;
+		}
+		// Remove the last code unit; when it ends a surrogate pair, the unit before it too, even in the run before.
+		const unit = added.charCodeAt(--ends[ends.length - 1]);
+		dropEmpty(starts, ends);
+		if (ends.length && isLow(unit) && isHigh(added.charCodeAt(ends[ends.length - 1] - 1))) {
+			ends[ends.length - 1]--;
+			dropEmpty(starts, ends);
+		}
 	}
-	written += added.slice(start);
+	const written = starts.map((from, i) => added.slice(from, ends[i]));
+	written.push(added.slice(start));
 	let end = kept.length;
 	for (; fromKept > 0 && end > 0; fromKept--) end = lastCodePoint(kept, end);
-	return (end === kept.length ? kept : kept.slice(0, end)) + written;
+	return (end === kept.length ? kept : kept.slice(0, end)) + written.join('');
 }
+
+/** Drops the last run when a backspace emptied it. */
+function dropEmpty(starts: number[], ends: number[]): void {
+	if (ends[ends.length - 1] !== starts[starts.length - 1]) return;
+	starts.pop();
+	ends.pop();
+}
+
+const isHigh = (unit: number) => unit >= 0xd800 && unit <= 0xdbff;
+const isLow = (unit: number) => unit >= 0xdc00 && unit <= 0xdfff;
 
 /** Where the code point that ends at `end` in `text` starts: a surrogate pair is one. */
 function lastCodePoint(text: string, end = text.length): number {
-	const low = text.charCodeAt(end - 1);
-	const high = text.charCodeAt(end - 2);
-	return low >= 0xdc00 && low <= 0xdfff && high >= 0xd800 && high <= 0xdbff ? end - 2 : end - 1;
+	return isLow(text.charCodeAt(end - 1)) && isHigh(text.charCodeAt(end - 2)) ? end - 2 : end - 1;
 }
 
 /** The pauses before trying again after a failure or a drop, the last repeated: a live text's url may not serve yet, or its connection may drop. */

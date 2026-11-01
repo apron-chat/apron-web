@@ -187,6 +187,26 @@ describe('editLiveText (§4.8.5)', () => {
 		expect(edited('abc', 'de\b\b\b')).toBe('ab');
 	});
 
+	it('removes a surrogate pair whole when a backspace brought its halves together', () => {
+		// Removing "a" puts the pair's halves side by side, so the next backspace removes both.
+		expect(edited('x\ud83da\b\ude80\b')).toBe('x');
+		expect(edited('x\ud83dab\b\b\ude80\by')).toBe('xy');
+		expect(edited('x\ud83da\b\ude80')).toBe('x🚀');
+	});
+
+	it('edits a large chunk of backspaces in time linear in its length', () => {
+		// Each "aa\b" leaves one "a". Slicing a string at each backspace made this quadratic: 370 ms here, now about 10 ms.
+		const chunk = 'aa\b'.repeat(100_000);
+		const began = performance.now();
+		const text = editLiveText('kept', chunk);
+		const took = performance.now() - began;
+		expect(text).toBe(`kept${'a'.repeat(100_000)}`);
+		// The bound leaves a slow CI machine room.
+		expect(took).toBeLessThan(200);
+		expect(editLiveText('kept', `${chunk}${'\b'.repeat(100_002)}`)).toBe('ke');
+		expect(editLiveText('kept', `${'\b'.repeat(100_000)}${chunk}`)).toBe('a'.repeat(100_000));
+	});
+
 	it('leaves text already edited as it is, so a server may serve either', () => {
 		const raw = ['Here is the pla', 'm\bn:\fHere is the plan 🚀\b', ': roll back'];
 		const once = edited(...raw);
