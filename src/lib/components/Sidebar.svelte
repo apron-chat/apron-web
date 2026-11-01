@@ -610,8 +610,8 @@
 						<!-- A server may list only the most active members of a large room, with the total (§4.2.1). -->
 						{@const members = listing.memberCount ?? listing.members.length}
 						{@const count = members > 0 ? `${members} ${members === 1 ? 'member' : 'members'}` : ''}
-						<!-- Picking one joins it; one that can't join (reading as a guest) opens it to read, which needs no word. -->
-						<RoomItem room={listing.id} name={listing.title} topic={session.readOnly ? count || undefined : [count, 'Join'].filter(Boolean).join(' · ')} listed onselect={() => onjoin(listing.id)} />
+						<!-- Picking one joins it; one that can't join (reading as a guest) opens it to read, which needs no word, and it shows as open as a joined room does. -->
+						<RoomItem room={listing.id} name={listing.title} topic={session.readOnly ? count || undefined : [count, 'Join'].filter(Boolean).join(' · ')} listed active={listing.id === session.activeRoomId && !activeThread} onselect={() => onjoin(listing.id)} />
 					{/each}
 					{#if listError}<p class="ap-sect-note ap-tone-danger" role="alert">{listError}</p>{/if}
 				{/if}

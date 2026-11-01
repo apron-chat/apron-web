@@ -47,7 +47,7 @@
 		 * readers' way.
 		 */
 		peek?: boolean;
-		/** Called when the conversation's sliver is tapped (`peek`). */
+		/** Called when the conversation's sliver is tapped, or the rooms list swiped toward its far side (`peek`). */
 		onpeek?: () => void;
 		/** The rooms list's width while open, in px, such as dragged to; omit for `--sidebar-w`. */
 		sideWidth?: number;
@@ -79,6 +79,51 @@
 	/** The rooms list shows over a conversation whose sliver is in view. */
 	const peeking = $derived(peek && pane === 'rooms' && Boolean(onpeek));
 
+	/**
+	 * A swipe across the rooms list toward the side away from the sliver (the left, or the right under `dir="rtl"`)
+	 * returns to the conversation too: mostly sideways, and moving before a hold could lift a room to drag (its 350ms).
+	 */
+	const SWIPE_PX = 50;
+	const SWIPE_HOLD_MS = 300;
+	let swipe: { x: number; y: number; at: number; moved: boolean } | undefined;
+	function swipeStart(event: TouchEvent): void {
+		const target = event.target as Element;
+		const touch = event.touches[0];
+		swipe = peeking && event.touches.length === 1 && target.closest('.ap-shell-side') && !target.closest('[role="dialog"]')
+			? { x: touch.clientX, y: touch.clientY, at: event.timeStamp, moved: false }
+			: undefined;
+	}
+	function swipeMove(event: TouchEvent): void {
+		if (!swipe || swipe.moved) return;
+		const touch = event.touches[0];
+		if (Math.hypot(touch.clientX - swipe.x, touch.clientY - swipe.y) < 10) return;
+		swipe.moved = true;
+		// Held still first: a room lifting to be dragged, not a swipe.
+		if (event.timeStamp - swipe.at > SWIPE_HOLD_MS) swipe = undefined;
+	}
+	function swipeEnd(event: TouchEvent): void {
+		const start = swipe;
+		swipe = undefined;
+		if (!start?.moved || event.type === 'touchcancel') return;
+		const touch = event.changedTouches[0];
+		const away = (start.x - touch.clientX) * (getComputedStyle(event.currentTarget as Element).direction === 'rtl' ? -1 : 1);
+		if (away >= SWIPE_PX && away > 2 * Math.abs(touch.clientY - start.y)) onpeek?.();
+	}
+	/** The swipe's listeners, passive (it never stops a scroll): a touch shortcut beside the list's own › and the sliver. */
+	const swipeBack: Attachment<HTMLElement> = (shell) => {
+		const options = { passive: true };
+		shell.addEventListener('touchstart', swipeStart, options);
+		shell.addEventListener('touchmove', swipeMove, options);
+		shell.addEventListener('touchend', swipeEnd, options);
+		shell.addEventListener('touchcancel', swipeEnd, options);
+		return () => {
+			shell.removeEventListener('touchstart', swipeStart);
+			shell.removeEventListener('touchmove', swipeMove);
+			shell.removeEventListener('touchend', swipeEnd);
+			shell.removeEventListener('touchcancel', swipeEnd);
+		};
+	};
+
 	const px = (n: number | undefined) => (n === undefined ? undefined : `${n}px`);
 	/** The member list's column: nothing while it's shut or overlaid, kept at 0 so it can slide. */
 	const membersTrack = $derived(membersWide && membersOpen ? (px(membersWidth) ?? 'var(--member-list-w)') : '0px');
@@ -96,6 +141,7 @@
 		peeking && 'ap-shell-peeking', sideToggle && 'ap-shell-side-toggle', membersToggle && 'ap-shell-members-toggle', className
 	]}
 	style={shellStyle}
+	{@attach swipeBack}
 >
 	{@render rail?.()}
 	{@render sideToggle?.()}

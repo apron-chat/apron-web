@@ -117,6 +117,28 @@ test.describe('the rooms list on a phone', () => {
 		await expect(main).not.toHaveAttribute('inert');
 		await at(preview, 'engineering', /#room=engineering$/);
 	});
+
+	test('a swipe across it toward the left returns to the room, but not a swipe down it or a hold before moving', async ({ preview, page, context }) => {
+		await preview.open('#room=engineering');
+		await preview.roomsPane();
+		const cdp = await context.newCDPSession(page);
+		const swipe = async (from: { x: number; y: number }, by: { x: number; y: number }, holdMs = 0) => {
+			await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [from] });
+			if (holdMs) await page.waitForTimeout(holdMs);
+			for (let i = 1; i <= 6; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: from.x + (by.x * i) / 6, y: from.y + (by.y * i) / 6 }] });
+			await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+		};
+		const list = page.getByTestId('room-list');
+		const box = (await list.boundingBox())!;
+		const from = { x: box.x + box.width * 0.7, y: box.y + box.height + 120 };
+		await swipe(from, { x: 0, y: -120 });
+		await swipe(from, { x: -150, y: 0 }, 450);
+		await page.waitForTimeout(200);
+		await expect(list).toBeVisible();
+		await swipe(from, { x: -150, y: 10 });
+		await expect(list).toBeHidden();
+		await at(preview, 'engineering', /#room=engineering$/);
+	});
 });
 
 test.describe('Preferences in the address', () => {
