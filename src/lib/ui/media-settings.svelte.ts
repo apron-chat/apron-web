@@ -32,20 +32,38 @@ function known(value: unknown): value is MediaPolicy {
 }
 
 /**
+ * The `http(s):` URL an entry names: a full URL (`https://cdn.example/a.png`), else a bare host (`cdn.example`, or
+ * `cdn.example:443`, which `URL` alone reads as a scheme), as `https:`. One naming another scheme (`ftp://`) is
+ * none. Else undefined.
+ */
+function entryUrl(entry: string): URL | undefined {
+	for (const candidate of entry.includes('://') ? [entry] : [entry, `https://${entry}`]) {
+		try {
+			const url = new URL(candidate);
+			if (url.protocol === 'https:' || url.protocol === 'http:') return url;
+		} catch {
+			// Not a URL as it stands: try it as a bare host.
+		}
+	}
+	return undefined;
+}
+
+/** What `keep` makes of each URL named in `text`, separated by spaces, commas or lines: each once, in order. */
+function parseEntries(text: string, keep: (url: URL) => string | undefined): string[] {
+	const kept = text.split(/[\s,]+/).flatMap((entry) => {
+		const url = entry ? entryUrl(entry) : undefined;
+		const value = url && keep(url);
+		return value ? [value] : [];
+	});
+	return [...new Set(kept)];
+}
+
+/**
  * The `https:` origins named in `text`, each once, in order: full URLs (`https://cdn.example/a.png`) or bare hosts
  * (`cdn.example`), separated by spaces, commas or lines. Anything else is dropped.
  */
 export function parseMediaOrigins(text: string): string[] {
-	const origins = text.split(/[\s,]+/).flatMap((entry) => {
-		if (!entry) return [];
-		try {
-			const url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(entry) ? entry : `https://${entry}`);
-			return url.protocol === 'https:' && url.hostname.includes('.') ? [url.origin] : [];
-		} catch {
-			return [];
-		}
-	});
-	return [...new Set(origins)];
+	return parseEntries(text, (url) => (url.protocol === 'https:' && url.hostname.includes('.') ? url.origin : undefined));
 }
 
 /**
@@ -62,17 +80,10 @@ export function blockableHost(url: URL): string {
  * holds for the host whatever they are. Wildcards and anything else are dropped.
  */
 export function parseBlockedOrigins(text: string): string[] {
-	const origins = text.split(/[\s,]+/).flatMap((entry) => {
-		if (!entry || entry.includes('*')) return [];
-		try {
-			const url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(entry) ? entry : `https://${entry}`);
-			const host = blockableHost(url);
-			return (url.protocol === 'https:' || url.protocol === 'http:') && host ? [`https://${host}`] : [];
-		} catch {
-			return [];
-		}
+	return parseEntries(text, (url) => {
+		const host = blockableHost(url);
+		return host && !host.includes('*') ? `https://${host}` : undefined;
 	});
-	return [...new Set(origins)];
 }
 
 /** Where media loads from, shared by the page and Preferences. */

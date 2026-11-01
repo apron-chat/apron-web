@@ -60,11 +60,12 @@ describe('media settings', () => {
 	});
 
 	it('reads sites to block by host, whatever the scheme, port or trailing dot; no wildcards', () => {
-		expect(parseBlockedOrigins('http://plain.example:8080/a.png TRACKER.example. localhost https://cdn.example:443 *.wild.example ftp://x.example plain.example')).toEqual([
+		expect(parseBlockedOrigins('http://plain.example:8080/a.png TRACKER.example. localhost https://cdn.example:443 *.wild.example ftp://x.example http:/slash.example plain.example')).toEqual([
 			'https://plain.example',
 			'https://tracker.example',
 			'https://localhost',
-			'https://cdn.example'
+			'https://cdn.example',
+			'https://slash.example'
 		]);
 	});
 

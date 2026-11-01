@@ -61,12 +61,8 @@ export function mediaGate(origin: string | undefined, trusted: readonly string[]
 	const isBlocked = (value: unknown): boolean => {
 		const link = blocked.size ? safeLink(value) : undefined;
 		if (link === undefined) return false;
-		// The host, then each one it is under: a.b.example, b.example, example.
-		for (let host = blockableHost(new URL(link)); host; host = host.slice(host.indexOf('.') + 1) || '') {
-			if (blocked.has(host)) return true;
-			if (!host.includes('.')) break;
-		}
-		return false;
+		const host = blockableHost(new URL(link));
+		return [...blocked].some((site) => host === site || host.endsWith(`.${site}`));
 	};
 	const src = (value: unknown): MediaSrc | undefined => {
 		if (isBlocked(value)) return undefined;
