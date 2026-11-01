@@ -118,6 +118,15 @@ test.describe('the rooms list on a phone', () => {
 		await at(preview, 'engineering', /#room=engineering$/);
 	});
 
+	test('a message arriving in the room behind it stays unread until the room shows again', async ({ preview, page }) => {
+		await preview.open('#room=engineering');
+		await preview.roomsPane();
+		await preview.post('engineering', 'ada', 'While the list is open');
+		await expect(page).toHaveTitle('(1) Apron');
+		await preview.press(page.locator('.ap-shell-peek'));
+		await expect(page).toHaveTitle('Apron');
+	});
+
 	test('a swipe across it toward the left returns to the room, but not a swipe down it or a hold before moving', async ({ preview, page, context }) => {
 		await preview.open('#room=engineering');
 		await preview.roomsPane();

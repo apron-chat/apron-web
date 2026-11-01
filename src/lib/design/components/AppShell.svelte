@@ -111,16 +111,17 @@
 	}
 	/** The swipe's listeners, passive (it never stops a scroll): a touch shortcut beside the list's own › and the sliver. */
 	const swipeBack: Attachment<HTMLElement> = (shell) => {
-		const options = { passive: true };
+		// Capturing, so a touch the list stops on its way up (as on a thread's row, for dragging rooms) still counts.
+		const options = { passive: true, capture: true };
 		shell.addEventListener('touchstart', swipeStart, options);
 		shell.addEventListener('touchmove', swipeMove, options);
 		shell.addEventListener('touchend', swipeEnd, options);
 		shell.addEventListener('touchcancel', swipeEnd, options);
 		return () => {
-			shell.removeEventListener('touchstart', swipeStart);
-			shell.removeEventListener('touchmove', swipeMove);
-			shell.removeEventListener('touchend', swipeEnd);
-			shell.removeEventListener('touchcancel', swipeEnd);
+			shell.removeEventListener('touchstart', swipeStart, options);
+			shell.removeEventListener('touchmove', swipeMove, options);
+			shell.removeEventListener('touchend', swipeEnd, options);
+			shell.removeEventListener('touchcancel', swipeEnd, options);
 		};
 	};
 
@@ -149,8 +150,8 @@
 	{@render sideHandle?.()}
 	{#if nudge}<div class="ap-shell-nudge" aria-live="polite">{@render nudge()}</div>{/if}
 	{#if main}<main aria-label={mainLabel} class="ap-shell-main" inert={peeking} {@attach mainAttach}>{@render main()}</main>{/if}
-	<!-- A pointer's way back alone: the rooms list's › is the keyboard's and screen readers'. -->
-	{#if peeking}<button type="button" class="ap-shell-peek" tabindex="-1" aria-hidden="true" onclick={onpeek}></button>{/if}
+	<!-- A pointer's way back alone: the rooms list's › is the keyboard's and screen readers'. Pressing it never focuses it. -->
+	{#if peeking}<button type="button" class="ap-shell-peek" tabindex="-1" aria-hidden="true" onmousedown={(event) => event.preventDefault()} onclick={onpeek}></button>{/if}
 	{@render membersToggle?.()}
 	{@render members?.()}
 	{@render membersHandle?.()}
