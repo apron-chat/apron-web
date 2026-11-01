@@ -2,7 +2,7 @@
 	import { untrack, type Snippet } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { historySettings, RETENTIONS, storageUsed } from '$lib/history/settings.svelte';
-	import { MEDIA_POLICIES, mediaSettings, parseMediaOrigins } from '$lib/ui/media-settings.svelte';
+	import { MEDIA_POLICIES, mediaSettings, parseBlockedOrigins, parseMediaOrigins } from '$lib/ui/media-settings.svelte';
 	import { appearanceSettings, cssForTheme, parseThemeCss, THEME_CSS_MAX, THEMES, type ThemeId, type ThemeMode } from '$lib/ui/appearance.svelte';
 	import type { NotificationPermissionState, NotificationTestResult } from '$lib/ui/notifications';
 	import Button from '$lib/design/components/Button.svelte';
@@ -108,6 +108,8 @@
 	let mediaNote = $derived(mediaSettings.policy === 'any' ? 'Everything, from any site.' : `From ${serverHost ?? 'this server'} and the trusted origins below. Other images wait for a click.`);
 	/** The trusted origins, one per line as hosts, as the field shows them. */
 	let addedSites = $derived(mediaSettings.origins.map((origin) => new URL(origin).host).join('\n'));
+	/** The blocked origins, one per line as hosts, as their field shows them. */
+	let blockedSites = $derived(mediaSettings.blocked.map((origin) => new URL(origin).host).join('\n'));
 
 	type Note = { text: string; tone?: 'ok' | 'err' };
 	/**
@@ -328,6 +330,11 @@
 				{#if mediaHosts.length}<p class="ap-form-hint" data-testid="media-server-origins">Includes origins trusted by the server: {mediaHosts.join(', ')}</p>{/if}
 				{#snippet control()}
 					<textarea id="ap-media-sites" class="ap-field ap-pref-sites" rows="4" spellcheck="false" autocomplete="off" value={addedSites} onchange={(event) => mediaSettings.update(mediaSettings.policy, parseMediaOrigins(event.currentTarget.value))} data-testid="media-sites"></textarea>
+				{/snippet}
+			</SettingRow>
+			<SettingRow title="Blocked origins" for="ap-media-blocked" hint="One per line. Blocked origins are never rendered." stacked class="ap-pref-media-sites">
+				{#snippet control()}
+					<textarea id="ap-media-blocked" class="ap-field ap-pref-sites" rows="4" spellcheck="false" autocomplete="off" value={blockedSites} onchange={(event) => { mediaSettings.setBlocked(parseBlockedOrigins(event.currentTarget.value)); event.currentTarget.value = blockedSites; }} data-testid="media-blocked"></textarea>
 				{/snippet}
 			</SettingRow>
 		{:else if preferencesSection === 'history'}

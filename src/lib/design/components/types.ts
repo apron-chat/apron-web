@@ -14,7 +14,7 @@ export interface OG {
 	audio?: { url?: MediaSrc; type?: string; ask?: MediaAskProps };
 }
 
-/** Media that waits for a click (MediaAsk): where it is, its site, and what Load and Always load do. */
+/** Media that waits for a click (MediaAsk): where it is, its site, and what Load, Always load and Block do. */
 export interface MediaAskProps {
 	/** Where it is, in full, for the viewer to judge before loading it. */
 	url: string;
@@ -24,6 +24,8 @@ export interface MediaAskProps {
 	onload: () => void;
 	/** Trusts its site from now on; absent where it can't be (not `https:`). */
 	ontrust?: () => void;
+	/** Blocks its site from now on, over its trust; absent where it can't be (not `https:`). */
+	onblock?: () => void;
 }
 
 /** One entry of `body.embeds` (§4.8). `kind` picks the renderer; unknown kinds render from `og`, else EmbedFallback (§3.5). */

@@ -10,6 +10,7 @@ import { loadMediaSettings, MEDIA_KEY, saveMediaSettings } from './storage';
  *   Media in the timeline from anywhere else waits for a click; avatars and
  *   custom emoji from anywhere else don't show.
  * - `any`: any site.
+ * Either way, nothing loads from the origins the viewer blocked (`blocked`), whatever trusts them.
  * Inline images (`data:`) always show.
  */
 export const MEDIA_POLICIES = [
@@ -47,19 +48,55 @@ export function parseMediaOrigins(text: string): string[] {
 	return [...new Set(origins)];
 }
 
+/**
+ * A host to compare a blocked one with: lower case (as `URL` makes it), without a trailing dot, whatever the port or
+ * scheme.
+ */
+export function blockableHost(url: URL): string {
+	return url.hostname.replace(/\.$/, '');
+}
+
+/**
+ * The sites named in `text` to block, each once, in order, as `https:` origins of their hosts: full URLs of any
+ * `http(s):` scheme, or bare hosts, separated by spaces, commas or lines; the port and scheme dropped, since a block
+ * holds for the host whatever they are. Wildcards and anything else are dropped.
+ */
+export function parseBlockedOrigins(text: string): string[] {
+	const origins = text.split(/[\s,]+/).flatMap((entry) => {
+		if (!entry || entry.includes('*')) return [];
+		try {
+			const url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(entry) ? entry : `https://${entry}`);
+			const host = blockableHost(url);
+			return (url.protocol === 'https:' || url.protocol === 'http:') && host ? [`https://${host}`] : [];
+		} catch {
+			return [];
+		}
+	});
+	return [...new Set(origins)];
+}
+
 /** Where media loads from, shared by the page and Preferences. */
 export class MediaSettings {
 	policy = $state<MediaPolicy>(DEFAULT_MEDIA_POLICY);
 	/** The origins the viewer trusts besides the server's, Preferences' Trusted origins. */
 	origins = $state.raw<string[]>([]);
+	/** The origins whose media never loads, whatever trusts them, Preferences' Blocked origins. */
+	blocked = $state.raw<string[]>([]);
 	/** Held to the server's origins on this page (`limit`), until something is chosen. */
 	private limited = $state(false);
+	/** The policy chosen and saved, which `limit` doesn't change. */
+	private chosen: MediaPolicy = DEFAULT_MEDIA_POLICY;
 
 	load(): void {
 		const saved = loadMediaSettings();
-		const origins = isJsonObject(saved) && Array.isArray(saved.origins) ? saved.origins : [];
-		this.policy = this.limited ? DEFAULT_MEDIA_POLICY : policyOf(isJsonObject(saved) ? saved.policy : undefined);
-		this.origins = parseMediaOrigins(origins.filter((origin) => typeof origin === 'string').join(' '));
+		const list = (key: string) => {
+			const value = isJsonObject(saved) ? saved[key] : undefined;
+			return (Array.isArray(value) ? value : []).filter((origin) => typeof origin === 'string').join(' ');
+		};
+		this.chosen = policyOf(isJsonObject(saved) ? saved.policy : undefined);
+		this.policy = this.limited ? DEFAULT_MEDIA_POLICY : this.chosen;
+		this.origins = parseMediaOrigins(list('origins'));
+		this.blocked = parseBlockedOrigins(list('blocked'));
 	}
 
 	/** Another tab changed `key` in storage: what it chose holds here too. */
@@ -67,18 +104,35 @@ export class MediaSettings {
 		if (key === MEDIA_KEY || key === null) this.load();
 	}
 
-	update(policy: string, origins: readonly string[] = this.origins): void {
+	update(policy: string, origins: readonly string[] = this.origins, blocked: readonly string[] = this.blocked): void {
 		if (!known(policy)) return;
 		this.limited = false;
 		this.policy = policy;
+		this.chosen = policy;
 		this.origins = [...origins];
-		saveMediaSettings({ policy, origins });
+		this.blocked = [...blocked];
+		saveMediaSettings({ policy, origins, blocked });
 	}
 
 	/** Trusts `origin` from now on, as Always load does: it joins the Trusted origins, whatever the policy. */
 	trust(origin: string): void {
 		const [parsed] = parseMediaOrigins(origin);
 		if (parsed && !this.origins.includes(parsed)) this.update(this.policy, [...this.origins, parsed]);
+	}
+
+	/** Blocks `origin` from now on, as Block does: it joins the Blocked origins, which win over the trusted ones. */
+	block(origin: string): void {
+		const [parsed] = parseBlockedOrigins(origin);
+		if (parsed && !this.blocked.includes(parsed)) this.setBlocked([...this.blocked, parsed]);
+	}
+
+	/**
+	 * Replaces the Blocked origins. Blocking only ever loads less, so unlike `update` it keeps a page held to the
+	 * server's origins (`limit`) held, and saves the policy chosen, not the one held to.
+	 */
+	setBlocked(blocked: readonly string[]): void {
+		this.blocked = [...blocked];
+		saveMediaSettings({ policy: this.chosen, origins: this.origins, blocked: this.blocked });
 	}
 
 	/**

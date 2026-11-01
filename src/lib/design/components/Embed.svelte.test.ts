@@ -39,18 +39,21 @@ describe('EmbedUpload', () => {
 });
 
 describe('media that waits for a click', () => {
-	it('shows a card without its picture, and under it Load and Always load, each doing its own', () => {
+	it('shows a card without its picture, and under it Load, Always load and Block, each doing its own', () => {
 		const onload = vi.fn();
 		const ontrust = vi.fn();
-		render(EmbedCard, { kind: 'link', url: 'https://news.example/story', testid: 'card', og: { title: 'A story', image: { alt: 'Chart', ask: { url: 'https://cdn.example/chart.png', host: 'cdn.example', onload, ontrust } } } });
+		const onblock = vi.fn();
+		render(EmbedCard, { kind: 'link', url: 'https://news.example/story', testid: 'card', og: { title: 'A story', image: { alt: 'Chart', ask: { url: 'https://cdn.example/chart.png', host: 'cdn.example', onload, ontrust, onblock } } } });
 		expect(document.querySelector('[data-testid="card"]')?.classList.contains('ap-embed-held')).toBe(true);
 		expect(document.querySelector('img')).toBeNull();
 		const ask = () => [document.querySelector('.ap-media-ask-label')?.textContent, ...[...document.querySelectorAll('.ap-media-ask button')].map((button) => button.textContent)];
-		expect(ask()).toEqual(['Chart https://cdn.example/chart.png', 'Load', 'Always load from cdn.example']);
+		expect(ask()).toEqual(['Chart https://cdn.example/chart.png', 'Load', 'Always load from cdn.example', 'Block cdn.example']);
 		document.querySelector<HTMLButtonElement>('[aria-label="Load Chart from cdn.example"]')!.click();
 		expect(onload).toHaveBeenCalledOnce();
 		document.querySelector<HTMLButtonElement>('button[title="Adds cdn.example to Trusted origins"]')!.click();
 		expect(ontrust).toHaveBeenCalledOnce();
+		document.querySelector<HTMLButtonElement>('button[title="Adds cdn.example to Blocked origins"]')!.click();
+		expect(onblock).toHaveBeenCalledOnce();
 		unmount();
 		// An upload's preview: its file card, and the one that would show first; no Always load where it can't be.
 		render(EmbedUpload, { kind: 'upload', url: 'https://files.example/a.mp4', title: 'a.mp4', og: { video: { ask: { url: 'http://plain.example/a.mp4', host: 'plain.example', onload } }, image: { ask: { url: 'http://plain.example/a.png', host: 'plain.example', onload } } } });

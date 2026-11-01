@@ -32,7 +32,8 @@ class Directory {
 	private serverMedia = $state.raw<readonly string[]>([]);
 	/**
 	 * The origins besides the server's own that media loads from: the server's, and as the viewer chose
-	 * (`mediaSettings`), their trusted origins, or any (`ANY_ORIGIN`).
+	 * (`mediaSettings`), their trusted origins, or any (`ANY_ORIGIN`). Their blocked origins, which win over these, the
+	 * gates leave out.
 	 */
 	readonly mediaOrigins = $derived(mediaSettings.trusted(this.serverMedia));
 	/** URLs the viewer clicked to load, on this page: each loads wherever it is. */
@@ -42,13 +43,13 @@ class Directory {
 	 * images and custom emoji in messages, HTML embeds. Every such URL asks it (`$lib/ui/media-gate`); what it won't
 	 * load, the timeline offers to (`ask`).
 	 */
-	readonly mediaGate = $derived(gateFor(this.origin, this.mediaOrigins, { once: this.loadedOnce, asks: mediaSettings.asks }));
+	readonly mediaGate = $derived(gateFor(this.origin, this.mediaOrigins, { once: this.loadedOnce, asks: mediaSettings.asks, blocked: mediaSettings.blocked }));
 	/** What avatars load (`mediaOrigins`): from anywhere but the server, only `https:` (§4.8.6). */
-	readonly avatarGate = $derived(gateFor(this.origin, this.mediaOrigins, { httpsElsewhere: true }));
+	readonly avatarGate = $derived(gateFor(this.origin, this.mediaOrigins, { httpsElsewhere: true, blocked: mediaSettings.blocked }));
 
 	/** What the avatar of another server, such as one signed in to before, loads: as its own would, from it. */
 	avatarGateFor(server: string): MediaGate {
-		return gateFor(serverOrigin(server), mediaSettings.trusted([]), { httpsElsewhere: true });
+		return gateFor(serverOrigin(server), mediaSettings.trusted([]), { httpsElsewhere: true, blocked: mediaSettings.blocked });
 	}
 
 	/** Loads the media at `url` wherever it is, on this page, as a click on Load asks. */

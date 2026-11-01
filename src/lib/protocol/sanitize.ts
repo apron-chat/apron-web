@@ -39,7 +39,7 @@ const CONFIGS: Record<'message' | 'embed', Config> = {
 		// DOMPurify's own list of URL schemes, and Apron links' (Appendix A.4), which the page opens itself.
 		ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|matrix|apron):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i
 	},
-	// No `data-` attribute either: Load and Always load (`data-media-load`, `data-media-trust`) are written only here.
+	// No `data-` attribute either: Load, Always load and Block (`data-media-load`, `data-media-trust`, `data-media-block`) are written only here.
 	embed: { USE_PROFILES: { html: true }, FORBID_TAGS: ['style', 'form', 'input', 'button'], FORBID_ATTR: ['style'], ALLOW_DATA_ATTR: false }
 };
 
@@ -175,7 +175,7 @@ function stand(element: Element, src: string, media: MediaCheck, doc: Document):
 	return made;
 }
 
-/** Media that waits for a click, as the design system's MediaAsk draws it: what it is and its full URL, then Load and Always load. */
+/** Media that waits for a click, as the design system's MediaAsk draws it: what it is and its full URL, then Load, Always load and Block. */
 function askBox(what: string, asked: MediaAskAt, doc: Document): HTMLElement {
 	const part = (tag: string, className: string, text = '') => {
 		const node = doc.createElement(tag);
@@ -196,9 +196,14 @@ function askBox(what: string, asked: MediaAskAt, doc: Document): HTMLElement {
 	const actions = part('span', 'ap-media-ask-actions');
 	actions.append(load);
 	if (asked.origin) {
-		const trust = button(`Always load from ${asked.host}`, 'data-media-trust', asked.origin);
-		trust.setAttribute('title', `Adds ${asked.host} to Trusted origins`);
-		actions.append(trust);
+		const site = (text: string, name: string, list: string) => {
+			const node = button('', name, asked.origin!);
+			node.setAttribute('aria-label', `${text} ${asked.host}`);
+			node.setAttribute('title', `Adds ${asked.host} to ${list}`);
+			node.append(part('span', 'ap-media-ask-btntext', text), ' ', part('span', 'ap-media-ask-host', asked.host));
+			return node;
+		};
+		actions.append(site('Always load from', 'data-media-trust', 'Trusted origins'), site('Block', 'data-media-block', 'Blocked origins'));
 	}
 	const box = part('span', 'ap-media-ask');
 	box.append(label, actions);
