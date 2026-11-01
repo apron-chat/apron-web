@@ -8,12 +8,14 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
  */
 
 /** The counted metrics, by kind of probe. A load probe has no `action`. */
-const LOAD = ['requests', 'startupJsKB', 'domNodes', 'layouts', 'styleRecalcs', 'heapMB'];
-const INTERACTION = ['layouts', 'styleRecalcs'];
+const LOAD = ['requests', 'startupJsKB', 'domNodes', 'layouts', 'styleRecalcs', 'calls', 'heapMB'];
+const INTERACTION = ['layouts', 'styleRecalcs', 'calls'];
 
 /**
- * How far over its baseline a metric may go before the check fails: bytes and requests hardly move, counts
- * of layouts and style recalcs move by a few with timing, and the heap by a little.
+ * How far over its baseline a metric may go before the check fails. On the fake clock bytes, requests and DOM
+ * nodes don't move, and an interaction's layouts and style recalcs barely do. The load's layouts and style
+ * recalcs follow the frames the browser draws in real time, so move by a couple; JS calls move by a few from
+ * events Playwright sends in real time (mouse moves).
  */
 const SLACK = {
 	requests: { abs: 0, rel: 0 },
@@ -23,11 +25,17 @@ const SLACK = {
 	domNodes: { abs: 2, rel: 0.01 },
 	layouts: { abs: 3, rel: 0.15 },
 	styleRecalcs: { abs: 3, rel: 0.15 },
+	calls: { abs: 20, rel: 0.005 },
 	heapMB: { abs: 0.2, rel: 0.05 }
 };
+/** An interaction's, where they differ from the load's. */
+const INTERACTION_SLACK = { layouts: { abs: 1, rel: 0 }, styleRecalcs: { abs: 1, rel: 0 } };
 
-/** The highest value `metric` may reach against a baseline of `base`. */
-export const limitOf = (metric, base) => base + Math.max(SLACK[metric].abs, base * SLACK[metric].rel);
+/** The highest value `metric` may reach against a baseline of `base`, on the load or an interaction. */
+export const limitOf = (metric, base, interaction = false) => {
+	const slack = (interaction && INTERACTION_SLACK[metric]) || SLACK[metric];
+	return base + Math.max(slack.abs, base * slack.rel);
+};
 
 /**
  * Shard `index` of `count` (from 1) of the probes, for checking the budget on several machines at once: each
@@ -61,19 +69,83 @@ export function countsOf(result, probes) {
 const round = (x) => Math.round(x * 10) / 10;
 
 /**
+ * Every run's counts per probe, with their medians and spread, to diff between machines (`qa budget --out`):
+ * the budget's metrics, plus `calls` and `chunks` (calls by chunk) when they were counted. Timings are left out.
+ */
+export function samplesOf(result, probes) {
+	const label = result.labels[0];
+	const probesOut = {};
+	for (const probe of probes) {
+		const { samples, stats } = result.probes[probe.name][label];
+		const metrics = (probe.action ? INTERACTION : LOAD).filter((m) => m in samples[0]);
+		probesOut[probe.name] = Object.fromEntries(metrics.map((m) => [m, { median: round(stats[m].median), min: round(stats[m].min), max: round(stats[m].max), runs: samples.map((s) => round(s[m])) }]));
+		if (samples[0].chunks) {
+			const names = [...new Set(samples.flatMap((s) => Object.keys(s.chunks)))].sort();
+			probesOut[probe.name].chunks = Object.fromEntries(names.map((n) => [n, samples.map((s) => s.chunks[n] ?? 0)]));
+		}
+	}
+	return probesOut;
+}
+
+/**
+ * Two `qa budget --out` files side by side (say, this machine's and a CI runner's): per probe and metric each
+ * side's `median [min–max]`, and whether every run on both sides counted the same. Chunks whose calls differ are
+ * listed under their probe. Only the probes both measured are compared (a shard holds a third of them).
+ */
+export function diffSamples(a, b) {
+	const cell = (s) => (s ? `${s.median}${s.min === s.max ? '' : ` [${s.min}–${s.max}]`}` : '–');
+	const rows = [];
+	let same = 0;
+	const shared = Object.keys(a.probes).filter((p) => p in b.probes);
+	for (const probe of shared) {
+		const pa = a.probes[probe] ?? {};
+		const pb = b.probes[probe] ?? {};
+		for (const metric of [...new Set([...Object.keys(pa), ...Object.keys(pb)])].filter((m) => m !== 'chunks')) {
+			const runs = [...(pa[metric]?.runs ?? []), ...(pb[metric]?.runs ?? [])];
+			const identical = !!pa[metric] && !!pb[metric] && new Set(runs).size === 1;
+			if (identical) same++;
+			rows.push([probe, metric, cell(pa[metric]), cell(pb[metric]), identical ? '' : pa[metric] && pb[metric] ? `${round(pb[metric].median - pa[metric].median)}` : 'missing']);
+		}
+		for (const chunk of [...new Set([...Object.keys(pa.chunks ?? {}), ...Object.keys(pb.chunks ?? {})])]) {
+			const ca = pa.chunks?.[chunk] ?? [0];
+			const cb = pb.chunks?.[chunk] ?? [0];
+			if (new Set([...ca, ...cb]).size > 1) rows.push([probe, `  calls in ${chunk}`, ca.join(' '), cb.join(' '), '']);
+		}
+	}
+	const head = ['probe', 'metric', 'a', 'b', 'b − a'];
+	const widths = head.map((_, i) => Math.max(...[head, ...rows].map((r) => r[i].length)));
+	const line = (r) => r.map((c, i) => c.padEnd(widths[i])).join('  ').trimEnd();
+	const counted = rows.filter((r) => !r[1].startsWith(' ')).length;
+	const unshared = [...Object.keys(a.probes), ...Object.keys(b.probes)].filter((p) => !shared.includes(p));
+	const summary = `${same}/${counted} counts the same in every run on both sides${unshared.length ? `; not in both: ${[...new Set(unshared)].join(', ')}` : ''}`;
+	return { same, total: counted, text: [line(head), ...rows.map(line), '', summary].join('\n') };
+}
+
+/** Per probe and metric, `median [min–max]` over the runs, marking with `*` any metric that varied between them. */
+export function formatSamples(probes) {
+	const metrics = [...new Set(Object.values(probes).flatMap((p) => Object.keys(p).filter((k) => k !== 'chunks')))];
+	const cell = (s) => (s ? `${s.median}${s.min === s.max ? '' : ` [${s.min}–${s.max}]*`}` : '');
+	const body = Object.entries(probes).map(([name, p]) => [name, ...metrics.map((m) => cell(p[m]))]);
+	const head = ['probe', ...metrics];
+	const widths = head.map((_, i) => Math.max(...[head, ...body].map((r) => r[i].length)));
+	const line = (r) => r.map((c, i) => c.padEnd(widths[i])).join('  ').trimEnd();
+	return [line(head), ...body.map(line)].join('\n');
+}
+
+/**
  * Each metric of `counts` against `budget`: `over` past its slack, `under` well below it (worth locking in
  * with `--update`), else `ok`. Metrics missing from the baseline are `new`.
  */
 export function compareBudget(counts, budget) {
 	const rows = [];
-	const add = (probe, metric, value, base) => {
+	const add = (probe, metric, value, base, interaction = false) => {
 		if (base === undefined) return rows.push({ probe, metric, value, status: 'new' });
-		const limit = limitOf(metric, base);
+		const limit = limitOf(metric, base, interaction);
 		const status = value > limit ? 'over' : value < base - (limit - base) ? 'under' : 'ok';
 		rows.push({ probe, metric, value, base, limit, status });
 	};
 	for (const [probe, metrics] of Object.entries(counts.probes))
-		for (const [metric, value] of Object.entries(metrics)) add(probe, metric, value, budget.probes?.[probe]?.[metric]);
+		for (const [metric, value] of Object.entries(metrics)) add(probe, metric, value, budget.probes?.[probe]?.[metric], Object.keys(metrics).every((m) => INTERACTION.includes(m)));
 	for (const [metric, value] of Object.entries(counts.bundle)) add('bundle', metric, value, budget.bundle?.[metric]);
 	return rows;
 }
@@ -93,11 +165,12 @@ export function readBudget(path) {
 	return existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : { probes: {}, bundle: {} };
 }
 
-export function writeBudget(path, counts, { runs, cpu }) {
+export function writeBudget(path, counts, { runs, cpu, chromium }) {
 	const budget = {
 		$comment: 'Perf budget: medians of counts, not timings. `npm run qa -- budget` checks a build against it; `--update` rewrites it. See scripts/qa/README.md.',
 		runs,
 		cpu,
+		chromium,
 		...counts
 	};
 	writeFileSync(path, `${JSON.stringify(budget, null, '\t')}\n`);

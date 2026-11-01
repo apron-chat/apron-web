@@ -15,10 +15,12 @@ const READY = '[data-testid=message-list] .ap-msg';
  * measures the load, as the built-in `load` probe does. `knobs` set the preview's memory server
  * (`PreviewKnobs`), e.g. many rooms or long histories; `budget: false` leaves a probe whose counts follow
  * the machine's speed out of `qa budget`. Suites export theirs as `interactions`;
- * `selectProbes` picks them.
+ * `selectProbes` picks them. `calls` adds each probe's JS function calls (see `measure`), named by chunk from
+ * `chunkBuilds` (the served builds' directories). `clock: 'fake'` times the windows in fake time (see `measure`).
  */
-export async function runPerf({ browser, urls, labels = urls, runs = 5, cpu = 4, reducedMotion, probes, path = '/__preview', builds = [], log = console.log }) {
+export async function runPerf({ browser, urls, labels = urls, runs = 5, cpu = 4, reducedMotion, probes, path = '/__preview', builds = [], chunkBuilds = builds, calls = false, clock = 'wall', log = console.log }) {
 	const all = probes;
+	const chunkNames = urls.map((_, i) => chunkNamesOf(chunkBuilds[i]));
 	const start = loadavg();
 	if (start[0] > cpus().length * 0.75)
 		log(`qa perf: load average ${start[0].toFixed(1)} on ${cpus().length} CPUs; the machine is busy, so read the spread before the medians.`);
@@ -29,13 +31,15 @@ export async function runPerf({ browser, urls, labels = urls, runs = 5, cpu = 4,
 		for (const probe of all) {
 			const order = urls.map((_, i) => (i + unit) % urls.length);
 			unit++;
-			for (const i of order) samples[probe.name][labels[i]].push(await measure(browser, urls[i], probe, { cpu, path, reducedMotion }));
+			for (const i of order) samples[probe.name][labels[i]].push(await measure(browser, urls[i], probe, { cpu, path, reducedMotion, calls, clock, chunkNames: chunkNames[i] }));
 		}
 		log(`perf run ${run + 1}/${runs} done`);
 	}
 	const result = {
 		runs,
 		cpu,
+		calls,
+		clock,
 		labels,
 		urls,
 		loadavg: { start, end: loadavg() },
@@ -59,13 +63,41 @@ export function selectProbes(suite, only = []) {
 	return only.length ? all.filter((p) => only.includes(p.name)) : all;
 }
 
-/** Opens a throttled page on `url` and measures one probe. */
-async function measure(browser, url, probe, { cpu, path, reducedMotion }) {
+/**
+ * Opens a throttled page on `url` and measures one probe. With `calls`, also counts the JS functions the
+ * page's own scripts call in the window (`calls`, and `chunks`: the same by chunk), from V8's precise coverage:
+ * a count that follows only what the code does, not how fast the machine does it.
+ *
+ * The windows (1200 ms after the page is ready, 300 ms after `setup`, `settle` after the action) are real time.
+ * With `clock: 'fake'`, Playwright's clock stands in for the page's timers, animation frames, idle callbacks
+ * and Date, paused from the start. Each window is run in `FAKE_STEP` ms steps, and after each step the page is
+ * left to settle in real time (no fetch in flight, a few real frames) before the next, so a fetch that
+ * completes late still lands at the same fake moment. The browser still draws and lays out in real time.
+ * Interactions start `FAKE_STARTUP` ms after ready rather than 1200.
+ */
+async function measure(browser, url, probe, { cpu, path, reducedMotion, calls, clock = 'wall', chunkNames }) {
+	const fake = clock === 'fake';
 	const context = await browser.newContext({ viewport: probe.viewport ?? DESKTOP, colorScheme: 'dark', deviceScaleFactor: 1, reducedMotion });
 	try {
+		if (fake) {
+			// The fake clock's `performance` lists no entries; the load's counts read the real one, kept first.
+			await context.addInitScript(() => ((/** @type {any} */ (window)).__qaPerformance = performance));
+			await context.clock.install({ time: FAKE_EPOCH });
+			await context.clock.pauseAt(FAKE_EPOCH + 1000);
+		}
 		const page = await context.newPage();
 		const cdp = await context.newCDPSession(page);
 		await cdp.send('Performance.enable');
+		/** Requests in flight (id to URL), for `settled`. */
+		const inflight = new Map();
+		/** Requests sent since `settled` last returned. */
+		let sent = 0;
+		cdp.on('Network.requestWillBeSent', (e) => {
+			inflight.set(e.requestId, e.request.url);
+			sent++;
+		});
+		cdp.on('Network.loadingFinished', (e) => inflight.delete(e.requestId));
+		cdp.on('Network.loadingFailed', (e) => inflight.delete(e.requestId));
 		await cdp.send('Network.enable');
 		await cdp.send('Network.setCacheDisabled', { cacheDisabled: true });
 		await cdp.send('Emulation.setCPUThrottlingRate', { rate: cpu });
@@ -86,15 +118,71 @@ async function measure(browser, url, probe, { cpu, path, reducedMotion }) {
 			await cdp.send('HeapProfiler.collectGarbage');
 			return (await metrics()).JSHeapUsedSize / 1048576;
 		};
+		// Started before the navigation, it counts from the page's first script: the renderer that loads the page
+		// is the one the blank page had, so the coverage carries over.
+		if (calls) {
+			await cdp.send('Profiler.enable');
+			await cdp.send('Profiler.startPreciseCoverage', { callCount: true, detailed: false });
+		}
+		const origin = new URL(url).origin;
+		/**
+		 * Waits until no request is in flight and the page has had `FAKE_QUIET` ms of real time to itself since,
+		 * then, if anything was requested, for its main thread (a chunk still being parsed may yet ask for its
+		 * imports), and checks again.
+		 * Gives up after `FAKE_SETTLE_LIMIT` ms, naming what is still loading, rather than hang the budget.
+		 */
+		const settled = async () => {
+			const deadline = Date.now() + FAKE_SETTLE_LIMIT;
+			do {
+				for (let quiet = Date.now(); Date.now() - quiet < FAKE_QUIET; ) {
+					if (Date.now() > deadline) throw new Error(`${probe.name}: requests still in flight after ${FAKE_SETTLE_LIMIT / 1000} s: ${[...inflight.values()].join(', ')}`);
+					await new Promise((resolve) => setTimeout(resolve, 5));
+					if (inflight.size) quiet = Date.now();
+				}
+				if (!sent) return;
+				sent = 0;
+				await page.evaluate(() => 0);
+			} while (sent || inflight.size);
+		};
+		/** Runs `ms` of fake time in steps of `step`, settling after each. */
+		const runFake = async (/** @type {number} */ ms, step = FAKE_STEP) => {
+			for (let done = 0; done < ms; done += step) {
+				await page.clock.runFor(Math.min(step, ms - done));
+				await settled();
+			}
+		};
+		/** Lets `ms` of the page's time pass: real time, or fake time in steps. */
+		const wait = fake ? runFake : (/** @type {number} */ ms) => page.waitForTimeout(ms);
 		const t0 = Date.now();
-		await page.goto(new URL(path, url.endsWith('/') ? url : `${url}/`).href);
-		await page.waitForSelector(READY, { timeout: 30000 });
-		const ready = Date.now() - t0;
-		await page.waitForTimeout(1200);
+		let ready;
+		if (fake) {
+			await page.goto(new URL(path, url.endsWith('/') ? url : `${url}/`).href);
+			await settled();
+			// Looked for after each step, never before the first, so the windows that follow start from a fake
+			// moment rather than from whether the app happened to render within the first settle.
+			for (ready = FAKE_STEP; ; ready += FAKE_STEP) {
+				await wait(FAKE_STEP);
+				if (await page.$(READY)) break;
+				if (ready > 30000) throw new Error(`not ready after ${ready} ms of fake time`);
+			}
+		} else {
+			await page.goto(new URL(path, url.endsWith('/') ? url : `${url}/`).href);
+			await page.waitForSelector(READY, { timeout: 30000 });
+			ready = Date.now() - t0;
+		}
+		// Under the fake clock an interaction starts once the page's start-up timers have run (the on-demand
+		// chunk's prefetch, 2 s after mount), so none lands in its window, nor on its edge.
+		// Nothing is counted then, so in long steps: a timer still fires in order, and a fetch it starts settles
+		// before the next.
+		if (fake && probe.action) await runFake(FAKE_STARTUP, FAKE_STARTUP_STEP);
+		else await wait(1200);
 		if (!probe.action) {
 			const m = await metrics();
+			const counted = calls ? await callCounts(cdp, origin, chunkNames, true) : {};
 			const nav = await page.evaluate(() => {
 				const w = /** @type {any} */ (window);
+				/** @type {Performance} */
+				const performance = w.__qaPerformance ?? window.performance;
 				const n = /** @type {PerformanceNavigationTiming} */ (performance.getEntriesByType('navigation')[0]);
 				return {
 					fcp: performance.getEntriesByName('first-contentful-paint')[0]?.startTime ?? NaN,
@@ -118,11 +206,12 @@ async function measure(browser, url, probe, { cpu, path, reducedMotion }) {
 				styleMs: m.RecalcStyleDuration * 1000,
 				layouts: m.LayoutCount,
 				styleRecalcs: m.RecalcStyleCount,
+				...counted,
 				heapMB: await retainedHeapMB()
 			};
 		}
 		if (probe.setup) await probe.setup(page);
-		await page.waitForTimeout(300);
+		await wait(300);
 		await page.evaluate(() => {
 			const w = /** @type {any} */ (window);
 			w.__frames = [];
@@ -134,10 +223,14 @@ async function measure(browser, url, probe, { cpu, path, reducedMotion }) {
 			};
 			w.__raf = requestAnimationFrame(tick);
 		});
+		// Taking the coverage resets its counters, so what the next take returns is the action's alone.
+		if (calls) await cdp.send('Profiler.takePreciseCoverage');
 		const before = await metrics();
 		await probe.action(page);
-		await page.waitForTimeout(probe.settle ?? 600);
+		if (fake) await settled();
+		await wait(probe.settle ?? 600);
 		const after = await metrics();
+		const counted = calls ? await callCounts(cdp, origin, chunkNames) : {};
 		const frames = await page.evaluate(() => {
 			const w = /** @type {any} */ (window);
 			cancelAnimationFrame(w.__raf);
@@ -153,12 +246,70 @@ async function measure(browser, url, probe, { cpu, path, reducedMotion }) {
 			layoutMs: (after.LayoutDuration - before.LayoutDuration) * 1000,
 			styleMs: (after.RecalcStyleDuration - before.RecalcStyleDuration) * 1000,
 			layouts: after.LayoutCount - before.LayoutCount,
-			styleRecalcs: after.RecalcStyleCount - before.RecalcStyleCount
+			styleRecalcs: after.RecalcStyleCount - before.RecalcStyleCount,
+			...counted
 		};
 	} finally {
 		await context.close().catch(() => {});
 	}
 }
+
+/** Where the fake clock starts (it is paused 1 s later, before the page opens). */
+const FAKE_EPOCH = Date.parse('2026-10-22T12:00:00Z');
+/** The fake clock's step, in ms: the resolution of every window, and of when a late fetch lands. */
+const FAKE_STEP = 50;
+/** Fake ms after ready before an interaction's `setup`: past the start-up timers. */
+const FAKE_STARTUP = 3000;
+/** The start-up's step, in fake ms. */
+const FAKE_STARTUP_STEP = 500;
+/** Real ms the page must spend with no request in flight before the fake clock moves on. */
+const FAKE_QUIET = 50;
+/** Real ms `settled` waits at most. */
+const FAKE_SETTLE_LIMIT = 15000;
+
+/**
+ * Function calls since the last take, summed over the scripts the page's origin served (Playwright's own
+ * injected scripts have no URL and don't count), in all and by chunk. A function counts once per call; one
+ * that never ran counts 0.
+ */
+async function callCounts(cdp, origin, chunkNames = new Map(), load = false) {
+	const { result } = await cdp.send('Profiler.takePreciseCoverage');
+	/** @type {Record<string, number>} */
+	const chunks = {};
+	let total = 0;
+	for (const script of result) {
+		if (!script.url.startsWith(`${origin}/`)) continue;
+		const file = new URL(script.url).pathname.slice(1);
+		const name = file.endsWith('.js') ? (chunkNames.get(file) ?? file.split('/').pop()) : 'inline';
+		const n = script.functions.reduce((sum, f) => sum + f.ranges[0].count, 0);
+		total += n;
+		chunks[name] = (chunks[name] ?? 0) + n;
+	}
+	// A load always runs the app's code; none counted means the coverage was lost, not that nothing ran.
+	if (load && !total) throw new Error('precise coverage counted no calls in the page: did the navigation move it to another renderer?');
+	return { calls: total, chunks };
+}
+
+/**
+ * Stable names for a build's JS chunks, from the Vite manifest SvelteKit leaves in `.svelte-kit` (`index-client`,
+ * `on-demand`, `nodes/2`…), where file names change with every hash. Used only when the manifest's files are
+ * the ones `buildDir` holds; otherwise chunks go by file name.
+ */
+export function chunkNamesOf(buildDir) {
+	/** @type {Map<string, string>} */
+	const names = new Map();
+	const manifest = join(repoRootOf(buildDir), '.svelte-kit/output/client/.vite/manifest.json');
+	if (!buildDir || !existsSync(manifest)) return names;
+	for (const [key, entry] of Object.entries(JSON.parse(readFileSync(manifest, 'utf8')))) {
+		if (!entry.file?.endsWith('.js') || !existsSync(join(buildDir, entry.file))) continue;
+		const vendor = key.startsWith('node_modules/') ? `${key.split('/')[1].startsWith('@') ? key.split('/').slice(1, 3).join('/') : key.split('/')[1]}:` : '';
+		names.set(entry.file, `${vendor}${entry.name ?? entry.file}`);
+	}
+	return names;
+}
+
+/** The checkout a build directory belongs to: its parent, where `vite build` writes `build/` beside `.svelte-kit/`. */
+const repoRootOf = (buildDir) => join(buildDir ?? '.', '..');
 
 const median = (xs) => {
 	const s = xs.filter((x) => Number.isFinite(x)).sort((a, b) => a - b);
@@ -171,7 +322,7 @@ const median = (xs) => {
 function stats(rows) {
 	if (!rows.length) return {};
 	return Object.fromEntries(
-		Object.keys(rows[0]).map((k) => {
+		Object.keys(rows[0]).filter((k) => typeof rows[0][k] === 'number').map((k) => {
 			const xs = rows.map((r) => r[k]).filter((x) => Number.isFinite(x));
 			return [k, { median: median(xs), min: Math.min(...xs), max: Math.max(...xs), n: xs.length }];
 		})

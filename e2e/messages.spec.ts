@@ -69,3 +69,30 @@ test.describe('a shared name', () => {
 		await expect(preview.message('Long names and four roles').getByTestId('sender-handle')).toHaveCount(0);
 	});
 });
+
+test.describe('the timeline at its latest', () => {
+	test.use(DEVICES.desktop);
+
+	test('stays there when a message above grows without a scroll (an image\'s size arriving), and never offers a jump', async ({ preview, page }) => {
+		await preview.open();
+		const list = page.getByTestId('message-list');
+		const atLatest = () => list.evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight < 2);
+		await expect.poll(atLatest).toBe(true);
+		// Watch for the jump button from here on, in any frame.
+		await page.evaluate(() => {
+			const w = window as unknown as { jumpShown: boolean };
+			w.jumpShown = false;
+			new MutationObserver(() => (w.jumpShown ||= Boolean(document.querySelector('[data-testid=jump-button]')))).observe(document.body, { childList: true, subtree: true });
+		});
+		// A style, not a node: as an image laying out at its size does, which the pane's mutation observer doesn't see.
+		await list.evaluate((el) => {
+			const rows = el.querySelectorAll<HTMLElement>('[data-timeline-item]');
+			rows[rows.length - 3].style.paddingBottom = `${el.clientHeight}px`;
+		});
+		await expect.poll(atLatest).toBe(true);
+		// Two frames more, for the observer to report and anything it shows to render.
+		await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+		expect(await page.evaluate(() => (window as unknown as { jumpShown: boolean }).jumpShown)).toBe(false);
+		await expect(page.getByTestId('jump-button')).toHaveCount(0);
+	});
+});

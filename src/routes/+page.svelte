@@ -1127,8 +1127,23 @@
 				latestVisibleIn = pane;
 				return;
 			}
-			observer = new IntersectionObserver(([entry]) => {
-				latestVisible = entry.isIntersecting;
+			observer = new IntersectionObserver((entries) => {
+				// An entry says where the latest was at a frame since gone: on a busy main thread several frames'
+				// entries arrive together, and the pane may have been pinned again before this runs. Out of view is
+				// checked against now.
+				let visible = entries[entries.length - 1].isIntersecting;
+				if (!visible) {
+					const at = latest.getBoundingClientRect();
+					const box = scroll.getBoundingClientRect();
+					visible = at.bottom > box.top && at.top < box.bottom;
+				}
+				// Pinned, and pushed down by something laying out above it without a mutation or a scroll (an image's
+				// size arriving): it follows the latest, as the pane does while it fills in, rather than offering a jump.
+				if (!visible && stickToBottom && !atLatest(scroll)) {
+					scrollToLatest();
+					return;
+				}
+				latestVisible = visible;
 				latestVisibleIn = pane;
 				if (latestVisible) {
 					seenThrough = messages[messages.length - 1]?.message_id;

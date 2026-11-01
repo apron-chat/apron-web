@@ -21,7 +21,7 @@ npm test && npm run check && npm run e2e && npm run qa -- budget --build build
 
 ## Keeping the app fast
 
-- **Run the perf budget** (`npm run qa -- budget --build build`) when a change touches rendering, reactivity, CSS or startup code. It compares exact counts (layouts, style recalcs, DOM nodes, requests, startup JS, heap) against `scripts/qa/perf-budget.json`, and CI runs it too.
+- **Run the perf budget** (`npm run qa -- budget --build build`) when a change touches rendering, reactivity, CSS or startup code. It compares exact counts (layouts, style recalcs, JS calls, DOM nodes, requests, startup JS, heap) against `scripts/qa/perf-budget.json`, and CI runs it too. It runs only in the Chromium the baseline was recorded with: `npx playwright-core install chromium` installs it.
   - If it fails, find the cause before anything else.
   - Run `--update` only when the cost is intended or a saving is real. Say which in the commit message.
 - **Measure in counts, not timings.** Timings on a shared machine swing by tens of percent. `qa perf` and `qa prof` are for digging further (see `scripts/qa/README.md`).
