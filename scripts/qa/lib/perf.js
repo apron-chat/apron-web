@@ -74,14 +74,31 @@ export function selectProbes(suite, only = []) {
  * page has work to do or a fetch pending and otherwise jumps to its next timer, so its timers fire at the same
  * virtual moment however slow the machine is. Virtual time is paused while Playwright runs `setup` and
  * `action`, and each window is a virtual time budget granted afterwards. Date.now() starts at `NOW`.
+ *
+ * With `clock: 'fake'`, Playwright's clock stands in for the page's timers, animation frames, idle callbacks
+ * and Date, paused from the start. Each window is run in `FAKE_STEP` ms steps, and after each step the page is
+ * left to settle in real time (no fetch in flight, a few real frames) before the next, so a fetch that
+ * completes late still lands at the same fake moment. The browser still draws and lays out in real time.
  */
 async function measure(browser, url, probe, { cpu, path, reducedMotion, calls, clock = 'wall', chunkNames }) {
 	const virtual = clock === 'virtual';
+	const fake = clock === 'fake';
 	const context = await browser.newContext({ viewport: probe.viewport ?? DESKTOP, colorScheme: 'dark', deviceScaleFactor: 1, reducedMotion });
 	try {
+		if (fake) {
+			// The fake clock's `performance` lists no entries; the load's counts read the real one, kept first.
+			await context.addInitScript(() => ((/** @type {any} */ (window)).__qaPerformance = performance));
+			await context.clock.install({ time: FAKE_EPOCH });
+			await context.clock.pauseAt(FAKE_EPOCH + 1000);
+		}
 		const page = await context.newPage();
 		const cdp = await context.newCDPSession(page);
 		await cdp.send('Performance.enable');
+		/** Requests in flight, for `settled`. */
+		const inflight = new Set();
+		cdp.on('Network.requestWillBeSent', (e) => inflight.add(e.requestId));
+		cdp.on('Network.loadingFinished', (e) => inflight.delete(e.requestId));
+		cdp.on('Network.loadingFailed', (e) => inflight.delete(e.requestId));
 		await cdp.send('Network.enable');
 		await cdp.send('Network.setCacheDisabled', { cacheDisabled: true });
 		if (!virtual) await cdp.send('Emulation.setCPUThrottlingRate', { rate: cpu });
@@ -118,8 +135,22 @@ async function measure(browser, url, probe, { cpu, path, reducedMotion, calls, c
 			await cdp.send('Profiler.startPreciseCoverage', { callCount: true, detailed: false });
 		}
 		const origin = new URL(url).origin;
+		/** Waits until no request is in flight and the page has had `FAKE_QUIET` ms of real time to itself since. */
+		const settled = async () => {
+			for (let quiet = Date.now(); Date.now() - quiet < FAKE_QUIET; ) {
+				await new Promise((resolve) => setTimeout(resolve, 5));
+				if (inflight.size) quiet = Date.now();
+			}
+		};
+		/** Runs `ms` of fake time in steps, settling after each. */
+		const runFake = async (/** @type {number} */ ms) => {
+			for (let done = 0; done < ms; done += FAKE_STEP) {
+				await page.clock.runFor(Math.min(FAKE_STEP, ms - done));
+				await settled();
+			}
+		};
 		/** Lets `ms` of the page's time pass: real time, or a budget of virtual time it then waits out. */
-		const wait = virtual ? (/** @type {number} */ ms) => grantVirtualTime(cdp, ms) : (/** @type {number} */ ms) => page.waitForTimeout(ms);
+		const wait = virtual ? (/** @type {number} */ ms) => grantVirtualTime(cdp, ms) : fake ? runFake : (/** @type {number} */ ms) => page.waitForTimeout(ms);
 		const t0 = Date.now();
 		let ready;
 		if (virtual) {
@@ -129,6 +160,13 @@ async function measure(browser, url, probe, { cpu, path, reducedMotion, calls, c
 			for (ready = 0; !(await page.$(READY)); ready += VIRTUAL_STEP) {
 				if (ready > 30000) throw new Error(`not ready after ${ready} ms of virtual time`);
 				await wait(VIRTUAL_STEP);
+			}
+		} else if (fake) {
+			await page.goto(new URL(path, url.endsWith('/') ? url : `${url}/`).href);
+			await settled();
+			for (ready = 0; !(await page.$(READY)); ready += FAKE_STEP) {
+				if (ready > 30000) throw new Error(`not ready after ${ready} ms of fake time`);
+				await wait(FAKE_STEP);
 			}
 		} else {
 			await page.goto(new URL(path, url.endsWith('/') ? url : `${url}/`).href);
@@ -141,6 +179,8 @@ async function measure(browser, url, probe, { cpu, path, reducedMotion, calls, c
 			const counted = calls ? await callCounts(cdp, origin, chunkNames) : {};
 			const nav = await page.evaluate(() => {
 				const w = /** @type {any} */ (window);
+				/** @type {Performance} */
+				const performance = w.__qaPerformance ?? window.performance;
 				const n = /** @type {PerformanceNavigationTiming} */ (performance.getEntriesByType('navigation')[0]);
 				return {
 					fcp: performance.getEntriesByName('first-contentful-paint')[0]?.startTime ?? NaN,
@@ -185,6 +225,7 @@ async function measure(browser, url, probe, { cpu, path, reducedMotion, calls, c
 		if (calls) await cdp.send('Profiler.takePreciseCoverage');
 		const before = await metrics();
 		await probe.action(page);
+		if (fake) await settled();
 		await wait(probe.settle ?? 600);
 		const after = await metrics();
 		const counted = calls ? await callCounts(cdp, origin, chunkNames) : {};
@@ -215,6 +256,12 @@ async function measure(browser, url, probe, { cpu, path, reducedMotion, calls, c
 const VIRTUAL_EPOCH = Date.parse('2026-10-22T12:00:00Z') / 1000;
 /** How often, in virtual ms, the load looks for the ready selector. */
 const VIRTUAL_STEP = 50;
+/** Where the fake clock starts (it is paused 1 s later, before the page opens). */
+const FAKE_EPOCH = Date.parse('2026-10-22T12:00:00Z');
+/** The fake clock's step, in ms: the resolution of every window, and of when a late fetch lands. */
+const FAKE_STEP = 50;
+/** Real ms the page must spend with no request in flight before the fake clock moves on. */
+const FAKE_QUIET = 50;
 
 /**
  * Lets `ms` of virtual time pass, and waits (in real time) until it has. Fetches hold it back

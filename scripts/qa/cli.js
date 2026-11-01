@@ -41,7 +41,8 @@ const HELP = `npm run qa -- <command> [options]
                          over. --update rewrites the baseline. [--runs 3] [--cpu 4] [--only p] [--shard i/n]
                          [--out file.json]: every run's counts, to diff between machines.
                          Prototype: --calls also counts JS function calls per probe (V8 precise coverage);
-                         --clock virtual times the windows in Chromium's virtual time (no throttle: --cpu 1).
+                         --clock virtual times the windows in Chromium's virtual time (no throttle: --cpu 1);
+                         --clock fake in Playwright's fake clock, stepped, settling after each step.
                          Either prints the counts and their spread instead of checking them.
   prof --url A --url B   CPU-profile page load; biggest per-function changes. [--runs 6] [--cpu 4]
   sheet <spec.json>      Render hand-picked before/after panels (title, note, crop box, scale) to a PNG.
@@ -164,7 +165,7 @@ async function main() {
 			if (!probes.length) throw new Error(`shard ${index}/${count} has no probes to check`);
 			const runs = int(o.runs, 3);
 			const clock = o.clock ?? 'wall';
-			if (!['wall', 'virtual'].includes(clock)) throw new Error(`--clock takes wall or virtual, not ${clock}`);
+			if (!['wall', 'virtual', 'fake'].includes(clock)) throw new Error(`--clock takes wall, virtual or fake, not ${clock}`);
 			const cpu = int(o.cpu, clock === 'virtual' ? 1 : 4);
 			// The prototypes' counts have no baseline yet: they are printed (and written with --out), not checked.
 			const prototype = !!o.calls || clock !== 'wall';
