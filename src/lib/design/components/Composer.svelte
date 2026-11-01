@@ -142,7 +142,7 @@
 <!-- The picker anchors to the field's row and grows upward. -->
 <div class="ap-composer-wrap">
 	{@render picker?.()}
-	<form class={['ap-composer', disabled && 'ap-composer-disabled', cmd && 'ap-composer-cmd', live && 'ap-composer-live']} aria-label="Send a message" onsubmit={(e) => { e.preventDefault(); if (waitLeft <= 0) onsend?.(); }}>
+	<form class={['ap-composer', disabled && 'ap-composer-disabled', cmd && 'ap-composer-cmd']} aria-label="Send a message" onsubmit={(e) => { e.preventDefault(); if (waitLeft <= 0) onsend?.(); }}>
 		{#if canUpload}
 			<span class="ap-composer-tools">
 				<button type="button" class="ap-iconbtn" onclick={() => fileInput?.click()} disabled={disabled || recording} aria-label="Attach a file" title="Attach a file">
@@ -164,7 +164,7 @@
 			{#if live}<span class="ap-composer-cmdtag ap-composer-livetag" data-testid={liveTestid} title="Everyone sees this message as you type it; Send finishes it"><span class="ap-composer-livedot" aria-hidden="true"></span>Live</span>{/if}
 			{#if field}{@render field({ placeholder: ph, disabled: !!disabled, command: cmd })}
 			{:else}
-				<textarea rows="1" dir="auto" placeholder={ph} {disabled} aria-label={cmd ? 'Command' : live ? 'Live message' : 'Message'} class={['ap-composer-field', className]} bind:value={() => value, (v) => { value = v; oninput?.(v); }}></textarea>
+				<textarea rows="1" dir="auto" placeholder={ph} {disabled} aria-label={cmd ? 'Command' : 'Message'} class={['ap-composer-field', className]} bind:value={() => value, (v) => { value = v; oninput?.(v); }}></textarea>
 			{/if}
 		{/if}
 		{#if onemoji}
@@ -175,7 +175,7 @@
 			</span>
 		{/if}
 		<!-- Pressing Send leaves the focus in the field, so a phone's keyboard stays up between messages rather than dropping and coming back. -->
-		<Button type="submit" size="sm" variant="primary" class={waitLeft > 0 ? 'ap-composer-wait' : undefined} data-testid={sendTestid} onmousedown={(e) => e.preventDefault()} aria-label={waitLeft > 0 ? `Send again in ${waitWords(waitLeft, waitLeft >= LONG_WAIT_MS)}` : cmd ? 'Run command' : live ? 'Finish live message' : 'Send message'} disabled={disabled || recording || !sendable || waitLeft > 0}>
+		<Button type="submit" size="sm" variant="primary" class={waitLeft > 0 ? 'ap-composer-wait' : undefined} data-testid={sendTestid} onmousedown={(e) => e.preventDefault()} aria-label={waitLeft > 0 ? `Send again in ${waitWords(waitLeft, waitLeft >= LONG_WAIT_MS)}` : cmd ? 'Run command' : 'Send message'} disabled={disabled || recording || !sendable || waitLeft > 0}>
 			{#snippet children()}{#if waitLeft > 0}<Hourglass size={14} aria-hidden="true" />{waitLabel(waitLeft, waitLeft >= LONG_WAIT_MS)}{:else}{cmd ? 'Run' : 'Send'}{/if}{/snippet}
 		</Button>
 	</form>

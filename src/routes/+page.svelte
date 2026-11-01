@@ -58,8 +58,7 @@
 	import { backendHost, statusLabel } from '$lib/ui/connection';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { FeedbackState, type Feedback } from '$lib/ui/feedback.svelte';
-	import type { LiveTyping, LiveTypingEnd } from '$lib/ui/live-typing';
-	import { canWriteLiveText } from '$lib/protocol/live-text';
+	import type { LiveComposer } from '$lib/ui/live-composer.svelte';
 	import { prepareUpload } from '$lib/ui/images';
 	import { MentionTracker } from '$lib/ui/mentions.svelte';
 	import { IncomingMessageTracker } from '$lib/ui/incoming-messages';
@@ -578,10 +577,12 @@
 	let paneSteady = $derived(Boolean(paneRoom && session.steady && !snapshot.authBusy));
 	/** Writing here: posting, replying, reacting, and editing threads. A guest who only reads can't. */
 	let canCompose = $derived(paneReady && !session.readOnly);
-	/** The live message (`/live`), while there is one: see `startLive`. */
-	let live = $state.raw<LiveMessage | undefined>();
-	/** The open pane's draft is the live message. */
-	let composingLive = $derived(live !== undefined && paneRoom !== undefined && live.key === draftKey(paneRoom.id));
+	/** Live typing (`/live`), loaded the first time it is used: see `startLive`. */
+	let liveComposer = $state.raw<LiveComposer | undefined>();
+	/** The same, read where typing reads it: not reactive, so that typing reads nothing of it until it loads. */
+	let liveLoaded: LiveComposer | undefined;
+	/** The open pane's draft is a live message. */
+	let composingLive = $derived(liveComposer?.composing ?? false);
 	/** Files dropped on the conversation or pasted outside the field attach to the draft while the composer is showing. */
 	let canAttach = $derived(paneSteady && !session.readOnly && session.capabilities['embed:upload'] && !selection.active && !composingLive);
 	/** Files are being dragged over the conversation. */
@@ -2056,7 +2057,7 @@
 		if (!client || !paneRoom) return;
 		drafts.saveText();
 		// A live message shows itself as it is typed: no typing indicator besides.
-		if (live && composingLive) return;
+		if (liveLoaded?.composing) return;
 		const roomId = paneRoom.id;
 		client.sendTyping(roomId, true);
 		if (typingTimer) clearTimeout(typingTimer);
@@ -2073,11 +2074,8 @@
 	 */
 	function sendMessage(): void {
 		if (!client || !paneRoom || !canCompose) return;
-		if (live && composingLive) {
-			live.mentions = composerMentions;
-			live.reply = drafts.reply;
-			live.typing.update(drafts.text);
-			finishLive(client, live);
+		if (composingLive) {
+			liveComposer?.send();
 			composer?.focus();
 			return;
 		}
@@ -2170,120 +2168,33 @@
 		composer?.focus();
 	}
 
-	/** MDN's page on streaming uploads (`duplex`), with which browsers have them: what `/live` points to where it can't write. */
-	const STREAMING_UPLOADS_URL = 'https://developer.mozilla.org/en-US/docs/Web/API/Request/duplex#browser_compatibility';
-
 	/**
-	 * Live typing (`/live`, capability `embed:append`): the message the composer types live, posted at once with an
-	 * `append` embed (§4.8.5) whose live text follows the draft, so the timeline shows it, and everyone sees it grow
-	 * and change as it is typed. It belongs to the pane it was started in (`key`), and Send there finishes it. It keeps
-	 * the draft's mentions and reply as last seen, for the save that finishes it.
+	 * `/live` (capability `embed:append`): the composer types the next message live (`LiveComposer`, loaded on demand,
+	 * so the composer costs nothing more until then).
 	 */
-	interface LiveMessage {
-		typing: LiveTyping;
-		key: string;
-		mentions: string[];
-		/** A reply picked while it was live: the save that finishes it sets it. */
-		reply?: string;
-	}
-
-	// Each change to the live draft goes out as it is made: typing, a chip, an emoji, a paste. Its mentions and reply
-	// are kept with it, for when it finishes, from here or from another pane.
-	// Only while live: otherwise the draft isn't read here, so typing doesn't run this.
-	$effect(() => {
-		if (!composingLive) return;
-		const text = drafts.text;
-		const mentions = composerMentions;
-		const reply = drafts.reply;
-		untrack(() => {
-			if (!live) return;
-			live.mentions = mentions;
-			live.reply = reply;
-			live.typing.update(text);
-		});
-	});
-	// Leaving the pane finishes its live message, as Send would, with what was typed.
-	$effect(() => {
-		if (live && !composingLive) untrack(() => live && client && finishLive(client, live));
-	});
-
-	/** `/live`: the composer empties, and what is typed next is the room's newest message, live, until Send. */
 	function startLive(chat: ChatClient, room: RoomSnapshot, reply: string | undefined): void {
-		if (!canWriteLiveText()) {
-			chat.notify(room.id, `Live typing needs a browser that can stream an upload as it is written, over HTTP/2 or later ([which browsers can](${STREAMING_UPLOADS_URL})).`, 'markdown');
-			return;
-		}
-		if (live) finishLive(chat, live);
-		const roomId = room.id;
-		const key = draftKey(roomId);
-		clearComposer(roomId);
-		chat.sendTyping(roomId, false);
-		if (typingTimer) clearTimeout(typingTimer);
-		stickToBottom = true;
-		pins++;
-		composer?.focus();
-		// Loaded on demand, as few ever type live: what is typed meanwhile is its opening text.
-		import('$lib/ui/live-typing').then(({ LiveTyping }) => {
-			if (live || client !== chat || !paneRoom || draftKey(paneRoom.id) !== key) return;
-			const post = () => chat.sendAppend(roomId, '', 'markdown', reply ? { replyTo: reply } : {});
-			const joining = joinFirst(chat, room);
-			const typing: LiveTyping = new LiveTyping(drafts.text, { start: () => (joining ? joining.then(post) : post()) }, (end) => liveEnded(chat, current, end));
-			const current: LiveMessage = { typing, key, mentions: [...composerMentions] };
-			live = current;
+		const key = draftKey(room.id);
+		import('$lib/ui/live-composer.svelte').then(({ LiveComposer }) => {
+			if (client !== chat || !paneRoom || draftKey(paneRoom.id) !== key) return;
+			liveComposer ??= liveLoaded = new LiveComposer({
+				client: () => client,
+				paneKey: () => (paneRoom ? draftKey(paneRoom.id) : undefined),
+				draft: () => ({ text: drafts.text, mentions: composerMentions, reply: drafts.reply }),
+				canEdit: () => session.canEdit,
+				forget: (forgotten) => drafts.forget(forgotten),
+				restore: (restored, text, replyTo) => {
+					if (drafts.restore(restored, text, replyTo)) composer?.focus();
+				},
+				started: () => {
+					if (typingTimer) clearTimeout(typingTimer);
+					stickToBottom = true;
+					pins++;
+					composer?.focus();
+				},
+				error: (cause, fallback) => feedback.error(cause, fallback)
+			});
+			liveComposer.start(chat, room.id, key, reply, joinFirst(chat, room));
 		}, (cause: unknown) => feedback.error(cause, 'Unable to start live typing'));
-	}
-
-	/**
-	 * Send on a live message, or its pane left: the draft is its final text. The composer empties at once; if the
-	 * message never got going, `liveEnded` gives the draft back.
-	 */
-	function finishLive(chat: ChatClient, current: LiveMessage): void {
-		if (live === current) live = undefined;
-		drafts.forget(current.key);
-		void current.typing.finish().then((messageId) => {
-			if (messageId) settleLive(chat, current, messageId);
-		});
-	}
-
-	/**
-	 * A live message's final text, once its session ended. With capability `edit` a save puts the draft in
-	 * `body.text`, with its mentions and any reply picked meanwhile, and without the embed, which ends the text (§4.8.5:
-	 * the composer's own state is the text it means), or deletes it when nothing was typed; then the write ends. A save
-	 * that fails gives the draft back. Without `edit`, the write ends, and the server keeps what arrived.
-	 */
-	function settleLive(chat: ChatClient, current: LiveMessage, messageId: string): void {
-		const { typing, mentions, reply } = current;
-		const text = typing.liveText;
-		if (!session.canEdit) {
-			typing.close();
-			return;
-		}
-		const saved = text.trim()
-			? chat.saveMessage(messageId, { body: { text, format: 'markdown', ...(mentions.length ? { mentions } : {}) }, ...(reply ? { reply_to: reply } : {}) })
-			: chat.deleteMessage(messageId);
-		saved.promise.then(() => typing.close(), (cause: unknown) => {
-			typing.close();
-			if (drafts.restore(current.key, typing.text, reply)) composer?.focus();
-			feedback.error(cause, 'Unable to finish the live message');
-		});
-	}
-
-	/**
-	 * A live message that stopped by itself. One that never got going is taken back, where it can be, and the draft
-	 * is kept, or given back if it was already sent, as an ordinary draft. One the server ended (a limit, or the
-	 * connection dropped after text went out) keeps what arrived, and is finished as Send would, from the draft.
-	 */
-	function liveEnded(chat: ChatClient, current: LiveMessage, end: LiveTypingEnd): void {
-		if (live === current) live = undefined;
-		if (end.kind === 'failed') {
-			if (end.messageId && session.canEdit) chat.deleteMessage(end.messageId).promise.catch(() => undefined);
-			drafts.restore(current.key, current.typing.text, current.reply);
-			feedback.error(`Live typing stopped: ${end.reason}`);
-			return;
-		}
-		drafts.forget(current.key);
-		feedback.error(`The live message ended early: ${end.reason}`);
-		if (end.messageId) settleLive(chat, current, end.messageId);
 	}
 
 	/** `/join`: a room you're in opens; another, found by ID or title among those listed, is joined and opens once it arrives. */
@@ -2652,7 +2563,7 @@
 	// --- Message rows ---
 
 	/** The test ids interop finds a message's parts by. */
-	const MESSAGE_TESTIDS: MessageTestids = { handle: 'sender-handle', reply: 'reply-reference', reactions: 'reactions', chip: 'reaction-chip', select: 'select-message', writing: 'message-writing', receipts: 'read-receipts' };
+	const MESSAGE_TESTIDS: MessageTestids = { handle: 'sender-handle', reply: 'reply-reference', reactions: 'reactions', chip: 'reaction-chip', select: 'select-message', writing: 'message-writing', waiting: 'message-waiting', receipts: 'read-receipts' };
 
 	/** What every row reads from, each field only where a row needs it. */
 	const messageContext: MessageContext = {

@@ -2627,21 +2627,6 @@ export class ChatClient {
 	}
 
 	/**
-	 * Posts a message whose text continues as live text (capability
-	 * `embed:append`, §4.8.5): `text` opens its body, and one `append` embed
-	 * takes the rest. Resolves with the message and the `write_url` its result
-	 * lists for the sender alone (§4.8.3).
-	 */
-	sendAppend(room: string, text: string, format: MessageFormat = 'markdown', options: SendOptions = {}): Promise<{ messageId: string; writeUrl: string }> {
-		const embeds = [...(options.embeds ?? []), { kind: 'append' }];
-		return this.send(room, text, format, { ...options, embeds }).promise.then((result) => {
-			const written = (Array.isArray(result.embeds) ? result.embeds : []).find((embed): embed is JsonObject => isJsonObject(embed) && embed.kind === 'append' && typeof embed.write_url === 'string');
-			if (!written) throw new Error('The server did not accept the live text');
-			return { messageId: result.message_id, writeUrl: written.write_url as string };
-		});
-	}
-
-	/**
 	 * Uploads an image as your avatar (§4.8.6, capabilities `command` and
 	 * `embed:upload`): a `/avatar` command with one upload embed, then the file
 	 * written to the result's `write_url`. The server sets `avatar` and sends a

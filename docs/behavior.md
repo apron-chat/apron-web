@@ -884,7 +884,9 @@ its status. It needs a browser that streams a request body as it is
 written ([`duplex: 'half'`](https://developer.mozilla.org/en-US/docs/Web/API/Request/duplex#browser_compatibility)),
 which browsers do only over HTTP/2 or later. Where it can't (`canWriteLiveText`
 detects the feature, not a browser), `/live` does nothing but post a local
-notice in the room that says so, with that link. `/__preview`'s in-memory
+notice in the room that says so, with that link. The code for all of it loads
+the first time `/live` is used, so the composer costs nothing more until then.
+`/__preview`'s in-memory
 server reads any body, so there it works everywhere.
 
 With the `activity` capability, reading the latest message of a room advances your
@@ -1342,8 +1344,9 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](ht
   or middle click keeps the link's own behavior: the file in a new tab or window.
 - **Terminals** (`terminal` embeds, capability `embed:terminal`,
   [PROTOCOL.md §4.8.6](https://github.com/shazow/apron/blob/main/PROTOCOL.md#486-embedterminal)):
-  a card titled by the embed's `title` (else "Terminal") over a real terminal
-  emulator, xterm.js, loaded the first time a terminal is shown, 80 columns by
+  a card titled by the embed's `title` (else "Terminal"), which reads
+  "Waiting to stream…" while the embed has no `url` (its write hasn't
+  started), over a real terminal emulator, xterm.js, loaded the first time a terminal is shown, 80 columns by
   40 rows: colors (16, 256 and true color), emphasis, carriage returns
   (progress bars), cursor movement, erasing, box drawing and the alternate
   screen of full-screen programs all show as a terminal would show them. A
@@ -1404,7 +1407,9 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](ht
   such as a model's reply as it writes: no card. The message shows its
   `body.text` and right after it the text `GET url` has streamed so far, as
   one text in the body's format (Markdown rendered as any message is), with
-  a quiet "Writing…" under it while the text arrives. The bytes are decoded
+  a quiet "Writing…" under it while the text arrives. Before then, while the
+  embed has no `url` (its write hasn't started, §4.8.5), the message shows its
+  `body.text` with a quiet "Waiting to stream…" under it. The bytes are decoded
   as UTF-8 as they come (a character split between chunks shows once whole),
   and the body is redrawn at most once an animation frame. Each chunk's edits
   apply as it arrives, to the streamed text only, never `body.text`: a

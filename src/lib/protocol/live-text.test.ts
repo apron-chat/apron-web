@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { canWriteLiveText, editLiveText, followLiveText, liveTextDecoder, readLiveText, setLiveFetch, writeLiveText, type LiveTextSink } from './live-text';
+import { editLiveText, followLiveText, liveTextDecoder, readLiveText, setLiveFetch, type LiveTextSink } from './live-text';
+import { canWriteLiveText, writeLiveText } from '$lib/ui/live-typing';
 
 const bytes = (text: string) => new TextEncoder().encode(text);
 
