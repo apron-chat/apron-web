@@ -132,6 +132,9 @@
 	--iframe-max-h: 480px;
 	--rail-tile: 40px;  /* a backend's tile; the rail's own width, --rail-w, is in rail.css, the design bundle's alone */
 	--header-h: 48px;
+	/* How far what sits on the screen's bottom edge (the composer, the sidebar's profile bar, a sheet) keeps clear of
+	   its rounded corners: nothing, but where the app runs down into them (below). */
+	--corner-clear: 0px;
 	/* The member list's width until the page sets the one you dragged it to (the page's own default is the same: +page.svelte). */
 	--member-list-w: 240px;
 
@@ -185,6 +188,16 @@
 	   720px  (max-width: 719px)  one pane at a time: rooms, then the room or thread; popovers become bottom sheets.
 	          (min-width: 720px)  above it.
 	   960px  (min-width: 960px)  the member list gets a column of its own; (max-width: 959px) overlays it. */
+}
+
+/* Installed on an iPhone (or an iPad), the app runs down to the screen's rounded corners: what sits on its bottom edge
+   keeps a little further up from them. Without viewport-fit=cover, iOS gives no safe-area inset to go by, and with it
+   the visual viewport reads short of the screen (WebKit bug 254868), which trackKeyboard would take for a keyboard.
+   -webkit-touch-callout is iOS's alone. */
+@media (display-mode: standalone) {
+	@supports (-webkit-touch-callout: none) {
+		:root { --corner-clear: var(--space-2); }
+	}
 }
 
 @media (prefers-color-scheme: light) {
