@@ -95,9 +95,15 @@ npm run qa -- budget-diff .qa/counts.json ci-counts.json          # which counts
   windows advance it, in 50 ms steps that each wait for fetches to finish. Interactions start 3 s after ready,
   past the prefetch. Layouts that real frames draw, and events Playwright sends in real time (wheel, mouse
   moves), can still vary a little.
-- `--clock virtual` (Chromium's virtual time, `--cpu 1` only) is kept for reference: Chromium hardly draws
-  under it, so Playwright's clicks can wait for a frame forever, and counts still vary.
 - `--out file.json` writes every run's counts in any mode, with the Chromium version and CPU.
+
+On the same Chromium (141, the build CI installs), three runs each on an Intel machine and on three CI runners
+with different AMD CPUs agreed on 38 of 42 counts under `--calls --clock fake`, against 21 of 42 with the
+real-time windows. The ones that still moved were the load's layouts and style recalcs (by up to 2) and its
+calls (one run in six +725, an IntersectionObserver callback), and hover-messages' calls (±9, from mouse
+moves sent in real time). Chromium's version matters more than the machine: on one machine, Chrome 153
+counts 2–5 more style recalcs per probe than Chrome 141, so a baseline holds only for the build it was
+recorded with.
 - `sheet` takes `{ "panels": [{ "title", "note", "before", "after", "box": [l, t, r, b], "scale" }] }`
   (paths relative to the spec; `before` optional) and renders it with real text, for a PR description.
 
