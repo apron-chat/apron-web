@@ -846,6 +846,36 @@ arrive as notices, and a failed command shows its error as a local "System
 message to you" notice and gives the draft back. `//` posts a message starting with one `/`.
 Without the capability, `/` text is an ordinary message.
 
+**Live typing.** With the `embed:append` capability, `/live` alone (with or
+without `command`) is the client's own: it puts the composer in live typing
+mode for the next message
+([PROTOCOL.md §4.8.5](https://github.com/shazow/apron/blob/main/PROTOCOL.md#485-embedappend)).
+The composer empties and shows a **Live** tag with a beating dot, and the
+message is posted at once, as Markdown with an empty `body.text` and one
+`append` embed (replying to the draft's reply, if it had one, and joining a
+thread first as a message would). Its `write_url` gets one streaming `PUT`
+(`fetch` with a `ReadableStream` body), and each change to the draft, typed,
+pasted, a mention chip or an emoji, goes out as the edit that turns what was
+sent into the new text: backspaces (U+0008), one per code point, for what
+follows their common start, then what was added; or a form feed (U+000C) and
+the whole text when that is shorter. Backspace and form feed in the draft
+itself are left out of what is sent. So the timeline, the sender's own
+included, shows the message growing and changing as it is typed, with
+Writing… under it, while the draft is still in the composer. It takes no
+link previews or files, no typing indicator is sent, and the draft is no
+command while it is live. **Send** (on, even with the field empty) finishes
+it: with `edit`, a save puts the draft in `body.text`, with its mentions and
+without the embed, which ends the text (the composer's own state is the text
+it means), then the write ends; an empty draft deletes the message instead.
+Without `edit`, the write ends, and the server keeps what arrived. Leaving
+the pane finishes it as Send would, with what was typed. If the message or
+its write can't be made, the message is deleted (with `edit`), the composer
+keeps what was typed as an ordinary draft, and a notice says why; if the
+server ends the text first (a limit), the message keeps what arrived and a
+notice says so. Streaming a request body needs Chromium over HTTP/2 or later;
+in other browsers `/live` says so and does nothing. `/__preview`'s in-memory
+server reads any body, so there it works everywhere.
+
 With the `activity` capability, reading the latest message of a room advances your
 read cursor (`read_message_id`), which the server syncs across your
 connections. Each room's goes to the server at most every 10 seconds: the

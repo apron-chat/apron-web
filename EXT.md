@@ -43,8 +43,10 @@ the fallback of that capability:
 
 Some features have no capability:
 
-- apron-web renders `terminal` and `append` embeds (live text) that it receives. It never creates them; a
-  server's `/embed-terminal` and `/embed-append` commands do, for a client that types them.
+- apron-web renders `terminal` and `append` embeds (live text) that it receives. It creates `append` embeds
+  for one thing, its own `/live` command (with `embed:append`), which types the next message live from the
+  composer and finishes it on Send. It never creates `terminal` embeds; a server's `/embed-terminal` and
+  `/embed-append` commands do, for a client that types them.
 - `server.push` enables Web Push, for accounts that are not guests.
 - `server.auth` enables passkeys, and email and external sign-in.
 - `server.title`, `description` and `avatar`

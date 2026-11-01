@@ -98,6 +98,12 @@ export class PaneDrafts {
 		this.staged.set(key, []);
 	}
 
+	/** Empties `key`'s kept text, and the composer's when `key` is open: its text went out some other way, as live text. */
+	forgetText(key: string): void {
+		this.texts.set(key, '');
+		if (this.key === key) this.text = '';
+	}
+
 	/**
 	 * A failed send gives `key`'s draft back, unless something else has been
 	 * typed or attached there since; the composer shows it again when `key`

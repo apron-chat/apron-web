@@ -53,6 +53,11 @@
 		/** Cap `command` (§4.1): while `value` starts with one "/" (`//` posts a message), a Command tag shows, the field turns monospace and Send reads Run. */
 		canCommand?: boolean;
 		/**
+		 * Live typing: the draft is already a message that others see as it is typed (an `append` embed, §4.8.5). A Live
+		 * tag shows in place of the Command tag, and Send, which finishes the message, stays on while the field is empty.
+		 */
+		live?: boolean;
+		/**
 		 * Your own field in place of the textarea, such as a ComposerEditable that shows mentions as chips. It gets the
 		 * placeholder, whether the Composer is disabled and whether the draft is a command.
 		 */
@@ -88,6 +93,8 @@
 		fileInputTestid?: string;
 		/** `data-testid` on the Command tag. */
 		commandTestid?: string;
+		/** `data-testid` on the Live tag. */
+		liveTestid?: string;
 		/** `data-testid` on the emoji button. */
 		emojiTestid?: string;
 		/** `data-testid` on Send. */
@@ -96,14 +103,14 @@
 		class?: ClassValue;
 	}
 	let {
-		room, placeholder, value = $bindable(''), oninput, onsend, canSend, waitUntil, canUpload, onfiles, accept, disabled, canRecord, onrecord, onstoprecording, recording, recordingTime, thread, canCommand,
+		room, placeholder, value = $bindable(''), oninput, onsend, canSend, waitUntil, canUpload, onfiles, accept, disabled, canRecord, onrecord, onstoprecording, recording, recordingTime, thread, canCommand, live,
 		field, onemoji, emojiOpen, emojiButton = $bindable(), reply, replyText, oncancelreply, attachments, previews, preview, onremovepreview, picker,
-		replyTestid, attachmentsTestid, previewsTestid, fileInputTestid, commandTestid, emojiTestid, sendTestid, class: className
+		replyTestid, attachmentsTestid, previewsTestid, fileInputTestid, commandTestid, liveTestid, emojiTestid, sendTestid, class: className
 	}: Props = $props();
 
 	const ph = $derived(placeholder || (thread ? `Reply in ${roomName(thread.name, thread.thread, { thread: true })}` : `Message ${room || ''}`));
-	const cmd = $derived(!!canCommand && isCommand(value));
-	const sendable = $derived(canSend ?? (!!value.trim() || !!attachments));
+	const cmd = $derived(!live && !!canCommand && isCommand(value));
+	const sendable = $derived(canSend ?? (!!live || !!value.trim() || !!attachments));
 	/** What's left of a wait on sending, while there is one. */
 	const waitLeft = $derived(waitUntil === undefined ? 0 : Math.max(0, waitUntil - secondNow()));
 	let fileInput = $state<HTMLInputElement>();
@@ -135,7 +142,7 @@
 <!-- The picker anchors to the field's row and grows upward. -->
 <div class="ap-composer-wrap">
 	{@render picker?.()}
-	<form class={['ap-composer', disabled && 'ap-composer-disabled', cmd && 'ap-composer-cmd']} aria-label="Send a message" onsubmit={(e) => { e.preventDefault(); if (waitLeft <= 0) onsend?.(); }}>
+	<form class={['ap-composer', disabled && 'ap-composer-disabled', cmd && 'ap-composer-cmd', live && 'ap-composer-live']} aria-label="Send a message" onsubmit={(e) => { e.preventDefault(); if (waitLeft <= 0) onsend?.(); }}>
 		{#if canUpload}
 			<span class="ap-composer-tools">
 				<button type="button" class="ap-iconbtn" onclick={() => fileInput?.click()} disabled={disabled || recording} aria-label="Attach a file" title="Attach a file">
@@ -154,9 +161,10 @@
 			<span class="ap-composer-recording" role="status"><span class="ap-composer-recdot" aria-hidden="true"></span>Recording <span class="ap-composer-rectime">{recordingTime || '0:00'}</span></span>
 		{:else}
 			{#if cmd}<span class="ap-composer-cmdtag" data-testid={commandTestid} title="Sent to the server, not posted">Command</span>{/if}
+			{#if live}<span class="ap-composer-cmdtag ap-composer-livetag" data-testid={liveTestid} title="Everyone sees this message as you type it; Send finishes it"><span class="ap-composer-livedot" aria-hidden="true"></span>Live</span>{/if}
 			{#if field}{@render field({ placeholder: ph, disabled: !!disabled, command: cmd })}
 			{:else}
-				<textarea rows="1" dir="auto" placeholder={ph} {disabled} aria-label={cmd ? 'Command' : 'Message'} class={['ap-composer-field', className]} bind:value={() => value, (v) => { value = v; oninput?.(v); }}></textarea>
+				<textarea rows="1" dir="auto" placeholder={ph} {disabled} aria-label={cmd ? 'Command' : live ? 'Live message' : 'Message'} class={['ap-composer-field', className]} bind:value={() => value, (v) => { value = v; oninput?.(v); }}></textarea>
 			{/if}
 		{/if}
 		{#if onemoji}
@@ -167,7 +175,7 @@
 			</span>
 		{/if}
 		<!-- Pressing Send leaves the focus in the field, so a phone's keyboard stays up between messages rather than dropping and coming back. -->
-		<Button type="submit" size="sm" variant="primary" class={waitLeft > 0 ? 'ap-composer-wait' : undefined} data-testid={sendTestid} onmousedown={(e) => e.preventDefault()} aria-label={waitLeft > 0 ? `Send again in ${waitWords(waitLeft, waitLeft >= LONG_WAIT_MS)}` : cmd ? 'Run command' : 'Send message'} disabled={disabled || recording || !sendable || waitLeft > 0}>
+		<Button type="submit" size="sm" variant="primary" class={waitLeft > 0 ? 'ap-composer-wait' : undefined} data-testid={sendTestid} onmousedown={(e) => e.preventDefault()} aria-label={waitLeft > 0 ? `Send again in ${waitWords(waitLeft, waitLeft >= LONG_WAIT_MS)}` : cmd ? 'Run command' : live ? 'Finish live message' : 'Send message'} disabled={disabled || recording || !sendable || waitLeft > 0}>
 			{#snippet children()}{#if waitLeft > 0}<Hourglass size={14} aria-hidden="true" />{waitLabel(waitLeft, waitLeft >= LONG_WAIT_MS)}{:else}{cmd ? 'Run' : 'Send'}{/if}{/snippet}
 		</Button>
 	</form>
