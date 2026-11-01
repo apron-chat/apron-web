@@ -15,7 +15,8 @@ const INTERACTION = ['layouts', 'styleRecalcs', 'calls'];
  * How far over its baseline a metric may go before the check fails. On the fake clock bytes, requests and DOM
  * nodes don't move, and an interaction's layouts and style recalcs barely do. The load's layouts and style
  * recalcs follow the frames the browser draws in real time, so move by a couple; JS calls move by a few from
- * events Playwright sends in real time (mouse moves) and, on the load, the odd extra observer callback.
+ * events Playwright sends in real time (mouse moves), and on the load by about 0.6% when an observer callback
+ * renders the jump-to-new dock or doesn't.
  */
 const SLACK = {
 	requests: { abs: 0, rel: 0 },
@@ -25,11 +26,11 @@ const SLACK = {
 	domNodes: { abs: 2, rel: 0.01 },
 	layouts: { abs: 3, rel: 0.15 },
 	styleRecalcs: { abs: 3, rel: 0.15 },
-	calls: { abs: 20, rel: 0.005 },
+	calls: { abs: 20, rel: 0.01 },
 	heapMB: { abs: 0.2, rel: 0.05 }
 };
 /** An interaction's, where they differ from the load's. */
-const INTERACTION_SLACK = { layouts: { abs: 1, rel: 0 }, styleRecalcs: { abs: 1, rel: 0 } };
+const INTERACTION_SLACK = { layouts: { abs: 1, rel: 0 }, styleRecalcs: { abs: 1, rel: 0 }, calls: { abs: 20, rel: 0.005 } };
 
 /** The highest value `metric` may reach against a baseline of `base`, on the load or an interaction. */
 export const limitOf = (metric, base, interaction = false) => {
