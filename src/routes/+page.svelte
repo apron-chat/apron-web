@@ -2158,6 +2158,9 @@
 		composer?.focus();
 	}
 
+	/** MDN's page on streaming uploads (`duplex`), with which browsers have them: what `/live` points to where it can't write. */
+	const STREAMING_UPLOADS_URL = 'https://developer.mozilla.org/en-US/docs/Web/API/Request/duplex#browser_compatibility';
+
 	/**
 	 * Live typing (`/live`, capability `embed:append`): the message the composer types live, posted at once with an
 	 * `append` embed (§4.8.5) whose live text follows the draft, so the timeline shows it, and everyone sees it grow
@@ -2180,7 +2183,7 @@
 	/** `/live`: the composer empties, and what is typed next is the room's newest message, live, until Send. */
 	function startLive(chat: ChatClient, room: RoomSnapshot, reply: string | undefined): void {
 		if (!canWriteLiveText()) {
-			feedback.error('Live typing needs a browser that streams uploads, such as Chrome or Edge');
+			chat.notify(room.id, `Live typing needs a browser that can stream an upload as it is written, over HTTP/2 or later ([which browsers can](${STREAMING_UPLOADS_URL})).`, 'markdown');
 			return;
 		}
 		if (live) finishLive(chat, live, live.typing.text, []);

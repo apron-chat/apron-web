@@ -187,7 +187,7 @@ function pause(ms: number, signal: AbortSignal): Promise<void> {
 
 /**
  * Whether this browser can write live text: a `PUT` whose body streams in as it is typed (`fetch` with a
- * `ReadableStream` body, `duplex: 'half'`), which Chromium does over HTTP/2 or later. The preview's in-memory server
+ * `ReadableStream` body, `duplex: 'half'`), which browsers do only over HTTP/2 or later. The preview's in-memory server
  * reads any body (`setLiveFetch`), so there it always can.
  */
 export function canWriteLiveText(): boolean {
@@ -207,7 +207,7 @@ export function canWriteLiveText(): boolean {
 /**
  * Writes live text (§4.8.3): `body` streams to `write_url` as a `PUT`, and its end ends the text. Resolves with the
  * server's response, which may come before the body ends (the text reached a limit, or a save removed the embed), and
- * rejects when the request could not be made, such as over HTTP/1.1, where Chromium streams no request body.
+ * rejects when the request could not be made, such as over HTTP/1.1, where browsers stream no request body.
  */
 export function writeLiveText(writeUrl: string, body: ReadableStream<Uint8Array>, signal?: AbortSignal): Promise<Response> {
 	const init = { method: 'PUT', body, duplex: 'half', headers: { 'Content-Type': 'text/plain; charset=utf-8' }, credentials: 'omit', cache: 'no-store', ...(signal ? { signal } : {}) };

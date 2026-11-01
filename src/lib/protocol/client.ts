@@ -1669,10 +1669,11 @@ export class ChatClient {
 
 	/**
 	 * Shows a transient notice in a room for this session (§3.5), such as a
-	 * command's error: from `~private`, never sent or stored.
+	 * command's error: from `~private`, never sent or stored. `format` as a
+	 * message's: `markdown` for one with links.
 	 */
-	notify(room: string, text: string): void {
-		this.addNotice(room, privateSender(), { text });
+	notify(room: string, text: string, format?: MessageFormat): void {
+		this.addNotice(room, privateSender(), { text, ...(format ? { format } : {}) });
 		this.emit();
 	}
 

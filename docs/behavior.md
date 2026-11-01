@@ -875,8 +875,11 @@ the pane finishes it as Send would, with what was typed. If the message or
 its write can't be made, the message is deleted (with `edit`), the composer
 keeps what was typed as an ordinary draft, and a notice says why; if the
 server ends the text first (a limit), the message keeps what arrived and a
-notice says so. Streaming a request body needs Chromium over HTTP/2 or later;
-in other browsers `/live` says so and does nothing. `/__preview`'s in-memory
+notice says so. It needs a browser that streams a request body as it is
+written ([`duplex: 'half'`](https://developer.mozilla.org/en-US/docs/Web/API/Request/duplex#browser_compatibility)),
+which browsers do only over HTTP/2 or later. Where it can't (`canWriteLiveText`
+detects the feature, not a browser), `/live` does nothing but post a local
+notice in the room that says so, with that link. `/__preview`'s in-memory
 server reads any body, so there it works everywhere.
 
 With the `activity` capability, reading the latest message of a room advances your
