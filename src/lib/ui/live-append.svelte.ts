@@ -1,9 +1,11 @@
 import { createSubscriber } from 'svelte/reactivity';
-import { followLiveText, liveTextDecoder } from '$lib/protocol/live-text';
+import { editLiveText, followLiveText, liveTextDecoder } from '$lib/protocol/live-text';
 
 /**
  * The text of an `append` embed (§4.8.5) while it is live: what `GET url`
- * has streamed so far, decoded as UTF-8 in streaming mode. It is read only
+ * has streamed so far, decoded as UTF-8 in streaming mode, with its edits
+ * applied as each chunk arrives (a backspace removes the code point before it,
+ * a form feed the text before it; `editLiveText`). It is read only
  * while something shows it: the first reader starts the request, and when
  * the last stops reading it is cancelled, to be read afresh (a reconnect
  * replaces what was shown). Readers hear of new text at most once an
@@ -34,11 +36,11 @@ export class LiveAppend {
 					changed();
 				},
 				chunk: (bytes) => {
-					this.#text += decoder.decode(bytes, { stream: true });
+					this.#text = editLiveText(this.#text, decoder.decode(bytes, { stream: true }));
 					changed();
 				},
 				end: () => {
-					this.#text += decoder.decode();
+					this.#text = editLiveText(this.#text, decoder.decode());
 					this.#live = false;
 					changed();
 				}
@@ -50,7 +52,7 @@ export class LiveAppend {
 		});
 	}
 
-	/** The text streamed so far: kept when the request ends or fails, until a new response replaces it. */
+	/** The text streamed so far, after its edits: kept when the request ends or fails, until a new response replaces it. */
 	get text(): string {
 		this.#subscribe();
 		return this.#text;

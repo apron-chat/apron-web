@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { followLiveText, liveTextDecoder, readLiveText, setLiveFetch, type LiveTextSink } from './live-text';
+import { editLiveText, followLiveText, liveTextDecoder, readLiveText, setLiveFetch, type LiveTextSink } from './live-text';
 
 const bytes = (text: string) => new TextEncoder().encode(text);
 
@@ -154,5 +154,66 @@ describe('liveTextDecoder (§4.8.3)', () => {
 		const text = parts.map((part) => decoder.decode(part, { stream: true })).join('') + decoder.decode();
 		// The BOM stays, "€" cut between chunks is whole, C0 AF is two U+FFFD, and the cut-off E2 at the end is one.
 		expect(text).toBe('\ufeff$\u20ac \ufffd\ufffd \ufffd');
+	});
+});
+
+describe('editLiveText (§4.8.5)', () => {
+	/** A text's chunks, each applied in turn to the text so far, as a reader does. */
+	const edited = (...chunks: string[]) => chunks.reduce(editLiveText, '');
+
+	it('removes the code point before each backspace: "é" and an astral emoji are one, a surrogate pair whole', () => {
+		expect(edited('Ready.\b!')).toBe('Ready!');
+		expect(edited('caf\u00e9\b')).toBe('caf');
+		expect(edited('ok 🚀\b')).toBe('ok ');
+		expect(edited('ok 🚀\b\b')).toBe('ok');
+		// "é" written as e and a combining accent is two code points: one backspace removes the accent.
+		expect(edited('cafe\u0301\b')).toBe('cafe');
+		// One with nothing before it removes nothing.
+		expect(edited('\b\bHi')).toBe('Hi');
+	});
+
+	it('clears the text before a form feed, and keeps what follows', () => {
+		expect(edited('Looking at the logs…\f')).toBe('');
+		expect(edited('Draft one\fDraft two\fThe plan')).toBe('The plan');
+		expect(edited('Draft', ' one', '\fThe ', 'plan\bn')).toBe('The plan');
+	});
+
+	it('edits split across chunks: a backspace reaches back into the text kept so far', () => {
+		expect(edited('Roll back the indx', '\b', 'ex')).toBe('Roll back the index');
+		expect(edited('faield', '\b\b\bled')).toBe('failed');
+		expect(edited('🚀🚀', '\b')).toBe('🚀');
+		expect(edited('ab', '\b\b\b\bc')).toBe('c');
+		// A chunk's own text goes first, then the kept text's end.
+		expect(edited('abc', 'de\b\b\b')).toBe('ab');
+	});
+
+	it('removes a surrogate pair whole when a backspace brought its halves together', () => {
+		// Removing "a" puts the pair's halves side by side, so the next backspace removes both.
+		expect(edited('x\ud83da\b\ude80\b')).toBe('x');
+		expect(edited('x\ud83dab\b\b\ude80\by')).toBe('xy');
+		expect(edited('x\ud83da\b\ude80')).toBe('x🚀');
+	});
+
+	it('edits a large chunk of backspaces in time linear in its length', () => {
+		// Each "aa\b" leaves one "a". Slicing a string at each backspace made this quadratic: 370 ms here, now about 10 ms.
+		const chunk = 'aa\b'.repeat(100_000);
+		const began = performance.now();
+		const text = editLiveText('kept', chunk);
+		const took = performance.now() - began;
+		expect(text).toBe(`kept${'a'.repeat(100_000)}`);
+		// The bound leaves a slow CI machine room.
+		expect(took).toBeLessThan(200);
+		expect(editLiveText('kept', `${chunk}${'\b'.repeat(100_002)}`)).toBe('ke');
+		expect(editLiveText('kept', `${'\b'.repeat(100_000)}${chunk}`)).toBe('a'.repeat(100_000));
+	});
+
+	it('leaves text already edited as it is, so a server may serve either', () => {
+		const raw = ['Here is the pla', 'm\bn:\fHere is the plan 🚀\b', ': roll back'];
+		const once = edited(...raw);
+		expect(once).toBe('Here is the plan : roll back');
+		expect(edited(once)).toBe(once);
+		expect(editLiveText(once, '')).toBe(once);
+		// Edited text the server kept, then raw chunks: the same text.
+		expect(edited(edited(raw[0], raw[1]), raw[2])).toBe(once);
 	});
 });

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ChatClient, timelineMessages } from '$lib/protocol/client';
 import { MemoryProtocolServer } from './memory-server';
 
@@ -430,6 +430,48 @@ describe('in-memory live text (§4.8.3, §4.8.5, §4.8.6)', () => {
 		expect(server.liveReads(id)).toBe(2);
 		await waitFor(() => !embedOf(client));
 		expect(latest(client).body).toMatchObject({ text: 'Plan: one two three', format: 'markdown' });
+	});
+
+	it('/embed-append: backspaces and form feeds edit only the streamed text; late readers get it kept edited, and the snapshot appends it after its edits', async () => {
+		const server = new MemoryProtocolServer({});
+		const client = await connect(server);
+		const id = server.startLive('general', 'ada', 'append', { body: { text: 'Plan:' } });
+		await waitFor(() => embedOf(client)?.embed_id === id);
+		const url = String(embedOf(client)!.url);
+		const rocket = new TextEncoder().encode('🚀');
+		server.liveWrite(id, ' draft\f\b\b roll bakc');
+		server.liveWrite(id, '\b\bck ');
+		server.liveWrite(id, rocket.slice(0, 3));
+		// A reader that comes in now gets the text kept so far after its edits, and the rest as written: the 🚀 cut
+		// between writes comes whole.
+		const late = await server.fetchLive(url, {});
+		server.liveWrite(id, rocket.slice(3));
+		server.liveWrite(id, '\b\b.');
+		server.liveEnd(id);
+		expect(await late.text()).toBe(' roll back 🚀\b\b.');
+		await waitFor(() => !embedOf(client));
+		// The backspaces past " roll back" never reached "Plan:".
+		expect(latest(client).body).toEqual({ text: 'Plan: roll back.', format: 'markdown' });
+	});
+
+	it('plays an append demo that revises itself: a placeholder a form feed clears, a typo backspaces correct', async () => {
+		const server = new MemoryProtocolServer({});
+		const client = await connect(server);
+		const id = server.startLive('general', 'ada', 'append', { body: { text: '' } });
+		await waitFor(() => embedOf(client)?.embed_id === id);
+		vi.useFakeTimers();
+		try {
+			server.playDemo(id);
+			await vi.advanceTimersByTimeAsync(60_000);
+		} finally {
+			vi.useRealTimers();
+		}
+		await waitFor(() => !embedOf(client));
+		const text = String(latest(client).body?.text);
+		expect(text).toMatch(/^Here is the plan for the rollback/);
+		expect(text).toContain('so every deploy since then failed.\n3. Re-run');
+		expect(text).not.toMatch(/Looking|faield|[\b\f]/);
+		expect(text).toMatch(/I’ll keep an eye on #general\.$/);
 	});
 
 	it('serves nothing it did not mint', async () => {

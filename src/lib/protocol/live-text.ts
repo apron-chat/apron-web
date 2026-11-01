@@ -37,6 +37,67 @@ export function liveTextDecoder(): TextDecoder {
 	return new TextDecoder('utf-8', { ignoreBOM: true });
 }
 
+/**
+ * An `append` embed's text (§4.8.5) with `added`, its next decoded text, applied to `kept`, the text so far after
+ * its edits: U+0008 (backspace) removes the code point before it, U+000C (form feed) all the text before it. The
+ * edits reach only the live text, never `body.text`, which the caller keeps apart. Text already edited has neither,
+ * so it is unchanged, and a server may serve either. The cost is `added`'s length and what it removes, not `kept`'s.
+ * Not for `terminal` embeds, where both are the terminal's own.
+ */
+export function editLiveText(kept: string, added: string): string {
+	const feed = added.lastIndexOf('\f');
+	if (feed !== -1) {
+		kept = '';
+		added = added.slice(feed + 1);
+	}
+	if (!added.includes('\b')) return kept + added;
+	// Each backspace removes from what this chunk wrote before it, and once that is gone, from the end of `kept`.
+	// What this chunk wrote and kept is runs of `added`, from `starts[i]` to `ends[i]`, joined once at the end:
+	// a string built up and sliced at each backspace would be copied each time, so a chunk would cost its length squared.
+	const starts: number[] = [];
+	const ends: number[] = [];
+	let fromKept = 0;
+	let start = 0;
+	for (let at = added.indexOf('\b'); at !== -1; at = added.indexOf('\b', start)) {
+		if (at > start) {
+			starts.push(start);
+			ends.push(at);
+		}
+		start = at + 1;
+		if (!ends.length) {
+			fromKept++;
+			continue;
+		}
+		// Remove the last code unit; when it ends a surrogate pair, the unit before it too, even in the run before.
+		const unit = added.charCodeAt(--ends[ends.length - 1]);
+		dropEmpty(starts, ends);
+		if (ends.length && isLow(unit) && isHigh(added.charCodeAt(ends[ends.length - 1] - 1))) {
+			ends[ends.length - 1]--;
+			dropEmpty(starts, ends);
+		}
+	}
+	const written = starts.map((from, i) => added.slice(from, ends[i]));
+	written.push(added.slice(start));
+	let end = kept.length;
+	for (; fromKept > 0 && end > 0; fromKept--) end = lastCodePoint(kept, end);
+	return (end === kept.length ? kept : kept.slice(0, end)) + written.join('');
+}
+
+/** Drops the last run when a backspace emptied it. */
+function dropEmpty(starts: number[], ends: number[]): void {
+	if (ends[ends.length - 1] !== starts[starts.length - 1]) return;
+	starts.pop();
+	ends.pop();
+}
+
+const isHigh = (unit: number) => unit >= 0xd800 && unit <= 0xdbff;
+const isLow = (unit: number) => unit >= 0xdc00 && unit <= 0xdfff;
+
+/** Where the code point that ends at `end` in `text` starts: a surrogate pair is one. */
+function lastCodePoint(text: string, end = text.length): number {
+	return isLow(text.charCodeAt(end - 1)) && isHigh(text.charCodeAt(end - 2)) ? end - 2 : end - 1;
+}
+
 /** The pauses before trying again after a failure or a drop, the last repeated: a live text's url may not serve yet, or its connection may drop. */
 export const LIVE_RETRY_MS = [1000, 2000, 4000, 8000, 15000] as const;
 
