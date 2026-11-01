@@ -4,6 +4,7 @@
  * commands; scripts/qa/README.md explains the workflow and how to add a suite.
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpus } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { ab } from './lib/ab.js';
 import { int, list, parseArgs } from './lib/args.js';
@@ -39,7 +40,9 @@ const HELP = `npm run qa -- <command> [options]
                          bytes) per perf probe against scripts/qa/perf-budget.json; exits 1 when one is
                          over. --update rewrites the baseline. [--runs 3] [--cpu 4] [--only p] [--shard i/n]
                          [--out file.json]: every run's counts, to diff between machines.
-                         Prototype: --calls also counts JS function calls per probe (V8 precise coverage).
+                         Prototype: --calls also counts JS function calls per probe (V8 precise coverage);
+                         --clock virtual times the windows in Chromium's virtual time (no throttle: --cpu 1).
+                         Either prints the counts and their spread instead of checking them.
   prof --url A --url B   CPU-profile page load; biggest per-function changes. [--runs 6] [--cpu 4]
   sheet <spec.json>      Render hand-picked before/after panels (title, note, crop box, scale) to a PNG.
                          [--out <spec>.png]
@@ -160,7 +163,12 @@ async function main() {
 			const probes = shardOf(selectProbes(suite, list(o.only)).filter((p) => p.budget !== false), index, count);
 			if (!probes.length) throw new Error(`shard ${index}/${count} has no probes to check`);
 			const runs = int(o.runs, 3);
-			const cpu = int(o.cpu, 4);
+			const clock = o.clock ?? 'wall';
+			if (!['wall', 'virtual'].includes(clock)) throw new Error(`--clock takes wall or virtual, not ${clock}`);
+			const cpu = int(o.cpu, clock === 'virtual' ? 1 : 4);
+			// The prototypes' counts have no baseline yet: they are printed (and written with --out), not checked.
+			const prototype = !!o.calls || clock !== 'wall';
+			if (prototype && o.update) throw new Error('--update writes the baseline from the default measurement: run it without --calls or --clock');
 			const server = await serveDir(dir);
 			const browser = await launch();
 			let result;
@@ -168,22 +176,22 @@ async function main() {
 			try {
 				// Under reduced motion, so an animation's layouts don't count once per frame drawn: a faster runner
 				// draws more frames, and the count would go with it.
-				result = await runPerf({ browser, urls: [server.url], labels: ['now'], runs, cpu, reducedMotion: 'reduce', probes, path: suite.path, builds: index === 1 ? [dir] : [], chunkBuilds: [dir], calls: !!o.calls });
+				result = await runPerf({ browser, urls: [server.url], labels: ['now'], runs, cpu, reducedMotion: 'reduce', probes, path: suite.path, builds: index === 1 ? [dir] : [], chunkBuilds: [dir], calls: !!o.calls, clock });
 			} finally {
 				await browser.close();
 				await server.close();
 			}
 			const path = join(repo, 'scripts/qa/perf-budget.json');
 			const counts = countsOf(result, probes);
-			if (o.calls) console.log(`${formatSamples(samplesOf(result, probes))}\n`);
+			if (prototype || o.out) console.log(`${formatSamples(samplesOf(result, probes))}\n`);
 			if (o.out) {
 				const out = resolve(o.out);
 				mkdirSync(dirname(out), { recursive: true });
-				const { cpus, loadavg } = await import('node:os');
-				const meta = { calls: !!o.calls, runs, cpu, shard: `${index}/${count}`, seconds: Math.round((Date.now() - started) / 1000), chromium: browser.version(), cpus: cpus().length, cpuModel: cpus()[0]?.model, loadavg: result.loadavg };
+				const meta = { calls: !!o.calls, clock, runs, cpu, shard: `${index}/${count}`, seconds: Math.round((Date.now() - started) / 1000), chromium: browser.version(), cpus: cpus().length, cpuModel: cpus()[0]?.model, loadavg: result.loadavg };
 				writeFileSync(out, `${JSON.stringify({ ...meta, probes: samplesOf(result, probes), bundle: counts.bundle }, null, 1)}\n`);
 				console.log(`json: ${relative(process.cwd(), out)}`);
 			}
+			if (prototype) return 0;
 			if (o.update) {
 				writeBudget(path, counts, { runs, cpu });
 				console.log(`wrote ${relative(process.cwd(), path)}`);

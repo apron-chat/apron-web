@@ -16,9 +16,10 @@ const READY = '[data-testid=message-list] .ap-msg';
  * (`PreviewKnobs`), e.g. many rooms or long histories; `budget: false` leaves a probe whose counts follow
  * the machine's speed out of `qa budget`. Suites export theirs as `interactions`;
  * `selectProbes` picks them. `calls` adds each probe's JS function calls (see `measure`), named by chunk from
- * `chunkBuilds` (the served builds' directories).
+ * `chunkBuilds` (the served builds' directories). `clock: 'virtual'` times the windows in virtual time (see `measure`).
  */
-export async function runPerf({ browser, urls, labels = urls, runs = 5, cpu = 4, reducedMotion, probes, path = '/__preview', builds = [], chunkBuilds = builds, calls = false, log = console.log }) {
+export async function runPerf({ browser, urls, labels = urls, runs = 5, cpu = 4, reducedMotion, probes, path = '/__preview', builds = [], chunkBuilds = builds, calls = false, clock = 'wall', log = console.log }) {
+	if (clock === 'virtual' && cpu !== 1) throw new Error('virtual time takes --cpu 1: under CPU throttling Chromium stops running the page once the virtual time budget is set');
 	const all = probes;
 	const chunkNames = urls.map((_, i) => chunkNamesOf(chunkBuilds[i]));
 	const start = loadavg();
@@ -31,7 +32,7 @@ export async function runPerf({ browser, urls, labels = urls, runs = 5, cpu = 4,
 		for (const probe of all) {
 			const order = urls.map((_, i) => (i + unit) % urls.length);
 			unit++;
-			for (const i of order) samples[probe.name][labels[i]].push(await measure(browser, urls[i], probe, { cpu, path, reducedMotion, calls, chunkNames: chunkNames[i] }));
+			for (const i of order) samples[probe.name][labels[i]].push(await measure(browser, urls[i], probe, { cpu, path, reducedMotion, calls, clock, chunkNames: chunkNames[i] }));
 		}
 		log(`perf run ${run + 1}/${runs} done`);
 	}
@@ -39,6 +40,7 @@ export async function runPerf({ browser, urls, labels = urls, runs = 5, cpu = 4,
 		runs,
 		cpu,
 		calls,
+		clock,
 		labels,
 		urls,
 		loadavg: { start, end: loadavg() },
@@ -66,8 +68,15 @@ export function selectProbes(suite, only = []) {
  * Opens a throttled page on `url` and measures one probe. With `calls`, also counts the JS functions the
  * page's own scripts call in the window (`calls`, and `chunks`: the same by chunk), from V8's precise coverage:
  * a count that follows only what the code does, not how fast the machine does it.
+ *
+ * The windows (1200 ms after the page is ready, 300 ms after `setup`, `settle` after the action) are real time,
+ * unless `clock` is `'virtual'`: then the page runs on Chromium's virtual time, which stands still while the
+ * page has work to do or a fetch pending and otherwise jumps to its next timer, so its timers fire at the same
+ * virtual moment however slow the machine is. Virtual time is paused while Playwright runs `setup` and
+ * `action`, and each window is a virtual time budget granted afterwards. Date.now() starts at `NOW`.
  */
-async function measure(browser, url, probe, { cpu, path, reducedMotion, calls, chunkNames }) {
+async function measure(browser, url, probe, { cpu, path, reducedMotion, calls, clock = 'wall', chunkNames }) {
+	const virtual = clock === 'virtual';
 	const context = await browser.newContext({ viewport: probe.viewport ?? DESKTOP, colorScheme: 'dark', deviceScaleFactor: 1, reducedMotion });
 	try {
 		const page = await context.newPage();
@@ -75,7 +84,7 @@ async function measure(browser, url, probe, { cpu, path, reducedMotion, calls, c
 		await cdp.send('Performance.enable');
 		await cdp.send('Network.enable');
 		await cdp.send('Network.setCacheDisabled', { cacheDisabled: true });
-		await cdp.send('Emulation.setCPUThrottlingRate', { rate: cpu });
+		if (!virtual) await cdp.send('Emulation.setCPUThrottlingRate', { rate: cpu });
 		await page.addInitScript(() => {
 			const w = /** @type {any} */ (window);
 			w.__lcp = 0;
@@ -85,6 +94,15 @@ async function measure(browser, url, probe, { cpu, path, reducedMotion, calls, c
 			new PerformanceObserver((l) => l.getEntries().forEach((e) => !(/** @type {any} */ (e).hadRecentInput) && (w.__cls += /** @type {any} */ (e).value))).observe({ type: 'layout-shift', buffered: true });
 			new PerformanceObserver((l) => l.getEntries().forEach((e) => w.__longtasks.push(e.duration))).observe({ type: 'longtask', buffered: true });
 		});
+		// Idle callbacks wait for an idle period between frames, and under virtual time Chromium draws hardly any
+		// frames, so one would run whenever a real-time frame happened to leave room for it, or at its timeout.
+		// Here it runs once the page has nothing else to do, which virtual time decides.
+		if (virtual)
+			await page.addInitScript(() => {
+				const w = /** @type {any} */ (window);
+				w.requestIdleCallback = (/** @type {Function} */ run) => setTimeout(() => run({ didTimeout: false, timeRemaining: () => 50 }), 1);
+				w.cancelIdleCallback = (/** @type {number} */ id) => clearTimeout(id);
+			});
 		if (probe.knobs) await page.addInitScript((knobs) => ((/** @type {any} */ (window)).__APRON_PREVIEW__ = knobs), probe.knobs);
 		const metrics = async () => Object.fromEntries((await cdp.send('Performance.getMetrics')).metrics.map((m) => [m.name, m.value]));
 		// After a full collection: what the page keeps. Before it, the heap reads whatever garbage the last
@@ -100,11 +118,24 @@ async function measure(browser, url, probe, { cpu, path, reducedMotion, calls, c
 			await cdp.send('Profiler.startPreciseCoverage', { callCount: true, detailed: false });
 		}
 		const origin = new URL(url).origin;
+		/** Lets `ms` of the page's time pass: real time, or a budget of virtual time it then waits out. */
+		const wait = virtual ? (/** @type {number} */ ms) => grantVirtualTime(cdp, ms) : (/** @type {number} */ ms) => page.waitForTimeout(ms);
 		const t0 = Date.now();
-		await page.goto(new URL(path, url.endsWith('/') ? url : `${url}/`).href);
-		await page.waitForSelector(READY, { timeout: 30000 });
-		const ready = Date.now() - t0;
-		await page.waitForTimeout(1200);
+		let ready;
+		if (virtual) {
+			await cdp.send('Emulation.setVirtualTimePolicy', { policy: 'pause', initialVirtualTime: VIRTUAL_EPOCH });
+			await page.goto(new URL(path, url.endsWith('/') ? url : `${url}/`).href, { waitUntil: 'commit' });
+			// Ready at a virtual moment, found in steps of virtual time: its own resolution.
+			for (ready = 0; !(await page.$(READY)); ready += VIRTUAL_STEP) {
+				if (ready > 30000) throw new Error(`not ready after ${ready} ms of virtual time`);
+				await wait(VIRTUAL_STEP);
+			}
+		} else {
+			await page.goto(new URL(path, url.endsWith('/') ? url : `${url}/`).href);
+			await page.waitForSelector(READY, { timeout: 30000 });
+			ready = Date.now() - t0;
+		}
+		await wait(1200);
 		if (!probe.action) {
 			const m = await metrics();
 			const counted = calls ? await callCounts(cdp, origin, chunkNames) : {};
@@ -138,7 +169,7 @@ async function measure(browser, url, probe, { cpu, path, reducedMotion, calls, c
 			};
 		}
 		if (probe.setup) await probe.setup(page);
-		await page.waitForTimeout(300);
+		await wait(300);
 		await page.evaluate(() => {
 			const w = /** @type {any} */ (window);
 			w.__frames = [];
@@ -154,7 +185,7 @@ async function measure(browser, url, probe, { cpu, path, reducedMotion, calls, c
 		if (calls) await cdp.send('Profiler.takePreciseCoverage');
 		const before = await metrics();
 		await probe.action(page);
-		await page.waitForTimeout(probe.settle ?? 600);
+		await wait(probe.settle ?? 600);
 		const after = await metrics();
 		const counted = calls ? await callCounts(cdp, origin, chunkNames) : {};
 		const frames = await page.evaluate(() => {
@@ -177,6 +208,30 @@ async function measure(browser, url, probe, { cpu, path, reducedMotion, calls, c
 		};
 	} finally {
 		await context.close().catch(() => {});
+	}
+}
+
+/** Where `Date.now()` starts under virtual time: the QA scenes' fixed clock, so no count follows today's date. */
+const VIRTUAL_EPOCH = Date.parse('2026-10-22T12:00:00Z') / 1000;
+/** How often, in virtual ms, the load looks for the ready selector. */
+const VIRTUAL_STEP = 50;
+
+/**
+ * Lets `ms` of virtual time pass, and waits (in real time) until it has. Fetches hold it back
+ * (`pauseIfNetworkFetchesPending`), so a chunk that takes longer to arrive doesn't let the page's timers run ahead.
+ * Chromium pauses virtual time again when the budget runs out.
+ */
+async function grantVirtualTime(cdp, ms) {
+	/** @type {(() => void) | undefined} */
+	let done;
+	const expired = new Promise((resolve) => (done = resolve));
+	cdp.once('Emulation.virtualTimeBudgetExpired', () => done?.());
+	await cdp.send('Emulation.setVirtualTimePolicy', { policy: 'pauseIfNetworkFetchesPending', budget: ms });
+	let timer;
+	try {
+		await Promise.race([expired, new Promise((_, reject) => (timer = setTimeout(() => reject(new Error(`a ${ms} ms virtual time budget didn't run out in 60 s`)), 60000)))]);
+	} finally {
+		clearTimeout(timer);
 	}
 }
 
