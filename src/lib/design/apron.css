@@ -687,7 +687,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
  * so under dir="rtl" it and its pointer mirror with the list. While the rooms list is shut or on a phone, the same offer
  * shows in the main pane above the composer (ap-shell-nudge-inline).
  */
-.ap-shell-nudge { --notify-left: max(var(--space-2), calc(var(--side-col, var(--sidebar-w)) - var(--nudge-w) - var(--space-2))); position: absolute; z-index: var(--z-nudge); inset-inline-start: var(--notify-left); bottom: calc(var(--header-h) + 10px); width: var(--nudge-w); max-width: calc(100vw - var(--space-4)); display: none; }
+.ap-shell-nudge { --notify-left: max(var(--space-2), calc(var(--side-col, var(--sidebar-w)) - var(--nudge-w) - var(--space-2))); position: absolute; z-index: var(--z-nudge); inset-inline-start: var(--notify-left); bottom: calc(var(--header-h) + var(--corner-clear) + 10px); width: var(--nudge-w); max-width: calc(100vw - var(--space-4)); display: none; }
 .ap-shell-nudge .ap-nudge { --ap-nudge-tip: calc(var(--side-col, var(--sidebar-w)) - 30px - var(--notify-left)); }
 .ap-shell-nudge-inline { padding: 0 var(--space-4); }
 .ap-shell-nudge-inline:not(:empty) { padding-top: var(--space-2); }
