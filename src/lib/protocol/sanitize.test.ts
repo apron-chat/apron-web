@@ -46,8 +46,8 @@ describe('sanitizeHtml: media in an HTML embed (§4.8)', () => {
 			`<span class="ap-media-ask"><span class="ap-media-ask-label"><span class="ap-media-ask-what">${what}</span> <span class="ap-media-ask-url">${url}</span></span>` +
 			`<span class="ap-media-ask-actions"><button class="ap-btn ap-btn-quiet ap-btn-sm" type="button" data-media-load="${url}" aria-label="Load ${what} from ${host}">Load</button>` +
 			(origin
-				? `<button class="ap-btn ap-btn-quiet ap-btn-sm" type="button" data-media-trust="${origin}" title="Adds ${host} to Trusted origins"><span class="ap-media-ask-btntext">Always load from ${host}</span></button>` +
-					`<button class="ap-btn ap-btn-quiet ap-btn-sm" type="button" data-media-block="${origin}" title="Adds ${host} to Blocked origins"><span class="ap-media-ask-btntext">Block ${host}</span></button>`
+				? `<button class="ap-btn ap-btn-quiet ap-btn-sm" type="button" data-media-trust="${origin}" aria-label="Always load from ${host}" title="Adds ${host} to Trusted origins"><span class="ap-media-ask-btntext">Always load from</span> <span class="ap-media-ask-host">${host}</span></button>` +
+					`<button class="ap-btn ap-btn-quiet ap-btn-sm" type="button" data-media-block="${origin}" aria-label="Block ${host}" title="Adds ${host} to Blocked origins"><span class="ap-media-ask-btntext">Block</span> <span class="ap-media-ask-host">${host}</span></button>`
 				: '') +
 			'</span></span>';
 		expect(embed('<p><img src="https://tracker.example/t.gif" alt="Chart"></p>', asking)).toBe(`<p>${box('Chart', 'https://tracker.example/t.gif', 'tracker.example', 'https://tracker.example')}</p>`);

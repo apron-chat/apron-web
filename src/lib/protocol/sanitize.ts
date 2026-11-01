@@ -198,11 +198,12 @@ function askBox(what: string, asked: MediaAskAt, doc: Document): HTMLElement {
 	if (asked.origin) {
 		const site = (text: string, name: string, list: string) => {
 			const node = button('', name, asked.origin!);
+			node.setAttribute('aria-label', `${text} ${asked.host}`);
 			node.setAttribute('title', `Adds ${asked.host} to ${list}`);
-			node.append(part('span', 'ap-media-ask-btntext', text));
+			node.append(part('span', 'ap-media-ask-btntext', text), ' ', part('span', 'ap-media-ask-host', asked.host));
 			return node;
 		};
-		actions.append(site(`Always load from ${asked.host}`, 'data-media-trust', 'Trusted origins'), site(`Block ${asked.host}`, 'data-media-block', 'Blocked origins'));
+		actions.append(site('Always load from', 'data-media-trust', 'Trusted origins'), site('Block', 'data-media-block', 'Blocked origins'));
 	}
 	const box = part('span', 'ap-media-ask');
 	box.append(label, actions);

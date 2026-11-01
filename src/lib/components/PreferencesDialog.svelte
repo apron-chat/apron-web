@@ -2,7 +2,7 @@
 	import { untrack, type Snippet } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { historySettings, RETENTIONS, storageUsed } from '$lib/history/settings.svelte';
-	import { MEDIA_POLICIES, mediaSettings, parseMediaOrigins } from '$lib/ui/media-settings.svelte';
+	import { MEDIA_POLICIES, mediaSettings, parseBlockedOrigins, parseMediaOrigins } from '$lib/ui/media-settings.svelte';
 	import { appearanceSettings, cssForTheme, parseThemeCss, THEME_CSS_MAX, THEMES, type ThemeId, type ThemeMode } from '$lib/ui/appearance.svelte';
 	import type { NotificationPermissionState, NotificationTestResult } from '$lib/ui/notifications';
 	import Button from '$lib/design/components/Button.svelte';
@@ -334,7 +334,7 @@
 			</SettingRow>
 			<SettingRow title="Blocked origins" for="ap-media-blocked" hint="One per line. Blocked origins are never rendered." stacked class="ap-pref-media-sites">
 				{#snippet control()}
-					<textarea id="ap-media-blocked" class="ap-field ap-pref-sites" rows="4" spellcheck="false" autocomplete="off" value={blockedSites} onchange={(event) => mediaSettings.update(mediaSettings.policy, mediaSettings.origins, parseMediaOrigins(event.currentTarget.value))} data-testid="media-blocked"></textarea>
+					<textarea id="ap-media-blocked" class="ap-field ap-pref-sites" rows="4" spellcheck="false" autocomplete="off" value={blockedSites} onchange={(event) => { mediaSettings.setBlocked(parseBlockedOrigins(event.currentTarget.value)); event.currentTarget.value = blockedSites; }} data-testid="media-blocked"></textarea>
 				{/snippet}
 			</SettingRow>
 		{:else if preferencesSection === 'history'}

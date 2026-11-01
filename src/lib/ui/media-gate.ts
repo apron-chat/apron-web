@@ -9,7 +9,7 @@
  */
 import type { MediaSrc } from '$lib/design/components/types';
 import { embedMedia, safeLink, sameOriginMedia } from '$lib/protocol/embeds';
-import { parseMediaOrigins } from './media-settings.svelte';
+import { blockableHost, parseMediaOrigins } from './media-settings.svelte';
 
 export type { MediaSrc };
 
@@ -38,15 +38,16 @@ export interface MediaGateOptions {
 	asks?: boolean;
 	/**
 	 * Origins whose media never loads, nor is asked for: Preferences' Blocked origins. They win over everything else
-	 * that would let media load (the trusted origins, Any site, a click on Load), and match by host, whatever the scheme.
+	 * that would let media load (the trusted origins, Any site, a click on Load), and match by host (`blockableHost`),
+	 * whatever the scheme or port.
 	 */
 	blocked?: readonly string[];
 }
 
-/** The host of `url`, an `http(s):` URL; else undefined. */
+/** The host of `url` to compare a blocked one with (`blockableHost`); else undefined. */
 function hostOf(url: string): string | undefined {
 	try {
-		return new URL(url).host;
+		return blockableHost(new URL(url));
 	} catch {
 		return undefined;
 	}
@@ -59,7 +60,7 @@ export function mediaGate(origin: string | undefined, trusted: readonly string[]
 	const key = `${origin ?? ''} ${trusted.join(' ')}${options.httpsElsewhere ? ' https' : ''}${options.asks ? ' ask' : ''}${blocked.size ? ` -${[...blocked].join(' -')}` : ''}${once.length ? `\n${once.join('\n')}` : ''}`;
 	const isBlocked = (value: unknown): boolean => {
 		const link = blocked.size ? safeLink(value) : undefined;
-		return link !== undefined && blocked.has(new URL(link).host);
+		return link !== undefined && blocked.has(blockableHost(new URL(link)));
 	};
 	const src = (value: unknown): MediaSrc | undefined => {
 		if (isBlocked(value)) return undefined;

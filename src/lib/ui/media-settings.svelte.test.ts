@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ANY_ORIGIN } from '$lib/protocol/embeds';
 import { memoryStorage } from '$lib/test/storage';
-import { MediaSettings, parseMediaOrigins } from './media-settings.svelte';
+import { MediaSettings, parseBlockedOrigins, parseMediaOrigins } from './media-settings.svelte';
 
 const values = new Map<string, string>();
 
@@ -45,7 +45,6 @@ describe('media settings', () => {
 		settings.update('trusted', ['https://cdn.example']);
 		settings.block('https://cdn.example/a.png');
 		settings.block('cdn.example');
-		settings.block('http://plain.example');
 		settings.block('ads.example');
 		expect(settings.blocked).toEqual(['https://cdn.example', 'https://ads.example']);
 		// Trusted still lists it: the gates leave it out.
@@ -55,9 +54,36 @@ describe('media settings', () => {
 		const again = new MediaSettings();
 		again.load();
 		expect(again.blocked).toEqual(['https://cdn.example', 'https://ads.example']);
-		localStorage.setItem('apron.media', JSON.stringify({ policy: 'trusted', origins: [], blocked: ['https://kept.example', 'http://x.example', 7] }));
+		localStorage.setItem('apron.media', JSON.stringify({ policy: 'trusted', origins: [], blocked: ['https://kept.example', 'ftp://x.example', 7] }));
 		again.load();
 		expect(again.blocked).toEqual(['https://kept.example']);
+	});
+
+	it('reads sites to block by host, whatever the scheme, port or trailing dot; no wildcards', () => {
+		expect(parseBlockedOrigins('http://plain.example:8080/a.png TRACKER.example. localhost https://cdn.example:443 *.wild.example ftp://x.example plain.example')).toEqual([
+			'https://plain.example',
+			'https://tracker.example',
+			'https://localhost',
+			'https://cdn.example'
+		]);
+	});
+
+	it('keeps a page held to the server’s origins held when blocking, and saves the policy chosen', () => {
+		const settings = new MediaSettings();
+		settings.update('any', ['https://cdn.example']);
+		settings.limit();
+		settings.block('https://tracker.example');
+		expect(settings.trusted([])).toEqual([]);
+		expect(settings.policy).toBe('trusted');
+		const saved = new MediaSettings();
+		saved.load();
+		expect(saved.policy).toBe('any');
+		expect(saved.blocked).toEqual(['https://tracker.example']);
+		settings.setBlocked([]);
+		expect(settings.trusted([])).toEqual([]);
+		saved.load();
+		expect(saved.policy).toBe('any');
+		expect(saved.blocked).toEqual([]);
 	});
 
 	it('loads what was saved, what earlier versions saved as its nearest, and the default for anything else', () => {

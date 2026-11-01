@@ -57,6 +57,7 @@ describe('media loads on a click only where the viewer clicks', () => {
 	it('writes Load, Always load and Block into markup only in the sanitizer, and answers them only in media-ask', () => {
 		expect(using(/data-media-(?:load|trust|block)/)).toEqual(['lib/protocol/sanitize.ts', 'lib/ui/media-ask.ts']);
 		expect(using(/\bloadOnce\(|\.trust\(/)).toEqual(['lib/ui/directory.svelte.ts', 'lib/ui/media-ask.ts']);
+		expect(using(/mediaSettings\.block\(/)).toEqual(['lib/ui/media-ask.ts']);
 	});
 });
 
