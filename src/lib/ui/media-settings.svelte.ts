@@ -37,7 +37,8 @@ function known(value: unknown): value is MediaPolicy {
  * none. Else undefined.
  */
 function entryUrl(entry: string): URL | undefined {
-	for (const candidate of entry.includes('://') ? [entry] : [entry, `https://${entry}`]) {
+	// Only one that starts with a scheme and `//` names it: a bare host can have `://` further on, in its query.
+	for (const candidate of /^[a-z][a-z0-9+.-]*:\/\//i.test(entry) ? [entry] : [entry, `https://${entry}`]) {
 		try {
 			const url = new URL(candidate);
 			if (url.protocol === 'https:' || url.protocol === 'http:') return url;
@@ -77,12 +78,16 @@ export function blockableHost(url: URL): string {
 /**
  * The sites named in `text` to block, each once, in order, as `https:` origins of their hosts: full URLs of any
  * `http(s):` scheme, or bare hosts, separated by spaces, commas or lines; the port and scheme dropped, since a block
- * holds for the host whatever they are. Wildcards and anything else are dropped.
+ * holds for the host whatever they are. Wildcards, single labels but localhost, and anything else are dropped.
  */
 export function parseBlockedOrigins(text: string): string[] {
 	return parseEntries(text, (url) => {
 		const host = blockableHost(url);
-		return host && !host.includes('*') ? `https://${host}` : undefined;
+		const labels = host.split('.');
+		// Each label something, no wildcards; and a single label other than localhost (`com`, or `tracker:` read as
+		// one) would block a whole top-level domain.
+		const named = labels.every(Boolean) && !host.includes('*') && (labels.length > 1 || host === 'localhost');
+		return named ? `https://${host}` : undefined;
 	});
 }
 
