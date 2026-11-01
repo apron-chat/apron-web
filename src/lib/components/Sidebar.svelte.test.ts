@@ -83,7 +83,7 @@ describe('Sidebar', () => {
 		session.dispose();
 	});
 
-	it('lists the threads of a room open without joining right under its row in Other Rooms, all of them, to read one without joining; joining one sets the rest apart again', () => {
+	it('lists the threads of a room open without joining right under its row in Other Rooms, all of them, to read one without joining, kept while Other Rooms is folded; joining one sets the rest apart again', () => {
 		const client = fake();
 		const session = new SessionView();
 		const listing = (id: string, title: string, parentRoomId?: string) => ({ id, title, joined: false, record: { room_id: id, ...(parentRoomId ? { parent_room_id: parentRoomId } : {}) }, members: [] });
@@ -102,6 +102,10 @@ describe('Sidebar', () => {
 		// Picking one reads it, which joins nothing.
 		directory().querySelector<HTMLButtonElement>('[data-other-thread="t0"]')!.click();
 		expect([onopenthread.mock.calls, onjoin.mock.calls]).toEqual([[['t0']], []]);
+		// Other Rooms folded keeps the one open to read, with its threads, as Rooms keeps the open one; Quiet folds away.
+		dom.button('Other Rooms').click();
+		flushSync();
+		expect([[...directory().querySelectorAll('[data-join]')].filter((row) => !row.closest('.ap-threads')).map((row) => row.getAttribute('data-join')), rows()]).toEqual([['design'], titles]);
 
 		// Once one is joined, the rest are others to it again: under their heading, the first few showing.
 		dom.unmount(root);
