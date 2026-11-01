@@ -63,7 +63,7 @@ export function shownPerson<T extends { name?: string; roles?: unknown }>(person
 const shownPeople = new WeakMap<object, object>();
 
 /** What an embed shows as text (§4.8): never its addresses, IDs or kind. */
-const EMBED_TEXT = ['title', 'text', 'html'] as const;
+const EMBED_TEXT = ['title', 'html'] as const;
 const OG_TEXT = ['title', 'description', 'site_name'] as const;
 const OG_MEDIA = ['image', 'video', 'audio'] as const;
 const shownEmbeds = new WeakMap<object, object>();

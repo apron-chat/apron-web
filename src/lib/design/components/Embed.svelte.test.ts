@@ -2,9 +2,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import EmbedCard from './EmbedCard.svelte';
 import EmbedFrame from './EmbedFrame.svelte';
-import EmbedStream from './EmbedStream.svelte';
+import Embed from './Embed.svelte';
+import EmbedTerminal from './EmbedTerminal.svelte';
 import EmbedUpload from './EmbedUpload.svelte';
-import { render, unmount } from '$lib/test/dom';
+import { button, queryByRole, render, touch, unmount } from '$lib/test/dom';
 import { media } from '$lib/test/media';
 
 const PIXEL = 'data:image/png;base64,iVBORw0KGgo=';
@@ -76,11 +77,71 @@ describe('EmbedFrame', () => {
 	});
 });
 
-describe('EmbedStream', () => {
+describe('EmbedTerminal', () => {
 	it('names itself by its title, and says how it stopped', () => {
-		render(EmbedStream, { kind: 'stream', title: 'Build', url: '#', done: true, status: 'Ended', text: 'ok' });
-		expect(document.querySelector('.ap-embed-streamkind')?.textContent).toBe('Build');
+		render(EmbedTerminal, { kind: 'terminal', title: 'make test', url: '#', done: true, status: 'Ended', text: 'ok' });
+		expect(document.querySelector('.ap-embed-termtitle')?.textContent).toBe('make test');
 		expect(detail()).toBe('Ended');
-		expect(document.querySelector('.ap-embed-stream-live')).toBeNull();
+		expect(document.querySelector('.ap-embed-terminal-live')).toBeNull();
+	});
+
+	it('is live while it has a url and is not done, and says so', () => {
+		render(EmbedTerminal, { kind: 'terminal', url: '#' });
+		expect(document.querySelector('.ap-embed-termtitle')?.textContent).toBe('Terminal');
+		expect(document.querySelector('.ap-embed-livebadge')?.textContent).toBe('Live');
+		expect(document.querySelector('.ap-embed-terminal-live')).not.toBeNull();
+	});
+
+	it('hands its screen to `attach`, left to right whatever the page, or else shows its text as it is', () => {
+		const attach = vi.fn();
+		render(EmbedTerminal, { kind: 'terminal', output: 'x', attach });
+		const screen = document.querySelector<HTMLElement>('.ap-embed-termscreen')!;
+		expect(attach).toHaveBeenCalledWith(screen);
+		expect([screen.tagName, screen.dir, screen.textContent]).toEqual(['DIV', 'ltr', '']);
+		unmount();
+		render(EmbedTerminal, { kind: 'terminal', text: '$ make\nok' });
+		expect(document.querySelector('pre.ap-embed-termscreen')?.textContent).toBe('$ make\nok');
+	});
+
+	it('offers Expand, a labeled button in its header, only with `onexpand`, which it calls with that button', () => {
+		render(EmbedTerminal, { kind: 'terminal', url: '#', attach: vi.fn() });
+		expect(queryByRole('button', 'Expand terminal')).toBeNull();
+		unmount();
+		const onexpand = vi.fn();
+		render(EmbedTerminal, { kind: 'terminal', url: '#', attach: vi.fn(), onexpand });
+		const expand = button('Expand terminal');
+		expect(expand.closest('.ap-embed-termhead')).not.toBeNull();
+		expect([expand.type, expand.title, expand.getAttribute('aria-haspopup')]).toEqual(['button', 'Expand', 'dialog']);
+		expand.click();
+		expect(onexpand).toHaveBeenCalledExactlyOnceWith(expand);
+	});
+
+	it('expands on a tap on its screen, on a touch screen, and leaves a mouse’s click to select', () => {
+		const onexpand = vi.fn();
+		render(EmbedTerminal, { kind: 'terminal', url: '#', attach: vi.fn(), onexpand });
+		const screen = document.querySelector<HTMLElement>('.ap-embed-termscreen')!;
+		// The terminal drawn inside it, which the tap lands on.
+		const row = screen.appendChild(document.createElement('span'));
+		row.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+		row.click();
+		expect(onexpand).not.toHaveBeenCalled();
+		touch('pointerdown', row);
+		row.click();
+		expect(onexpand).toHaveBeenCalledExactlyOnceWith(button('Expand terminal'));
+	});
+});
+
+describe('Embed', () => {
+	it('draws a terminal as a terminal, and nothing for append, whose text continues the body (§4.8.5)', () => {
+		render(Embed, { kind: 'terminal', title: 'build' });
+		expect(document.querySelector('.ap-embed-terminal')).not.toBeNull();
+		unmount();
+		const box = render(Embed, { kind: 'append', url: 'https://chat.example/a/1' });
+		expect(box.innerHTML.replace(/<!--[^]*?-->/g, '')).toBe('');
+	});
+
+	it('draws a kind it does not know, such as the retired stream, as the fallback card', () => {
+		render(Embed, { kind: 'stream', url: 'https://chat.example/s/1' });
+		expect(document.querySelector('.ap-embed-fallback .ap-embed-kind')?.textContent).toBe('stream');
 	});
 });

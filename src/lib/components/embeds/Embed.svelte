@@ -6,12 +6,13 @@
 	import EmbedFallback from './EmbedFallback.svelte';
 	import EmbedFrame from './EmbedFrame.svelte';
 	import EmbedHtml from './EmbedHtml.svelte';
-	import EmbedStream from './EmbedStream.svelte';
+	import EmbedTerminal from './EmbedTerminal.svelte';
 	import EmbedUpload from './EmbedUpload.svelte';
 
 	/**
 	 * One entry of `body.embeds` (§4.8), rendered by its `kind`. An
 	 * unknown kind renders from `og`, else as the fallback card — never an error.
+	 * An `append` embed draws nothing here: the body shows its text.
 	 * Its text shows without bidi embeddings and overrides (§3.5.2, `shownEmbed`).
 	 */
 	/** `detail`: who sent it and when, for an image shown full screen. */
@@ -21,8 +22,10 @@
 
 {#if embed.kind === 'upload'}
 	<EmbedUpload {embed} {upload} {detail} />
-{:else if embed.kind === 'stream'}
-	<EmbedStream {embed} />
+{:else if embed.kind === 'terminal'}
+	<EmbedTerminal {embed} />
+{:else if embed.kind === 'append'}
+	<!-- No card: its text continues the message's body (§4.8.5, `messageView`). -->
 {:else if embed.kind === 'iframe'}
 	<EmbedFrame {embed} />
 {:else if embed.kind === 'html'}

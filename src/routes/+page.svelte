@@ -6,7 +6,7 @@
 	import { page } from '$app/state';
 	import { passkeySupportError } from '$lib/protocol/webauthn';
 	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, editableTitle, findMessage, keepsBio, normalizeWebSocketUrl, serverArchive, serverLook, serverMedia, serverSettings, timelineMessages, webPushKey, yourPermissions, type ClientSnapshot, type EmbedEdits, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
-	import { serverOrigin } from '$lib/protocol/embeds';
+	import { embedsLabel, serverOrigin } from '$lib/protocol/embeds';
 	import { withoutBidiOverrides } from '$lib/protocol/plain-text';
 	import { compareLogIds } from '$lib/protocol/reducer';
 	import { destinationUrl, readDestination, type Destination } from '$lib/ui/address';
@@ -21,7 +21,7 @@
 	import JumpBar from '$lib/components/JumpBar.svelte';
 	import TimelineMessage from '$lib/components/TimelineMessage.svelte';
 	import EmbedItem from '$lib/components/embeds/Embed.svelte';
-	import type { MessageEmbed, MessageHandlers, MessageTestids } from '$lib/design/components/types';
+	import type { Face, MessageEmbed, MessageHandlers, MessageTestids } from '$lib/design/components/types';
 	import { linkedRoomIn, messageView, sourceEmbed, type LinkedRoom, type MessageCaps, type MessageContext, type MessageView } from '$lib/ui/message-view';
 	import { decorateCode } from '$lib/ui/copy-code';
 	import { emojiAnchor, emojiPicker, type EmojiPickerRequest } from '$lib/ui/emoji-picker.svelte';
@@ -52,7 +52,8 @@
 	import AddedBanner from '$lib/design/components/AddedBanner.svelte';
 	import { ArrivalWatch, addRoomMembers, othersIn, reachesStart } from '$lib/ui/private-rooms';
 	import { couldNotAdd } from '$lib/ui/members';
-	import { roomFaces } from '$lib/ui/faces';
+	import { faceOf, roomFaces } from '$lib/ui/faces';
+	import { receiptsByMessage, steadyReceipts } from '$lib/ui/receipts';
 	import { attachmentLimits, composerAction } from '$lib/ui/commands';
 	import { backendHost, statusLabel } from '$lib/ui/connection';
 	import { directory } from '$lib/ui/directory.svelte';
@@ -64,6 +65,7 @@
 	import { ReadPositions } from '$lib/ui/read-positions';
 	import { RoomOrder } from '$lib/ui/room-order.svelte';
 	import { embedsOf, isOwn, mayMove, mentionsMe, peopleIn, messageSnippet, plainTextOf, senderName, textOf } from '$lib/ui/messages';
+	import { removeEmbedQuestion } from '$lib/ui/attachments';
 	import { messageLog, messageLogHtml } from '$lib/ui/message-log';
 	import { reactionChips, type ReactionChip } from '$lib/ui/reactions';
 	import { MessageSelection, type MoveAuthors } from '$lib/ui/selection.svelte';
@@ -85,6 +87,7 @@
 	import { historySettings } from '$lib/history/settings.svelte';
 	import { mediaAskClick } from '$lib/ui/media-ask';
 	import { mediaSettings } from '$lib/ui/media-settings.svelte';
+	import { receiptSettings } from '$lib/ui/receipt-settings.svelte';
 	import { onlyPreferencesDiffer, preferencesOpener } from '$lib/ui/preferences.svelte';
 	import { buildRoomTimeline, newDividerBefore, steady, threadEntries, threadStartedFrom, threadDescriptionFor, threadTitleFor, type ThreadEntry, type TimelineItem } from '$lib/ui/timeline';
 	import { takeSignInLink } from '$lib/ui/sign-in-link';
@@ -289,6 +292,8 @@
 	const previewMode = untrack(() => webSocketFactory !== undefined);
 
 	let client = $state<ChatClient | undefined>();
+	// Read Receipts on this device: off, your cursor in a private room isn't sent where the server would show it.
+	$effect(() => client?.setReadReceipts(receiptSettings.on));
 	let serverInput = $state('');
 	let displayName = $state('');
 	/** The `user_id`s the composer's chips mention (§3.5), sent as `body.mentions`. */
@@ -549,7 +554,20 @@
 	let timeline = $derived((lastTimeline = steady(lastTimeline, buildRoomTimeline({
 		messages, threads: activeThread ? [] : threads, renames: paneRoom?.renames, notices: paneRoom?.notices, memberships: paneRoom?.timeline.memberships
 	}))));
+	const NO_RECEIPTS: ReadonlyMap<string, Face[]> = new Map();
+	// The receipts last shown, which `steadyReceipts` keeps what is unchanged from; not state, only a memo.
+	let lastReceipts: ReadonlyMap<string, Face[]> = NO_RECEIPTS;
 	let shownTimeline = $derived(reveal.hidden > 0 ? timeline.slice(Math.min(reveal.hidden, timeline.length)) : timeline);
+	/**
+	 * Read receipts (`ext.settings.read_receipts`, private rooms only): the other members' faces under the newest message
+	 * shown that each has read through, by `message_id`. Empty, and the same map, wherever there are none.
+	 */
+	let receipts = $derived.by(() => {
+		// Read Receipts turned off here: others' aren't shown either.
+		const placed = receiptsByMessage(shownTimeline, paneRoom?.private && receiptSettings.on ? paneRoom : undefined, session.you?.user_id);
+		const next = placed.size ? new Map([...placed].map(([messageId, people]) => [messageId, people.map((person) => faceOf(person, false))])) : NO_RECEIPTS;
+		return (lastReceipts = steadyReceipts(lastReceipts, next));
+	});
 	/** The pane is live: its room is listed, and no sign-in is under way. */
 	let paneReady = $derived(Boolean(paneRoom && session.ready && !snapshot.authBusy));
 	/** `paneReady`, or a quiet reconnect from it: what shows stays as it was, and what's asked waits for the connection. */
@@ -1168,6 +1186,7 @@
 		if (!previewMode) pushSettings.load();
 		// Where images load from holds for an export read here too.
 		mediaSettings.load();
+		receiptSettings.load();
 		webPushAvailable = webPushSupported();
 		runsInstalled = isStandalone();
 		// Push turned on or off, and descriptions put away, in another tab apply here too.
@@ -1177,6 +1196,7 @@
 			// Not keeping history, or keeping less, chosen in another tab: this one stops or prunes too.
 			historySettings.storageChanged(event.key);
 			mediaSettings.storageChanged(event.key);
+			receiptSettings.storageChanged(event.key);
 			if (event.key === NOTIFY_SCOPES_KEY) notifyScopesSaved += 1;
 			// A description put away or brought back in another tab is here too.
 			if (event.key === HIDDEN_DESCRIPTIONS_KEY) hiddenDescriptions = loadHiddenDescriptions();
@@ -1424,7 +1444,7 @@
 			...(id ? { pushId: id, messageId: event.message_id, group: notificationGroup(id, room.id) } : {})
 		};
 		const shown = await showNotification(notificationTitle(senderName(event), room), {
-			body: body || 'New message',
+			body: body || embedsLabel(event.body?.embeds) || 'New message',
 			// One per message, shared with the server's push of it (§4.9), which replaces it quietly;
 			// a newer message in the room closes it. Without a `push_id`, one per room.
 			...(id ? { tag: messageNotificationTag(id, event.message_id), renotify: false } : { tag: `apron:${client.url}:${room.id}`, renotify: true }),
@@ -2467,7 +2487,7 @@
 	// --- Message rows ---
 
 	/** The test ids interop finds a message's parts by. */
-	const MESSAGE_TESTIDS: MessageTestids = { handle: 'sender-handle', reply: 'reply-reference', reactions: 'reactions', chip: 'reaction-chip', select: 'select-message' };
+	const MESSAGE_TESTIDS: MessageTestids = { handle: 'sender-handle', reply: 'reply-reference', reactions: 'reactions', chip: 'reaction-chip', select: 'select-message', writing: 'message-writing', receipts: 'read-receipts' };
 
 	/** What every row reads from, each field only where a row needs it. */
 	const messageContext: MessageContext = {
@@ -2796,10 +2816,11 @@
 		feedback.track(client.deleteMessage(event.message_id), 'Deleting message…');
 	}
 
-	/** The (x) on one of your embeds: saves the message without it. Hosted files go with it, so those ask first. */
+	/** The (x) on one of your embeds: saves the message without it. Hosted files and live output go with it, so those ask first. */
 	function removeEmbed(event: MessageRecord, embed: Embed): void {
 		if (!client || !session.canEdit) return;
-		if ((embed.kind === 'upload' || embed.kind === 'stream') && !confirm('Remove this attachment? Its file will be deleted.')) return;
+		const question = removeEmbedQuestion(embed);
+		if (question && !confirm(question)) return;
 		feedback.track(client.removeEmbed(event.message_id, embed), 'Removing embed…');
 	}
 
@@ -3222,7 +3243,8 @@
 									selecting: selection.active,
 									selected: selection.has(item.event.message_id),
 									editing: editingId === item.event.message_id,
-									caps: capsFor(item.event)
+									caps: capsFor(item.event),
+									seenBy: receipts.get(item.event.message_id)
 								}, messageContext)}
 								on={messageHandlers}
 								testids={MESSAGE_TESTIDS}

@@ -1,0 +1,16 @@
+<!-- @dsCard group="Timeline" height=96 subtitle="Read receipts under a private room's message: who read up to it, three faces and then a count" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>ReadReceipts</title></head>
+<body>
+<div id="root" class="ap-stack" style="padding-left:0"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(props) { return A.render(A.ReadReceipts, root, props); }
+  var bob = { user_id: 'bob', name: 'Bob', hue: 200 }, dev = { user_id: 'dev', name: 'Dev', hue: 140 }, mira = { user_id: 'mira', name: 'Mira Okafor', hue: 80 };
+  add({ people: [bob] });
+  add({ people: [dev, mira] });
+  add({ people: [bob, dev, mira, { user_id: 'sam', name: 'Sam', hue: 20 }, { user_id: 'kai', name: 'Kai', hue: 300 }] });
+</script>
+</body>
+</html>

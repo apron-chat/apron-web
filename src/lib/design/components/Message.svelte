@@ -21,9 +21,11 @@
 	import MessageActions from './MessageActions.svelte';
 	import MessageEmbeds from './MessageEmbeds.svelte';
 	import ReactionBar from './ReactionBar.svelte';
+	import ReadReceipts from './ReadReceipts.svelte';
 	import LinkCard from './LinkCard.svelte';
 	import ReplyPreview from './ReplyPreview.svelte';
 	import RoleBadges from './RoleBadges.svelte';
+	import TypingDots from './TypingDots.svelte';
 	import type { MessageAction, MessageEmbed, MessageTestids, MessageView } from './types';
 	import { times } from './util';
 
@@ -264,6 +266,8 @@
 			{/if}
 		</div>
 		<div class="ap-msg-main">
+			<!-- Floated to the end of the first line (the header, or a follower's first line of text), so it adds no height. Decorative inside the timeline's live log. -->
+			{#if view.seenBy?.length && !view.editing}<ReadReceipts people={view.seenBy} decorative class="ap-msg-receipts" testid={testids?.receipts} />{/if}
 			{#if !grouped}
 				<header class="ap-msg-head">
 					<button class="ap-msg-sender ap-msg-who" type="button" data-user-id={view.sender.user_id} aria-haspopup="dialog" title="Show profile">{view.sender.name}</button>
@@ -277,6 +281,7 @@
 			{:else}
 				<!-- An absent format is plain (§3.5); only an explicit `markdown` body is rendered as Markdown. -->
 				{#if view.body}<div class={['ap-msg-text', view.body.markdown ? 'ap-msg-markdown' : 'ap-msg-plain']} {@attach view.body.code && code}>{@html view.body.html}</div>{/if}
+				{#if view.writing}<div class="ap-msg-writing" role="status" data-testid={testids?.writing}><TypingDots />Writing…</div>{/if}
 				{#if view.linkCards?.length}<div class="ap-msg-linkcards">{#each view.linkCards as card (card.href)}<LinkCard {card} data-testid={testids?.linkCard} />{/each}</div>{/if}
 				{#if view.embeds?.length}<MessageEmbeds embeds={view.embeds} {embed} onremove={(item) => on.removeEmbed?.(view, item)} />{/if}
 			{/if}

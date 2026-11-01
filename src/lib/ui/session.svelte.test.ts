@@ -153,7 +153,7 @@ describe('SessionView.starting', () => {
 });
 
 describe('SessionView through a reconnect', () => {
-	const server = { apron: 9, auth: ['token'], capabilities: ['history', 'rooms', 'status', 'embed:upload'] };
+	const server = { apron: 10, auth: ['token'], capabilities: ['history', 'rooms', 'status', 'embed:upload'] };
 	const live = (fields: Partial<ClientSnapshot> = {}) => ready({ server, capabilities: capabilitiesOf(server), rooms: [room('general', ['1'])], activeRoom: 'general', passkeySession: true, signedInWith: 'token', signInMethods: ['token'], ...fields });
 	const dropped = (at: number, fields: Partial<ClientSnapshot> = {}): ClientSnapshot => ({ ...blankSnapshot(), status: 'reconnecting', disconnectedAt: at, ...fields });
 
@@ -233,7 +233,7 @@ describe('SessionView through a reconnect', () => {
 });
 
 describe('SessionView after a reconnect', () => {
-	const server = { apron: 9, auth: ['token'], capabilities: ['history', 'rooms'] };
+	const server = { apron: 10, auth: ['token'], capabilities: ['history', 'rooms'] };
 	const live = (fields: Partial<ClientSnapshot> = {}) => ready({ server, capabilities: capabilitiesOf(server), rooms: [room('general', ['1'])], activeRoom: 'general', ...fields });
 	const dropped = (at: number, fields: Partial<ClientSnapshot> = {}): ClientSnapshot => ({ ...blankSnapshot(), status: 'reconnecting', disconnectedAt: at, retryingSince: at, ...fields });
 

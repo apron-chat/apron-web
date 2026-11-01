@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { CustomEmojiCatalog } from './custom-emoji.svelte';
 
-const server = (catalog_url: string) => ({ apron: 9, auth: ['guest'], capabilities: ['ext:emoji'], ext: { emoji: { catalog_url } } });
+const server = (catalog_url: string) => ({ apron: 10, auth: ['guest'], capabilities: ['ext:emoji'], ext: { emoji: { catalog_url } } });
 const ANY = () => true;
 const CATALOG = { ':partyparrot:': { url: 'https://chat.example/e/parrot.gif', static_url: 'https://chat.example/e/parrot.png', width: 2, height: 1 } };
 
@@ -32,7 +32,7 @@ describe('the custom emoji catalog (ext:emoji)', () => {
 		emoji.reducedMotion = true;
 		expect(emoji.image({ key: ':p:', url: 'https://e.example/a.gif', static_url: 'https://e.example/a.png', tags: [], hidden: false }).src).toBe('https://e.example/a.png');
 		expect(emoji.image({ key: ':p:', url: 'https://e.example/a.gif', tags: [], hidden: false }).src).toBe('https://e.example/a.gif');
-		emoji.apply({ apron: 9, auth: [], capabilities: [], ext: { emoji: { catalog_url: 'https://e.example/c.json' } } }, 'wss://e.example/', ANY);
+		emoji.apply({ apron: 10, auth: [], capabilities: [], ext: { emoji: { catalog_url: 'https://e.example/c.json' } } }, 'wss://e.example/', ANY);
 		expect(emoji.resolve(':p:')).toBeUndefined();
 		emoji.need();
 		expect(load).not.toHaveBeenCalled();

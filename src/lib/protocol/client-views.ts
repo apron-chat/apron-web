@@ -12,7 +12,7 @@ import type {
 } from './types';
 import type { Capabilities, ClientSnapshot, RoomSnapshot } from './client-types';
 
-const CAPABILITIES: Capability[] = ['history', 'edit', 'rooms', 'reactions', 'activity', 'embed:upload', 'embed:stream', 'command', 'status', 'ext', 'ext:settings', 'ext:limits', 'ext:media', 'ext:permissions', 'ext:bio', 'ext:archive'];
+const CAPABILITIES: Capability[] = ['history', 'edit', 'rooms', 'reactions', 'activity', 'embed:upload', 'embed:append', 'embed:terminal', 'command', 'status', 'ext', 'ext:settings', 'ext:limits', 'ext:media', 'ext:permissions', 'ext:bio', 'ext:archive'];
 
 /**
  * How to render a user (§3.3): field by field, the kept object for its
@@ -64,6 +64,7 @@ export function sameRoomSnapshot(a: RoomSnapshot, b: RoomSnapshot): boolean {
 		if (a[key] === b[key]) return true;
 		if (key === 'renames') return sameItems(a.renames, b.renames, (x, y) => x.log_id === y.log_id && x.title === y.title && x.previous === y.previous);
 		if (key === 'members') return sameItems(a.members, b.members, (x, y) => x === y);
+		if (key === 'readers') return sameItems(a.readers, b.readers, (x, y) => x.user_id === y.user_id && x.message_id === y.message_id);
 		return false;
 	});
 }
@@ -98,16 +99,19 @@ export const hasHistory = (server: ServerParams | undefined) => hasCapability(se
 /**
  * The server's settings (extension `ext:settings`, `server.ext.settings`):
  * `read_cursors` is `true` unless the server says `false`, also without the
- * extension; `private_rooms` only as a count. A value of the wrong type takes
- * its default.
+ * extension; `read_receipts` is `'private'` only where the server says so
+ * (members of a private room see each other's read cursors), else `false`;
+ * `private_rooms` only as a count. A value of the wrong type takes its
+ * default.
  */
-export function serverSettings(server: ServerParams | undefined): { read_cursors: boolean; private_rooms?: number } {
+export function serverSettings(server: ServerParams | undefined): { read_cursors: boolean; read_receipts: 'private' | false; private_rooms?: number } {
 	const ext = hasCapability(server, 'ext:settings') ? server?.ext : undefined;
 	const settings = isJsonObject(ext) && isJsonObject(ext.settings) ? ext.settings : {};
 	// The most private rooms one user may be a member of. Absent (or not a count) states no limit.
 	const limit = settings.private_rooms;
 	return {
 		read_cursors: settings.read_cursors !== false,
+		read_receipts: settings.read_receipts === 'private' ? 'private' : false,
 		...(typeof limit === 'number' && Number.isInteger(limit) && limit >= 0 ? { private_rooms: limit } : {})
 	};
 }

@@ -18,6 +18,28 @@ export function passkeyPublicKeyOptions(options: JsonObject): JsonObject | undef
 }
 
 /**
+ * Why a server may not run this ceremony, if it may not. Its RP ID (`rp.id`
+ * when creating, `rpId` when signing in, else this page's host, as the
+ * browser takes it) must be the server's host or a domain that the host is
+ * under. Otherwise a server could relay another server's challenge under an
+ * RP ID that this page can use, such as this client's own domain, and sign in
+ * there as the user: the browser binds the passkey to this page, which every
+ * server shares.
+ */
+export function passkeyRpIdError(action: 'register' | 'login', publicKey: JsonObject, server: string): string | undefined {
+	const requested = action === 'register' ? (isJsonObject(publicKey.rp) ? publicKey.rp.id : undefined) : publicKey.rpId;
+	const rpId = (typeof requested === 'string' ? requested : globalThis.location?.hostname ?? '').toLowerCase();
+	let host: string;
+	try {
+		host = new URL(server).hostname.toLowerCase();
+	} catch {
+		return 'Passkeys need a server address with a host name.';
+	}
+	if (rpId && (host === rpId || host.endsWith(`.${rpId}`))) return undefined;
+	return `This server (${host}) asked for a passkey for ${rpId || 'no domain'}, which is not its own.`;
+}
+
+/**
  * Creation options with the passkey labelled `name`: password managers show
  * `user.name` and `user.displayName`, which a server fills from the session
  * the ceremony starts on (a guest's). Neither is signed or sent back, so
@@ -33,15 +55,19 @@ export function labelledCreationOptions(publicKey: JsonObject, name: string | un
 /**
  * Runs one explicit ceremony: the browser's modal sheet, started from the
  * user's tap. The wire uses WebAuthn JSON encodings (base64url for binary
- * fields). `name` labels a new passkey (see `labelledCreationOptions`).
+ * fields). `server` is the address the options came from, which must own
+ * their RP ID (see `passkeyRpIdError`). `name` labels a new passkey (see
+ * `labelledCreationOptions`).
  */
 export async function requestPasskey(
-	action: 'register' | 'login', options: JsonObject, signal: AbortSignal, name?: string
+	action: 'register' | 'login', options: JsonObject, signal: AbortSignal, server: string, name?: string
 ): Promise<JsonObject> {
 	const unsupported = passkeySupportError();
 	if (unsupported) throw new Error(unsupported);
 	const publicKey = passkeyPublicKeyOptions(options);
 	if (!publicKey) throw new Error('Invalid passkey options from server');
+	const foreign = passkeyRpIdError(action, publicKey, server);
+	if (foreign) throw new Error(foreign);
 	const credential = action === 'register'
 		? await navigator.credentials.create({
 			publicKey: PublicKeyCredential.parseCreationOptionsFromJSON(labelledCreationOptions(publicKey, name) as unknown as PublicKeyCredentialCreationOptionsJSON), signal

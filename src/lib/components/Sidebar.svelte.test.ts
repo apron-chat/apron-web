@@ -19,7 +19,7 @@ afterEach(() => {
 	localStorage.clear();
 });
 
-const server = { apron: 9, auth: ['token'], capabilities: ['history', 'rooms'] };
+const server = { apron: 10, auth: ['token'], capabilities: ['history', 'rooms'] };
 const general: RoomSnapshot = { id: 'general', title: 'General', joined: true, timeline: createTimeline('general'), recovering: false, loaded: true, loading: false, notices: [] } as RoomSnapshot;
 const live = (fields: Partial<ClientSnapshot> = {}): ClientSnapshot => ({
 	...blankSnapshot(), status: 'connected', authenticated: true, you: { user_id: 'ada', name: 'Ada' }, roomsListed: true,

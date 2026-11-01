@@ -12,7 +12,8 @@ The default connection is `VITE_DEFAULT_SERVER_URL` from the build, which
 Embed media (`og` images, video and audio) loads from the chat server's origin
 and from the origins that server names for its media, such as its upload bucket
 (`ext.media.origins`, [EXT.md §6](../EXT.md#6-extmedia)).
-Streams load from the chat server's origin only. Every link in chat, from
+Live text (`terminal` and `append` embeds) loads from the chat server's origin
+only. Every link in chat, from
 message text, link cards, uploads and HTML embeds, opens in a new tab.
 
 `/__preview` (in development builds only: `vite dev`, or `APRON_PREVIEW=1 vite build`, which the QA tools and
@@ -24,7 +25,15 @@ requests (auth, room listings/history, messages, reactions, room changes,
 profile updates, activity, commands, and ping). Changes last only for the page
 lifetime, as do settings changed there (display name, sidebar, appearance),
 so previewing never replaces the real ones; the preview does not advertise
-upload or streaming capabilities. The in-memory server loads only with that
+uploads. It does advertise live text (`embed:terminal`, `embed:append`), which
+it serves itself at `http://apron-preview.invalid/` (the page routes those
+URLs to it; there is no network): `/embed-terminal [title]` and
+`/embed-append [markdown]` answer as the servers do, with a write URL and a
+`curl` recipe in a notice to you, and since nothing can `PUT` to it, a moment
+later play a canned demo into a new message (a test run with colors, a
+progress bar, box drawing and cursor movement; a Markdown reply cut at
+arbitrary bytes, which a form feed and backspaces revise). A `message` with a
+new `terminal` or `append` embed gets its write URL too. The in-memory server loads only with that
 route, never with the app itself.
 Local development and builds with an empty `VITE_DEFAULT_SERVER_URL` retain the
 same-origin default.
@@ -1290,17 +1299,101 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](ht
   room or thread, oldest first. Escape, Close, or a click beside the image
   closes it, with focus back on the image last shown. A Cmd, Ctrl, Shift, Alt
   or middle click keeps the link's own behavior: the file in a new tab or window.
-- **Streams** (capability `embed:stream`): while the embed has a `url` the client reads
-  it with a streaming `GET` and shows the text growing under a Live badge;
-  when a snapshot carries `text` instead it shows the kept text as Finished.
-  `terminal` output is monospace with ANSI colors and emphasis, carriage
-  returns overwrite the line (progress bars), and other escape sequences are
-  dropped; `markdown` renders, the rest is plain.
+- **Terminals** (`terminal` embeds, capability `embed:terminal`,
+  [PROTOCOL.md §4.8.6](https://github.com/shazow/apron/blob/main/PROTOCOL.md#486-embedterminal)):
+  a card titled by the embed's `title` (else "Terminal") over a real terminal
+  emulator, xterm.js, loaded the first time a terminal is shown, 80 columns by
+  40 rows: colors (16, 256 and true color), emphasis, carriage returns
+  (progress bars), cursor movement, erasing, box drawing and the alternate
+  screen of full-screen programs all show as a terminal would show them. A
+  bare line feed starts a new line, as a terminal's driver would make it. The
+  font is scaled so the 80 columns fit the message's width, at most 13px on a
+  wide screen (about 6px on a 390px phone, 5.5px at 360px; the page never
+  scrolls sideways), and only the rows down to the last one written show,
+  unless a program is on the alternate screen, which shows all 40. In a
+  message it is a fixed glance: nothing scrolls inside it (it keeps no
+  scrollback: what scrolls off the top is gone there, as on a terminal's
+  screen), and a wheel or swipe over it scrolls the page. It only reads:
+  nothing typed reaches it, no key is the terminal's even once a click has
+  focused it (Escape, the arrows and Page Up go on to the page), its cursor
+  isn't drawn, and nothing a program prints acts outside it: no window
+  title, bell or clipboard (OSC 52), its answers to queries go nowhere, and
+  OSC 8 links show but open nothing.
+  While the embed has no `output` it is live, under a Live badge: the client
+  reads `url` with a streaming `GET` and writes each chunk as it arrives. A
+  drop or a failure keeps what it shows and tries again (after 1 s, then
+  longer, up to 15 s), and the new response replaces it, from a fresh
+  terminal. Once `GET` ends it says Ended, and when a snapshot carries
+  `output`, it shows that, from a fresh terminal, as Finished.
+  **Expand terminal** (the ⤢ in its header, or on a touch screen a tap on
+  the terminal; a mouse click there still selects text) opens it full screen
+  in the terminal viewer, on the image viewer's dark ground: its title, Live
+  or how it stopped, and **Close**, over the same 80 by 40 screen at a
+  readable size. The font is the largest that fits the 80 columns in the
+  viewer's width and, where the screen is tall enough, the 40 rows in its
+  height (about 17.75px at 1280×900), but the rows never take it below 13px
+  (a phone on its side, 844×390: 13px, and a screen using all 40 rows
+  scrolls up and down inside the viewer), and the columns never take it
+  below 9px (a phone upright, 390px: 9px, and the screen scrolls sideways
+  inside the viewer; the page never does). It shows the same text as the
+  message, live or finished, and keeps up with it as it arrives, without
+  reading `url` a second time (a server caps how often a live text is
+  read). Unlike the message, it keeps the lines that scroll off the top,
+  up to 5,000 (`VIEWER_SCROLLBACK`): it replays the text since the last
+  reset (a reconnect's new response, or the finished `output`), so opened
+  after a long run it has all of it, at the foot, on the newest line. The
+  wheel or a vertical swipe over the viewer, and ↑ and ↓ (a line), Page Up
+  and Page Down (the rows in view less one), Home and End (all the way),
+  wherever focus is in the viewer (it opens on Close; no key types into the
+  terminal), scroll back and forth; a sideways wheel or swipe still scrolls
+  a screen wider than the viewer sideways. New output keeps a reader at the
+  foot there; one who scrolled back stays where they are, until they scroll
+  to the foot again (End). The lines kept and the 40 rows scroll as one:
+  where the rows fit the viewer's height, only the lines move and the stage
+  never scrolls up and down; where they don't (a phone on its side), the
+  stage opens at the screen's foot and stays there while going back through
+  the lines above, and only once at the first line does it scroll up to
+  the screen's top rows (going forward, the stage reaches the foot first),
+  so there is one scroll, never two that fight. xterm's own scrollbar,
+  slimmed, shows over the last column while there is something to scroll
+  back to. Escape, Close or Back closes it (opening it adds a history
+  entry), with focus back on Expand, and it closes if its message goes.
+- **Live text in the body** (`append` embeds, capability `embed:append`,
+  [§4.8.5](https://github.com/shazow/apron/blob/main/PROTOCOL.md#485-embedappend)),
+  such as a model's reply as it writes: no card. The message shows its
+  `body.text` and right after it the text `GET url` has streamed so far, as
+  one text in the body's format (Markdown rendered as any message is), with
+  a quiet "Writing…" under it while the text arrives. The bytes are decoded
+  as UTF-8 as they come (a character split between chunks shows once whole),
+  and the body is redrawn at most once an animation frame. Each chunk's edits
+  apply as it arrives, to the streamed text only, never `body.text`: a
+  backspace (U+0008) removes the code point before it (an emoji is one), a
+  form feed (U+000C) all the streamed text before it, and text the server
+  already edited shows as it is. While it is still
+  arriving, Markdown cut off mid-construct is settled for display only: an
+  open code fence or code span is closed, an odd `**` or `~~` in the last
+  paragraph is closed after the text so far (or held back with nothing after
+  it), a link whose destination hasn't closed shows as its label, and a last
+  line that is only a list marker, or a `-` or `=` that would make the line
+  above a heading, waits for more. When `GET` ends (Writing… goes) or fails,
+  what it shows stays until the snapshot without the embed arrives, with the
+  text in the body; a failure tries again, and the new response replaces what
+  was streamed. Edit, Copy text, a reply's quote and a thread's preview use
+  the message as recorded (`body.text`), never the streamed text, and a save
+  sends the embed back by its `embed_id`, so editing doesn't end it; leaving
+  it out of a save (its tile's (x) in the editor) ends it there, dropping what
+  had arrived. A message with only live text and none yet shows as "Live
+  text" in previews and notifications, and one with only a terminal as
+  "Terminal" or "Terminal: its title".
+- A `stream` embed (protocol v9 and before) is a kind like any other the
+  client doesn't know: it shows the fallback card.
 - **`iframe`** embeds stay a paused placeholder until **Load live view**, then
   load sandboxed (`allow-scripts`, never same-origin, no referrer), clamped to
   480px. **`html`** embeds are sanitized with DOMPurify before insertion.
 - Any other kind renders from its `og` as a link card, else as the fallback card
-  with its kind name and its `url` or `text`.
+  ([§3.5.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#352-rendering)):
+  its kind name, plus its `title` and a link to its `url` when it has them
+  (without a usable `url`, it says "This client can’t display this embed.").
 - **Link previews**: any link in a message is checked against a map of sites
   by host (`SITES` in `link-sites.ts`), and up to three links on those sites
   each get a `link` embed, with an `og` the sender builds from the site's
@@ -1378,9 +1471,10 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](ht
 With the `edit` capability, **Edit** on your own message opens it in place, in
 a box like the composer: its text, with its embeds above it as tiles like a
 draft's files (an upload as its picture, audio with a player, or a file card;
-a link preview, stream or other embed as a card named by its title or
-address; a file card says what kind of file it is from its name, such as
-"PDF file"). The message's toolbar hides while it is edited. Each tile's (x) leaves that embed out, and an upload's name can be
+a terminal as a card with its title, saying "Live terminal" or "Terminal
+output"; live text in the body as "Live text", "Still arriving"; a link
+preview or other embed as a card named by its title or address; a file card
+says what kind of file it is from its name, such as "PDF file"). The message's toolbar hides while it is edited. Each tile's (x) leaves that embed out, and an upload's name can be
 changed as on a draft; nothing is sent until **Save changes** (or Enter; on a
 phone or tablet Enter starts a new line), which saves the new text and the
 embed changes in one save: the embeds left out are dropped, and a renamed
@@ -1394,8 +1488,9 @@ still being written has no (x).
 Outside the editor, each embed on your own messages shows an **(x)** on its
 corner while hovered (always on touch screens), which saves the message without
 that embed ([PROTOCOL.md §4.8.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#482-embed-identity)): it is identified by `embed_id`, or by
-value on servers that store embeds as given. Removing an upload or stream asks
-first, since the server deletes its content. A message's last embed has no (x)
+value on servers that store embeds as given. Removing an upload or a terminal
+asks first, since the server deletes its content (a live terminal stops
+showing its output). A message's last embed has no (x)
 when there is no text (delete the message instead), nor does an upload still
 being written.
 
@@ -1420,8 +1515,8 @@ picker), an avatar as initials (a server signed in to before, its avatar only
 from its own origin), and a custom emoji catalog on another site isn't fetched.
 An HTML embed never loads a `srcset`, a `background` or a `ping`. Images in a
 message or embed itself (`data:`) always show: they load from nowhere.
-The choice is kept on this device, and another tab's applies at once. Stream
-URLs load only from the server's own origin, whatever the choice; links may
+The choice is kept on this device, and another tab's applies at once. Live
+text URLs load only from the server's own origin, whatever the choice; links may
 point anywhere `http(s)`.
 
 The rooms list's head shows the server you're connected to (its avatar, title
@@ -1573,6 +1668,15 @@ sheet only ever opens for a tap:
   requests sent as the old identity to settle). Where the panel has a
   **Cancel**, it stops the ceremony, whether it is still waiting or the
   browser's sheet is up, and closes the panel.
+
+The client runs a ceremony only when its RP ID (`rp.id` when creating,
+`rpId` when signing in, else the page's host) is the server's host or a
+domain that the host is under, such as `apron.chat` for `server.apron.chat`.
+Otherwise it says "This server (<host>) asked for a passkey for <RP ID>,
+which is not its own." and opens no sheet. The browser binds a passkey to
+the page, which every server shares, so without this check a server could
+relay another server's challenge, under an RP ID that this page can use, and
+sign in there as the user.
 
 The client makes no WebAuthn request of its own: no conditional (autofill)
 or `immediate` mediation and no capability probes, which password-manager

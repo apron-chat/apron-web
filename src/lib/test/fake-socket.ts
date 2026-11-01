@@ -93,7 +93,7 @@ export class FakeSocket {
 		this.receive({
 			method: 'server',
 			params: {
-				apron: 9, agent: 'fake', auth: options.auth ?? ['guest'], capabilities: advertised,
+				apron: 10, agent: 'fake', auth: options.auth ?? ['guest'], capabilities: advertised,
 				...(options.ext ? { ext: options.ext } : {}), ...(options.ping ? { ping: options.ping } : {})
 			}
 		});
