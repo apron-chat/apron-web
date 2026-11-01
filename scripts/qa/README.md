@@ -14,8 +14,8 @@ npm run qa -- ab --base main --filter desktop--dark  # while iterating
 npm run qa -- help                                  # every command and option
 ```
 
-It needs Chromium: `QA_CHROMIUM=/path/to/chrome`, or the build playwright-core 1.56 expects
-(chromium-1194) under `PLAYWRIGHT_BROWSERS_PATH` or Playwright's cache
+It needs Chromium: `QA_CHROMIUM=/path/to/chrome`, or the build playwright-core 1.64 expects
+(chromium-1248) under `PLAYWRIGHT_BROWSERS_PATH` or Playwright's cache
 (`npx playwright-core install chromium` installs it).
 
 ## `qa ab`: before and after a change
@@ -59,19 +59,23 @@ npm run qa -- sheet .qa/sheet.json                        # curated before/after
   more rooms, 1500 messages in general), where costs that grow with rooms or history show. A probe
   without an `action` measures the load, which also counts `startupJsKB`: the JS the page parses to start.
 - `prof` CPU-profiles page load and lists the functions whose self time changed most.
+- `sheet` takes `{ "panels": [{ "title", "note", "before", "after", "box": [l, t, r, b], "scale" }] }`
+  (paths relative to the spec; `before` optional) and renders it with real text, for a PR description.
 
 ## `qa budget`: the perf budget in CI
 
 Timings swing by tens of percent between runs and machines; counts don't. `qa budget` loads a preview build
-and runs every perf probe (3 runs, medians, under reduced motion so animations don't count per frame), then checks the counts against `scripts/qa/perf-budget.json`:
-layouts and style recalcs per probe; requests, startup JS, DOM nodes and heap per load; gzipped bundle sizes.
-Each may go a little over its baseline (a few layouts or style recalcs, 1% of bytes), and no further. CI runs it
-on every pull request (`perf-budget` in `.github/workflows/ci.yml`), split across three runners with
-`--shard 1/3` to `3/3`: each checks its share of the probes, and the first the bundle's size.
+and runs every perf probe (3 runs, medians, under reduced motion so animations don't count per frame), then
+checks the counts against `scripts/qa/perf-budget.json`: layouts, style recalcs and JS function calls per
+probe; requests, startup JS, DOM nodes and heap per load; gzipped bundle sizes. CI runs it on every pull
+request (`perf-budget` in `.github/workflows/ci.yml`), split across three runners with `--shard 1/3` to
+`3/3`: each checks its share of the probes, and the first the bundle's size.
 
 ```sh
 APRON_PREVIEW=1 npm run build && npm run qa -- budget         # check the build in build/
 npm run qa -- budget --update                                  # a cost that's meant, or a gain: rewrite the baseline
+npm run qa -- budget --out .qa/counts.json                     # also write every run's counts
+npm run qa -- budget-diff .qa/counts.json ci-counts.json       # which counts match in every run on both
 ```
 
 When it fails, the table names the probe and count. Find the cause with `qa perf` and `qa prof` against
@@ -79,33 +83,25 @@ When it fails, the table names the probe and count. Find the cause with `qa perf
 baseline with the change, so the review sees it. After making something cheaper, `--update` too: the
 baseline is a ratchet, and a gain not written into it can be spent again unnoticed.
 
-The counts are taken over real-time windows (1200 ms after the page is ready, a probe's `settle` after its
-action), so what lands inside one follows the machine's speed: the on-demand chunk's prefetch, 2 s after
-mount, falls inside the load window at 4× here but not on a faster runner. Two prototypes, which print their
-counts rather than check them, aim at counts that hold on any machine:
+The counts hold on any machine, fast or slow, busy or idle, because nothing in them follows real time:
 
-```sh
-npm run qa -- budget --calls --clock fake --out .qa/counts.json   # fake clock, plus JS function calls
-npm run qa -- budget-diff .qa/counts.json ci-counts.json          # which counts match in every run on both
-```
+- **Fake clock.** The page runs on Playwright's clock: its timers, frames and idle callbacks fire only as the
+  windows advance it, in 50 ms steps that each wait for fetches to finish, so a slow runner's timers fire at
+  the same moments as a fast one's. Interactions start 3 s after ready, past the start-up timers (the
+  on-demand chunk's prefetch, 2 s after mount).
+- **JS calls** are counted with V8's precise coverage: the functions the app's own scripts call in each
+  window, in all and by chunk (`--out` lists the chunks).
+- **Slack.** An interaction's layouts and style recalcs may go 1 over its baseline. The load's may go a few
+  over, since the browser still draws its frames in real time; calls 0.5%, for mouse moves Playwright sends in
+  real time and the odd extra observer callback on the load; bytes 1%.
+- **One Chromium.** A different version counts differently (one to the next moves style recalcs by a few per
+  probe), so the baseline records its Chromium and the check refuses another: run it in the build
+  playwright-core installs. After upgrading Playwright, record a new baseline with `--update`.
 
-- `--calls` counts the JS functions the app's scripts call in each window (V8 precise coverage), in all and
-  by chunk.
-- `--clock fake` runs the page on Playwright's clock: its timers, frames and idle callbacks fire only as the
-  windows advance it, in 50 ms steps that each wait for fetches to finish. Interactions start 3 s after ready,
-  past the prefetch. Layouts that real frames draw, and events Playwright sends in real time (wheel, mouse
-  moves), can still vary a little.
-- `--out file.json` writes every run's counts in any mode, with the Chromium version and CPU.
+Across an Intel machine and three CI runners with different AMD CPUs, 38 of 42 counts were the same in every
+run, against 21 of 42 when the windows were real time. Under full CPU load on every core, every interaction's
+counts matched the baseline exactly.
 
-On the same Chromium (141, the build CI installs), three runs each on an Intel machine and on three CI runners
-with different AMD CPUs agreed on 38 of 42 counts under `--calls --clock fake`, against 21 of 42 with the
-real-time windows. The ones that still moved were the load's layouts and style recalcs (by up to 2) and its
-calls (one run in six +725, an IntersectionObserver callback), and hover-messages' calls (±9, from mouse
-moves sent in real time). Chromium's version matters more than the machine: on one machine, Chrome 153
-counts 2–5 more style recalcs per probe than Chrome 141, so a baseline holds only for the build it was
-recorded with.
-- `sheet` takes `{ "panels": [{ "title", "note", "before", "after", "box": [l, t, r, b], "scale" }] }`
-  (paths relative to the spec; `before` optional) and renders it with real text, for a PR description.
 
 Shot ids are `<scene>--<viewport>--<theme>.png` (extra shots add `--<suffix>`); `--filter` keeps the ids
 containing any of its comma-separated parts.

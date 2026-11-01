@@ -8,12 +8,14 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
  */
 
 /** The counted metrics, by kind of probe. A load probe has no `action`. */
-const LOAD = ['requests', 'startupJsKB', 'domNodes', 'layouts', 'styleRecalcs', 'heapMB'];
-const INTERACTION = ['layouts', 'styleRecalcs'];
+const LOAD = ['requests', 'startupJsKB', 'domNodes', 'layouts', 'styleRecalcs', 'calls', 'heapMB'];
+const INTERACTION = ['layouts', 'styleRecalcs', 'calls'];
 
 /**
- * How far over its baseline a metric may go before the check fails: bytes and requests hardly move, counts
- * of layouts and style recalcs move by a few with timing, and the heap by a little.
+ * How far over its baseline a metric may go before the check fails. On the fake clock bytes, requests and DOM
+ * nodes don't move, and an interaction's layouts and style recalcs barely do. The load's layouts and style
+ * recalcs follow the frames the browser draws in real time, so move by a couple; JS calls move by a few from
+ * events Playwright sends in real time (mouse moves) and, on the load, the odd extra observer callback.
  */
 const SLACK = {
 	requests: { abs: 0, rel: 0 },
@@ -23,11 +25,17 @@ const SLACK = {
 	domNodes: { abs: 2, rel: 0.01 },
 	layouts: { abs: 3, rel: 0.15 },
 	styleRecalcs: { abs: 3, rel: 0.15 },
+	calls: { abs: 20, rel: 0.005 },
 	heapMB: { abs: 0.2, rel: 0.05 }
 };
+/** An interaction's, where they differ from the load's. */
+const INTERACTION_SLACK = { layouts: { abs: 1, rel: 0 }, styleRecalcs: { abs: 1, rel: 0 } };
 
-/** The highest value `metric` may reach against a baseline of `base`. */
-export const limitOf = (metric, base) => base + Math.max(SLACK[metric].abs, base * SLACK[metric].rel);
+/** The highest value `metric` may reach against a baseline of `base`, on the load or an interaction. */
+export const limitOf = (metric, base, interaction = false) => {
+	const slack = (interaction && INTERACTION_SLACK[metric]) || SLACK[metric];
+	return base + Math.max(slack.abs, base * slack.rel);
+};
 
 /**
  * Shard `index` of `count` (from 1) of the probes, for checking the budget on several machines at once: each
@@ -69,7 +77,7 @@ export function samplesOf(result, probes) {
 	const probesOut = {};
 	for (const probe of probes) {
 		const { samples, stats } = result.probes[probe.name][label];
-		const metrics = [...(probe.action ? INTERACTION : LOAD), ...('calls' in samples[0] ? ['calls'] : [])];
+		const metrics = (probe.action ? INTERACTION : LOAD).filter((m) => m in samples[0]);
 		probesOut[probe.name] = Object.fromEntries(metrics.map((m) => [m, { median: round(stats[m].median), min: round(stats[m].min), max: round(stats[m].max), runs: samples.map((s) => round(s[m])) }]));
 		if (samples[0].chunks) {
 			const names = [...new Set(samples.flatMap((s) => Object.keys(s.chunks)))].sort();
@@ -130,14 +138,14 @@ export function formatSamples(probes) {
  */
 export function compareBudget(counts, budget) {
 	const rows = [];
-	const add = (probe, metric, value, base) => {
+	const add = (probe, metric, value, base, interaction = false) => {
 		if (base === undefined) return rows.push({ probe, metric, value, status: 'new' });
-		const limit = limitOf(metric, base);
+		const limit = limitOf(metric, base, interaction);
 		const status = value > limit ? 'over' : value < base - (limit - base) ? 'under' : 'ok';
 		rows.push({ probe, metric, value, base, limit, status });
 	};
 	for (const [probe, metrics] of Object.entries(counts.probes))
-		for (const [metric, value] of Object.entries(metrics)) add(probe, metric, value, budget.probes?.[probe]?.[metric]);
+		for (const [metric, value] of Object.entries(metrics)) add(probe, metric, value, budget.probes?.[probe]?.[metric], !('requests' in metrics));
 	for (const [metric, value] of Object.entries(counts.bundle)) add('bundle', metric, value, budget.bundle?.[metric]);
 	return rows;
 }
@@ -157,11 +165,12 @@ export function readBudget(path) {
 	return existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : { probes: {}, bundle: {} };
 }
 
-export function writeBudget(path, counts, { runs, cpu }) {
+export function writeBudget(path, counts, { runs, cpu, chromium }) {
 	const budget = {
 		$comment: 'Perf budget: medians of counts, not timings. `npm run qa -- budget` checks a build against it; `--update` rewrites it. See scripts/qa/README.md.',
 		runs,
 		cpu,
+		chromium,
 		...counts
 	};
 	writeFileSync(path, `${JSON.stringify(budget, null, '\t')}\n`);

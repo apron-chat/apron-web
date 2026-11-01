@@ -42,7 +42,7 @@ jobs:
   # The probes are split across three runners (`--shard`), each checking its share against the same baseline.
   perf-budget-shard:
     name: perf-budget (${{ matrix.shard }}/3)
-    # Pinned: Playwright 1.56 installs Chromium for Ubuntu 24.04, not 26.04, and a fixed OS keeps the counts steady.
+    # Pinned: a fixed OS keeps the counts steady.
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     strategy:

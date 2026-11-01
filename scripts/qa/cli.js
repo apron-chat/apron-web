@@ -38,11 +38,9 @@ const HELP = `npm run qa -- <command> [options]
                          [--build dirA --build dirB] [--out file.json]
   budget --build <dir>   Check a preview build's counts (layouts, style recalcs, DOM nodes, requests,
                          bytes) per perf probe against scripts/qa/perf-budget.json; exits 1 when one is
-                         over. --update rewrites the baseline. [--runs 3] [--cpu 4] [--only p] [--shard i/n]
+                         over. --update rewrites the baseline. Counts JS function calls too, and times the
+                         windows on Playwright's fake clock. [--runs 3] [--cpu 4] [--only p] [--shard i/n]
                          [--out file.json]: every run's counts, to diff between machines.
-                         Prototype: --calls also counts JS function calls per probe (V8 precise coverage);
-                         --clock fake in Playwright's fake clock, stepped, settling after each step.
-                         Either prints the counts and their spread instead of checking them.
   budget-diff <a.json> <b.json>
                          Two files written by budget --out, side by side: which counts match in every run.
   prof --url A --url B   CPU-profile page load; biggest per-function changes. [--runs 6] [--cpu 4]
@@ -165,41 +163,40 @@ async function main() {
 			const probes = shardOf(selectProbes(suite, list(o.only)).filter((p) => p.budget !== false), index, count);
 			if (!probes.length) throw new Error(`shard ${index}/${count} has no probes to check`);
 			const runs = int(o.runs, 3);
-			const clock = o.clock ?? 'wall';
-			if (!['wall', 'fake'].includes(clock)) throw new Error(`--clock takes wall or fake, not ${clock}`);
 			const cpu = int(o.cpu, 4);
-			// The prototypes' counts have no baseline yet: they are printed (and written with --out), not checked.
-			const prototype = !!o.calls || clock !== 'wall';
-			if (prototype && o.update) throw new Error('--update writes the baseline from the default measurement: run it without --calls or --clock');
+			const path = join(repo, 'scripts/qa/perf-budget.json');
+			const budget = readBudget(path);
 			const server = await serveDir(dir);
 			const browser = await launch();
 			let result;
 			const started = Date.now();
 			try {
-				// Under reduced motion, so an animation's layouts don't count once per frame drawn: a faster runner
-				// draws more frames, and the count would go with it.
-				result = await runPerf({ browser, urls: [server.url], labels: ['now'], runs, cpu, reducedMotion: 'reduce', probes, path: suite.path, builds: index === 1 ? [dir] : [], chunkBuilds: [dir], calls: !!o.calls, clock });
+				// A Chromium other than the baseline's counts differently (one version to the next moves style recalcs
+				// by a few per probe), so the check runs only on the baseline's.
+				if (!o.update && budget.chromium && budget.chromium !== browser.version())
+					throw new Error(`the baseline was recorded on Chromium ${budget.chromium}, this is ${browser.version()}: install playwright-core's build (\`npx playwright-core install chromium\`), or after upgrading Playwright, record a new baseline with --update`);
+				// On the fake clock, so what lands in a window doesn't follow the machine's speed, and under reduced
+				// motion, so an animation's layouts don't count once per frame drawn.
+				result = await runPerf({ browser, urls: [server.url], labels: ['now'], runs, cpu, reducedMotion: 'reduce', probes, path: suite.path, builds: index === 1 ? [dir] : [], chunkBuilds: [dir], calls: true, clock: 'fake' });
 			} finally {
 				await browser.close();
 				await server.close();
 			}
-			const path = join(repo, 'scripts/qa/perf-budget.json');
 			const counts = countsOf(result, probes);
-			if (prototype || o.out) console.log(`${formatSamples(samplesOf(result, probes))}\n`);
+			if (o.out) console.log(`${formatSamples(samplesOf(result, probes))}\n`);
 			if (o.out) {
 				const out = resolve(o.out);
 				mkdirSync(dirname(out), { recursive: true });
-				const meta = { calls: !!o.calls, clock, runs, cpu, shard: `${index}/${count}`, seconds: Math.round((Date.now() - started) / 1000), chromium: browser.version(), cpus: cpus().length, cpuModel: cpus()[0]?.model, loadavg: result.loadavg };
+				const meta = { calls: true, clock: 'fake', runs, cpu, shard: `${index}/${count}`, seconds: Math.round((Date.now() - started) / 1000), chromium: browser.version(), cpus: cpus().length, cpuModel: cpus()[0]?.model, loadavg: result.loadavg };
 				writeFileSync(out, `${JSON.stringify({ ...meta, probes: samplesOf(result, probes), bundle: counts.bundle }, null, 1)}\n`);
 				console.log(`json: ${relative(process.cwd(), out)}`);
 			}
-			if (prototype) return 0;
 			if (o.update) {
-				writeBudget(path, counts, { runs, cpu });
+				writeBudget(path, counts, { runs, cpu, chromium: browser.version() });
 				console.log(`wrote ${relative(process.cwd(), path)}`);
 				return 0;
 			}
-			const rows = compareBudget(counts, readBudget(path));
+			const rows = compareBudget(counts, budget);
 			console.log(formatBudget(rows));
 			const over = rows.filter((r) => r.status === 'over');
 			if (over.length) console.log(`\n${over.length} over budget. If that cost is meant, run \`npm run qa -- budget --update\` and commit scripts/qa/perf-budget.json with the change.`);

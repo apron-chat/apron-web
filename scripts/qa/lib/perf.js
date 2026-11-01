@@ -127,10 +127,10 @@ async function measure(browser, url, probe, { cpu, path, reducedMotion, calls, c
 				if (inflight.size) quiet = Date.now();
 			}
 		};
-		/** Runs `ms` of fake time in steps, settling after each. */
-		const runFake = async (/** @type {number} */ ms) => {
-			for (let done = 0; done < ms; done += FAKE_STEP) {
-				await page.clock.runFor(Math.min(FAKE_STEP, ms - done));
+		/** Runs `ms` of fake time in steps of `step`, settling after each. */
+		const runFake = async (/** @type {number} */ ms, step = FAKE_STEP) => {
+			for (let done = 0; done < ms; done += step) {
+				await page.clock.runFor(Math.min(step, ms - done));
 				await settled();
 			}
 		};
@@ -152,7 +152,10 @@ async function measure(browser, url, probe, { cpu, path, reducedMotion, calls, c
 		}
 		// Under the fake clock an interaction starts once the page's start-up timers have run (the on-demand
 		// chunk's prefetch, 2 s after mount), so none lands in its window, nor on its edge.
-		await wait(fake && probe.action ? FAKE_STARTUP : 1200);
+		// Nothing is counted then, so in long steps: a timer still fires in order, and a fetch it starts settles
+		// before the next.
+		if (fake && probe.action) await runFake(FAKE_STARTUP, FAKE_STARTUP_STEP);
+		else await wait(1200);
 		if (!probe.action) {
 			const m = await metrics();
 			const counted = calls ? await callCounts(cdp, origin, chunkNames) : {};
@@ -237,6 +240,8 @@ const FAKE_EPOCH = Date.parse('2026-10-22T12:00:00Z');
 const FAKE_STEP = 50;
 /** Fake ms after ready before an interaction's `setup`: past the start-up timers. */
 const FAKE_STARTUP = 3000;
+/** The start-up's step, in fake ms. */
+const FAKE_STARTUP_STEP = 500;
 /** Real ms the page must spend with no request in flight before the fake clock moves on. */
 const FAKE_QUIET = 50;
 
