@@ -154,7 +154,7 @@ function stand(element: Element, src: string, media: MediaCheck, doc: Document):
 	const asked = media.ask?.(src);
 	let link = element.closest('a');
 	if (asked) {
-		const box = askBox(alt || KINDS[element.localName] || 'Media', asked, doc);
+		const box = askBox(alt || KINDS[element.localName] || 'Media', element.localName === 'video' || element.localName === 'audio' ? element.localName : 'image', asked, doc);
 		if (!link) return box;
 		// A button can't be in a link: it goes after it, and after any put there before it.
 		for (let outer = link.parentElement?.closest('a'); outer; outer = outer.parentElement?.closest('a')) link = outer;
@@ -176,7 +176,7 @@ function stand(element: Element, src: string, media: MediaCheck, doc: Document):
 }
 
 /** Media that waits for a click, as the design system's MediaAsk draws it: what it is and its full URL, then Load, Always load and Block. */
-function askBox(what: string, asked: MediaAskAt, doc: Document): HTMLElement {
+function askBox(what: string, kind: 'image' | 'video' | 'audio', asked: MediaAskAt, doc: Document): HTMLElement {
 	const part = (tag: string, className: string, text = '') => {
 		const node = doc.createElement(tag);
 		node.className = className;
@@ -205,7 +205,7 @@ function askBox(what: string, asked: MediaAskAt, doc: Document): HTMLElement {
 		};
 		actions.append(site('Always load from', 'data-media-trust', 'Trusted origins'), site('Block', 'data-media-block', 'Blocked origins'));
 	}
-	const box = part('span', 'ap-media-ask');
+	const box = part('span', `ap-media-ask ap-media-ask-${kind}`);
 	box.append(label, actions);
 	return box;
 }
