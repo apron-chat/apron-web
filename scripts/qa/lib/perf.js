@@ -16,7 +16,7 @@ const READY = '[data-testid=message-list] .ap-msg';
  * (`PreviewKnobs`), e.g. many rooms or long histories; `budget: false` leaves a probe whose counts follow
  * the machine's speed out of `qa budget`. Suites export theirs as `interactions`;
  * `selectProbes` picks them. `calls` adds each probe's JS function calls (see `measure`), named by chunk from
- * `chunkBuilds` (the served builds' directories). `clock: 'virtual'` times the windows in virtual time (see `measure`).
+ * `chunkBuilds` (the served builds' directories). `clock: 'virtual'` or `'fake'` times the windows in virtual or fake time (see `measure`).
  */
 export async function runPerf({ browser, urls, labels = urls, runs = 5, cpu = 4, reducedMotion, probes, path = '/__preview', builds = [], chunkBuilds = builds, calls = false, clock = 'wall', log = console.log }) {
 	if (clock === 'virtual' && cpu !== 1) throw new Error('virtual time takes --cpu 1: under CPU throttling Chromium stops running the page once the virtual time budget is set');
@@ -79,6 +79,7 @@ export function selectProbes(suite, only = []) {
  * and Date, paused from the start. Each window is run in `FAKE_STEP` ms steps, and after each step the page is
  * left to settle in real time (no fetch in flight, a few real frames) before the next, so a fetch that
  * completes late still lands at the same fake moment. The browser still draws and lays out in real time.
+ * Interactions start `FAKE_STARTUP` ms after ready rather than 1200.
  */
 async function measure(browser, url, probe, { cpu, path, reducedMotion, calls, clock = 'wall', chunkNames }) {
 	const virtual = clock === 'virtual';
@@ -173,7 +174,9 @@ async function measure(browser, url, probe, { cpu, path, reducedMotion, calls, c
 			await page.waitForSelector(READY, { timeout: 30000 });
 			ready = Date.now() - t0;
 		}
-		await wait(1200);
+		// Under the fake clock an interaction starts once the page's start-up timers have run (the on-demand
+		// chunk's prefetch, 2 s after mount), so none lands in its window, nor on its edge.
+		await wait(fake && probe.action ? FAKE_STARTUP : 1200);
 		if (!probe.action) {
 			const m = await metrics();
 			const counted = calls ? await callCounts(cdp, origin, chunkNames) : {};
@@ -260,6 +263,8 @@ const VIRTUAL_STEP = 50;
 const FAKE_EPOCH = Date.parse('2026-10-22T12:00:00Z');
 /** The fake clock's step, in ms: the resolution of every window, and of when a late fetch lands. */
 const FAKE_STEP = 50;
+/** Fake ms after ready before an interaction's `setup`: past the start-up timers. */
+const FAKE_STARTUP = 3000;
 /** Real ms the page must spend with no request in flight before the fake clock moves on. */
 const FAKE_QUIET = 50;
 
