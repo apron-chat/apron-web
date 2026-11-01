@@ -125,6 +125,8 @@ test.describe('ext:permissions and ext:settings', () => {
 				await page.evaluate(() => { location.hash = '#room=design'; });
 				await expect(preview.message('The new palette is up for review.')).toBeVisible();
 				expect((await preview.sent('room_join')).filter((p) => p.room_id === 'design')).toEqual([]);
+				// Its row under Other Rooms shows it open, as a joined room's would.
+				await expect(page.getByTestId('room-directory').locator('button[data-join="design"]')).toHaveAttribute('aria-current', 'page');
 			});
 		});
 	});

@@ -726,7 +726,20 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 	.ap-shell[data-pane='main'] .ap-shell-side { display: none; }
 	.ap-shell[data-pane='rooms'] .ap-shell-main, .ap-shell[data-pane='rooms'] .ap-memberlist { display: none; }
 	.ap-shell-side-shut .ap-shell-side, .ap-shell-slides.ap-shell-side-shut .ap-shell-side { opacity: 1; visibility: visible; transition: none; }
+	/*
+	 * Over a room or thread (ap-shell-peeking), the rooms list leaves a sliver of it at the inline end, in reach of a thumb:
+	 * the conversation keeps its full width behind (so nothing reflows), faded, and its sliver is a button back to it.
+	 */
+	.ap-shell-peeking { --shell-peek: clamp(32px, 9vw, 44px); grid-template-columns: minmax(0, 1fr) var(--shell-peek); }
+	.ap-shell-peeking .ap-shell-side { z-index: 1; box-shadow: var(--shadow-float); }
+	.ap-shell.ap-shell-peeking[data-pane='rooms'] .ap-shell-main { display: flex; position: absolute; top: 0; bottom: 0; inset-inline-start: calc(100% - var(--shell-peek)); width: 100%; opacity: var(--opacity-dim); pointer-events: none; }
+	.ap-shell-peek { position: absolute; z-index: 1; top: 0; bottom: 0; inset-inline-end: 0; width: var(--shell-peek); margin: 0; padding: 0; border: 0; background: transparent; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+	.ap-shell-peek:active { background: var(--hover); }
+	/* The room's back button, which opened the list, would show cut in half there (and still hovered: a phone keeps :hover on the last thing tapped). */
+	.ap-shell-peeking .ap-shell-main .ap-roomhead-back { visibility: hidden; }
 }
+.ap-shell-peek { display: none; }
+@media (max-width: 719px) { .ap-shell-peeking .ap-shell-peek { display: block; } }
 @media (prefers-reduced-motion: reduce) {
 	.ap-shell, .ap-shell .ap-shell-side, .ap-shell .ap-memberlist, .ap-shell .ap-roomhead, .ap-shell .ap-memberlist:not(.ap-memberlist-open), .ap-shell-slides .ap-shell-handle, .ap-shell-slides .ap-shell-toggle { transition: none; }
 	/* As specific as the shut panels' and handle's own transitions, which would otherwise still fade and slide them. */

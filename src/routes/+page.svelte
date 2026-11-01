@@ -369,6 +369,8 @@
 	let mobilePane = $state<'rooms' | 'main'>('main');
 	/** Wide screens give the member list a column of its own; narrower ones overlay it on the conversation. */
 	let memberListWide = $state(false);
+	/** One pane at a time (under 720px). */
+	let narrow = $state(false);
 	/** The narrow overlay, closed until asked for. */
 	let memberListOverlay = $state(false);
 	/**
@@ -630,7 +632,9 @@
 	 * You are reading the open pane's latest message: it is on screen, as
 	 * measured in this pane, and the pane has opened at its divider.
 	 */
-	let readingLatest = $derived(latestVisible && latestVisibleIn === paneRoom?.id && newDivider.room === paneRoom?.id && newDivider.landed);
+	/** The conversation shows: not behind the phone's rooms list, where only a faded sliver of it peeks out. */
+	let paneShown = $derived(!(narrow && mobilePane === 'rooms'));
+	let readingLatest = $derived(paneShown && latestVisible && latestVisibleIn === paneRoom?.id && newDivider.room === paneRoom?.id && newDivider.landed);
 	/** The pane's messages this viewer may pick, in order: what shift-click ranges run along. */
 	let selectableOrder = $derived(messages.filter(canSelect).map((event) => event.message_id));
 	/** Picked messages move with `message` requests (capability `edit`), which a reader who may not write makes none of. */
@@ -728,7 +732,7 @@
 	// they're chosen on this device), and while you're away they notify. Never from a held view (`arrivalAlerts`).
 	$effect(() => {
 		const alerts = arrivalAlerts(
-			{ held: session.showingHeld, rooms: session.rooms, you: session.you, pane: paneRoom?.id, latestVisible, readThrough: syncsReads ? (room) => readPositions.through(room, session.you) : () => undefined },
+			{ held: session.showingHeld, rooms: session.rooms, you: session.you, pane: paneRoom?.id, latestVisible: latestVisible && paneShown, readThrough: syncsReads ? (room) => readPositions.through(room, session.you) : () => undefined },
 			{ mentions, messages: incomingMessages },
 			{
 				offerable: untrack(() => !notifyOffer && !installOffer && offersNotifications({ chosen: notificationsChoiceMade, active: notificationsActive, permission: notificationState, silenced })),
@@ -1172,6 +1176,10 @@
 		};
 		memberListMediaChange(memberListMedia);
 		memberListMedia.addEventListener('change', memberListMediaChange);
+		const narrowMedia = window.matchMedia(`(max-width: ${NARROW_MAX - 1}px)`);
+		const narrowMediaChange = ({ matches }: { matches: boolean }) => (narrow = matches);
+		narrowMediaChange(narrowMedia);
+		narrowMedia.addEventListener('change', narrowMediaChange);
 		// Taken, and scrubbed from the address bar, before anything else can read or keep the URL.
 		const signInLink = previewMode ? undefined : takeSignInLink(window.location, scrubUrl);
 		// A link pasted into this tab later is a same-document fragment change: take (and scrub) it too.
@@ -1297,6 +1305,7 @@
 		}
 		return () => {
 			memberListMedia.removeEventListener('change', memberListMediaChange);
+			narrowMedia.removeEventListener('change', narrowMediaChange);
 			window.removeEventListener('hashchange', hashChanged);
 			document.removeEventListener('click', apronLinkClicked);
 			window.removeEventListener('storage', storageChanged);
@@ -3129,6 +3138,8 @@
 	membersOpen={memberListOpen}
 	membersWide={memberListWide}
 	pane={mobilePane}
+	peek={narrow && activeRoom !== undefined}
+	onpeek={closeRooms}
 	sideWidth={sidebar.width}
 	membersWidth={memberList.width}
 	mainLabel="Conversation"

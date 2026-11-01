@@ -101,6 +101,53 @@ test.describe('the rooms list on a phone', () => {
 		await at(preview, 'engineering', /#room=engineering$/);
 		await expect(page.getByTestId('room-list')).toBeHidden();
 	});
+
+	test('leaves a sliver of the room in reach at its edge, faded and inert, which returns to it', async ({ preview, page }) => {
+		await preview.open('#room=engineering');
+		await preview.roomsPane();
+		const list = (await page.getByTestId('room-list').boundingBox())!;
+		const viewport = page.viewportSize()!;
+		const main = page.getByRole('main', { name: 'Conversation', includeHidden: true });
+		// The conversation keeps its width behind the list, only its start in view, and out of the keyboard's and screen readers' way.
+		expect(list.x + list.width).toBeLessThan(viewport.width - 30);
+		await expect(main).toHaveAttribute('inert', '');
+		expect((await main.boundingBox())!.width).toBe(viewport.width);
+		await preview.press(page.locator('.ap-shell-peek'));
+		await expect(page.getByTestId('room-list')).toBeHidden();
+		await expect(main).not.toHaveAttribute('inert');
+		await at(preview, 'engineering', /#room=engineering$/);
+	});
+
+	test('a message arriving in the room behind it stays unread until the room shows again', async ({ preview, page }) => {
+		await preview.open('#room=engineering');
+		await preview.roomsPane();
+		await preview.post('engineering', 'ada', 'While the list is open');
+		await expect(page).toHaveTitle('(1) Apron');
+		await preview.press(page.locator('.ap-shell-peek'));
+		await expect(page).toHaveTitle('Apron');
+	});
+
+	test('a swipe across it toward the left returns to the room, but not a swipe down it or a hold before moving', async ({ preview, page, context }) => {
+		await preview.open('#room=engineering');
+		await preview.roomsPane();
+		const cdp = await context.newCDPSession(page);
+		const swipe = async (from: { x: number; y: number }, by: { x: number; y: number }, holdMs = 0) => {
+			await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [from] });
+			if (holdMs) await page.waitForTimeout(holdMs);
+			for (let i = 1; i <= 6; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: from.x + (by.x * i) / 6, y: from.y + (by.y * i) / 6 }] });
+			await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+		};
+		const list = page.getByTestId('room-list');
+		const box = (await list.boundingBox())!;
+		const from = { x: box.x + box.width * 0.7, y: box.y + box.height + 120 };
+		await swipe(from, { x: 0, y: -120 });
+		await swipe(from, { x: -150, y: 0 }, 450);
+		await page.waitForTimeout(200);
+		await expect(list).toBeVisible();
+		await swipe(from, { x: -150, y: 10 });
+		await expect(list).toBeHidden();
+		await at(preview, 'engineering', /#room=engineering$/);
+	});
 });
 
 test.describe('Preferences in the address', () => {
