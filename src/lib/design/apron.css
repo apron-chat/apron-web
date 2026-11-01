@@ -387,7 +387,7 @@ a.ap-embed-card:hover { background: var(--hover); }
 @keyframes ap-bob { 0%, 60%, 100% { transform: translateY(0); opacity: .5; } 30% { transform: translateY(-3px); opacity: 1; } }
 
 /* Composer */
-.ap-composer { display: flex; align-items: flex-start; container-type: normal; gap: var(--space-2); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3); margin: var(--space-2) var(--space-4) var(--space-4); background: var(--bg-200); border: 1px solid var(--line-strong); border-radius: var(--radius-lg); }
+.ap-composer { display: flex; align-items: flex-start; container-type: normal; gap: var(--space-2); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3); margin: var(--space-2) var(--space-4) calc(var(--space-4) + var(--corner-clear)); background: var(--bg-200); border: 1px solid var(--line-strong); border-radius: var(--radius-lg); }
 .ap-composer:focus-within { border-color: var(--focus); }
 .ap-composer-tools { display: inline-flex; gap: var(--space-0_5); }
 .ap-composer-recording { flex: 1; display: inline-flex; align-items: center; gap: var(--space-2); height: var(--control-md); box-sizing: border-box; padding: 0 var(--space-1); font-size: var(--text-body); line-height: var(--leading-body); color: var(--ink); }
@@ -624,15 +624,6 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-shell-viewport { height: 100dvh; min-height: 100%; }
 html[data-keyboard] .ap-shell-viewport { position: fixed; top: var(--app-top); left: 0; right: 0; height: var(--app-height); min-height: 0; }
 html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space-2); }
-/* Installed on an iPhone, the app runs down to the screen's rounded corners, and the composer (or what stands in its
-   place) sits a little further up from them. Without viewport-fit=cover, iOS gives no safe-area inset to go by, and
-   with it the visual viewport reads short of the screen (WebKit bug 254868), which trackKeyboard would take for a
-   keyboard. -webkit-touch-callout is iOS's alone. Over the keyboard the rule above, more specific, still applies. */
-@media (display-mode: standalone) {
-	@supports (-webkit-touch-callout: none) {
-		.ap-shell-viewport :is(.ap-composer, .ap-selbar) { margin-bottom: calc(var(--space-4) + var(--space-2)); }
-	}
-}
 /*
  * The side panels open and shut sliding (ap-shell-slides): their grid columns move (the grid's own transition, not an
  * inherited variable, so nothing else restyles each frame); each panel's contents keep their width against its inner
@@ -768,7 +759,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 /* Small, after the count, as the rooms list's header buttons: most visits are to see who is here. */
 .ap-memberlist-head .ap-memberlist-addtoggle { width: var(--control-sm); height: var(--control-sm); }
 /* Wider at the start (the left, or the right under dir="rtl"), so the avatars line up under the header's start (its toggle, with a column of its own, or Members). */
-.ap-memberlist-body { --edge: var(--space-2); flex: 1; min-height: 0; overflow: auto; padding: var(--space-3) var(--edge); padding-inline-start: var(--space-3); }
+.ap-memberlist-body { --edge: var(--space-2); flex: 1; min-height: 0; overflow: auto; padding: var(--space-3) var(--edge) calc(var(--space-3) + var(--corner-clear)); padding-inline-start: var(--space-3); }
 .ap-memberlist-placeholder { display: grid; gap: var(--space-3); padding: var(--space-2) var(--space-3); }
 .ap-memberlist-placeholder .ap-skel { height: 12px; }
 .ap-memberlist-section + .ap-memberlist-section { margin-top: var(--space-4); }
@@ -954,7 +945,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-field:focus-visible { outline-offset: 0; border-color: var(--focus); }
 
 /* ProfileBar — your identity on the active backend, pinned to the bottom of the sidebar */
-.ap-profile { position: relative; flex: none; display: flex; align-items: center; gap: var(--space-1); height: var(--header-h); box-sizing: border-box; padding: var(--space-1) var(--space-2); box-shadow: inset 0 1px var(--line); background: var(--bg-000); }
+.ap-profile { position: relative; flex: none; display: flex; align-items: center; gap: var(--space-1); height: calc(var(--header-h) + var(--corner-clear)); box-sizing: border-box; padding: var(--space-1) var(--space-2) calc(var(--space-1) + var(--corner-clear)); box-shadow: inset 0 1px var(--line); background: var(--bg-000); }
 .ap-profile-me { font: inherit; display: flex; align-items: center; gap: var(--space-2); flex: 1; min-width: 0; height: 100%; padding: 0 var(--space-2); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink); text-align: start; cursor: pointer; }
 .ap-profile-me:hover { background: var(--hover); }
 .ap-profile-open { background: var(--pressed); }
@@ -1033,12 +1024,12 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-popover-scrim { position: fixed; inset: 0; z-index: var(--z-sheet); background: var(--scrim); opacity: var(--opacity-dim); }
 .ap-popover-grabber { flex: none; align-self: center; width: 36px; height: 4px; margin: calc(-1 * var(--space-2)) auto var(--space-1); border-radius: var(--radius-full); background: var(--line-strong); }
 /* Narrow screens: a bottom sheet, full width, rounded only where it meets the page. */
-.ap-popover-sheet { left: 0; right: 0; bottom: 0; border-bottom: 0; border-radius: var(--radius-lg) var(--radius-lg) 0 0; padding-bottom: env(safe-area-inset-bottom); }
+.ap-popover-sheet { left: 0; right: 0; bottom: 0; border-bottom: 0; border-radius: var(--radius-lg) var(--radius-lg) 0 0; padding-bottom: calc(env(safe-area-inset-bottom) + var(--corner-clear)); }
 
 /* ProfileCard — who someone is, from a mention, a sender or a member */
 /* ServerCard — the server you're connected to, from the rooms list's head */
 .ap-servcard { gap: var(--space-3); padding: var(--space-4); }
-.ap-servcard.ap-popover-sheet { padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom)); }
+.ap-servcard.ap-popover-sheet { padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom) + var(--corner-clear)); }
 .ap-servcard-who { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
 .ap-servcard-avatar { flex: none; width: 48px; height: 48px; border-radius: var(--radius-lg); object-fit: cover; }
 .ap-servcard-initials { display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); font-size: var(--text-title); line-height: 1; font-weight: 600; user-select: none; }
@@ -1074,7 +1065,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-servcard.ap-popover-sheet .ap-servcard-actions { flex-direction: column; align-items: stretch; }
 .ap-servcard.ap-popover-sheet .ap-servcard-actions .ap-btn { justify-content: center; height: var(--control-xl); }
 .ap-profcard { gap: var(--space-3); padding: var(--space-4); }
-.ap-profcard.ap-popover-sheet { padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom)); }
+.ap-profcard.ap-popover-sheet { padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom) + var(--corner-clear)); }
 .ap-profcard-who { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
 .ap-profcard-names { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .ap-profcard-nameline { display: flex; align-items: baseline; gap: var(--space-1); min-width: 0; }
@@ -1096,7 +1087,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 
 /* ReactorsPopover — who reacted with an emoji; the list scrolls past 320px, so a crowd doesn't run off the screen */
 .ap-reactors { gap: var(--space-2); padding: var(--space-3); }
-.ap-reactors.ap-popover-sheet { padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom)); }
+.ap-reactors.ap-popover-sheet { padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom) + var(--corner-clear)); }
 .ap-reactors-head { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-ui); line-height: var(--leading-ui); color: var(--ink-muted); }
 .ap-reactors-emoji { font-family: var(--font-emoji); font-size: var(--text-title); line-height: var(--leading-title); }
 .ap-reactors-list { max-height: 320px; margin: 0; padding: 0; list-style: none; overflow-y: auto; overscroll-behavior: contain; }
@@ -1297,8 +1288,8 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-dialog-body .ap-field { width: 100%; }
 .ap-dialog-foot { flex: none; display: flex; justify-content: flex-end; gap: var(--space-2); padding: var(--space-3) var(--space-6); border-top: 1px solid var(--line); }
 @media (max-width: 560px) {
-	.ap-dialog { width: calc(100vw - 24px); max-height: calc(100dvh - 24px); }
-	.ap-dialog-lg { height: min(600px, calc(100dvh - 24px)); }
+	.ap-dialog { width: calc(100vw - 24px); max-height: calc(100dvh - 24px - 2 * var(--corner-clear)); }
+	.ap-dialog-lg { height: min(600px, calc(100dvh - 24px - 2 * var(--corner-clear))); }
 	.ap-dialog-head { padding-inline-start: var(--space-4); }
 	.ap-dialog-body:not(.ap-dialog-body-flush) { padding: var(--space-4); }
 	.ap-dialog-foot { padding: var(--space-3) var(--space-4); }
@@ -1334,7 +1325,7 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-viewer-prev { left: var(--space-4); }
 .ap-viewer-next { right: var(--space-4); }
 @media (max-width: 560px) {
-	.ap-viewer-stage { padding: 0 0 calc(var(--space-4) + env(safe-area-inset-bottom, 0px)); }
+	.ap-viewer-stage { padding: 0 0 calc(var(--space-4) + env(safe-area-inset-bottom, 0px) + var(--corner-clear)); }
 	.ap-viewer-media { border-radius: 0; }
 	.ap-viewer-prev { left: var(--space-2); }
 	.ap-viewer-next { right: var(--space-2); }
@@ -1359,7 +1350,7 @@ pre.ap-termviewer-text { width: 80ch; font-family: var(--font-mono); font-size: 
 @media (max-height: 500px) {
 	.ap-termviewer .ap-viewer-bar { padding-top: calc(var(--space-1) + env(safe-area-inset-top, 0px)); padding-bottom: var(--space-1); }
 	.ap-termviewer .ap-viewer-btn { width: var(--control-lg); height: var(--control-lg); }
-	.ap-termviewer-stage { padding-top: var(--space-2); padding-bottom: calc(var(--space-2) + env(safe-area-inset-bottom, 0px)); }
+	.ap-termviewer-stage { padding-top: var(--space-2); padding-bottom: calc(var(--space-2) + env(safe-area-inset-bottom, 0px) + var(--corner-clear)); }
 }
 
 /* TimelineLoading — at the foot of the timeline while it catches up: a pill, and placeholder rows when there is nothing to show yet */
@@ -1393,7 +1384,7 @@ pre.ap-termviewer-text { width: 80ch; font-family: var(--font-mono); font-size: 
 @media (prefers-reduced-motion: reduce) { .ap-tlstatus-spin { animation-duration: 2.4s; } .ap-tlstatus-float :is(.ap-tlstatus-pill, .ap-wait), .ap-tlstatus-top .ap-tlstatus-pill, .ap-skel { animation: none; } }
 
 /* SelectionBar — replaces the composer while messages are being picked */
-.ap-selbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-3); margin: var(--space-2) var(--space-4) var(--space-4); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4); background: var(--bg-200); border: 1px solid var(--accent); border-radius: var(--radius-lg); font-size: var(--text-ui); line-height: var(--leading-ui); }
+.ap-selbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-3); margin: var(--space-2) var(--space-4) calc(var(--space-4) + var(--corner-clear)); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4); background: var(--bg-200); border: 1px solid var(--accent); border-radius: var(--radius-lg); font-size: var(--text-ui); line-height: var(--leading-ui); }
 .ap-selbar .ap-btn { border-radius: var(--radius-inner); }
 .ap-selbar-count { font-weight: 600; font-variant-numeric: tabular-nums; }
 .ap-selbar-info { display: inline-flex; align-items: center; gap: var(--space-3); white-space: nowrap; }
