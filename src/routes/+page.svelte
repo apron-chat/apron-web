@@ -1128,8 +1128,9 @@
 				return;
 			}
 			observer = new IntersectionObserver((entries) => {
-				// An entry says where the latest was at a frame since gone: on a busy main thread several frames' arrive
-				// together, and the pane may have been pinned again before this runs. Out of view is checked against now.
+				// An entry says where the latest was at a frame since gone: on a busy main thread several frames'
+				// entries arrive together, and the pane may have been pinned again before this runs. Out of view is
+				// checked against now.
 				let visible = entries[entries.length - 1].isIntersecting;
 				if (!visible) {
 					const at = latest.getBoundingClientRect();

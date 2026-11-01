@@ -93,9 +93,8 @@ The counts hold on any machine, fast or slow, busy or idle, because nothing in t
 - **JS calls** are counted with V8's precise coverage: the functions the app's own scripts call in each
   window, in all and by chunk (`--out` lists the chunks).
 - **Slack.** An interaction's layouts and style recalcs may go 1 over its baseline. The load's may go a few
-  over, since the browser still draws its frames in real time. An interaction's calls may go 0.5% over, for
-  mouse moves Playwright sends in real time; the load's 1%, since an observer callback that briefly renders
-  the jump-to-new dock runs in some loads and not others (about 0.6%). Bytes 1%.
+  over, since the browser still draws its frames in real time. Calls may go 0.5% over, for mouse moves
+  Playwright sends in real time. Bytes 1%.
 - **One Chromium.** A different version counts differently (one to the next moves style recalcs by a few per
   probe), so the baseline records its Chromium and the check refuses another: run it in the build
   playwright-core installs. After upgrading Playwright, record a new baseline with `--update`.
