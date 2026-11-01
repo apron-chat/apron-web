@@ -133,7 +133,7 @@ test.describe('ext:permissions and ext:settings', () => {
 				const thread = page.getByTestId('room-directory').locator('button[data-other-thread="thread_palette"]');
 				await expect(thread).toContainText('Palette critique');
 				// Right under the room: none of its threads are yours, so there are no others to set them apart from.
-				await expect(page.getByTestId('other-threads')).toHaveCount(0);
+				await expect(page.getByTestId('room-directory').getByTestId('other-threads')).toHaveCount(0);
 				await thread.click();
 				await expect(preview.message('Too much teal on the dashboards.')).toBeVisible();
 				await expect(thread).toHaveAttribute('aria-current', 'page');

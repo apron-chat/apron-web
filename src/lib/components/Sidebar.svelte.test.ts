@@ -4,10 +4,11 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { capabilitiesOf, type ChatClient, type ClientSnapshot, type RoomSnapshot } from '$lib/protocol/client';
 import { createTimeline } from '$lib/protocol/reducer';
 import { blankSnapshot, SessionView } from '$lib/ui/session.svelte';
+import type { ThreadEntry } from '$lib/ui/timeline';
 import Sidebar from './Sidebar.svelte';
 import { serverPane } from '$lib/ui/server-pane.svelte';
 import { RoomOrder } from '$lib/ui/room-order.svelte';
-import { loadRoomOrder, saveRoomOrder } from '$lib/ui/storage';
+import { loadRoomOrder, saveOtherThreadsOpen, saveRoomOrder } from '$lib/ui/storage';
 import * as dom from '$lib/test/dom';
 
 // jsdom has no Web Animations: the rooms' flip as they make way (svelte/animate) asks an element for its own.
@@ -91,12 +92,16 @@ describe('Sidebar', () => {
 		const titles = ['Palette', 'Fonts', 'Icons', 'Motion'];
 		const threads = titles.map((title, n) => listing(`t${n}`, title, 'design'));
 		session.apply(live({ rooms: [general, design], activeRoom: 'design', directory: [listing('design', 'Design'), listing('quiet', 'Quiet')], threadDirectory: { design: threads } } as never), client);
+		// Other Threads folded once in a room you'd joined: not in one you haven't.
+		saveOtherThreadsOpen(false);
 		const onopenthread = vi.fn();
 		const onjoin = vi.fn();
-		const root = sidebar(client, session, { onopenthread, onjoin });
+		const props = $state({ client, session, backendLabel: 'fake.test', threads: [] as ThreadEntry[], mentions: {}, unread: {}, displayName: 'Ada', onroom: vi.fn(), onthread: vi.fn(), onopenthread, onjoin, onleavethread: vi.fn(), oncreateroom: vi.fn(), onnewthread: vi.fn(), onsignout: vi.fn() });
+		const root = dom.render(Sidebar, props as never);
 		flushSync();
 		const directory = () => root.querySelector('[data-testid="room-directory"]')!;
 		const rows = () => [...directory().querySelectorAll('[data-other-thread]')].map((row) => row.querySelector('.ap-room-name')?.textContent);
+		const roomRows = () => [...directory().querySelectorAll('[data-join]')].filter((row) => !row.closest('.ap-threads')).map((row) => row.getAttribute('data-join'));
 		// Under the open one only, with no Other Threads heading and none held back behind N more…, there being none of yours to set them apart from.
 		expect([rows(), directory().querySelector('.ap-threads-head'), directory().querySelector('[data-testid="more-threads"]')]).toEqual([titles, null, null]);
 		// Picking one reads it, which joins nothing.
@@ -105,18 +110,34 @@ describe('Sidebar', () => {
 		// Other Rooms folded keeps the one open to read, with its threads, as Rooms keeps the open one; Quiet folds away.
 		dom.button('Other Rooms').click();
 		flushSync();
-		expect([[...directory().querySelectorAll('[data-join]')].filter((row) => !row.closest('.ap-threads')).map((row) => row.getAttribute('data-join')), rows()]).toEqual([['design'], titles]);
+		expect([roomRows(), rows()]).toEqual([['design'], titles]);
 
-		// Once one is joined, the rest are others to it again: under their heading, the first few showing.
-		dom.unmount(root);
-		const joined = { id: 't0', parentRoomId: 'design', title: 'Palette', loaded: false, participants: [], joined: true };
-		session.apply(live({ rooms: [general, design], activeRoom: 'design', directory: [listing('design', 'Design')], threadDirectory: { design: threads.slice(1) } } as never), client);
-		const again = sidebar(client, session, { threads: [joined] });
+		// Once one is joined, the rest are others to it again: under their heading, not folded away by what was saved elsewhere.
+		props.threads = [{ id: 't0', parentRoomId: 'design', title: 'Palette', loaded: false, participants: [], joined: true }];
+		session.apply(live({ rooms: [general, design], activeRoom: 'design', directory: [listing('design', 'Design'), listing('quiet', 'Quiet')], threadDirectory: { design: threads.slice(1) } } as never), client);
 		flushSync();
-		const others = again.querySelector('[data-testid="room-directory"]')!;
-		expect(others.querySelector('[data-thread="t0"] .ap-room-name')?.textContent).toBe('Palette');
-		expect(others.querySelector('.ap-threads-head')?.textContent).toContain('Other Threads');
-		expect([...others.querySelectorAll('[data-other-thread]')].map((row) => row.querySelector('.ap-room-name')?.textContent)).toEqual(['Fonts', 'Icons', 'Motion']);
+		expect(directory().querySelector('[data-thread="t0"] .ap-room-name')?.textContent).toBe('Palette');
+		expect(directory().querySelector('.ap-threads-head')?.textContent).toContain('Other Threads');
+		expect(rows()).toEqual(['Fonts', 'Icons', 'Motion']);
+		session.dispose();
+	});
+
+	it('lists a joined thread with news under its room in Other Rooms once that room was opened without joining, as it no longer lists on its own', () => {
+		const client = fake();
+		const session = new SessionView();
+		const listing = (id: string, title: string) => ({ id, title, joined: false, record: { room_id: id }, members: [] });
+		// Design was read without joining (the client keeps it, viewed), and its thread Deploy is still yours.
+		const design = { ...general, id: 'design', title: 'Design', joined: false, timeline: createTimeline('design') } as RoomSnapshot;
+		const deploy = { ...general, id: 't1', title: 'Deploy', parentRoomId: 'design', timeline: createTimeline('t1') } as RoomSnapshot;
+		session.apply(live({ rooms: [general, design, deploy], directory: [listing('design', 'Design'), listing('quiet', 'Quiet')] } as never), client);
+		sidebar(client, session, { unread: { t1: 2 } });
+		flushSync();
+		const directory = document.querySelector('[data-testid="room-directory"]')!;
+		expect([names('room-list'), directory.querySelector('[data-thread="t1"] .ap-room-name')?.textContent]).toEqual([['General'], 'Deploy']);
+		// Folded, Other Rooms keeps Design for it, with it under its row.
+		dom.button('Other Rooms').click();
+		flushSync();
+		expect([[...directory.querySelectorAll('[data-join]')].filter((row) => !row.closest('.ap-threads')).map((row) => row.getAttribute('data-join')), directory.querySelector('[data-thread="t1"]') !== null]).toEqual([['design'], true]);
 		session.dispose();
 	});
 

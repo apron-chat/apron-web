@@ -615,7 +615,18 @@
 					<!-- Picking one joins it; one that can't join (reading as a guest) opens it to read, which needs no word, and it shows as open as a joined room does. -->
 					<RoomItem room={listing.id} name={listing.title} topic={session.readOnly ? count || undefined : [count, 'Join'].filter(Boolean).join(' · ')} listed active={listing.id === session.activeRoomId && !activeThread} onselect={() => onjoin(listing.id)} />
 					<!-- The one open to read without joining lists its threads under it, to explore them without joining either. -->
-					{#if listing.id === session.activeRoomId}<ThreadList roomId={listing.id} roomTitle={listing.title} {threads} others={otherThreads} foldInactive roomUnjoined {activeThread} {mentions} {unread} muted={session.snapshot.roomMutes} canJoin={canJoinThreads} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />{/if}
+					{#if listing.id === session.activeRoomId}
+						<ThreadList
+							roomId={listing.id} roomTitle={listing.title} {threads} others={otherThreads} foldInactive roomUnjoined {activeThread}
+							{mentions} {unread} muted={session.snapshot.roomMutes} canJoin={canJoinThreads} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread}
+						/>
+					{:else}
+						<!-- Another lists its threads you've joined with news, as a joined room's row does: once opened it holds them, so they're no longer listed on their own. -->
+						{@const news = threadsWithNews(threadsOf.get(listing.id) ?? [], listing.id, unread, mentions)}
+						{#if news.length > 0}
+							<ThreadList roomId={listing.id} roomTitle={listing.title} threads={news} others={[]} {mentions} {unread} muted={session.snapshot.roomMutes} canJoin={canJoinThreads} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
+						{/if}
+					{/if}
 				{/each}
 				{#if listError && !folds.has('otherRooms')}<p class="ap-sect-note ap-tone-danger" role="alert">{listError}</p>{/if}
 			</SidebarSection>

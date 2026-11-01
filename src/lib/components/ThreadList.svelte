@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import ThreadItem from '$lib/design/components/ThreadItem.svelte';
 	import DesignThreadList from '$lib/design/components/ThreadList.svelte';
 	import type { RoomListing } from '$lib/protocol/client';
@@ -51,7 +52,8 @@
 	/** Whether a thread is muted, by its own mute or its room's. */
 	const isMuted = (thread: string) => muted[thread] !== undefined || muted[roomId] !== undefined;
 
-	let othersFolded = $state(!loadOtherThreadsOpen());
+	// A room you haven't joined starts with them showing, whatever was saved: joining one of its threads, which sets the rest apart, doesn't fold them away.
+	let othersFolded = $state(!untrack(() => roomUnjoined) && !loadOtherThreadsOpen());
 	let inactiveFolded = $state(!loadInactiveThreadsOpen());
 	/** The room whose other threads are all showing, past the first few; another room starts short again. */
 	let allFor = $state<string | undefined>();
