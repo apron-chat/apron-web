@@ -96,3 +96,24 @@ test.describe('the timeline at its latest', () => {
 		await expect(page.getByTestId('jump-button')).toHaveCount(0);
 	});
 });
+
+test.describe('the timeline at its latest, dragged back slowly', () => {
+	test.use(DEVICES.phone);
+
+	test('lets go of the latest a pixel at a time, as a slow drag on a phone moves it', async ({ preview, page }) => {
+		await preview.open();
+		const list = page.getByTestId('message-list');
+		const fromEnd = () => list.evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight);
+		await expect.poll(fromEnd).toBeLessThan(2);
+		// A pixel a frame, each step waiting out the frame the pane would pin itself again in.
+		await list.evaluate(async (el) => {
+			const frame = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+			for (let step = 0; step < 150; step++) {
+				el.scrollTop -= 1;
+				await frame();
+			}
+		});
+		expect(await fromEnd()).toBeGreaterThan(140);
+		await expect(page.getByTestId('jump-button')).toBeVisible();
+	});
+});

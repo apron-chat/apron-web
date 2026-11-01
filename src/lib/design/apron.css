@@ -624,6 +624,15 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-shell-viewport { height: 100dvh; min-height: 100%; }
 html[data-keyboard] .ap-shell-viewport { position: fixed; top: var(--app-top); left: 0; right: 0; height: var(--app-height); min-height: 0; }
 html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space-2); }
+/* Installed on an iPhone, the app runs down to the screen's rounded corners, and the composer (or what stands in its
+   place) sits a little further up from them. Without viewport-fit=cover, iOS gives no safe-area inset to go by, and
+   with it the visual viewport reads short of the screen (WebKit bug 254868), which trackKeyboard would take for a
+   keyboard. -webkit-touch-callout is iOS's alone. Over the keyboard the rule above, more specific, still applies. */
+@media (display-mode: standalone) {
+	@supports (-webkit-touch-callout: none) {
+		.ap-shell-viewport :is(.ap-composer, .ap-selbar) { margin-bottom: calc(var(--space-4) + var(--space-2)); }
+	}
+}
 /*
  * The side panels open and shut sliding (ap-shell-slides): their grid columns move (the grid's own transition, not an
  * inherited variable, so nothing else restyles each frame); each panel's contents keep their width against its inner
