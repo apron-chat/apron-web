@@ -735,6 +735,8 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 	.ap-shell.ap-shell-peeking[data-pane='rooms'] .ap-shell-main { display: flex; position: absolute; top: 0; bottom: 0; inset-inline-start: calc(100% - var(--shell-peek)); width: 100%; opacity: var(--opacity-dim); pointer-events: none; }
 	.ap-shell-peek { position: absolute; z-index: 1; top: 0; bottom: 0; inset-inline-end: 0; width: var(--shell-peek); margin: 0; padding: 0; border: 0; background: transparent; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 	.ap-shell-peek:active { background: var(--hover); }
+	/* The room's back button, which opened the list, would show cut in half there (and still hovered: a phone keeps :hover on the last thing tapped). */
+	.ap-shell-peeking .ap-shell-main .ap-roomhead-back { visibility: hidden; }
 }
 .ap-shell-peek { display: none; }
 @media (max-width: 719px) { .ap-shell-peeking .ap-shell-peek { display: block; } }
