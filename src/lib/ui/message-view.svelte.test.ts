@@ -287,6 +287,19 @@ describe('messageView', () => {
 	});
 });
 
+describe('messageView read receipts', () => {
+	it('keeps the same view while its receipts are the same array, and makes a new one when they change', () => {
+		const event = messageRecord(1710000000500);
+		const faces = [{ user_id: 'bob', name: 'Bob' }];
+		const first = messageView(event, row({ seenBy: faces }), context());
+		expect(first.seenBy).toBe(faces);
+		expect(messageView(event, row({ seenBy: faces }), context())).toBe(first);
+		const moved = messageView(event, row({ seenBy: [{ user_id: 'cy' }] }), context());
+		expect(moved).not.toBe(first);
+		expect(messageView(event, row(), context())).not.toHaveProperty('seenBy');
+	});
+});
+
 describe('a message with live text appended (§4.8.5)', () => {
 	/** `GET url`'s response, written by the test as bytes; every request is counted. */
 	function serve() {

@@ -27,6 +27,7 @@ export { default as Attachments } from './Attachments.svelte';
 export { default as AttachmentTile } from './AttachmentTile.svelte';
 export { default as RoomItem } from './RoomItem.svelte';
 export { default as Faces } from './Faces.svelte';
+export { default as ReadReceipts } from './ReadReceipts.svelte';
 export { default as ThreadItem } from './ThreadItem.svelte';
 export { default as StatusBanner } from './StatusBanner.svelte';
 export { default as RateLimitNotice } from './RateLimitNotice.svelte';

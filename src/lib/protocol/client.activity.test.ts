@@ -113,13 +113,25 @@ describe('typing', () => {
 });
 
 describe('read cursors', () => {
-	it('tracks read cursors forward only and advances your own with activity', async () => {
+	/** Signed in to an account: a guest's read cursors would be dropped by the server, so none are sent. */
+	const account = { you: { user_id: 'ada', name: 'Ada' }, token: 'ada-token', auth: ['token', 'guest'] };
+
+	it('sends no read cursor as a guest, whose the server would drop', async () => {
 		await socket.greet(['history', 'rooms', 'activity'], { room: { room_id: 'general', log_id: '10', title: 'General', latest_log_id: '10', history_log_id: '10' } });
 		await socket.reply('history', { more: false, latest_log_id: '10', history_log_id: '10' });
+		socket.sent = [];
+		client.markRead('general', '31');
+		vi.advanceTimersByTime(20_000);
+		expect(socket.sent.filter((frame) => frame.method === 'activity')).toEqual([]);
+	});
+
+	it('tracks read cursors forward only and advances your own with activity', async () => {
+		await socket.greet(['history', 'rooms', 'activity'], { ...account, room: { room_id: 'general', log_id: '10', title: 'General', latest_log_id: '10', history_log_id: '10' } });
+		await socket.reply('history', { more: false, latest_log_id: '10', history_log_id: '10' });
 		const general = () => snapshot.rooms.find((room) => room.id === 'general')!;
-		socket.receive({ method: 'activity', params: { room_id: 'general', from: { user_id: 'guest_1' }, read_message_id: '30' } });
+		socket.receive({ method: 'activity', params: { room_id: 'general', from: { user_id: 'ada' }, read_message_id: '30' } });
 		expect(general().readMessageId).toBe('30');
-		socket.receive({ method: 'activity', params: { room_id: 'general', from: { user_id: 'guest_1' }, read_message_id: '25' } });
+		socket.receive({ method: 'activity', params: { room_id: 'general', from: { user_id: 'ada' }, read_message_id: '25' } });
 		expect(general().readMessageId).toBe('30');
 		socket.sent = [];
 		client.markRead('general', '29');
@@ -133,7 +145,7 @@ describe('read cursors', () => {
 	});
 
 	it('sends a room\'s read cursor at most every ten seconds, the latest at the end, and what waits when the page is hidden', async () => {
-		await socket.greet(['history', 'rooms', 'activity'], { room: { room_id: 'general', log_id: '10', title: 'General', latest_log_id: '10', history_log_id: '10' } });
+		await socket.greet(['history', 'rooms', 'activity'], { ...account, room: { room_id: 'general', log_id: '10', title: 'General', latest_log_id: '10', history_log_id: '10' } });
 		await socket.reply('history', { more: false, latest_log_id: '10', history_log_id: '10' });
 		const reads = () => socket.sent.filter((frame) => frame.method === 'activity').map((frame) => frame.params);
 		socket.sent = [];
@@ -163,7 +175,7 @@ describe('read cursors', () => {
 		vi.stubGlobal('document', page);
 		const started = startClient({ url: 'ws://fake.test/ws' });
 		const first = latest();
-		await first.greet(['history', 'rooms', 'activity'], { room: { room_id: 'general', log_id: '10', title: 'General', latest_log_id: '10', history_log_id: '10' } });
+		await first.greet(['history', 'rooms', 'activity'], { ...account, room: { room_id: 'general', log_id: '10', title: 'General', latest_log_id: '10', history_log_id: '10' } });
 		await first.reply('history', { more: false, latest_log_id: '10', history_log_id: '10' });
 		const reads = (peer: FakeSocket) => peer.sent.filter((frame) => frame.method === 'activity').map((frame) => (frame.params as { read_message_id?: string }).read_message_id);
 		started.client.markRead('general', '31');
@@ -183,14 +195,14 @@ describe('read cursors', () => {
 		vi.advanceTimersByTime(60_000);
 		const second = latest();
 		expect(second).not.toBe(first);
-		await second.greet(['history', 'rooms', 'activity'], { room: { room_id: 'general', log_id: '10', title: 'General', latest_log_id: '10', history_log_id: '10' } });
+		await second.greet(['history', 'rooms', 'activity'], { ...account, room: { room_id: 'general', log_id: '10', title: 'General', latest_log_id: '10', history_log_id: '10' } });
 		expect(reads(second)).toEqual(['33']);
 		started.client.stop();
 	});
 
 	it('drops the read cursors waiting when another identity signs in', async () => {
 		const first = latest();
-		await first.greet(['history', 'rooms', 'activity'], { room: { room_id: 'general', log_id: '10', title: 'General', latest_log_id: '10', history_log_id: '10' }, you: { user_id: 'alice' } });
+		await first.greet(['history', 'rooms', 'activity'], { room: { room_id: 'general', log_id: '10', title: 'General', latest_log_id: '10', history_log_id: '10' }, you: { user_id: 'alice' }, token: 'alice-token', auth: ['token', 'guest'] });
 		await first.reply('history', { more: false, latest_log_id: '10', history_log_id: '10' });
 		const reads = (peer: FakeSocket) => peer.sent.filter((frame) => frame.method === 'activity').map((frame) => (frame.params as { read_message_id?: string }).read_message_id);
 		client.markRead('general', '31');
@@ -199,7 +211,7 @@ describe('read cursors', () => {
 		vi.advanceTimersByTime(70_000);
 		const second = latest();
 		expect(second).not.toBe(first);
-		await second.greet(['history', 'rooms', 'activity'], { room: { room_id: 'general', log_id: '10', title: 'General', latest_log_id: '10', history_log_id: '10' }, you: { user_id: 'bob' } });
+		await second.greet(['history', 'rooms', 'activity'], { room: { room_id: 'general', log_id: '10', title: 'General', latest_log_id: '10', history_log_id: '10' }, you: { user_id: 'bob' }, token: 'bob-token', auth: ['token', 'guest'] });
 		// Alice's waiting cursor is not sent as Bob's.
 		expect(reads(first)).toEqual(['31']);
 		expect(reads(second)).toEqual([]);
@@ -207,7 +219,7 @@ describe('read cursors', () => {
 
 	it('takes your kept read cursor as the server sends it after listing the room (§4.6)', async () => {
 		const room = { room_id: 'general', log_id: '10', title: 'General', latest_log_id: '1724803312060', history_log_id: '10' };
-		await socket.greet(['history', 'rooms', 'activity'], { room, you: { user_id: 'alice' } });
+		await socket.greet(['history', 'rooms', 'activity'], { room, you: { user_id: 'alice' }, token: 'alice-token' });
 		// Right behind the room_list result, before the room's history: the New divider waits for that.
 		socket.receive({ method: 'activity', params: { room_id: 'general', from: { user_id: 'alice' }, typing: 8, read_message_id: '1724803312050' } });
 		const general = () => snapshot.rooms.find((entry) => entry.id === 'general')!;
@@ -218,6 +230,7 @@ describe('read cursors', () => {
 
 	it('keeps your read cursor locally when the server keeps none (ext:settings)', async () => {
 		await socket.greet(['history', 'rooms', 'activity', 'ext:settings'], {
+			...account,
 			room: { room_id: 'general', log_id: '10', title: 'General', latest_log_id: '10', history_log_id: '10' },
 			ext: { settings: { read_cursors: false } }
 		});
@@ -226,5 +239,83 @@ describe('read cursors', () => {
 		client.markRead('general', '31');
 		expect(socket.sent).toEqual([]);
 		expect(snapshot.rooms.find((room) => room.id === 'general')?.readMessageId).toBe('31');
+	});
+});
+
+describe('read receipts', () => {
+	const account = { you: { user_id: 'ada', name: 'Ada' }, token: 'ada-token', auth: ['token', 'guest'] };
+	const secret = { room_id: 'private_1', log_id: '10', private: true, latest_log_id: '10', history_log_id: '10' };
+	const settings = (read_receipts: unknown) => ({ settings: { read_cursors: true, read_receipts } });
+
+	it('keeps the other members\' cursors of a private room as its readers, where the server shows read receipts', async () => {
+		await socket.greet(['history', 'rooms', 'activity', 'ext:settings'], { ...account, room: secret, ext: settings('private') });
+		const room = () => snapshot.rooms.find((entry) => entry.id === 'private_1')!;
+		socket.receive({ method: 'activity', params: { room_id: 'private_1', from: { user_id: 'cy' }, read_message_id: '30' } });
+		socket.receive({ method: 'activity', params: { room_id: 'private_1', from: { user_id: 'bob', name: 'Bob' }, read_message_id: '25' } });
+		// Yours is the room's readMessageId, not a reader.
+		socket.receive({ method: 'activity', params: { room_id: 'private_1', from: { user_id: 'ada' }, read_message_id: '20' } });
+		expect(room().readers).toEqual([{ user_id: 'bob', message_id: '25' }, { user_id: 'cy', message_id: '30' }]);
+		expect(room().readMessageId).toBe('20');
+		// Forward only.
+		socket.receive({ method: 'activity', params: { room_id: 'private_1', from: { user_id: 'bob' }, read_message_id: '24' } });
+		expect(room().readers?.[0]).toEqual({ user_id: 'bob', message_id: '25' });
+	});
+
+	it('has no readers without the setting, nor in a public room', async () => {
+		await socket.greet(['history', 'rooms', 'activity', 'ext:settings'], { ...account, room: secret, ext: settings(false) });
+		socket.receive({ method: 'activity', params: { room_id: 'private_1', from: { user_id: 'bob' }, read_message_id: '25' } });
+		expect(snapshot.rooms.find((entry) => entry.id === 'private_1')).not.toHaveProperty('readers');
+		const started = startClient({ url: 'ws://fake.test/ws', onSnapshot: (next) => (snapshot = next) });
+		await started.socket.greet(['history', 'rooms', 'activity', 'ext:settings'], { ...account, room: { room_id: 'general', log_id: '10', title: 'General' }, ext: settings('private') });
+		started.socket.receive({ method: 'activity', params: { room_id: 'general', from: { user_id: 'bob' }, read_message_id: '25' } });
+		expect(snapshot.rooms.find((entry) => entry.id === 'general')).not.toHaveProperty('readers');
+		started.client.stop();
+	});
+
+	it('sends no cursor in a private room with Read Receipts off, while still keeping it here and syncing public rooms', async () => {
+		await socket.greet(['history', 'rooms', 'activity', 'ext:settings'], { ...account, room: secret, ext: settings('private') });
+		await socket.reply('history', { more: false, latest_log_id: '10', history_log_id: '10' });
+		client.setReadReceipts(false);
+		socket.sent = [];
+		client.markRead('private_1', '31');
+		vi.advanceTimersByTime(20_000);
+		expect(socket.sent.filter((frame) => frame.method === 'activity')).toEqual([]);
+		expect(snapshot.rooms.find((entry) => entry.id === 'private_1')?.readMessageId).toBe('31');
+		client.markRead('general', '40');
+		expect(socket.sent.filter((frame) => frame.method === 'activity')).toEqual([{ method: 'activity', params: { room_id: 'general', read_message_id: '40' } }]);
+		// Back on: how far you read goes at once, and the next one after the interval.
+		client.setReadReceipts(true);
+		expect(socket.sent.filter((frame) => frame.method === 'activity').at(-1)).toEqual({ method: 'activity', params: { room_id: 'private_1', read_message_id: '31' } });
+		client.markRead('private_1', '32');
+		vi.advanceTimersByTime(10_000);
+		expect(socket.sent.filter((frame) => frame.method === 'activity').at(-1)).toEqual({ method: 'activity', params: { room_id: 'private_1', read_message_id: '32' } });
+	});
+
+	it('drops a waiting private cursor when Read Receipts go off, and sends how far you read once they are back on', async () => {
+		await socket.greet(['history', 'rooms', 'activity', 'ext:settings'], { ...account, room: secret, ext: settings('private') });
+		await socket.reply('history', { more: false, latest_log_id: '10', history_log_id: '10' });
+		const sent = () => socket.sent.filter((frame) => frame.method === 'activity').map((frame) => (frame.params as { read_message_id?: string }).read_message_id);
+		socket.sent = [];
+		client.markRead('private_1', '31');
+		// Within the interval: this one waits.
+		client.markRead('private_1', '32');
+		client.setReadReceipts(false);
+		client.markRead('private_1', '33');
+		vi.advanceTimersByTime(20_000);
+		expect(sent()).toEqual(['31']);
+		client.setReadReceipts(true);
+		vi.advanceTimersByTime(20_000);
+		expect(sent()).toEqual(['31', '33']);
+	});
+
+	it('sends nothing on turning Read Receipts back on when nothing moved', async () => {
+		await socket.greet(['history', 'rooms', 'activity', 'ext:settings'], { ...account, room: secret, ext: settings('private') });
+		await socket.reply('history', { more: false, latest_log_id: '10', history_log_id: '10' });
+		client.markRead('private_1', '31');
+		socket.sent = [];
+		client.setReadReceipts(false);
+		client.setReadReceipts(true);
+		vi.advanceTimersByTime(20_000);
+		expect(socket.sent.filter((frame) => frame.method === 'activity')).toEqual([]);
 	});
 });
