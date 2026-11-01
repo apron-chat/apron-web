@@ -16,7 +16,7 @@
 	const audio = $derived(og.audio && safeHttp(og.audio.url));
 	const image = $derived(og.image && safeHttp(og.image.url));
 	/** The preview that waits for a click, the one that would show first: none while one may load. */
-	const ask = $derived(video || audio || image ? undefined : og.video?.ask ? { ...og.video.ask, what: 'Video' } : og.audio?.ask ? { ...og.audio.ask, what: 'Audio' } : og.image?.ask ? { ...og.image.ask, what: og.image.alt || 'Image' } : undefined);
+	const ask = $derived(video || audio || image ? undefined : og.video?.ask ? { ...og.video.ask, what: 'Video', kind: 'video' as const } : og.audio?.ask ? { ...og.audio.ask, what: 'Audio', kind: 'audio' as const } : og.image?.ask ? { ...og.image.ask, what: og.image.alt || 'Image', kind: 'image' as const } : undefined);
 	const pending = $derived(failed ? (typeof failed === 'string' ? `Upload failed · ${failed}` : 'Upload failed') : `${detail ? `${detail} · ` : ''}${pct != null ? `Uploading · ${pct}%` : 'Uploading…'}`);
 </script>
 

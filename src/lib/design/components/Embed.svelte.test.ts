@@ -45,6 +45,8 @@ describe('media that waits for a click', () => {
 		const onblock = vi.fn();
 		render(EmbedCard, { kind: 'link', url: 'https://news.example/story', testid: 'card', og: { title: 'A story', image: { alt: 'Chart', ask: { url: 'https://cdn.example/chart.png', host: 'cdn.example', onload, ontrust, onblock } } } });
 		expect(document.querySelector('[data-testid="card"]')?.classList.contains('ap-embed-held')).toBe(true);
+		// Its kind, for the icon before what it is.
+		expect(document.querySelector('.ap-media-ask')?.classList.contains('ap-media-ask-image')).toBe(true);
 		expect(document.querySelector('img')).toBeNull();
 		const ask = () => [document.querySelector('.ap-media-ask-label')?.textContent, ...[...document.querySelectorAll('.ap-media-ask button')].map((button) => button.textContent)];
 		expect(ask()).toEqual(['Chart https://cdn.example/chart.png', 'Load', 'Always load from cdn.example', 'Block cdn.example']);
@@ -59,6 +61,7 @@ describe('media that waits for a click', () => {
 		render(EmbedUpload, { kind: 'upload', url: 'https://files.example/a.mp4', title: 'a.mp4', og: { video: { ask: { url: 'http://plain.example/a.mp4', host: 'plain.example', onload } }, image: { ask: { url: 'http://plain.example/a.png', host: 'plain.example', onload } } } });
 		expect(document.querySelector('.ap-embed-file')).not.toBeNull();
 		expect(ask()).toEqual(['Video http://plain.example/a.mp4', 'Load']);
+		expect(document.querySelector('.ap-media-ask')?.classList.contains('ap-media-ask-video')).toBe(true);
 	});
 });
 
