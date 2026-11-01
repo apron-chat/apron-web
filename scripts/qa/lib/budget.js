@@ -82,13 +82,14 @@ export function samplesOf(result, probes) {
 /**
  * Two `qa budget --out` files side by side (say, this machine's and a CI runner's): per probe and metric each
  * side's `median [min–max]`, and whether every run on both sides counted the same. Chunks whose calls differ are
- * listed under their probe.
+ * listed under their probe. Only the probes both measured are compared (a shard holds a third of them).
  */
 export function diffSamples(a, b) {
 	const cell = (s) => (s ? `${s.median}${s.min === s.max ? '' : ` [${s.min}–${s.max}]`}` : '–');
 	const rows = [];
 	let same = 0;
-	for (const probe of [...new Set([...Object.keys(a.probes), ...Object.keys(b.probes)])]) {
+	const shared = Object.keys(a.probes).filter((p) => p in b.probes);
+	for (const probe of shared) {
 		const pa = a.probes[probe] ?? {};
 		const pb = b.probes[probe] ?? {};
 		for (const metric of [...new Set([...Object.keys(pa), ...Object.keys(pb)])].filter((m) => m !== 'chunks')) {
@@ -107,7 +108,9 @@ export function diffSamples(a, b) {
 	const widths = head.map((_, i) => Math.max(...[head, ...rows].map((r) => r[i].length)));
 	const line = (r) => r.map((c, i) => c.padEnd(widths[i])).join('  ').trimEnd();
 	const counted = rows.filter((r) => !r[1].startsWith(' ')).length;
-	return { same, total: counted, text: [line(head), ...rows.map(line), '', `${same}/${counted} counts the same in every run on both sides`].join('\n') };
+	const unshared = [...Object.keys(a.probes), ...Object.keys(b.probes)].filter((p) => !shared.includes(p));
+	const summary = `${same}/${counted} counts the same in every run on both sides${unshared.length ? `; not in both: ${[...new Set(unshared)].join(', ')}` : ''}`;
+	return { same, total: counted, text: [line(head), ...rows.map(line), '', summary].join('\n') };
 }
 
 /** Per probe and metric, `median [min–max]` over the runs, marking with `*` any metric that varied between them. */
