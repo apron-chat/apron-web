@@ -2711,7 +2711,9 @@
 		// pins again, and setting the scroll top there would snap the bounce back under the finger every frame.
 		const end = messageScroll.scrollHeight - messageScroll.clientHeight;
 		if (messageScroll.scrollTop < end - 1) messageScroll.scrollTop = messageScroll.scrollHeight;
-		lastScrollTop = messageScroll.scrollTop;
+		// Held at the end, not wherever within a pixel of it the list sits: what a slow drag moved
+		// it short of the end so far still counts toward letting go (trackScroll).
+		lastScrollTop = end;
 	}
 
 	/** Takes you to the oldest mention that arrived while you were reading back. */
@@ -2722,24 +2724,33 @@
 	}
 
 	function trackScroll(): void {
-		if (!messageScroll) return;
-		const top = messageScroll.scrollTop;
+		const scroller = messageScroll;
+		if (!scroller) return;
+		const pinned = stickToBottom;
+		const top = scroller.scrollTop;
 		const scrolledUp = lastScrollTop === undefined || top < lastScrollTop - 1;
-		lastScrollTop = top;
 		// While pinned, only the reader scrolling up lets go. The pane grows under us as a room's
 		// history, its threads' cards and long messages lay out; our own scroll's event can land
 		// after that, and scroll anchoring moves the list down, before the next frame catches up.
-		if (stickToBottom && !scrolledUp) {
+		// Up is measured from where the pane was last held, not from the last event: a slow drag
+		// (on iOS, a third of a pixel at a time) moves less than a pixel between events, each step
+		// too small to count, and pinning back after each would hold it until the drag gathered
+		// speed. Held no further down than the end, so bouncing back out of iOS's rubber band
+		// below the latest isn't read as scrolling up.
+		if (!pinned || lastScrollTop === undefined) lastScrollTop = top;
+		else if (top > lastScrollTop) lastScrollTop = Math.min(top, scroller.scrollHeight - scroller.clientHeight);
+		if (pinned && !scrolledUp) {
+			// Unless the reader has gone on up by then: a drag can move the list again before this frame.
 			requestAnimationFrame(() => {
-				if (stickToBottom) scrollToLatest();
+				if (stickToBottom && messageScroll && lastScrollTop !== undefined && messageScroll.scrollTop >= lastScrollTop - 1) scrollToLatest();
 			});
 			return;
 		}
-		const atBottom = atLatest(messageScroll);
+		const atBottom = atLatest(scroller);
 		if (top < OLDER_REPLIES_MARGIN_PX) void loadOlderReplies();
-		if (!atBottom && stickToBottom) seenThrough = messages[messages.length - 1]?.message_id;
+		if (!atBottom && pinned) seenThrough = messages[messages.length - 1]?.message_id;
 		stickToBottom = atBottom;
-		floatingDay.update(messageScroll, atBottom);
+		floatingDay.update(scroller, atBottom);
 	}
 
 	/**
