@@ -35,7 +35,7 @@ export interface LiveTypingTransport {
 	/** Posts the message with an `append` embed (§4.8.5); resolves with its ID and the embed's `write_url`. */
 	start(): Promise<{ messageId: string; writeUrl: string }>;
 	/** Streams `body` to `writeUrl` (`writeLiveText`): resolves with the server's response, which may come before the body ends. */
-	write?(writeUrl: string, body: ReadableStream<Uint8Array>, signal: AbortSignal): Promise<Response>;
+	write?(writeUrl: string, body: ReadableStream<Uint8Array>): Promise<Response>;
 }
 
 /** Why a session ended without being finished: the write could not be made, or the server ended the text first. */
@@ -64,7 +64,8 @@ export class LiveTyping {
 	#latest: string;
 	#body: ReadableStreamDefaultController<Uint8Array> | undefined;
 	#done = false;
-	readonly #abort = new AbortController();
+	/** Some text went out on the write. */
+	#wrote = false;
 	readonly #encoder = new TextEncoder();
 	/** Settles once the message is posted and its write has started, or failed to. */
 	readonly started: Promise<void>;
@@ -75,16 +76,19 @@ export class LiveTyping {
 		const write = transport.write ?? writeLiveText;
 		const end = (kind: LiveTypingEnd['kind'], reason: string) => {
 			if (this.#done) return;
-			this.#done = true;
+			this.close();
 			onend({ kind, reason, ...(this.messageId ? { messageId: this.messageId } : {}) });
 		};
 		this.started = transport.start().then(({ messageId, writeUrl }) => {
 			this.messageId = messageId;
 			if (this.#done) return;
 			const body = new ReadableStream<Uint8Array>({ start: (controller) => void (this.#body = controller) });
-			write(writeUrl, body, this.#abort.signal).then(
-				async (response) => end('ended', (await reason(response)) || 'The live message ended'),
-				(cause: unknown) => end('failed', cause instanceof Error && cause.name !== 'TypeError' ? cause.message : 'This connection can’t stream live text')
+			write(writeUrl, body).then(
+				async (response) => end('ended', (await reason(response)) || 'the server ended it'),
+				// Once text went out, the server keeps what arrived (§4.8.5): the message stands, so the text ended.
+				(cause: unknown) => this.#wrote
+					? end('ended', 'the connection to the server dropped')
+					: end('failed', cause instanceof Error && cause.name !== 'TypeError' ? cause.message : 'this connection can’t stream live text')
 			);
 			this.update(this.#text);
 		}, (cause: unknown) => end('failed', cause instanceof Error && cause.message ? cause.message : 'Unable to start the live message'));
@@ -100,6 +104,11 @@ export class LiveTyping {
 		return this.#text;
 	}
 
+	/** That as it goes out as live text (`liveTextOf`): what a save that ends it puts in `body.text`, so readers keep what they saw. */
+	get liveText(): string {
+		return this.#latest;
+	}
+
 	/** The composer's text changed: the edit to it goes out, once the write has started. */
 	update(text: string): void {
 		if (this.#done) return;
@@ -110,6 +119,7 @@ export class LiveTyping {
 		if (!edit) return;
 		this.#body.enqueue(this.#encoder.encode(edit));
 		this.#sent = this.#latest;
+		this.#wrote = true;
 	}
 
 	/**
@@ -134,17 +144,10 @@ export class LiveTyping {
 		}
 		this.#body = undefined;
 	}
-
-	/** Gives up on the write at once, as when the message is deleted. */
-	abort(): void {
-		this.#done = true;
-		this.#abort.abort();
-	}
 }
 
-/** The server's word on an ended write, a line of its body at most. */
+/** The server's word on an ended write, a line of its body at most: some servers say why with a success status too. */
 async function reason(response: Response): Promise<string> {
-	if (response.ok) return '';
 	try {
 		return (await response.text()).trim().split('\n')[0].slice(0, 200);
 	} catch {

@@ -865,17 +865,22 @@ and the whole text, a full reset to what the composer shows. Backspace and form 
 itself are left out of what is sent. So the timeline, the sender's own
 included, shows the message growing and changing as it is typed, with
 Writing… under it, while the draft is still in the composer. It takes no
-link previews or files, no typing indicator is sent, and the draft is no
-command while it is live. **Send** (on, even with the field empty) finishes
-it: with `edit`, a save puts the draft in `body.text`, with its mentions and
-without the embed, which ends the text (the composer's own state is the text
-it means), then the write ends; an empty draft deletes the message instead.
-Without `edit`, the write ends, and the server keeps what arrived. Leaving
-the pane finishes it as Send would, with what was typed. If the message or
-its write can't be made, the message is deleted (with `edit`), the composer
-keeps what was typed as an ordinary draft, and a notice says why; if the
-server ends the text first (a limit), the message keeps what arrived and a
-notice says so. It needs a browser that streams a request body as it is
+link previews or files (`/live` with files staged asks to send or remove them
+first), no typing indicator is sent, and the draft is no command while it is
+live. **Send** (on, even with the field empty) finishes it: with `edit`, a
+save puts the draft in `body.text`, with its mentions, any reply picked while
+it was live, and without the embed, which ends the text (the composer's own
+state is the text it means), then the write ends; an empty draft deletes the
+message instead. Without `edit`, the write ends, and the server keeps what
+arrived. Leaving the pane finishes it as Send would, with what was typed, its
+mentions and reply. If the message or its write can't be made, the message is
+deleted (with `edit`), and what was typed stays in the composer as an
+ordinary draft, or comes back to it if Send had already emptied it; a notice
+says why. If the server ends the text first (a limit), or the connection
+drops once text went out, the message keeps what arrived: it is finished from
+the draft as Send would, and a notice says so; if that save fails, the draft
+comes back. The server's reason is read from its answer to the write, whatever
+its status. It needs a browser that streams a request body as it is
 written ([`duplex: 'half'`](https://developer.mozilla.org/en-US/docs/Web/API/Request/duplex#browser_compatibility)),
 which browsers do only over HTTP/2 or later. Where it can't (`canWriteLiveText`
 detects the feature, not a browser), `/live` does nothing but post a local

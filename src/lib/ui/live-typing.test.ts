@@ -65,7 +65,7 @@ describe('LiveTyping', () => {
 		await typing.started;
 		state.fail(new TypeError('Failed to fetch'));
 		await settle();
-		expect(ends).toEqual([{ kind: 'failed', messageId: 'm1', reason: 'This connection can’t stream live text' }]);
+		expect(ends).toEqual([{ kind: 'failed', messageId: 'm1', reason: 'this connection can’t stream live text' }]);
 		expect(typing.active).toBe(false);
 		expect(await typing.finish()).toBeUndefined();
 	});
@@ -78,6 +78,28 @@ describe('LiveTyping', () => {
 		state.respond(new Response('This live text is limited to 64 KB; it ended\n', { status: 413 }));
 		await settle();
 		expect(ends).toEqual([{ kind: 'ended', messageId: 'm1', reason: 'This live text is limited to 64 KB; it ended' }]);
+	});
+
+	it('reads a reason from the server whatever its status, as some say why with a success', async () => {
+		const { state, transport: t } = transport();
+		const ends: LiveTypingEnd[] = [];
+		const typing = new LiveTyping('', t, (end) => ends.push(end));
+		await typing.started;
+		state.respond(new Response('The text reached its 2m limit; what arrived is posted.\n', { status: 200 }));
+		await settle();
+		expect(ends).toEqual([{ kind: 'ended', messageId: 'm1', reason: 'The text reached its 2m limit; what arrived is posted.' }]);
+	});
+
+	it('counts a connection dropped after text went out as ended, not failed: the server keeps what arrived', async () => {
+		const { state, transport: t } = transport();
+		const ends: LiveTypingEnd[] = [];
+		const typing = new LiveTyping('', t, (end) => ends.push(end));
+		await typing.started;
+		typing.update('partial');
+		state.fail(new TypeError('network error'));
+		await settle();
+		expect(ends).toEqual([{ kind: 'ended', messageId: 'm1', reason: 'the connection to the server dropped' }]);
+		expect(typing.active).toBe(false);
 	});
 
 	it('tells of a message that was not posted', async () => {

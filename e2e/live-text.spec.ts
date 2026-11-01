@@ -393,6 +393,58 @@ test.describe('live typing (/live)', () => {
 		expect(saved.body).toEqual({ text: 'Hi everyone', format: 'markdown' });
 	});
 
+	test('leaving the pane finishes it with its mentions and a reply picked meanwhile, and the next message is no reply', async ({ preview, page }) => {
+		await preview.open();
+		await preview.composer().click();
+		await page.keyboard.insertText('/live');
+		await page.keyboard.press('Enter');
+		await expect(page.getByTestId('live-tag')).toBeVisible();
+		await preview.waitForSent('message', (params) => isAppend(params.body));
+		await page.keyboard.type('@ad');
+		await page.getByTestId('mention-picker').getByRole('option', { name: /Ada Lovelace/ }).click();
+		await page.keyboard.type('look');
+		await expect(preview.message('look')).toBeVisible();
+		const welcome = page.locator('article[data-message-id="1710000000001"]');
+		const reply = welcome.getByRole('button', { name: 'Reply to message', exact: true });
+		await expect(async () => {
+			await welcome.hover();
+			await expect(reply).toBeVisible({ timeout: 1000 });
+		}).toPass();
+		await reply.click();
+		await expect(page.getByTestId('reply-draft')).toBeVisible();
+		await preview.openRoom('engineering');
+		const saved = await preview.waitForSent('message', (params) => params.message_id !== undefined);
+		expect(saved.body).toEqual({ text: '@ada look', format: 'markdown', mentions: ['ada'] });
+		expect(saved.reply_to).toEqual({ message_id: '1710000000001' });
+		await preview.openRoom('general');
+		await expect(page.getByTestId('live-tag')).toHaveCount(0);
+		await expect(page.getByTestId('reply-draft')).toHaveCount(0);
+		await expect(preview.composer()).toHaveText('');
+	});
+
+	test('Send before the server took the message gives the draft back when it refuses it', async ({ preview, page }) => {
+		await preview.open();
+		// The server answers a live message's post late, and refuses it.
+		await page.evaluate(() => {
+			const server = (window as any).__apronPreview;
+			const message = server.message.bind(server);
+			server.message = (socket: unknown, params: any, reply: unknown, fail: (text: string) => void) => {
+				if (!params.body?.embeds?.some((embed: { kind?: string }) => embed.kind === 'append')) return message(socket, params, reply, fail);
+				setTimeout(() => fail('Not now'), 800);
+			};
+		});
+		await preview.composer().click();
+		await page.keyboard.insertText('/live');
+		await page.keyboard.press('Enter');
+		await expect(page.getByTestId('live-tag')).toBeVisible();
+		await page.keyboard.type('keep me');
+		await page.keyboard.press('Enter');
+		await expect(preview.composer()).toHaveText('');
+		await expect(preview.composer()).toHaveText('keep me');
+		await expect(page.getByTestId('live-tag')).toHaveCount(0);
+		expect((await preview.sent('message')).filter((params) => params.message_id !== undefined)).toHaveLength(0);
+	});
+
 	test('Send with nothing typed takes the live message back', async ({ preview, page }) => {
 		await preview.open();
 		await preview.composer().click();

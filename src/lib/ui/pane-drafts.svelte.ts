@@ -98,10 +98,16 @@ export class PaneDrafts {
 		this.staged.set(key, []);
 	}
 
-	/** Empties `key`'s kept text, and the composer's when `key` is open: its text went out some other way, as live text. */
-	forgetText(key: string): void {
+	/**
+	 * Empties `key`'s kept text and reply, and the composer's when `key` is open: they went out some other way, as a
+	 * live message. Staged files stay.
+	 */
+	forget(key: string): void {
 		this.texts.set(key, '');
-		if (this.key === key) this.text = '';
+		this.replies.set(key, undefined);
+		if (this.key !== key) return;
+		this.text = '';
+		this.reply = undefined;
 	}
 
 	/**
