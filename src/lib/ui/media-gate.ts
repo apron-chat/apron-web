@@ -39,7 +39,7 @@ export interface MediaGateOptions {
 	/**
 	 * Origins whose media never loads, nor is asked for: Preferences' Blocked origins. They win over everything else
 	 * that would let media load (the trusted origins, Any site, a click on Load), and match by host (`blockableHost`),
-	 * whatever the scheme or port.
+	 * whatever the scheme or port, and every host under it (blocking `tracker.example` blocks `a.tracker.example`).
 	 */
 	blocked?: readonly string[];
 }
@@ -60,7 +60,13 @@ export function mediaGate(origin: string | undefined, trusted: readonly string[]
 	const key = `${origin ?? ''} ${trusted.join(' ')}${options.httpsElsewhere ? ' https' : ''}${options.asks ? ' ask' : ''}${blocked.size ? ` -${[...blocked].join(' -')}` : ''}${once.length ? `\n${once.join('\n')}` : ''}`;
 	const isBlocked = (value: unknown): boolean => {
 		const link = blocked.size ? safeLink(value) : undefined;
-		return link !== undefined && blocked.has(blockableHost(new URL(link)));
+		if (link === undefined) return false;
+		// The host, then each one it is under: a.b.example, b.example, example.
+		for (let host = blockableHost(new URL(link)); host; host = host.slice(host.indexOf('.') + 1) || '') {
+			if (blocked.has(host)) return true;
+			if (!host.includes('.')) break;
+		}
+		return false;
 	};
 	const src = (value: unknown): MediaSrc | undefined => {
 		if (isBlocked(value)) return undefined;

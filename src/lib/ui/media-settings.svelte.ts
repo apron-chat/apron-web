@@ -10,7 +10,7 @@ import { loadMediaSettings, MEDIA_KEY, saveMediaSettings } from './storage';
  *   Media in the timeline from anywhere else waits for a click; avatars and
  *   custom emoji from anywhere else don't show.
  * - `any`: any site.
- * Either way, nothing loads from the origins the viewer blocked (`blocked`), whatever trusts them.
+ * Either way, nothing loads from the origins the viewer blocked (`blocked`), or from under them, whatever trusts them.
  * Inline images (`data:`) always show.
  */
 export const MEDIA_POLICIES = [
