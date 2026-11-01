@@ -2056,7 +2056,7 @@
 		if (!client || !paneRoom) return;
 		drafts.saveText();
 		// A live message shows itself as it is typed: no typing indicator besides.
-		if (composingLive) return;
+		if (live && composingLive) return;
 		const roomId = paneRoom.id;
 		client.sendTyping(roomId, true);
 		if (typingTimer) clearTimeout(typingTimer);
@@ -2189,11 +2189,12 @@
 
 	// Each change to the live draft goes out as it is made: typing, a chip, an emoji, a paste. Its mentions and reply
 	// are kept with it, for when it finishes, from here or from another pane.
+	// Only while live: otherwise the draft isn't read here, so typing doesn't run this.
 	$effect(() => {
+		if (!composingLive) return;
 		const text = drafts.text;
 		const mentions = composerMentions;
 		const reply = drafts.reply;
-		if (!composingLive) return;
 		untrack(() => {
 			if (!live) return;
 			live.mentions = mentions;

@@ -123,14 +123,16 @@
 	});
 	/** Voice messages need uploads, a type the server takes, and a browser that can record. */
 	let canRecord = $derived(canUpload && voice !== undefined && Boolean(navigator.mediaDevices?.getUserMedia));
-	let command = $derived(!live && canCommand && isCommand(value));
+	let command = $derived(canCommand && isCommand(value) && !live);
 	let emojiOpen = $derived(emojiPicker.isOpenFor(emojiButton));
 	/** Bumped when a fetched preview arrives, so the previews below are redrawn. */
 	let previewsArrived = $state(0);
 	/** The link embeds the draft will be sent with (a command takes none). */
 	let previews = $derived.by(() => {
 		void previewsArrived;
-		return command || live || disabled ? [] : linkPreviews.embeds(value, dismissed);
+		if (command || disabled) return [];
+		const embeds = linkPreviews.embeds(value, dismissed);
+		return embeds.length && live ? [] : embeds;
 	});
 	/** Those as the design system's Composer takes them: their pictures only from where link previews may load from (each is drawn by `preview` below, which asks the same). */
 	let previewCards = $derived(previews.map((embed) => ({ ...embed, og: loadableOg(embed.og, directory.mediaGate) })));
@@ -139,7 +141,7 @@
 	// Typed links are looked up once typing pauses, so a half-typed URL isn't.
 	$effect(() => {
 		const text = value;
-		if (command || live || disabled || linkPreviews.links(text).length === 0) return;
+		if (command || disabled || linkPreviews.links(text).length === 0 || live) return;
 		const timer = setTimeout(() => void linkPreviews.prefetch(text), PREVIEW_TYPING_PAUSE_MS);
 		return () => clearTimeout(timer);
 	});

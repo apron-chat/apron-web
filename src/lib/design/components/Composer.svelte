@@ -109,8 +109,8 @@
 	}: Props = $props();
 
 	const ph = $derived(placeholder || (thread ? `Reply in ${roomName(thread.name, thread.thread, { thread: true })}` : `Message ${room || ''}`));
-	const cmd = $derived(!live && !!canCommand && isCommand(value));
-	const sendable = $derived(canSend ?? (!!live || !!value.trim() || !!attachments));
+	const cmd = $derived(!!canCommand && isCommand(value) && !live);
+	const sendable = $derived(canSend ?? (!!value.trim() || !!attachments || !!live));
 	/** What's left of a wait on sending, while there is one. */
 	const waitLeft = $derived(waitUntil === undefined ? 0 : Math.max(0, waitUntil - secondNow()));
 	let fileInput = $state<HTMLInputElement>();
