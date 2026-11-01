@@ -88,9 +88,14 @@ async function measure(browser, url, probe, { cpu, path, reducedMotion, calls, c
 		const page = await context.newPage();
 		const cdp = await context.newCDPSession(page);
 		await cdp.send('Performance.enable');
-		/** Requests in flight, for `settled`. */
-		const inflight = new Set();
-		cdp.on('Network.requestWillBeSent', (e) => inflight.add(e.requestId));
+		/** Requests in flight (id to URL), for `settled`. */
+		const inflight = new Map();
+		/** Requests sent since `settled` last returned. */
+		let sent = 0;
+		cdp.on('Network.requestWillBeSent', (e) => {
+			inflight.set(e.requestId, e.request.url);
+			sent++;
+		});
 		cdp.on('Network.loadingFinished', (e) => inflight.delete(e.requestId));
 		cdp.on('Network.loadingFailed', (e) => inflight.delete(e.requestId));
 		await cdp.send('Network.enable');
@@ -120,12 +125,24 @@ async function measure(browser, url, probe, { cpu, path, reducedMotion, calls, c
 			await cdp.send('Profiler.startPreciseCoverage', { callCount: true, detailed: false });
 		}
 		const origin = new URL(url).origin;
-		/** Waits until no request is in flight and the page has had `FAKE_QUIET` ms of real time to itself since. */
+		/**
+		 * Waits until no request is in flight and the page has had `FAKE_QUIET` ms of real time to itself since,
+		 * then, if anything was requested, for its main thread (a chunk still being parsed may yet ask for its
+		 * imports), and checks again.
+		 * Gives up after `FAKE_SETTLE_LIMIT` ms, naming what is still loading, rather than hang the budget.
+		 */
 		const settled = async () => {
-			for (let quiet = Date.now(); Date.now() - quiet < FAKE_QUIET; ) {
-				await new Promise((resolve) => setTimeout(resolve, 5));
-				if (inflight.size) quiet = Date.now();
-			}
+			const deadline = Date.now() + FAKE_SETTLE_LIMIT;
+			do {
+				for (let quiet = Date.now(); Date.now() - quiet < FAKE_QUIET; ) {
+					if (Date.now() > deadline) throw new Error(`${probe.name}: requests still in flight after ${FAKE_SETTLE_LIMIT / 1000} s: ${[...inflight.values()].join(', ')}`);
+					await new Promise((resolve) => setTimeout(resolve, 5));
+					if (inflight.size) quiet = Date.now();
+				}
+				if (!sent) return;
+				sent = 0;
+				await page.evaluate(() => 0);
+			} while (sent || inflight.size);
 		};
 		/** Runs `ms` of fake time in steps of `step`, settling after each. */
 		const runFake = async (/** @type {number} */ ms, step = FAKE_STEP) => {
@@ -141,9 +158,12 @@ async function measure(browser, url, probe, { cpu, path, reducedMotion, calls, c
 		if (fake) {
 			await page.goto(new URL(path, url.endsWith('/') ? url : `${url}/`).href);
 			await settled();
-			for (ready = 0; !(await page.$(READY)); ready += FAKE_STEP) {
-				if (ready > 30000) throw new Error(`not ready after ${ready} ms of fake time`);
+			// Looked for after each step, never before the first, so the windows that follow start from a fake
+			// moment rather than from whether the app happened to render within the first settle.
+			for (ready = FAKE_STEP; ; ready += FAKE_STEP) {
 				await wait(FAKE_STEP);
+				if (await page.$(READY)) break;
+				if (ready > 30000) throw new Error(`not ready after ${ready} ms of fake time`);
 			}
 		} else {
 			await page.goto(new URL(path, url.endsWith('/') ? url : `${url}/`).href);
@@ -158,7 +178,7 @@ async function measure(browser, url, probe, { cpu, path, reducedMotion, calls, c
 		else await wait(1200);
 		if (!probe.action) {
 			const m = await metrics();
-			const counted = calls ? await callCounts(cdp, origin, chunkNames) : {};
+			const counted = calls ? await callCounts(cdp, origin, chunkNames, true) : {};
 			const nav = await page.evaluate(() => {
 				const w = /** @type {any} */ (window);
 				/** @type {Performance} */
@@ -244,13 +264,15 @@ const FAKE_STARTUP = 3000;
 const FAKE_STARTUP_STEP = 500;
 /** Real ms the page must spend with no request in flight before the fake clock moves on. */
 const FAKE_QUIET = 50;
+/** Real ms `settled` waits at most. */
+const FAKE_SETTLE_LIMIT = 15000;
 
 /**
  * Function calls since the last take, summed over the scripts the page's origin served (Playwright's own
  * injected scripts have no URL and don't count), in all and by chunk. A function counts once per call; one
  * that never ran counts 0.
  */
-async function callCounts(cdp, origin, chunkNames = new Map()) {
+async function callCounts(cdp, origin, chunkNames = new Map(), load = false) {
 	const { result } = await cdp.send('Profiler.takePreciseCoverage');
 	/** @type {Record<string, number>} */
 	const chunks = {};
@@ -263,7 +285,8 @@ async function callCounts(cdp, origin, chunkNames = new Map()) {
 		total += n;
 		chunks[name] = (chunks[name] ?? 0) + n;
 	}
-	if (!total) throw new Error('precise coverage counted no calls in the page: did the navigation move it to another renderer?');
+	// A load always runs the app's code; none counted means the coverage was lost, not that nothing ran.
+	if (load && !total) throw new Error('precise coverage counted no calls in the page: did the navigation move it to another renderer?');
 	return { calls: total, chunks };
 }
 

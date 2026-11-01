@@ -35,7 +35,7 @@ const HELP = `npm run qa -- <command> [options]
                          Diff, plus before|after crops of each changed shot and <dir>/index.html.
   perf --url A --url B   Load and interaction metrics, strictly interleaved; medians and spread.
                          [--label a --label b] [--runs 5] [--cpu 4] [--suite main] [--only load,type-composer]
-                         [--build dirA --build dirB] [--out file.json]
+                         [--build dirA --build dirB] [--out file.json] [--calls: JS function calls too]
   budget --build <dir>   Check a preview build's counts (layouts, style recalcs, DOM nodes, requests,
                          bytes) per perf probe against scripts/qa/perf-budget.json; exits 1 when one is
                          over. --update rewrites the baseline. Counts JS function calls too, and times the
@@ -54,7 +54,8 @@ const HELP = `npm run qa -- <command> [options]
   clean                  Remove .qa/snap (cached builds); --all removes all of .qa.
 
 Filters match any part of a shot id, <scene>--<viewport>--<theme>; commas give several.
-Chromium: QA_CHROMIUM, else playwright-core's build under PLAYWRIGHT_BROWSERS_PATH.`;
+Chromium: QA_CHROMIUM, else playwright-core's build under PLAYWRIGHT_BROWSERS_PATH. budget checks only in the
+Chromium its baseline was recorded with.`;
 
 const BOOLEAN = ['perf', 'recheck', 'rebuild', 'install', 'keep', 'clean', 'all', 'help', 'check', 'update', 'calls'];
 const MULTI = ['url', 'label', 'build', 'suite', 'filter', 'only'];
@@ -159,7 +160,7 @@ async function main() {
 			// checks the bundle's size.
 			const [index, count] = o.shard ? String(o.shard).split('/').map(Number) : [1, 1];
 			if (!(Number.isInteger(index) && Number.isInteger(count) && index >= 1 && index <= count)) throw new Error(`--shard takes <index>/<count>, e.g. 2/3, not ${o.shard}`);
-			if (count > 1 && o.update) throw new Error('--update rewrites the whole baseline: run it without --shard');
+			if (o.update && (count > 1 || o.only)) throw new Error('--update rewrites the whole baseline: run it without --shard or --only');
 			const probes = shardOf(selectProbes(suite, list(o.only)).filter((p) => p.budget !== false), index, count);
 			if (!probes.length) throw new Error(`shard ${index}/${count} has no probes to check`);
 			const runs = int(o.runs, 3);
@@ -173,7 +174,8 @@ async function main() {
 			try {
 				// A Chromium other than the baseline's counts differently (one version to the next moves style recalcs
 				// by a few per probe), so the check runs only on the baseline's.
-				if (!o.update && budget.chromium && budget.chromium !== browser.version())
+				// With --out the counts are still written, to diff between machines, but not checked.
+				if (!o.update && !o.out && budget.chromium && budget.chromium !== browser.version())
 					throw new Error(`the baseline was recorded on Chromium ${budget.chromium}, this is ${browser.version()}: install playwright-core's build (\`npx playwright-core install chromium\`), or after upgrading Playwright, record a new baseline with --update`);
 				// On the fake clock, so what lands in a window doesn't follow the machine's speed, and under reduced
 				// motion, so an animation's layouts don't count once per frame drawn.
@@ -183,8 +185,8 @@ async function main() {
 				await server.close();
 			}
 			const counts = countsOf(result, probes);
-			if (o.out) console.log(`${formatSamples(samplesOf(result, probes))}\n`);
 			if (o.out) {
+				console.log(`${formatSamples(samplesOf(result, probes))}\n`);
 				const out = resolve(o.out);
 				mkdirSync(dirname(out), { recursive: true });
 				const meta = { calls: true, clock: 'fake', runs, cpu, shard: `${index}/${count}`, seconds: Math.round((Date.now() - started) / 1000), chromium: browser.version(), cpus: cpus().length, cpuModel: cpus()[0]?.model, loadavg: result.loadavg };
@@ -195,6 +197,10 @@ async function main() {
 				writeBudget(path, counts, { runs, cpu, chromium: browser.version() });
 				console.log(`wrote ${relative(process.cwd(), path)}`);
 				return 0;
+			}
+			if (budget.chromium && budget.chromium !== browser.version()) {
+				console.log(`Not checked: the baseline was recorded on Chromium ${budget.chromium}, this is ${browser.version()}.`);
+				return 1;
 			}
 			const rows = compareBudget(counts, budget);
 			console.log(formatBudget(rows));
@@ -207,6 +213,7 @@ async function main() {
 			const [a, b] = o._;
 			if (!a || !b) throw new Error('budget-diff needs two files written by `budget --out`');
 			const [ja, jb] = [a, b].map((f) => JSON.parse(readFileSync(f, 'utf8')));
+			for (const [f, j] of [[a, ja], [b, jb]]) if (!j.probes || !j.shard) throw new Error(`${f} wasn't written by \`budget --out\``);
 			for (const [name, j] of [['a', ja], ['b', jb]]) console.log(`${name}: ${j.clock ?? 'wall'} clock${j.calls ? ', calls' : ''}, cpu ${j.cpu}, ${j.runs} runs, shard ${j.shard}, ${j.chromium}, ${j.cpus}x ${j.cpuModel}, ${j.seconds}s`);
 			console.log(diffSamples(ja, jb).text);
 			return 0;

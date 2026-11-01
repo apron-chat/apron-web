@@ -146,7 +146,7 @@ export function compareBudget(counts, budget) {
 		rows.push({ probe, metric, value, base, limit, status });
 	};
 	for (const [probe, metrics] of Object.entries(counts.probes))
-		for (const [metric, value] of Object.entries(metrics)) add(probe, metric, value, budget.probes?.[probe]?.[metric], !('requests' in metrics));
+		for (const [metric, value] of Object.entries(metrics)) add(probe, metric, value, budget.probes?.[probe]?.[metric], Object.keys(metrics).every((m) => INTERACTION.includes(m)));
 	for (const [metric, value] of Object.entries(counts.bundle)) add('bundle', metric, value, budget.bundle?.[metric]);
 	return rows;
 }

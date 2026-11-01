@@ -2,8 +2,8 @@
 
 Screenshots, pixel diffs and perf comparisons of the app on `/__preview`, which runs the full client
 against the in-memory server (`src/lib/preview/memory-server.ts`), so nothing needs a backend; and the
-browser tests in `e2e/` (`npm run e2e`, [below](#npm-run-e2e-the-browser-tests)). They run locally, not in
-CI. Everything they write goes under `.qa/` (gitignored). `/__preview` exists only in builds made with
+browser tests in `e2e/` (`npm run e2e`, [below](#npm-run-e2e-the-browser-tests)). They run locally; CI runs
+only the perf budget ([below](#qa-budget-the-perf-budget-in-ci)). Everything they write goes under `.qa/` (gitignored). `/__preview` exists only in builds made with
 `APRON_PREVIEW=1` (and under `vite dev`): the QA snapshots and `npm run e2e` set it, and a production `npm run build`
 leaves the page and its code out. To serve a build of your own here, make it with `APRON_PREVIEW=1 npm run build`.
 
@@ -88,7 +88,8 @@ The counts hold on any machine, fast or slow, busy or idle, because nothing in t
 - **Fake clock.** The page runs on Playwright's clock: its timers, frames and idle callbacks fire only as the
   windows advance it, in 50 ms steps that each wait for fetches to finish, so a slow runner's timers fire at
   the same moments as a fast one's. Interactions start 3 s after ready, past the start-up timers (the
-  on-demand chunk's prefetch, 2 s after mount).
+  on-demand chunk's prefetch, 2 s after mount); nothing is counted then, so those 3 s run in 500 ms steps.
+  A step that waits 15 s for requests fails, naming them.
 - **JS calls** are counted with V8's precise coverage: the functions the app's own scripts call in each
   window, in all and by chunk (`--out` lists the chunks).
 - **Slack.** An interaction's layouts and style recalcs may go 1 over its baseline. The load's may go a few
