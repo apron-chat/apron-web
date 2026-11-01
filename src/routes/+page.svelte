@@ -2728,17 +2728,21 @@
 		if (!scroller) return;
 		const pinned = stickToBottom;
 		const top = scroller.scrollTop;
-		const scrolledUp = lastScrollTop === undefined || top < lastScrollTop - 1;
+		let scrolledUp = true;
 		// While pinned, only the reader scrolling up lets go. The pane grows under us as a room's
 		// history, its threads' cards and long messages lay out; our own scroll's event can land
 		// after that, and scroll anchoring moves the list down, before the next frame catches up.
 		// Up is measured from where the pane was last held, not from the last event: a slow drag
 		// (on iOS, a third of a pixel at a time) moves less than a pixel between events, each step
 		// too small to count, and pinning back after each would hold it until the drag gathered
-		// speed. Held no further down than the end, so bouncing back out of iOS's rubber band
-		// below the latest isn't read as scrolling up.
-		if (!pinned || lastScrollTop === undefined) lastScrollTop = top;
-		else if (top > lastScrollTop) lastScrollTop = Math.min(top, scroller.scrollHeight - scroller.clientHeight);
+		// speed. Held no further down than the end as it is now, so bouncing back out of iOS's
+		// rubber band below the latest isn't read as scrolling up, nor is the list shrinking under it.
+		if (pinned && lastScrollTop !== undefined) {
+			const end = scroller.scrollHeight - scroller.clientHeight;
+			const held = Math.min(lastScrollTop, end);
+			scrolledUp = top < held - 1;
+			lastScrollTop = Math.min(Math.max(top, held), end);
+		} else lastScrollTop = top;
 		if (pinned && !scrolledUp) {
 			// Unless the reader has gone on up by then: a drag can move the list again before this frame.
 			requestAnimationFrame(() => {
