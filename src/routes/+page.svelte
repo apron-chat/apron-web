@@ -54,7 +54,7 @@
 	import { ArrivalWatch, addRoomMembers, othersIn, reachesStart } from '$lib/ui/private-rooms';
 	import { couldNotAdd } from '$lib/ui/members';
 	import { faceOf, roomFaces } from '$lib/ui/faces';
-	import { receiptsByMessage } from '$lib/ui/receipts';
+	import { receiptsByMessage, steadyReceipts } from '$lib/ui/receipts';
 	import { attachmentLimits, composerAction } from '$lib/ui/commands';
 	import { backendHost, statusLabel } from '$lib/ui/connection';
 	import { directory } from '$lib/ui/directory.svelte';
@@ -556,6 +556,8 @@
 		messages, threads: activeThread ? [] : threads, renames: paneRoom?.renames, notices: paneRoom?.notices, memberships: paneRoom?.timeline.memberships
 	}))));
 	const NO_RECEIPTS: ReadonlyMap<string, Face[]> = new Map();
+	// The receipts last shown, which `steadyReceipts` keeps what is unchanged from; not state, only a memo.
+	let lastReceipts: ReadonlyMap<string, Face[]> = NO_RECEIPTS;
 	let shownTimeline = $derived(reveal.hidden > 0 ? timeline.slice(Math.min(reveal.hidden, timeline.length)) : timeline);
 	/**
 	 * Read receipts (`ext.settings.read_receipts`, private rooms only): the other members' faces under the newest message
@@ -564,7 +566,8 @@
 	let receipts = $derived.by(() => {
 		// Read Receipts turned off here: others' aren't shown either.
 		const placed = receiptsByMessage(shownTimeline, paneRoom?.private && receiptSettings.on ? paneRoom : undefined, session.you?.user_id);
-		return placed.size ? new Map([...placed].map(([messageId, people]) => [messageId, people.map((person) => faceOf(person, false))])) : NO_RECEIPTS;
+		const next = placed.size ? new Map([...placed].map(([messageId, people]) => [messageId, people.map((person) => faceOf(person, false))])) : NO_RECEIPTS;
+		return (lastReceipts = steadyReceipts(lastReceipts, next));
 	});
 	/** The pane is live: its room is listed, and no sign-in is under way. */
 	let paneReady = $derived(Boolean(paneRoom && session.ready && !snapshot.authBusy));
@@ -3249,7 +3252,7 @@
 								embed={messageEmbed}
 							/>
 							{@const seenBy = receipts.get(event.message_id)}
-							{#if seenBy}<ReadReceipts people={seenBy} testid="read-receipts" />{/if}
+							{#if seenBy}<ReadReceipts people={seenBy} decorative testid="read-receipts" />{/if}
 						{/if}
 					{/each}
 				{/if}

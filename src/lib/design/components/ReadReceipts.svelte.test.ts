@@ -22,4 +22,13 @@ describe('ReadReceipts', () => {
 		dom.render(ReadReceipts, { people: [] });
 		expect(document.querySelector('.ap-receipts')).toBeNull();
 	});
+
+	it('is hidden from assistive tech when decorative, keeping its tooltip', () => {
+		dom.render(ReadReceipts, { people: [{ user_id: 'bob', name: 'Bob' }], decorative: true, testid: 'seen' });
+		const row = document.querySelector('[data-testid="seen"]')!;
+		expect(row.getAttribute('aria-hidden')).toBe('true');
+		expect(row.hasAttribute('role')).toBe(false);
+		expect(row.getAttribute('title')).toBe('Seen by Bob');
+		dom.cleanup();
+	});
 });

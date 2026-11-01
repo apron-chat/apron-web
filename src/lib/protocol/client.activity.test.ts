@@ -283,9 +283,28 @@ describe('read receipts', () => {
 		expect(snapshot.rooms.find((entry) => entry.id === 'private_1')?.readMessageId).toBe('31');
 		client.markRead('general', '40');
 		expect(socket.sent.filter((frame) => frame.method === 'activity')).toEqual([{ method: 'activity', params: { room_id: 'general', read_message_id: '40' } }]);
-		// Back on: the next one goes.
+		// Back on: how far you read goes at once, and the next one after the interval.
 		client.setReadReceipts(true);
+		expect(socket.sent.filter((frame) => frame.method === 'activity').at(-1)).toEqual({ method: 'activity', params: { room_id: 'private_1', read_message_id: '31' } });
 		client.markRead('private_1', '32');
+		vi.advanceTimersByTime(10_000);
 		expect(socket.sent.filter((frame) => frame.method === 'activity').at(-1)).toEqual({ method: 'activity', params: { room_id: 'private_1', read_message_id: '32' } });
+	});
+
+	it('drops a waiting private cursor when Read Receipts go off, and sends how far you read once they are back on', async () => {
+		await socket.greet(['history', 'rooms', 'activity', 'ext:settings'], { ...account, room: secret, ext: settings('private') });
+		await socket.reply('history', { more: false, latest_log_id: '10', history_log_id: '10' });
+		const sent = () => socket.sent.filter((frame) => frame.method === 'activity').map((frame) => (frame.params as { read_message_id?: string }).read_message_id);
+		socket.sent = [];
+		client.markRead('private_1', '31');
+		// Within the interval: this one waits.
+		client.markRead('private_1', '32');
+		client.setReadReceipts(false);
+		client.markRead('private_1', '33');
+		vi.advanceTimersByTime(20_000);
+		expect(sent()).toEqual(['31']);
+		client.setReadReceipts(true);
+		vi.advanceTimersByTime(20_000);
+		expect(sent()).toEqual(['31', '33']);
 	});
 });

@@ -2310,7 +2310,14 @@ export class ChatClient {
 	 * the other members (`ext.settings.read_receipts` `'private'`). It still moves here, and elsewhere still syncs.
 	 */
 	setReadReceipts(on: boolean): void {
+		const was = this.receiptsOff;
 		this.receiptsOff = !on;
+		if (!was || on === false || !this.authenticated || !this.registeredSession || !serverSettings(this.server).read_cursors) return;
+		// Back on: how far you read while it was off goes now, as it would have.
+		for (const roomId of this.reads.keys()) {
+			const cursor = this.readCursor(roomId);
+			if (cursor !== undefined && this.store.room(roomId)?.private === true && serverSettings(this.server).read_receipts === 'private') this.sendReadCursor(roomId, cursor);
+		}
 	}
 
 	/** Your cursor in `roomId` stays here: Read Receipts are off, and the server would show it to the room's members. */

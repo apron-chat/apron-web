@@ -9,11 +9,16 @@
 	 */
 	interface Props {
 		people: Face[];
+		/**
+		 * Hidden from assistive tech, keeping only the tooltip: inside a live region such as the timeline's log, where
+		 * each move of someone's cursor would otherwise be announced.
+		 */
+		decorative?: boolean;
 		testid?: string;
 		/** Classes for its root, added to its own. */
 		class?: ClassValue;
 	}
-	let { people, testid, class: className }: Props = $props();
+	let { people, decorative = false, testid, class: className }: Props = $props();
 	const shown = $derived(people.slice(0, 3));
 	const more = $derived(people.length - shown.length);
 	const names = $derived(people.map((face) => face.name || face.user_id));
@@ -25,7 +30,7 @@
 </script>
 
 {#if people.length}
-	<div class={['ap-receipts', className]} role="img" aria-label={label} title={label} data-testid={testid}>
+	<div class={['ap-receipts', className]} role={decorative ? undefined : 'img'} aria-label={decorative ? undefined : label} aria-hidden={decorative || undefined} title={label} data-testid={testid}>
 		{#each shown as face (face.user_id)}<Avatar name={face.name || face.user_id} src={face.src} hue={face.hue} size="xs" />{/each}
 		{#if more > 0}<span class="ap-receipts-more" aria-hidden="true">+{more}</span>{/if}
 	</div>
