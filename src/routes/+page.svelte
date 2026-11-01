@@ -369,6 +369,8 @@
 	let mobilePane = $state<'rooms' | 'main'>('main');
 	/** Wide screens give the member list a column of its own; narrower ones overlay it on the conversation. */
 	let memberListWide = $state(false);
+	/** One pane at a time (under 720px). */
+	let narrow = $state(false);
 	/** The narrow overlay, closed until asked for. */
 	let memberListOverlay = $state(false);
 	/**
@@ -1172,6 +1174,10 @@
 		};
 		memberListMediaChange(memberListMedia);
 		memberListMedia.addEventListener('change', memberListMediaChange);
+		const narrowMedia = window.matchMedia(`(max-width: ${NARROW_MAX - 1}px)`);
+		const narrowMediaChange = ({ matches }: { matches: boolean }) => (narrow = matches);
+		narrowMediaChange(narrowMedia);
+		narrowMedia.addEventListener('change', narrowMediaChange);
 		// Taken, and scrubbed from the address bar, before anything else can read or keep the URL.
 		const signInLink = previewMode ? undefined : takeSignInLink(window.location, scrubUrl);
 		// A link pasted into this tab later is a same-document fragment change: take (and scrub) it too.
@@ -1297,6 +1303,7 @@
 		}
 		return () => {
 			memberListMedia.removeEventListener('change', memberListMediaChange);
+			narrowMedia.removeEventListener('change', narrowMediaChange);
 			window.removeEventListener('hashchange', hashChanged);
 			document.removeEventListener('click', apronLinkClicked);
 			window.removeEventListener('storage', storageChanged);
@@ -3129,6 +3136,8 @@
 	membersOpen={memberListOpen}
 	membersWide={memberListWide}
 	pane={mobilePane}
+	peek={narrow && activeRoom !== undefined}
+	onpeek={closeRooms}
 	sideWidth={sidebar.width}
 	membersWidth={memberList.width}
 	mainLabel="Conversation"

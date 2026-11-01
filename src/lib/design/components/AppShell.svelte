@@ -40,6 +40,15 @@
 		membersWide?: boolean;
 		/** Under 720px one pane shows at a time: the rooms list, or the main pane. */
 		pane?: 'rooms' | 'main';
+		/**
+		 * While the rooms list shows under 720px (`pane="rooms"`; set it only then, as the conversation goes inert), the room
+		 * or thread it opened over: a sliver of it stays in view at the inline end, faded, and a tap there returns to it
+		 * (`onpeek`). It's a reach-friendly twin of the list's own way back, so it is left out of the keyboard's and screen
+		 * readers' way.
+		 */
+		peek?: boolean;
+		/** Called when the conversation's sliver is tapped (`peek`). */
+		onpeek?: () => void;
 		/** The rooms list's width while open, in px, such as dragged to; omit for `--sidebar-w`. */
 		sideWidth?: number;
 		/** The member list's width, in px; omit for `--member-list-w`. */
@@ -63,9 +72,12 @@
 	}
 	let {
 		rail, side, main, mainLabel, mainAttach, members, sideToggle, sideHandle, membersToggle, membersHandle, nudge, children,
-		sideCollapsed = false, membersOpen = false, membersWide = false, pane, sideWidth, membersWidth, resizing = false, slides = false, viewport = false,
+		sideCollapsed = false, membersOpen = false, membersWide = false, pane, peek = false, onpeek, sideWidth, membersWidth, resizing = false, slides = false, viewport = false,
 		class: className
 	}: Props = $props();
+
+	/** The rooms list shows over a conversation whose sliver is in view. */
+	const peeking = $derived(peek && pane === 'rooms' && Boolean(onpeek));
 
 	const px = (n: number | undefined) => (n === undefined ? undefined : `${n}px`);
 	/** The member list's column: nothing while it's shut or overlaid, kept at 0 so it can slide. */
@@ -81,7 +93,7 @@
 	class={[
 		'ap-shell', !rail && 'ap-shell-norail', viewport && 'ap-shell-viewport', slides && 'ap-shell-slides', sideCollapsed && 'ap-shell-side-shut',
 		resizing && 'ap-shell-resizing', membersOpen && 'ap-shell-members-open', membersWide && 'ap-shell-members-wide',
-		sideToggle && 'ap-shell-side-toggle', membersToggle && 'ap-shell-members-toggle', className
+		peeking && 'ap-shell-peeking', sideToggle && 'ap-shell-side-toggle', membersToggle && 'ap-shell-members-toggle', className
 	]}
 	style={shellStyle}
 >
@@ -90,7 +102,9 @@
 	{@render side?.()}
 	{@render sideHandle?.()}
 	{#if nudge}<div class="ap-shell-nudge" aria-live="polite">{@render nudge()}</div>{/if}
-	{#if main}<main aria-label={mainLabel} class="ap-shell-main" {@attach mainAttach}>{@render main()}</main>{/if}
+	{#if main}<main aria-label={mainLabel} class="ap-shell-main" inert={peeking} {@attach mainAttach}>{@render main()}</main>{/if}
+	<!-- A pointer's way back alone: the rooms list's › is the keyboard's and screen readers'. -->
+	{#if peeking}<button type="button" class="ap-shell-peek" tabindex="-1" aria-hidden="true" onclick={onpeek}></button>{/if}
 	{@render membersToggle?.()}
 	{@render members?.()}
 	{@render membersHandle?.()}

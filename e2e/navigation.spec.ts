@@ -101,6 +101,22 @@ test.describe('the rooms list on a phone', () => {
 		await at(preview, 'engineering', /#room=engineering$/);
 		await expect(page.getByTestId('room-list')).toBeHidden();
 	});
+
+	test('leaves a sliver of the room in reach at its edge, faded and inert, which returns to it', async ({ preview, page }) => {
+		await preview.open('#room=engineering');
+		await preview.roomsPane();
+		const list = (await page.getByTestId('room-list').boundingBox())!;
+		const viewport = page.viewportSize()!;
+		const main = page.getByRole('main', { name: 'Conversation', includeHidden: true });
+		// The conversation keeps its width behind the list, only its start in view, and out of the keyboard's and screen readers' way.
+		expect(list.x + list.width).toBeLessThan(viewport.width - 30);
+		await expect(main).toHaveAttribute('inert', '');
+		expect((await main.boundingBox())!.width).toBe(viewport.width);
+		await preview.press(page.locator('.ap-shell-peek'));
+		await expect(page.getByTestId('room-list')).toBeHidden();
+		await expect(main).not.toHaveAttribute('inert');
+		await at(preview, 'engineering', /#room=engineering$/);
+	});
 });
 
 test.describe('Preferences in the address', () => {
