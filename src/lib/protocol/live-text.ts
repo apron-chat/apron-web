@@ -37,6 +37,43 @@ export function liveTextDecoder(): TextDecoder {
 	return new TextDecoder('utf-8', { ignoreBOM: true });
 }
 
+/**
+ * An `append` embed's text (§4.8.5) with `added`, its next decoded text, applied to `kept`, the text so far after
+ * its edits: U+0008 (backspace) removes the code point before it, U+000C (form feed) all the text before it. The
+ * edits reach only the live text, never `body.text`, which the caller keeps apart. Text already edited has neither,
+ * so it is unchanged, and a server may serve either. The cost is `added`'s length and what it removes, not `kept`'s.
+ * Not for `terminal` embeds, where both are the terminal's own.
+ */
+export function editLiveText(kept: string, added: string): string {
+	const feed = added.lastIndexOf('\f');
+	if (feed !== -1) {
+		kept = '';
+		added = added.slice(feed + 1);
+	}
+	if (!added.includes('\b')) return kept + added;
+	// Each backspace removes from what this chunk wrote before it, and once that is gone, from the end of `kept`.
+	let written = '';
+	let fromKept = 0;
+	let start = 0;
+	for (let at = added.indexOf('\b'); at !== -1; at = added.indexOf('\b', start)) {
+		written += added.slice(start, at);
+		if (written) written = written.slice(0, lastCodePoint(written));
+		else fromKept++;
+		start = at + 1;
+	}
+	written += added.slice(start);
+	let end = kept.length;
+	for (; fromKept > 0 && end > 0; fromKept--) end = lastCodePoint(kept, end);
+	return (end === kept.length ? kept : kept.slice(0, end)) + written;
+}
+
+/** Where the code point that ends at `end` in `text` starts: a surrogate pair is one. */
+function lastCodePoint(text: string, end = text.length): number {
+	const low = text.charCodeAt(end - 1);
+	const high = text.charCodeAt(end - 2);
+	return low >= 0xdc00 && low <= 0xdfff && high >= 0xd800 && high <= 0xdbff ? end - 2 : end - 1;
+}
+
 /** The pauses before trying again after a failure or a drop, the last repeated: a live text's url may not serve yet, or its connection may drop. */
 export const LIVE_RETRY_MS = [1000, 2000, 4000, 8000, 15000] as const;
 

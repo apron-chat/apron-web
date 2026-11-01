@@ -343,6 +343,33 @@ describe('a message with live text appended (§4.8.5)', () => {
 		}
 	});
 
+	it('shows the text after its edits: a backspace and a form feed revise only the streamed text, never body.text', async () => {
+		const server = serve();
+		const event = append('https://chat.example/a/4', 'Plan:');
+		const { views, stop } = follow(event);
+		try {
+			const last = () => views.at(-1)!;
+			await vi.waitFor(() => expect(server.urls).toEqual(['https://chat.example/a/4']));
+			server.push(' roll bakc');
+			await vi.waitFor(() => expect(last().body?.html).toContain('Plan: roll bakc'));
+			server.push('\b\bck the **index');
+			await vi.waitFor(() => expect(last().body?.html).toContain('Plan: roll back the <strong>index</strong>'));
+			// More backspaces than the streamed text has: it is gone, and the body as recorded shows whole.
+			server.push('\b'.repeat(40));
+			await vi.waitFor(() => expect(last().body?.html).not.toContain('roll'));
+			expect(last().body?.html).toContain('<p>Plan:</p>');
+			server.push(' draft\f renew the *cert*');
+			await vi.waitFor(() => expect(last().body?.html).toContain('<p>Plan: renew the <em>cert</em></p>'));
+			expect(last().body?.html).not.toContain('draft');
+			server.end();
+			await vi.waitFor(() => expect(last().writing).toBeUndefined());
+			expect(last().body?.html).toContain('<p>Plan: renew the <em>cert</em></p>');
+			expect(event.body?.text).toBe('Plan:');
+		} finally {
+			stop();
+		}
+	});
+
 	it('stops at a definitive refusal of GET url, as at its end: keeps what it shows, without Writing…', async () => {
 		const urls: string[] = [];
 		setLiveFetch(async (url) => {

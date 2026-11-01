@@ -1,6 +1,6 @@
 import { mergeExt } from '$lib/protocol/client-internals';
 import type { WebSocketFactory } from '$lib/protocol/client-types';
-import type { LiveFetch } from '$lib/protocol/live-text';
+import { editLiveText, liveTextDecoder, type LiveFetch } from '$lib/protocol/live-text';
 import { isJsonObject, type JsonObject, type WireFrame } from '$lib/protocol/types';
 import { memorySocket, type MemoryHost, type MemorySocket } from './memory-socket';
 import { DAWN, DUSK } from './preview-images';
@@ -444,7 +444,8 @@ export class MemoryProtocolServer {
 
 	/**
 	 * Ends a live text, as the end of its `PUT` body does: its readers' responses end, and a snapshot finishes the
-	 * message: a terminal's embed with its `output`, an append's text moved into the body and the embed gone.
+	 * message: a terminal's embed with its `output`, an append's text after its edits moved into the body and the
+	 * embed gone.
 	 */
 	liveEnd(embedId: string): void {
 		const live = this.lives.get(embedId);
@@ -453,7 +454,7 @@ export class MemoryProtocolServer {
 		this.stopLive(live);
 		const found = started && live.message_id ? this.findMessage(live.message_id) : undefined;
 		if (!found || !isJsonObject(found.message.body)) return;
-		const text = new TextDecoder().decode(concat(live.chunks));
+		const text = liveTextDecoder().decode(concat(live.chunks));
 		const body = structuredClone(found.message.body) as JsonObject;
 		const embeds = (Array.isArray(body.embeds) ? body.embeds : []).filter(isJsonObject);
 		const at = embeds.findIndex((embed) => embed.embed_id === embedId);
@@ -462,8 +463,8 @@ export class MemoryProtocolServer {
 			embeds[at] = { embed_id: live.embed_id, kind: 'terminal', ...(live.title ? { title: live.title } : {}), output: text };
 		} else {
 			embeds.splice(at, 1);
-			// The appended text doesn't change the mentions (§4.8.5).
-			body.text = `${typeof body.text === 'string' ? body.text : ''}${text}`;
+			// The appended text, after its backspaces and form feeds, doesn't change the mentions (§4.8.5).
+			body.text = `${typeof body.text === 'string' ? body.text : ''}${editLiveText('', text)}`;
 		}
 		if (embeds.length) body.embeds = embeds;
 		else delete body.embeds;
@@ -512,7 +513,7 @@ export class MemoryProtocolServer {
 		const body = new ReadableStream<Uint8Array>({
 			start(controller) {
 				reader = controller;
-				for (const chunk of live.chunks) controller.enqueue(chunk);
+				for (const chunk of keptText(live)) controller.enqueue(chunk);
 				if (live.state === 'ended') controller.close();
 				else live.readers.add(controller);
 				signal?.addEventListener('abort', () => {
@@ -952,6 +953,29 @@ export class MemoryProtocolServer {
 			}
 		} else fail(`Unknown command: ${text}`);
 	}
+}
+
+/**
+ * What a reader that comes in late gets first: the text kept so far. A terminal's as written; an append's after its
+ * edits (§4.8.5), as a server may keep it, up to a character the writes so far cut off, whose bytes follow as they came.
+ */
+function keptText(live: LiveWrite): Uint8Array[] {
+	if (live.kind !== 'append' || !live.chunks.length) return live.chunks;
+	const all = concat(live.chunks);
+	const whole = wholeCharacters(all);
+	const edited = new TextEncoder().encode(editLiveText('', liveTextDecoder().decode(all.subarray(0, whole))));
+	return [edited, all.subarray(whole)].filter((part) => part.byteLength);
+}
+
+/** How many of `bytes` end at a whole character: all but a UTF-8 sequence cut off at the end, which more bytes may finish. */
+function wholeCharacters(bytes: Uint8Array): number {
+	for (let at = bytes.length - 1; at >= Math.max(0, bytes.length - 3); at--) {
+		const byte = bytes[at];
+		if ((byte & 0xc0) === 0x80) continue;
+		const length = byte >= 0xf0 ? 4 : byte >= 0xe0 ? 3 : byte >= 0xc0 ? 2 : 1;
+		return bytes.length - at < length ? at : bytes.length;
+	}
+	return bytes.length;
 }
 
 /** One buffer of all of them, in order. */

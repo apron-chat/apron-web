@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { followLiveText, liveTextDecoder, readLiveText, setLiveFetch, type LiveTextSink } from './live-text';
+import { editLiveText, followLiveText, liveTextDecoder, readLiveText, setLiveFetch, type LiveTextSink } from './live-text';
 
 const bytes = (text: string) => new TextEncoder().encode(text);
 
@@ -154,5 +154,46 @@ describe('liveTextDecoder (§4.8.3)', () => {
 		const text = parts.map((part) => decoder.decode(part, { stream: true })).join('') + decoder.decode();
 		// The BOM stays, "€" cut between chunks is whole, C0 AF is two U+FFFD, and the cut-off E2 at the end is one.
 		expect(text).toBe('\ufeff$\u20ac \ufffd\ufffd \ufffd');
+	});
+});
+
+describe('editLiveText (§4.8.5)', () => {
+	/** A text's chunks, each applied in turn to the text so far, as a reader does. */
+	const edited = (...chunks: string[]) => chunks.reduce(editLiveText, '');
+
+	it('removes the code point before each backspace: "é" and an astral emoji are one, a surrogate pair whole', () => {
+		expect(edited('Ready.\b!')).toBe('Ready!');
+		expect(edited('caf\u00e9\b')).toBe('caf');
+		expect(edited('ok 🚀\b')).toBe('ok ');
+		expect(edited('ok 🚀\b\b')).toBe('ok');
+		// "é" written as e and a combining accent is two code points: one backspace removes the accent.
+		expect(edited('cafe\u0301\b')).toBe('cafe');
+		// One with nothing before it removes nothing.
+		expect(edited('\b\bHi')).toBe('Hi');
+	});
+
+	it('clears the text before a form feed, and keeps what follows', () => {
+		expect(edited('Looking at the logs…\f')).toBe('');
+		expect(edited('Draft one\fDraft two\fThe plan')).toBe('The plan');
+		expect(edited('Draft', ' one', '\fThe ', 'plan\bn')).toBe('The plan');
+	});
+
+	it('edits split across chunks: a backspace reaches back into the text kept so far', () => {
+		expect(edited('Roll back the indx', '\b', 'ex')).toBe('Roll back the index');
+		expect(edited('faield', '\b\b\bled')).toBe('failed');
+		expect(edited('🚀🚀', '\b')).toBe('🚀');
+		expect(edited('ab', '\b\b\b\bc')).toBe('c');
+		// A chunk's own text goes first, then the kept text's end.
+		expect(edited('abc', 'de\b\b\b')).toBe('ab');
+	});
+
+	it('leaves text already edited as it is, so a server may serve either', () => {
+		const raw = ['Here is the pla', 'm\bn:\fHere is the plan 🚀\b', ': roll back'];
+		const once = edited(...raw);
+		expect(once).toBe('Here is the plan : roll back');
+		expect(edited(once)).toBe(once);
+		expect(editLiveText(once, '')).toBe(once);
+		// Edited text the server kept, then raw chunks: the same text.
+		expect(edited(edited(raw[0], raw[1]), raw[2])).toBe(once);
 	});
 });

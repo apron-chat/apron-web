@@ -32,8 +32,8 @@ URLs to it; there is no network): `/embed-terminal [title]` and
 `curl` recipe in a notice to you, and since nothing can `PUT` to it, a moment
 later play a canned demo into a new message (a test run with colors, a
 progress bar, box drawing and cursor movement; a Markdown reply cut at
-arbitrary bytes). A `message` with a new `terminal` or `append` embed gets its
-write URL too. The in-memory server loads only with that
+arbitrary bytes, which a form feed and backspaces revise). A `message` with a
+new `terminal` or `append` embed gets its write URL too. The in-memory server loads only with that
 route, never with the app itself.
 Local development and builds with an empty `VITE_DEFAULT_SERVER_URL` retain the
 same-origin default.
@@ -1365,7 +1365,11 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](ht
   one text in the body's format (Markdown rendered as any message is), with
   a quiet "Writing…" under it while the text arrives. The bytes are decoded
   as UTF-8 as they come (a character split between chunks shows once whole),
-  and the body is redrawn at most once an animation frame. While it is still
+  and the body is redrawn at most once an animation frame. Each chunk's edits
+  apply as it arrives, to the streamed text only, never `body.text`: a
+  backspace (U+0008) removes the code point before it (an emoji is one), a
+  form feed (U+000C) all the streamed text before it, and text the server
+  already edited shows as it is. While it is still
   arriving, Markdown cut off mid-construct is settled for display only: an
   open code fence or code span is closed, an odd `**` or `~~` in the last
   paragraph is closed after the text so far (or held back with nothing after

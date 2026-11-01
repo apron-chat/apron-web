@@ -5,7 +5,8 @@
  * redrawn with carriage returns, box drawing, lines rewritten by moving the
  * cursor, and escapes that must do nothing: a title, the clipboard, a link,
  * the bell), and a Markdown reply that streams in as a model would write it,
- * cut at arbitrary bytes, mid-character included.
+ * cut at arbitrary bytes, mid-character included, and revises itself: a
+ * placeholder a form feed clears, and a typo backspaces correct (§4.8.5).
  */
 
 /** One write: `data` after `wait` milliseconds. */
@@ -71,10 +72,14 @@ export const TERMINAL_DEMO: readonly DemoStep[] = [
 	{ wait: 400, data: `${sgr('1;32')}PASS${reset} 3 packages, 128 tests, 0 failures ${sgr('2')}in 2.11s${reset}\r\n` }
 ];
 
-const REPLY = [
+const REPLY_START = [
 	'Here is the plan for the rollback, step by step:\n\n',
 	'1. **Roll back** the `orders_idx` migration with `./migrate down 0042`.\n',
-	'2. Renew the runner’s cert — it expired at 02:00 UTC, so every deploy since then failed.\n',
+	'2. Renew the runner’s cert — it expired at 02:00 UTC, so every deploy since then faield'
+].join('');
+
+const REPLY_END = [
+	'.\n',
 	'3. Re-run the deploy, and watch the p99 latency on the dashboard.\n\n',
 	'```sh\n./migrate down 0042\nkubectl rollout undo deploy/api\n```\n\n',
 	'| Step | Owner | ETA |\n| :-- | :-- | --: |\n| Roll back | Ada | 5 min |\n| Renew cert | Margaret | 10 min |\n\n',
@@ -82,7 +87,7 @@ const REPLY = [
 	'That should do it. 🚀 Ping me if anything looks off — I’ll keep an eye on #general.'
 ].join('');
 
-/** The reply cut at bytes 3 to 9 long, the same cuts every time, so characters (`’`, `—`, `🚀`) are split across writes. */
+/** Text cut at bytes 3 to 9 long, the same cuts every time, so characters (`’`, `—`, `🚀`) are split across writes. */
 function cuts(text: string): DemoStep[] {
 	const bytes = new TextEncoder().encode(text);
 	const steps: DemoStep[] = [];
@@ -96,4 +101,12 @@ function cuts(text: string): DemoStep[] {
 	return steps;
 }
 
-export const APPEND_DEMO: readonly DemoStep[] = cuts(REPLY);
+export const APPEND_DEMO: readonly DemoStep[] = [
+	// A placeholder, then a form feed: the reply replaces it (the message's own text stays).
+	{ wait: 200, data: '_Looking at the deploy logs…_' },
+	{ wait: 1200, data: '\f' },
+	...cuts(REPLY_START),
+	// A typo, left a moment, then corrected: each backspace removes the character before it.
+	{ wait: 700, data: '\b\b\bled' },
+	...cuts(REPLY_END)
+];
