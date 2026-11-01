@@ -412,6 +412,19 @@ describe('a message with live text appended (§4.8.5)', () => {
 		}
 	});
 
+	it('shows Waiting to stream… while an append has no url, its write not started, and loads nothing', async () => {
+		const server = serve();
+		const event = messageRecord(1710000000502, 'ops', { body: { text: 'Plan:', format: 'markdown', embeds: [{ embed_id: 'e1', kind: 'append' }] } });
+		const { views, stop } = follow(event);
+		try {
+			await new Promise((resolve) => setTimeout(resolve, 10));
+			expect(server.urls).toEqual([]);
+			expect([views.at(-1)!.body?.html.includes('Plan:'), views.at(-1)!.waiting, views.at(-1)!.writing]).toEqual([true, true, undefined]);
+		} finally {
+			stop();
+		}
+	});
+
 	it('shows nothing of a body still empty but Writing…, and lists the other embeds as usual', () => {
 		serve();
 		const event = messageRecord(1710000000501, 'ops', { body: { text: '', embeds: [{ embed_id: 'e1', kind: 'append', url: 'https://chat.example/a/2' }, { embed_id: 'e2', kind: 'terminal', url: 'https://chat.example/t/2' }] } });

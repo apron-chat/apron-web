@@ -26,7 +26,8 @@
 	/** `GET url` ended, or was refused for good: the output did, and the snapshot with it is on its way. */
 	let ended = $state(false);
 	let live = $derived(output === undefined && Boolean(url) && !ended);
-	let status = $derived(output !== undefined ? 'Finished' : url ? 'Ended' : 'Unavailable');
+	/** Without `output` or `url`, its write has not started (§4.8.5); a `url` from elsewhere is not loaded. */
+	let status = $derived(output !== undefined ? 'Finished' : url ? 'Ended' : embed.url === undefined ? 'Waiting to stream…' : 'Unavailable');
 
 	/** What the viewer shows of it, read as it changes. */
 	const view: TerminalView = {

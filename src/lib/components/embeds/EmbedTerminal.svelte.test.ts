@@ -105,6 +105,16 @@ describe('a terminal embed (§4.8.6)', () => {
 		expect(box.querySelector('.ap-embed-detail')?.textContent).toBe('Ended');
 	});
 
+	it('waits for its writer while it has no url', async () => {
+		const server = serve();
+		const box = show({ kind: 'terminal', title: 'make' });
+		await new Promise((resolve) => setTimeout(resolve, 10));
+		expect(server.urls).toEqual([]);
+		expect(box.querySelector('.ap-embed-livebadge')).toBeNull();
+		expect(box.querySelector('.ap-embed-detail')?.textContent).toBe('Waiting to stream…');
+		unmount();
+	});
+
 	it('reads live output only from the chat server', async () => {
 		const server = serve();
 		const box = show({ kind: 'terminal', url: 'https://elsewhere.example/t/3' });
