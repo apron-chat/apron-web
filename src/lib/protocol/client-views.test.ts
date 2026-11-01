@@ -63,11 +63,17 @@ describe('serverSettings (ext:settings)', () => {
 	});
 
 	it('keeps read cursors unless the server says false, and knows no other setting', () => {
-		expect(serverSettings(server(['ext:settings'], { settings: { read_cursors: false } }))).toEqual({ read_cursors: false });
+		expect(serverSettings(server(['ext:settings'], { settings: { read_cursors: false } }))).toEqual({ read_cursors: false, read_receipts: false });
 		for (const odd of [undefined, 'false', 0, null]) expect(serverSettings(server(['ext:settings'], { settings: { read_cursors: odd } })).read_cursors).toBe(true);
 		expect(serverSettings(server([], { settings: { read_cursors: false } })).read_cursors).toBe(true);
 		// Settings that moved to ext:permissions mean nothing here.
-		expect(serverSettings(server(['ext:settings'], { settings: { guest_posting: false, add_members: false } }))).toEqual({ read_cursors: true });
+		expect(serverSettings(server(['ext:settings'], { settings: { guest_posting: false, add_members: false } }))).toEqual({ read_cursors: true, read_receipts: false });
+	});
+
+	it('shows read receipts only where the server says "private"', () => {
+		expect(serverSettings(server(['ext:settings'], { settings: { read_receipts: 'private' } })).read_receipts).toBe('private');
+		for (const odd of [undefined, true, 'all', false]) expect(serverSettings(server(['ext:settings'], { settings: { read_receipts: odd } })).read_receipts).toBe(false);
+		expect(serverSettings(server([], { settings: { read_receipts: 'private' } })).read_receipts).toBe(false);
 	});
 });
 

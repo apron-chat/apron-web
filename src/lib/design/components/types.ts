@@ -368,6 +368,8 @@ export interface MessageEmbed {
 export interface MessageView {
 	/** The `message_id`; absent on a transient notice (§3.5), which is rendered, never stored. */
 	id?: string;
+	/** Read receipts (§4.6, a private room's members): those who have read up to this message and no further. */
+	seenBy?: Face[];
 	sender: MessageSender;
 	/** Epoch ms of the creation `log_id` (the `message_id`): the time and its tooltip. */
 	timestamp?: number;
@@ -455,6 +457,8 @@ export interface MessageTestids {
 	select?: string;
 	/** The Writing… of a message whose text is still arriving. */
 	writing?: string;
+	/** Its read receipts (`seenBy`). */
+	receipts?: string;
 }
 
 /** A status line's tone: StatusBanner colors its line with it. */

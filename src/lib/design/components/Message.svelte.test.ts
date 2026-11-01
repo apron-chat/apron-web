@@ -32,6 +32,16 @@ afterEach(() => {
 });
 
 describe('a message row', () => {
+	it('shows its read receipts at the end of its first line, hidden from assistive tech, and not while editing', () => {
+		const seen = render({ seenBy: [{ user_id: 'bob', name: 'Bob' }] }, {}, { testids: { receipts: 'seen' } }).querySelector('[data-testid="seen"]')!;
+		expect(seen.classList.contains('ap-msg-receipts')).toBe(true);
+		expect(seen.getAttribute('aria-hidden')).toBe('true');
+		expect(seen.getAttribute('title')).toBe('Seen by Bob');
+		dom.cleanup();
+		expect(render({ seenBy: [{ user_id: 'bob', name: 'Bob' }], editing: true }).querySelector('.ap-msg-receipts')).toBeNull();
+		dom.cleanup();
+	});
+
 	it('keeps its header to the name, handle, badges and time in that order', () => {
 		const row = render({ sender: { user_id: 'bart', name: 'Bartholomew Maximilian Featherstonehaugh-Cholmondeley', handle: 'bart', roles: ['admin', 'bot'] } });
 		const head = row.querySelector('header')!;

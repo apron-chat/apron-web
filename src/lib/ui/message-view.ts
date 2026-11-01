@@ -3,7 +3,7 @@ import type { Notice, RoomListing, RoomSnapshot, UploadState } from '$lib/protoc
 import { markdownText, mentionLabel, mentionSegments, renderMarkdown, renderPlain } from '$lib/protocol/markdown';
 import { withoutBidiOverrides } from '$lib/protocol/plain-text';
 import { systemScope, type Embed, type Identity, type MessageBody, type MessageRecord } from '$lib/protocol/types';
-import type { EmbedProps, MessageCaps, MessageEmbed, MessageUpload, LinkCardPlace, MessageLinkCard, MessageMention, MessageReply, MessageSender, MessageView, ReactionChip as Chip } from '$lib/design/components/types';
+import type { EmbedProps, Face, MessageCaps, MessageEmbed, MessageUpload, LinkCardPlace, MessageLinkCard, MessageMention, MessageReply, MessageSender, MessageView, ReactionChip as Chip } from '$lib/design/components/types';
 import type { ReactionChip } from './reactions';
 import { placeLinksIn, readPlaceLink, writeApronLink, type ApronLink } from './apron-link';
 import { backendHost } from './connection';
@@ -44,6 +44,8 @@ export interface MessageRow {
 	selected: boolean;
 	editing: boolean;
 	caps: MessageCaps;
+	/** Read receipts under it (`receiptsByMessage`): kept the same array while unchanged (`steadyReceipts`). */
+	seenBy?: Face[];
 }
 
 /** What every row reads from: one object for the page, its fields read only where a row needs them. */
@@ -382,6 +384,7 @@ export function messageView(event: MessageRecord, row: MessageRow, context: Mess
 	if (row.selecting) view.selecting = true;
 	if (row.selected) view.selected = true;
 	if (row.editing) view.editing = true;
+	if (row.seenBy?.length) view.seenBy = row.seenBy;
 	const last = made.get(event);
 	if (last && sameView(last, view)) return last;
 	made.set(event, view);
@@ -434,6 +437,7 @@ export function sameView(a: MessageView, b: MessageView): boolean {
 		&& a.body === b.body
 		&& (a.sender === b.sender || sameSender(a.sender, b.sender))
 		&& sameFields(a.caps, b.caps)
+		&& a.seenBy === b.seenBy
 		&& sameList(a.reactions, b.reactions, sameChip)
 		&& sameList(a.linkCards, b.linkCards, sameCard)
 		&& sameList(a.embeds, b.embeds, sameEmbed)

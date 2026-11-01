@@ -224,6 +224,10 @@ export class ChatClient {
 	private greatestLogId?: string;
 	/** Read cursors per room, per user (§4.6). */
 	private readonly reads = new Map<string, Map<string, string>>();
+	/** The read cursor last sent for each room on this connection's account, so turning Read Receipts back on sends only what moved. */
+	private readonly readSent = new Map<string, string>();
+	/** Read Receipts turned off on this device (`setReadReceipts`): your cursor in a private room stays here. */
+	private receiptsOff = false;
 	private readonly uploads = new Map<string, UploadState>();
 	/** Rooms whose `members` the server truncated (§4.2.1): the total it gave with them. */
 	private readonly memberCounts = new Map<string, number>();
@@ -811,6 +815,7 @@ export class ChatClient {
 					...(this.hasOlderRecords(room) ? { olderAvailable: true } : {}),
 					...(room.loadingOlder ? { loadingOlder: true } : {}),
 					...(this.readCursor(room.id) !== undefined ? { readMessageId: this.readCursor(room.id) } : {}),
+					...(record?.private === true ? this.readersOf(room.id) : {}),
 					...(members ? { members } : {}),
 					...(this.memberCounts.has(room.id) ? { memberCount: this.memberCounts.get(room.id) } : {}),
 					notices: this.notices.get(room.id) ?? NO_NOTICES
@@ -2250,16 +2255,17 @@ export class ChatClient {
 	/**
 	 * Advances your read cursor in a room (capability `activity`, §4.6) to a
 	 * message, if that is further than the cursor already is. The server
-	 * syncs it to your other connections.
+	 * syncs it to your other connections. Only for an account: a guest's
+	 * would be dropped by the server, so it costs a frame for nothing.
 	 */
 	markRead(roomId: string, messageId: string): void {
-		if (roomId === DEFAULT_ROOM_ID || !this.authenticated || !this.hasCap('activity') || !isLogId(messageId)) return;
+		if (roomId === DEFAULT_ROOM_ID || !this.authenticated || !this.registeredSession || !this.hasCap('activity') || !isLogId(messageId)) return;
 		const current = this.readCursor(roomId);
 		if (current !== undefined && compareLogIds(messageId, current) <= 0) return;
 		this.setReadCursor(roomId, this.you!.user_id, messageId);
 		// The cursor still moves here (the page reads it, with what it keeps itself); a
 		// server that keeps no read cursors (`ext:settings`) would only be charged a frame for it.
-		if (serverSettings(this.server).read_cursors) this.sendReadCursor(roomId, messageId);
+		if (serverSettings(this.server).read_cursors && !this.withholdsRead(roomId)) this.sendReadCursor(roomId, messageId);
 		this.emit();
 	}
 
@@ -2278,6 +2284,7 @@ export class ChatClient {
 		if (wait <= 0 && !waiting) {
 			this.readSentAt.set(roomId, this.now());
 			this.sendFrame({ method: 'activity', params: { room_id: roomId, read_message_id: messageId } });
+			this.readSent.set(roomId, messageId);
 			return;
 		}
 		this.readWaiting.set(roomId, {
@@ -2297,8 +2304,31 @@ export class ChatClient {
 			}
 			this.readWaiting.delete(room);
 			this.readSentAt.set(room, this.now());
-			if (serverSettings(this.server).read_cursors) this.sendFrame({ method: 'activity', params: { room_id: room, read_message_id: waiting.messageId } });
+			if (serverSettings(this.server).read_cursors && !this.withholdsRead(room)) {
+				this.sendFrame({ method: 'activity', params: { room_id: room, read_message_id: waiting.messageId } });
+				this.readSent.set(room, waiting.messageId);
+			}
 		}
+	}
+
+	/**
+	 * Read Receipts on this device: off, your read cursor in a private room is not sent where the server shows it to
+	 * the other members (`ext.settings.read_receipts` `'private'`). It still moves here, and elsewhere still syncs.
+	 */
+	setReadReceipts(on: boolean): void {
+		const was = this.receiptsOff;
+		this.receiptsOff = !on;
+		if (!was || on === false || !this.authenticated || !this.registeredSession || !serverSettings(this.server).read_cursors) return;
+		// Back on: how far you read while it was off goes now, as it would have.
+		for (const roomId of this.reads.keys()) {
+			const cursor = this.readCursor(roomId);
+			if (cursor !== undefined && cursor !== this.readSent.get(roomId) && this.store.room(roomId)?.private === true && serverSettings(this.server).read_receipts === 'private') this.sendReadCursor(roomId, cursor);
+		}
+	}
+
+	/** Your cursor in `roomId` stays here: Read Receipts are off, and the server would show it to the room's members. */
+	private withholdsRead(roomId: string): boolean {
+		return this.receiptsOff && this.store.room(roomId)?.private === true && serverSettings(this.server).read_receipts === 'private';
 	}
 
 	/** Forgets the read cursors sent and waiting, as for another account. */
@@ -2306,6 +2336,7 @@ export class ChatClient {
 		for (const waiting of this.readWaiting.values()) clearTimeout(waiting.timer);
 		this.readWaiting.clear();
 		this.readSentAt.clear();
+		this.readSent.clear();
 	}
 
 	/** Visible rooms in the order they were listed, joined, or opened. */
@@ -3609,6 +3640,20 @@ export class ChatClient {
 	/** Remembers the greatest `log_id` received: where a notice sits in its room's timeline. */
 	private observeLogId(logId: unknown): void {
 		if (isLogId(logId) && (this.greatestLogId === undefined || compareLogIds(logId, this.greatestLogId) > 0)) this.greatestLogId = logId;
+	}
+
+	/**
+	 * Read receipts (`ext.settings.read_receipts` `'private'`): the others'
+	 * read cursors in a private room, by `user_id`, for the room snapshot.
+	 */
+	private readersOf(roomId: string): { readers?: Array<{ user_id: string; message_id: string }> } {
+		if (serverSettings(this.server).read_receipts !== 'private') return {};
+		const you = this.you?.user_id;
+		const readers = [...(this.reads.get(roomId) ?? [])]
+			.filter(([userId]) => userId !== you)
+			.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+			.map(([user_id, message_id]) => ({ user_id, message_id }));
+		return readers.length ? { readers } : {};
 	}
 
 	private readCursor(roomId: string): string | undefined {
