@@ -99,6 +99,18 @@ export class PaneDrafts {
 	}
 
 	/**
+	 * Empties `key`'s kept text and reply, and the composer's when `key` is open: they went out some other way, as a
+	 * live message. Staged files stay.
+	 */
+	forget(key: string): void {
+		this.texts.set(key, '');
+		this.replies.set(key, undefined);
+		if (this.key !== key) return;
+		this.text = '';
+		this.reply = undefined;
+	}
+
+	/**
 	 * A failed send gives `key`'s draft back, unless something else has been
 	 * typed or attached there since; the composer shows it again when `key`
 	 * is still open and empty. Returns whether it did.

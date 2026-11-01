@@ -328,3 +328,139 @@ test.describe('an append embed', () => {
 		await expect(preview.message('The plan: streamed so far and more')).toBeVisible();
 	});
 });
+
+test.describe('live typing (/live)', () => {
+	test.use(DEVICES.desktop);
+
+	test('types the next message live, backspaces and all, already in the timeline, until Send finishes it', async ({ preview, page }) => {
+		await preview.open();
+		await preview.composer().click();
+		await page.keyboard.insertText('/live');
+		await page.keyboard.press('Enter');
+		await expect(page.getByTestId('live-tag')).toHaveText('Live');
+		await expect(preview.composer()).toHaveText('');
+		const posted = await preview.waitForSent('message', (params) => isAppend(params.body));
+		expect(posted.body).toMatchObject({ text: '', embeds: [{ kind: 'append' }] });
+		await page.keyboard.type('Hello wrold');
+		const message = preview.message('Hello wrold');
+		await expect(message.getByTestId('message-writing')).toHaveText('Writing…');
+		for (let i = 0; i < 4; i++) await page.keyboard.press('Backspace');
+		await page.keyboard.type('orld, **live**');
+		await expect(preview.message('Hello world, live').locator('.ap-msg-text strong')).toHaveText('live');
+		// It is still the draft: the composer holds it, and it is no command.
+		await expect(preview.composer()).toHaveText('Hello world, **live**');
+		await expect(page.getByTestId('command-tag')).toHaveCount(0);
+		await page.keyboard.press('Enter');
+		const saved = await preview.waitForSent('message', (params) => params.message_id !== undefined);
+		expect(saved.body).toEqual({ text: 'Hello world, **live**', format: 'markdown' });
+		await expect(page.getByTestId('live-tag')).toHaveCount(0);
+		await expect(preview.composer()).toHaveText('');
+		const finished = preview.message('Hello world, live');
+		await expect(finished.getByTestId('message-writing')).toHaveCount(0);
+		await expect(finished.locator('.ap-msg-text strong')).toHaveText('live');
+		// The next message is an ordinary one.
+		await page.keyboard.type('after');
+		await page.keyboard.press('Enter');
+		await expect(preview.message('after')).toBeVisible();
+		expect((await preview.sent('message')).filter((params) => isAppend(params.body))).toHaveLength(1);
+	});
+
+	test('a selection deleted or typed over resets the live text to what the composer shows', async ({ preview, page }) => {
+		await preview.open();
+		await preview.composer().click();
+		await page.keyboard.insertText('/live');
+		await page.keyboard.press('Enter');
+		await expect(page.getByTestId('live-tag')).toBeVisible();
+		await page.keyboard.type('Hello there, world');
+		await expect(preview.message('Hello there, world')).toBeVisible();
+		const id = await page.evaluate(() => [...(window as any).__apronPreview.lives.keys()].at(-1) as string);
+		// The second half, selected and deleted, then typed again.
+		for (let i = 0; i < 12; i++) await page.keyboard.press('Shift+ArrowLeft');
+		await page.keyboard.press('Backspace');
+		await expect(preview.message('Hello')).toBeVisible();
+		await page.keyboard.type('everyone');
+		await expect(preview.message('Hello everyone')).toBeVisible();
+		// The first word, selected and typed over.
+		await page.keyboard.press('Home');
+		for (let i = 0; i < 5; i++) await page.keyboard.press('Shift+ArrowRight');
+		await page.keyboard.type('Hi');
+		await expect(preview.message('Hi everyone')).toBeVisible();
+		await expect(preview.composer()).toHaveText('Hi everyone');
+		// Each replacement went as a form feed and the whole text; typing and one Backspace as themselves.
+		expect(await preview.liveWritten(id)).toBe('Hello there, world\fHello everyone\fH everyone\fHi everyone');
+		await page.keyboard.press('Enter');
+		const saved = await preview.waitForSent('message', (params) => params.message_id !== undefined);
+		expect(saved.body).toEqual({ text: 'Hi everyone', format: 'markdown' });
+	});
+
+	test('leaving the pane finishes it with its mentions and a reply picked meanwhile, and the next message is no reply', async ({ preview, page }) => {
+		await preview.open();
+		await preview.composer().click();
+		await page.keyboard.insertText('/live');
+		await page.keyboard.press('Enter');
+		await expect(page.getByTestId('live-tag')).toBeVisible();
+		await preview.waitForSent('message', (params) => isAppend(params.body));
+		await page.keyboard.type('@ad');
+		await page.getByTestId('mention-picker').getByRole('option', { name: /Ada Lovelace/ }).click();
+		await page.keyboard.type('look');
+		await expect(preview.message('look')).toBeVisible();
+		const welcome = page.locator('article[data-message-id="1710000000001"]');
+		const reply = welcome.getByRole('button', { name: 'Reply to message', exact: true });
+		await expect(async () => {
+			await welcome.hover();
+			await expect(reply).toBeVisible({ timeout: 1000 });
+		}).toPass();
+		await reply.click();
+		await expect(page.getByTestId('reply-draft')).toBeVisible();
+		await preview.openRoom('engineering');
+		const saved = await preview.waitForSent('message', (params) => params.message_id !== undefined);
+		expect(saved.body).toEqual({ text: '@ada look', format: 'markdown', mentions: ['ada'] });
+		expect(saved.reply_to).toEqual({ message_id: '1710000000001' });
+		await preview.openRoom('general');
+		await expect(page.getByTestId('live-tag')).toHaveCount(0);
+		await expect(page.getByTestId('reply-draft')).toHaveCount(0);
+		await expect(preview.composer()).toHaveText('');
+	});
+
+	test('Send before the server took the message gives the draft back when it refuses it', async ({ preview, page }) => {
+		await preview.open();
+		// The server answers a live message's post late, and refuses it.
+		await page.evaluate(() => {
+			const server = (window as any).__apronPreview;
+			const message = server.message.bind(server);
+			server.message = (socket: unknown, params: any, reply: unknown, fail: (text: string) => void) => {
+				if (!params.body?.embeds?.some((embed: { kind?: string }) => embed.kind === 'append')) return message(socket, params, reply, fail);
+				setTimeout(() => fail('Not now'), 800);
+			};
+		});
+		await preview.composer().click();
+		await page.keyboard.insertText('/live');
+		await page.keyboard.press('Enter');
+		await expect(page.getByTestId('live-tag')).toBeVisible();
+		await page.keyboard.type('keep me');
+		await page.keyboard.press('Enter');
+		await expect(preview.composer()).toHaveText('');
+		await expect(preview.composer()).toHaveText('keep me');
+		await expect(page.getByTestId('live-tag')).toHaveCount(0);
+		expect((await preview.sent('message')).filter((params) => params.message_id !== undefined)).toHaveLength(0);
+	});
+
+	test('Send with nothing typed takes the live message back', async ({ preview, page }) => {
+		await preview.open();
+		await preview.composer().click();
+		await page.keyboard.insertText('/live');
+		await page.keyboard.press('Enter');
+		await expect(page.getByTestId('live-tag')).toBeVisible();
+		const posted = await preview.waitForSent('message', (params) => isAppend(params.body));
+		expect(posted.body).toMatchObject({ text: '' });
+		await page.getByTestId('send-button').click();
+		const deleted = await preview.waitForSent('message', (params) => params.deleted === true);
+		expect(deleted.message_id).toBeDefined();
+		await expect(page.getByTestId('live-tag')).toHaveCount(0);
+	});
+});
+
+function isAppend(body: unknown): boolean {
+	const embeds = (body as { embeds?: { kind?: string }[] } | undefined)?.embeds;
+	return Array.isArray(embeds) && embeds.some((embed) => embed.kind === 'append');
+}

@@ -94,7 +94,7 @@ const isHigh = (unit: number) => unit >= 0xd800 && unit <= 0xdbff;
 const isLow = (unit: number) => unit >= 0xdc00 && unit <= 0xdfff;
 
 /** Where the code point that ends at `end` in `text` starts: a surrogate pair is one. */
-function lastCodePoint(text: string, end = text.length): number {
+export function lastCodePoint(text: string, end = text.length): number {
 	return isLow(text.charCodeAt(end - 1)) && isHigh(text.charCodeAt(end - 2)) ? end - 2 : end - 1;
 }
 
@@ -183,4 +183,9 @@ function pause(ms: number, signal: AbortSignal): Promise<void> {
 			resolve();
 		}
 	});
+}
+
+/** The fetch that `setLiveFetch` routes live text through, as `/__preview` does; undefined for the network. */
+export function routedLiveFetch(): LiveFetch | undefined {
+	return liveFetch === networkFetch ? undefined : liveFetch;
 }

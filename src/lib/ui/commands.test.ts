@@ -45,6 +45,19 @@ describe('composer commands', () => {
 	});
 });
 
+describe('/live', () => {
+	it('is the client\'s own with embed:append, with or without command', () => {
+		expect(composerAction('/live', { command: true, rooms: true, append: true })).toEqual({ kind: 'live' });
+		expect(composerAction('/LIVE ', { command: false, rooms: false, append: true })).toEqual({ kind: 'live' });
+	});
+
+	it('goes as typed without embed:append, or with an argument', () => {
+		expect(composerAction('/live', { command: true, rooms: true })).toEqual({ kind: 'command', text: '/live' });
+		expect(composerAction('/live', { command: false, rooms: false })).toEqual({ kind: 'message', text: '/live' });
+		expect(composerAction('/live now', { command: true, rooms: true, append: true })).toEqual({ kind: 'command', text: '/live now' });
+	});
+});
+
 describe('attachmentLimits (ext:media)', () => {
 	const upload = { 'image/*': { max_bytes: 5_242_880, max_side: 2048 } };
 	const emoji = { 'image/png': { max_bytes: 262_144 }, 'image/gif': { max_bytes: 262_144 } };

@@ -846,6 +846,49 @@ arrive as notices, and a failed command shows its error as a local "System
 message to you" notice and gives the draft back. `//` posts a message starting with one `/`.
 Without the capability, `/` text is an ordinary message.
 
+**Live typing.** With the `embed:append` capability, `/live` alone (with or
+without `command`) is the client's own: it puts the composer in live typing
+mode for the next message
+([PROTOCOL.md §4.8.5](https://github.com/shazow/apron/blob/main/PROTOCOL.md#485-embedappend)).
+The composer empties and shows a **Live** tag with a beating dot, and the
+message is posted at once, as Markdown with an empty `body.text` and one
+`append` embed (replying to the draft's reply, if it had one, and joining a
+thread first as a message would). Its `write_url` gets one streaming `PUT`
+(`fetch` with a `ReadableStream` body), and each change to the draft, typed,
+pasted, a mention chip or an emoji, goes out as the edit that turns what was
+sent into the new text, as typing makes it: what was added at the end goes as
+it is, and one character deleted from the end (a grapheme, such as an emoji
+with its skin tone) as backspaces (U+0008), one per code point. Any other
+change replaced text, such as a selection deleted or typed over, a word
+deleted at once, or an edit before the end: it goes as a form feed (U+000C)
+and the whole text, a full reset to what the composer shows. Backspace and form feed in the draft
+itself are left out of what is sent. So the timeline, the sender's own
+included, shows the message growing and changing as it is typed, with
+Writing… under it, while the draft is still in the composer. It takes no
+link previews or files (`/live` with files staged asks to send or remove them
+first), no typing indicator is sent, and the draft is no command while it is
+live. **Send** (on, even with the field empty) finishes it: with `edit`, a
+save puts the draft in `body.text`, with its mentions, any reply picked while
+it was live, and without the embed, which ends the text (the composer's own
+state is the text it means), then the write ends; an empty draft deletes the
+message instead. Without `edit`, the write ends, and the server keeps what
+arrived. Leaving the pane finishes it as Send would, with what was typed, its
+mentions and reply. If the message or its write can't be made, the message is
+deleted (with `edit`), and what was typed stays in the composer as an
+ordinary draft, or comes back to it if Send had already emptied it; a notice
+says why. If the server ends the text first (a limit), or the connection
+drops once text went out, the message keeps what arrived: it is finished from
+the draft as Send would, and a notice says so; if that save fails, the draft
+comes back. The server's reason is read from its answer to the write, whatever
+its status. It needs a browser that streams a request body as it is
+written ([`duplex: 'half'`](https://developer.mozilla.org/en-US/docs/Web/API/Request/duplex#browser_compatibility)),
+which browsers do only over HTTP/2 or later. Where it can't (`canWriteLiveText`
+detects the feature, not a browser), `/live` does nothing but post a local
+notice in the room that says so, with that link. The code for all of it loads
+the first time `/live` is used, so the composer costs nothing more until then.
+`/__preview`'s in-memory
+server reads any body, so there it works everywhere.
+
 With the `activity` capability, reading the latest message of a room advances your
 read cursor (`read_message_id`), which the server syncs across your
 connections. Each room's goes to the server at most every 10 seconds: the
@@ -1301,8 +1344,9 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](ht
   or middle click keeps the link's own behavior: the file in a new tab or window.
 - **Terminals** (`terminal` embeds, capability `embed:terminal`,
   [PROTOCOL.md §4.8.6](https://github.com/shazow/apron/blob/main/PROTOCOL.md#486-embedterminal)):
-  a card titled by the embed's `title` (else "Terminal") over a real terminal
-  emulator, xterm.js, loaded the first time a terminal is shown, 80 columns by
+  a card titled by the embed's `title` (else "Terminal"), which reads
+  "Waiting to stream…" while the embed has no `url` (its write hasn't
+  started), over a real terminal emulator, xterm.js, loaded the first time a terminal is shown, 80 columns by
   40 rows: colors (16, 256 and true color), emphasis, carriage returns
   (progress bars), cursor movement, erasing, box drawing and the alternate
   screen of full-screen programs all show as a terminal would show them. A
@@ -1363,7 +1407,9 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](ht
   such as a model's reply as it writes: no card. The message shows its
   `body.text` and right after it the text `GET url` has streamed so far, as
   one text in the body's format (Markdown rendered as any message is), with
-  a quiet "Writing…" under it while the text arrives. The bytes are decoded
+  a quiet "Writing…" under it while the text arrives. Before then, while the
+  embed has no `url` (its write hasn't started, §4.8.5), the message shows its
+  `body.text` with a quiet "Waiting to stream…" under it. The bytes are decoded
   as UTF-8 as they come (a character split between chunks shows once whole),
   and the body is redrawn at most once an animation frame. Each chunk's edits
   apply as it arrives, to the streamed text only, never `body.text`: a

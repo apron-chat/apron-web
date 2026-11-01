@@ -401,6 +401,9 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-composer-disabled { opacity: var(--opacity-disabled); }
 .ap-composer-cmdtag { flex: none; display: inline-flex; align-items: center; height: var(--control-md); box-sizing: border-box; padding: 0 var(--space-2); border-radius: var(--radius-full); background: var(--bg-300); color: var(--ink-muted); font-size: var(--text-ui); line-height: var(--leading-ui); font-weight: 500; }
 .ap-composer-cmd .ap-composer-field { font-family: var(--font-mono); font-size: var(--text-ui); }
+/* Live typing: the draft is a message others already see, so its tag says so with a beating dot. */
+.ap-composer-livetag { gap: var(--space-1); background: var(--accent-soft); color: var(--accent); }
+.ap-composer-livedot { flex: none; width: 6px; height: 6px; border-radius: var(--radius-full); background: currentColor; animation: ap-blink 1s steps(1) infinite; }
 /* The rich field (editable): a plain-text editable whose mentions are chips; it sizes like the textarea. */
 .ap-composer-editable { position: relative; height: auto; overflow-y: auto; white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; }
 /* On one line, however long the room or thread's name: out of the flow, over the field's padding, cut short. */
@@ -1009,7 +1012,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 @media (prefers-reduced-motion: reduce) {
   .ap-btn, .ap-room, .ap-thread, .ap-msg, .ap-rail-tile, .ap-actions-btn, .ap-profile-me, .ap-jumpbar-btn, .ap-composer, .ap-field { transition: none; }
   .ap-typing-dots i { animation: none; opacity: var(--opacity-dim); }
-  .ap-composer-recdot { animation: none; }
+  .ap-composer-recdot, .ap-composer-livedot { animation: none; }
   .ap-msg-pinged { animation: none; }
   .ap-embed-livebadge i { animation: none; }
 }

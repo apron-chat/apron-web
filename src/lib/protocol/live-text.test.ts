@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { editLiveText, followLiveText, liveTextDecoder, readLiveText, setLiveFetch, type LiveTextSink } from './live-text';
+import { canWriteLiveText, writeLiveText } from '$lib/ui/live-typing';
 
 const bytes = (text: string) => new TextEncoder().encode(text);
 
@@ -215,5 +216,27 @@ describe('editLiveText (§4.8.5)', () => {
 		expect(editLiveText(once, '')).toBe(once);
 		// Edited text the server kept, then raw chunks: the same text.
 		expect(edited(edited(raw[0], raw[1]), raw[2])).toBe(once);
+	});
+});
+
+describe('writeLiveText', () => {
+	afterEach(() => setLiveFetch());
+
+	it('streams a PUT to the write URL, through the routed fetch', async () => {
+		const seen: { url: string; init: RequestInit }[] = [];
+		setLiveFetch(async (url, init) => {
+			seen.push({ url, init });
+			return new Response(await new Response(init.body).text(), { status: 200 });
+		});
+		expect(canWriteLiveText()).toBe(true);
+		let controller!: ReadableStreamDefaultController<Uint8Array>;
+		const body = new ReadableStream<Uint8Array>({ start: (c) => (controller = c) });
+		const done = writeLiveText('https://chat.example/w/1', body);
+		controller.enqueue(bytes('hi\b!'));
+		controller.close();
+		const response = await done;
+		expect(await response.text()).toBe('hi\b!');
+		expect(seen[0].url).toBe('https://chat.example/w/1');
+		expect(seen[0].init).toMatchObject({ method: 'PUT', duplex: 'half' });
 	});
 });

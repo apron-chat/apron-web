@@ -78,11 +78,16 @@ function bodyOf(body: MessageBody | undefined, text = typeof body?.text === 'str
 	return { html, markdown, code: html.includes('<pre') };
 }
 
-/** The `url` of a message's `append` embed (§4.8.5) while it is live, where the client may load it: the chat server's own. */
-export function liveAppendUrl(event: MessageRecord): string | undefined {
+/**
+ * A message's `append` embed (§4.8.5) while it is live: its `url` where the client may load it (the chat server's
+ * own), or `waiting` while it has none, its write not started.
+ */
+export function liveAppendOf(event: MessageRecord): { url?: string; waiting: boolean } | undefined {
 	if (event.deleted) return undefined;
 	const embed = embedsOf(event).find((entry) => entry.kind === 'append');
-	return embed ? sameOriginMedia(embed.url, directory.origin) : undefined;
+	if (!embed) return undefined;
+	const url = sameOriginMedia(embed.url, directory.origin);
+	return url ? { url, waiting: false } : { waiting: embed.url === undefined };
 }
 
 /** The body with an `append` embed's text so far after its own text, as one text in its format, kept per record while it's the same. */
@@ -356,12 +361,14 @@ export function messageView(event: MessageRecord, row: MessageRow, context: Mess
 	// A system line shows its text whatever it is; a message only text it has.
 	if (seen.body && (system || seen.text)) view.body = seen.body;
 	// Live text that continues the body (§4.8.5): the body and the text so far, as one, until a snapshot finishes it.
-	const append = system ? undefined : liveAppendUrl(event);
-	if (append) {
-		const live = liveAppend(append);
+	const append = system ? undefined : liveAppendOf(event);
+	if (append?.url) {
+		const live = liveAppend(append.url);
 		const streamed = live.text;
 		if (streamed) view.body = appendedBody(event, streamed, live.live);
 		if (live.live) view.writing = true;
+	} else if (append?.waiting) {
+		view.waiting = true;
 	}
 	const reply = replyOf(event, context);
 	if (reply) view.reply = reply;
@@ -402,7 +409,7 @@ export function noticeView(notice: Notice): MessageView {
 	};
 }
 
-const KEYS = ['id', 'timestamp', 'time', 'grouped', 'deleted', 'system', 'scope', 'mention', 'pinged', 'highlighted', 'selecting', 'selected', 'editing', 'writing'] as const;
+const KEYS = ['id', 'timestamp', 'time', 'grouped', 'deleted', 'system', 'scope', 'mention', 'pinged', 'highlighted', 'selecting', 'selected', 'editing', 'writing', 'waiting'] as const;
 
 function sameFields<T extends object>(a: T | undefined, b: T | undefined): boolean {
 	if (a === b) return true;

@@ -405,6 +405,8 @@ export interface MessageView {
 	editing?: boolean;
 	/** Its text is still arriving (an `append` embed, §4.8.5): a quiet Writing… after it. */
 	writing?: boolean;
+	/** Its text waits for its writer to start (an `append` embed without `url`, §4.8.5): a quiet Waiting to stream… after it. */
+	waiting?: boolean;
 	caps?: MessageCaps;
 }
 
@@ -459,6 +461,8 @@ export interface MessageTestids {
 	select?: string;
 	/** The Writing… of a message whose text is still arriving. */
 	writing?: string;
+	/** The Waiting to stream… of a message whose text waits for its writer. */
+	waiting?: string;
 	/** Its read receipts (`seenBy`). */
 	receipts?: string;
 }

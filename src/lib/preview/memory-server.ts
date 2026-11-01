@@ -437,6 +437,11 @@ export class MemoryProtocolServer {
 		for (const reader of live.readers) reader.enqueue(bytes);
 	}
 
+	/** What its writer sent so far, as decoded text with its edits (backspaces and form feeds) still in it. */
+	liveWritten(embedId: string): string {
+		return liveTextDecoder().decode(concat(this.lives.get(embedId)?.chunks ?? []));
+	}
+
 	/** How many times its `url` was read (`GET`), from the first. */
 	liveReads(embedId: string): number {
 		return this.lives.get(embedId)?.reads ?? 0;
@@ -555,9 +560,9 @@ export class MemoryProtocolServer {
 		return live;
 	}
 
-	/** The embed as broadcast while live: with its `url` (§4.8.3). */
-	private liveEmbed(live: LiveWrite): JsonObject {
-		return { embed_id: live.embed_id, kind: live.kind, ...(live.title ? { title: live.title } : {}), url: `${PREVIEW_ORIGIN}/live/${live.read}` };
+	/** The embed as broadcast: with its `url` once its write started, and without while it waits for its writer (§4.8.5). */
+	private liveEmbed(live: LiveWrite, started = true): JsonObject {
+		return { embed_id: live.embed_id, kind: live.kind, ...(live.title ? { title: live.title } : {}), ...(started ? { url: `${PREVIEW_ORIGIN}/live/${live.read}` } : {}) };
 	}
 
 	/** What the sender is told of each new live text: its write URL, for it alone (§4.8.3). */
@@ -565,13 +570,25 @@ export class MemoryProtocolServer {
 		return { embed_id: live.embed_id, kind: live.kind, write_url: `${PREVIEW_ORIGIN}/write/${live.write}` };
 	}
 
-	/** Its write started: a command's posts its message now, from the command's sender, in its room (the contract's step 4). */
+	/**
+	 * Its write started: a message's is republished with the embed's `url` (§4.8.5), and a command's posts its message
+	 * now, with it, from the command's sender, in its room (the contract's step 4).
+	 */
 	private beginLive(live: LiveWrite): void {
 		if (live.state !== 'pending') return;
 		live.state = 'live';
 		for (const timer of live.timers.splice(0)) clearTimeout(timer);
 		const command = live.command;
-		if (!command) return;
+		if (!command) {
+			const found = live.message_id ? this.findMessage(live.message_id) : undefined;
+			const body = found && isJsonObject(found.message.body) ? (structuredClone(found.message.body) as JsonObject) : undefined;
+			const embeds = body && Array.isArray(body.embeds) ? body.embeds.filter(isJsonObject) : [];
+			const at = embeds.findIndex((embed) => embed.embed_id === live.embed_id);
+			if (!found || !body || at === -1) return;
+			embeds[at] = { ...embeds[at], ...this.liveEmbed(live) };
+			this.republish(found.room, found.message, { body: { ...body, embeds } });
+			return;
+		}
 		const room = this.rooms.get(command.room);
 		if (!room) return;
 		const id = this.nextLog(room);
@@ -624,7 +641,7 @@ export class MemoryProtocolServer {
 			const live = this.newLive(embed.kind, typeof embed.title === 'string' && embed.title ? embed.title : undefined);
 			created.push(live);
 			results.push(this.liveResult(live));
-			return this.liveEmbed(live);
+			return this.liveEmbed(live, false);
 		});
 		for (const entry of before) {
 			const id = typeof entry.embed_id === 'string' ? entry.embed_id : undefined;

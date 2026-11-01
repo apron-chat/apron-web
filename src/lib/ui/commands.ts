@@ -8,7 +8,9 @@ import type { MediaTypes, ServerMedia } from '$lib/protocol/client';
  * `/topic`, `/kick` and `/invite` map to the requests they spell (all but the
  * first need capability `rooms`), and anything else goes to the server as a
  * `command`. `//` posts a message starting with `/`. Without capability `command`,
- * every text is a message.
+ * every text is a message. `/live` alone, with capability `embed:append`
+ * (`caps.append`), is the client's own, with or without `command`: it puts the
+ * composer in live typing mode.
  */
 export type ComposerAction =
 	| { kind: 'message'; text: string }
@@ -21,7 +23,9 @@ export type ComposerAction =
 	/** `room_leave` with the `user_id` of the member to remove (§4.2.2). */
 	| { kind: 'kick'; user: string }
 	/** `room_join` with the `user_id` of the user to add (§4.2.2). */
-	| { kind: 'invite'; user: string };
+	| { kind: 'invite'; user: string }
+	/** `/live`, apron-web's own: the composer types its next message live, as an `append` embed (§4.8.5). */
+	| { kind: 'live' };
 
 /** Composer text that is a command: one leading `/`, not `//`. The design system's Composer reads it the same way. */
 export { isCommand };
@@ -36,7 +40,8 @@ const USER_ARGUMENT = new RegExp(`^@?(${TEXT_ID.source})[.+@:-]*$`);
  * exact where the text is not: in text, an ID ends with a letter, a digit, or
  * `_` (Appendix A.3), so `/kick @al-` names `al` unless a chip says `al-`.
  */
-export function composerAction(text: string, caps: { command: boolean; rooms: boolean; members?: boolean }, mentions: readonly string[] = []): ComposerAction {
+export function composerAction(text: string, caps: { command: boolean; rooms: boolean; members?: boolean; append?: boolean }, mentions: readonly string[] = []): ComposerAction {
+	if (caps.append && /^\/live\s*$/i.test(text)) return { kind: 'live' };
 	if (!caps.command) return { kind: 'message', text };
 	if (text.startsWith('//')) return { kind: 'message', text: text.slice(1) };
 	if (!isCommand(text)) return { kind: 'message', text };

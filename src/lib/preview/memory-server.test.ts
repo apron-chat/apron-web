@@ -386,24 +386,29 @@ describe('in-memory live text (§4.8.3, §4.8.5, §4.8.6)', () => {
 		expect(latest(client).body).toEqual({ text: 'Here is **the plan**:\n\n1. Roll back.\n2. Renew the cert. @ada', format: 'markdown' });
 	});
 
-	it('takes live embeds in a message: write URLs in the result, a url in the broadcast, kept by embed_id on a save, ended by one that leaves it out', async () => {
+	it('takes live embeds in a message: write URLs in the result, a url once each write starts, kept by embed_id on a save, ended by one that leaves it out', async () => {
 		const server = new MemoryProtocolServer({});
 		const client = await connect(server);
 		const sent = await client.send('general', 'Build:', 'markdown', { embeds: [{ kind: 'terminal', title: 'ci' }, { kind: 'append' }] }).promise;
 		const results = sent.embeds as { embed_id: string; kind: string; write_url: string }[];
 		expect(results.map((entry) => entry.kind)).toEqual(['terminal', 'append']);
 		await waitFor(() => client.message(sent.message_id) !== undefined);
-		const [terminal, append] = client.message(sent.message_id)!.body!.embeds as Record<string, unknown>[];
+		// They wait for their writers, without url (§4.8.5).
+		expect(client.message(sent.message_id)!.body!.embeds).toEqual([{ embed_id: results[0].embed_id, kind: 'terminal', title: 'ci' }, { embed_id: results[1].embed_id, kind: 'append' }]);
+		const embeds = () => client.message(sent.message_id)!.body!.embeds as Record<string, unknown>[];
+		// A write's start republishes the message with that embed's url.
+		server.fetchLive(results[0].write_url, { method: 'PUT', body: new ReadableStream(), duplex: 'half' } as RequestInit);
+		server.fetchLive(results[1].write_url, { method: 'PUT', body: new ReadableStream({ start: (c) => c.enqueue(new TextEncoder().encode(' so far')) }), duplex: 'half' } as RequestInit);
+		await waitFor(() => embeds().every((embed) => typeof embed.url === 'string'));
+		const [terminal, append] = embeds();
 		expect(terminal).toMatchObject({ embed_id: results[0].embed_id, kind: 'terminal', title: 'ci', url: expect.stringContaining('/live/') });
-		// Readable before the PUT: it waits for the text.
+		await waitFor(() => server['lives'].get(results[1].embed_id)!.chunks.length === 1);
 		const reading = await server.fetchLive(String(append.url), {});
 		expect(reading.status).toBe(200);
-		server.fetchLive(results[1].write_url, { method: 'PUT', body: new ReadableStream({ start: (c) => c.enqueue(new TextEncoder().encode(' so far')) }), duplex: 'half' } as RequestInit);
-		await waitFor(() => server['lives'].get(results[1].embed_id)!.chunks.length === 1);
 		// A save that sends both back keeps them, their urls restored by the server whatever was sent.
 		await client.editMessage(sent.message_id, 'Build (edited):').promise;
 		await waitFor(() => client.message(sent.message_id)?.body?.text === 'Build (edited):');
-		expect((client.message(sent.message_id)!.body!.embeds as Record<string, unknown>[]).map((embed) => embed.url)).toEqual([terminal.url, append.url]);
+		expect(embeds().map((embed) => embed.url)).toEqual([terminal.url, append.url]);
 		// One that leaves the append out ends it early, appending nothing.
 		await client.removeEmbed(sent.message_id, append as never).promise;
 		expect(await reading.text()).toBe(' so far');
