@@ -8,7 +8,7 @@ import { cpus } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { ab } from './lib/ab.js';
 import { int, list, parseArgs } from './lib/args.js';
-import { compareBudget, countsOf, formatBudget, formatSamples, readBudget, samplesOf, shardOf, writeBudget } from './lib/budget.js';
+import { compareBudget, countsOf, diffSamples, formatBudget, formatSamples, readBudget, samplesOf, shardOf, writeBudget } from './lib/budget.js';
 import { launch } from './lib/browser.js';
 import { compareDirs, diffDirs, formatDiff, summarize } from './lib/images.js';
 import { extractInteropContract, interopDir } from './lib/interop-contract.js';
@@ -44,6 +44,8 @@ const HELP = `npm run qa -- <command> [options]
                          --clock virtual times the windows in Chromium's virtual time (no throttle: --cpu 1);
                          --clock fake in Playwright's fake clock, stepped, settling after each step.
                          Either prints the counts and their spread instead of checking them.
+  budget-diff <a.json> <b.json>
+                         Two files written by budget --out, side by side: which counts match in every run.
   prof --url A --url B   CPU-profile page load; biggest per-function changes. [--runs 6] [--cpu 4]
   sheet <spec.json>      Render hand-picked before/after panels (title, note, crop box, scale) to a PNG.
                          [--out <spec>.png]
@@ -204,6 +206,14 @@ async function main() {
 			if (over.length) console.log(`\n${over.length} over budget. If that cost is meant, run \`npm run qa -- budget --update\` and commit scripts/qa/perf-budget.json with the change.`);
 			else if (rows.some((r) => r.status === 'under')) console.log('\nSome counts are well under budget: `npm run qa -- budget --update` locks the gain in.');
 			return over.length ? 1 : 0;
+		}
+		case 'budget-diff': {
+			const [a, b] = o._;
+			if (!a || !b) throw new Error('budget-diff needs two files written by `budget --out`');
+			const [ja, jb] = [a, b].map((f) => JSON.parse(readFileSync(f, 'utf8')));
+			for (const [name, j] of [['a', ja], ['b', jb]]) console.log(`${name}: ${j.clock ?? 'wall'} clock${j.calls ? ', calls' : ''}, cpu ${j.cpu}, ${j.runs} runs, shard ${j.shard}, ${j.chromium}, ${j.cpus}x ${j.cpuModel}, ${j.seconds}s`);
+			console.log(diffSamples(ja, jb).text);
+			return 0;
 		}
 		case 'prof': {
 			const urls = o.url ?? [];

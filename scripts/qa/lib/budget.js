@@ -79,6 +79,37 @@ export function samplesOf(result, probes) {
 	return probesOut;
 }
 
+/**
+ * Two `qa budget --out` files side by side (say, this machine's and a CI runner's): per probe and metric each
+ * side's `median [min–max]`, and whether every run on both sides counted the same. Chunks whose calls differ are
+ * listed under their probe.
+ */
+export function diffSamples(a, b) {
+	const cell = (s) => (s ? `${s.median}${s.min === s.max ? '' : ` [${s.min}–${s.max}]`}` : '–');
+	const rows = [];
+	let same = 0;
+	for (const probe of [...new Set([...Object.keys(a.probes), ...Object.keys(b.probes)])]) {
+		const pa = a.probes[probe] ?? {};
+		const pb = b.probes[probe] ?? {};
+		for (const metric of [...new Set([...Object.keys(pa), ...Object.keys(pb)])].filter((m) => m !== 'chunks')) {
+			const runs = [...(pa[metric]?.runs ?? []), ...(pb[metric]?.runs ?? [])];
+			const identical = !!pa[metric] && !!pb[metric] && new Set(runs).size === 1;
+			if (identical) same++;
+			rows.push([probe, metric, cell(pa[metric]), cell(pb[metric]), identical ? '' : pa[metric] && pb[metric] ? `${round(pb[metric].median - pa[metric].median)}` : 'missing']);
+		}
+		for (const chunk of [...new Set([...Object.keys(pa.chunks ?? {}), ...Object.keys(pb.chunks ?? {})])]) {
+			const ca = pa.chunks?.[chunk] ?? [0];
+			const cb = pb.chunks?.[chunk] ?? [0];
+			if (new Set([...ca, ...cb]).size > 1) rows.push([probe, `  calls in ${chunk}`, ca.join(' '), cb.join(' '), '']);
+		}
+	}
+	const head = ['probe', 'metric', 'a', 'b', 'b − a'];
+	const widths = head.map((_, i) => Math.max(...[head, ...rows].map((r) => r[i].length)));
+	const line = (r) => r.map((c, i) => c.padEnd(widths[i])).join('  ').trimEnd();
+	const counted = rows.filter((r) => !r[1].startsWith(' ')).length;
+	return { same, total: counted, text: [line(head), ...rows.map(line), '', `${same}/${counted} counts the same in every run on both sides`].join('\n') };
+}
+
 /** Per probe and metric, `median [min–max]` over the runs, marking with `*` any metric that varied between them. */
 export function formatSamples(probes) {
 	const metrics = [...new Set(Object.values(probes).flatMap((p) => Object.keys(p).filter((k) => k !== 'chunks')))];
