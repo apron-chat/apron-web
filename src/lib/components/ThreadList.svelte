@@ -30,6 +30,11 @@
 		muted?: Record<string, number | true>;
 		/** Put quiet joined threads away under Inactive: the open room's full list, not one folded to its threads with news. */
 		foldInactive?: boolean;
+		/**
+		 * The room is open without joining it: while you've joined none of its threads either, they list right under
+		 * it, all of them, with no Other Threads heading to set them apart from yours.
+		 */
+		roomUnjoined?: boolean;
 		/** Joining and leaving are offered (capability `rooms`, not read-only). */
 		canJoin: boolean;
 		onthread: (thread: string) => void;
@@ -38,7 +43,7 @@
 		onjoin: (thread: string) => void;
 		onleave: (thread: string) => void;
 	}
-	let { roomId, roomTitle, threads, others, activeThread, mentions, unread, muted = {}, foldInactive = false, canJoin, onthread, onopen, onjoin, onleave }: Props = $props();
+	let { roomId, roomTitle, threads, others, activeThread, mentions, unread, muted = {}, foldInactive = false, roomUnjoined = false, canJoin, onthread, onopen, onjoin, onleave }: Props = $props();
 
 	/** A thread you haven't joined: what its listing says, its description as text and when it was last active. */
 	type Other = { id: string; title: string; untitled?: true; private: boolean; description: string; latestLogId?: string };
@@ -131,8 +136,11 @@
 			? [{ id: reading.id, title: reading.title, ...(reading.untitled ? { untitled: true as const } : {}), private: reading.private === true, description: threadDescriptionText(reading), ...(reading.latestMessage ? { latestLogId: reading.latestMessage.message_id } : {}) }, ...listed]
 			: listed;
 	});
+	/** Nothing of the room is yours yet: its threads aren't others to anything, so none are folded or held back. */
+	let bare = $derived(roomUnjoined && joined.length === 0);
 	/** The first few (or all, after N more…), and always the open one, also while folded. */
 	let shownOthers = $derived.by(() => {
+		if (bare) return allOthers;
 		const open = allOthers.find((other) => other.id === activeThread);
 		if (othersFolded) return open ? [open] : [];
 		const shown = allFor === roomId ? allOthers : allOthers.slice(0, OTHERS_SHOWN);
@@ -191,6 +199,7 @@
 		onfoldinactive={(folded) => saveInactiveThreadsOpen(!folded)}
 		inactiveToggleTestid="inactive-threads"
 		others={allOthers.length}
+		othersBare={bare}
 		{otherRows}
 		bind:othersFolded
 		onfoldothers={(folded) => saveOtherThreadsOpen(!folded)}

@@ -90,7 +90,7 @@ test.describe('ext:permissions and ext:settings', () => {
 	test.describe('a guest who may not write', () => {
 		test.use({ knobs: { seed: 'rich', permissions: { write: false } } });
 
-		test('reads, with sign-in offered in place of the composer and no reactions or joins; copies a selection, with nothing to move it to; reads a room it hasn’t joined by its link', async ({ preview, page, context }) => {
+		test('reads, with sign-in offered in place of the composer and no reactions or joins; copies a selection, with nothing to move it to; reads a room it hasn’t joined by its link, and its threads', async ({ preview, page, context }) => {
 			await context.grantPermissions(['clipboard-read', 'clipboard-write']);
 			await preview.open();
 
@@ -127,6 +127,17 @@ test.describe('ext:permissions and ext:settings', () => {
 				expect((await preview.sent('room_join')).filter((p) => p.room_id === 'design')).toEqual([]);
 				// Its row under Other Rooms shows it open, as a joined room's would.
 				await expect(page.getByTestId('room-directory').locator('button[data-join="design"]')).toHaveAttribute('aria-current', 'page');
+			});
+
+			await test.step('explores the threads of a room it hasn’t joined, listed right under its row, and reads one without joining', async () => {
+				const thread = page.getByTestId('room-directory').locator('button[data-other-thread="thread_palette"]');
+				await expect(thread).toContainText('Palette critique');
+				// Right under the room: none of its threads are yours, so there are no others to set them apart from.
+				await expect(page.getByTestId('other-threads')).toHaveCount(0);
+				await thread.click();
+				await expect(preview.message('Too much teal on the dashboards.')).toBeVisible();
+				await expect(thread).toHaveAttribute('aria-current', 'page');
+				expect(await preview.sent('room_join')).toEqual([]);
 			});
 		});
 	});

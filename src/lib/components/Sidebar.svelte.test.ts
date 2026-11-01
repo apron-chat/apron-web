@@ -83,6 +83,39 @@ describe('Sidebar', () => {
 		session.dispose();
 	});
 
+	it('lists the threads of a room open without joining right under its row in Other Rooms, all of them, to read one without joining; joining one sets the rest apart again', () => {
+		const client = fake();
+		const session = new SessionView();
+		const listing = (id: string, title: string, parentRoomId?: string) => ({ id, title, joined: false, record: { room_id: id, ...(parentRoomId ? { parent_room_id: parentRoomId } : {}) }, members: [] });
+		const design = { ...general, id: 'design', title: 'Design', joined: false, timeline: createTimeline('design') } as RoomSnapshot;
+		const titles = ['Palette', 'Fonts', 'Icons', 'Motion'];
+		const threads = titles.map((title, n) => listing(`t${n}`, title, 'design'));
+		session.apply(live({ rooms: [general, design], activeRoom: 'design', directory: [listing('design', 'Design'), listing('quiet', 'Quiet')], threadDirectory: { design: threads } } as never), client);
+		const onopenthread = vi.fn();
+		const onjoin = vi.fn();
+		const root = sidebar(client, session, { onopenthread, onjoin });
+		flushSync();
+		const directory = () => root.querySelector('[data-testid="room-directory"]')!;
+		const rows = () => [...directory().querySelectorAll('[data-other-thread]')].map((row) => row.querySelector('.ap-room-name')?.textContent);
+		// Under the open one only, with no Other Threads heading and none held back behind N more…, there being none of yours to set them apart from.
+		expect([rows(), directory().querySelector('.ap-threads-head'), directory().querySelector('[data-testid="more-threads"]')]).toEqual([titles, null, null]);
+		// Picking one reads it, which joins nothing.
+		directory().querySelector<HTMLButtonElement>('[data-other-thread="t0"]')!.click();
+		expect([onopenthread.mock.calls, onjoin.mock.calls]).toEqual([[['t0']], []]);
+
+		// Once one is joined, the rest are others to it again: under their heading, the first few showing.
+		dom.unmount(root);
+		const joined = { id: 't0', parentRoomId: 'design', title: 'Palette', loaded: false, participants: [], joined: true };
+		session.apply(live({ rooms: [general, design], activeRoom: 'design', directory: [listing('design', 'Design')], threadDirectory: { design: threads.slice(1) } } as never), client);
+		const again = sidebar(client, session, { threads: [joined] });
+		flushSync();
+		const others = again.querySelector('[data-testid="room-directory"]')!;
+		expect(others.querySelector('[data-thread="t0"] .ap-room-name')?.textContent).toBe('Palette');
+		expect(others.querySelector('.ap-threads-head')?.textContent).toContain('Other Threads');
+		expect([...others.querySelectorAll('[data-other-thread]')].map((row) => row.querySelector('.ap-room-name')?.textContent)).toEqual(['Fonts', 'Icons', 'Motion']);
+		session.dispose();
+	});
+
 	it('folds Rooms to those with news, in them or their threads, and the open one, until the heading or its … unfolds it, kept as left', () => {
 		const client = fake();
 		const session = new SessionView();

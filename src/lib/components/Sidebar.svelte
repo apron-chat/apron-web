@@ -612,6 +612,10 @@
 						{@const count = members > 0 ? `${members} ${members === 1 ? 'member' : 'members'}` : ''}
 						<!-- Picking one joins it; one that can't join (reading as a guest) opens it to read, which needs no word, and it shows as open as a joined room does. -->
 						<RoomItem room={listing.id} name={listing.title} topic={session.readOnly ? count || undefined : [count, 'Join'].filter(Boolean).join(' · ')} listed active={listing.id === session.activeRoomId && !activeThread} onselect={() => onjoin(listing.id)} />
+						<!-- The one open to read without joining lists its threads right under it, to explore them without joining either: none set apart as Other Threads until you join one. -->
+						{#if listing.id === session.activeRoomId}
+							<ThreadList roomId={listing.id} roomTitle={listing.title} {threads} others={otherThreads} roomUnjoined {activeThread} {mentions} {unread} muted={session.snapshot.roomMutes} canJoin={!session.readOnly && session.canManageRooms} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
+						{/if}
 					{/each}
 					{#if listError}<p class="ap-sect-note ap-tone-danger" role="alert">{listError}</p>{/if}
 				{/if}

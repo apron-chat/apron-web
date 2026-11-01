@@ -369,6 +369,10 @@ export class MemoryProtocolServer {
 		// A room to browse (not joined), and a fourth thread not joined, which the sidebar folds behind "N more…".
 		const design = this.makeRoom('design', 'Design reviews', ['ada', 'grace']);
 		design.description = 'Critiques, every other Thursday.';
+		// A thread in it, to explore without joining either.
+		const critique = this.makeRoom('thread_palette', 'Palette critique', ['ada', 'grace'], 'design');
+		critique.messages.push({ message_id: '1710000000026', log_id: '1710000000026', room_id: critique.room_id, from: { ...this.people.ada }, body: { text: 'Too much teal on the dashboards.', format: 'plain' } });
+		critique.log_id = 1710000000026;
 		const thread = this.makeRoom('thread_fonts', 'Font licensing', ['grace', 'margaret'], 'general');
 		thread.messages.push({ message_id: '1710000000025', log_id: '1710000000025', room_id: thread.room_id, from: { ...this.people.grace }, body: { text: 'The display face needs a web license.', format: 'plain' } });
 		thread.log_id = 1710000000025;
