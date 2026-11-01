@@ -78,6 +78,26 @@ When it fails, the table names the probe and count. Find the cause with `qa perf
 `main`, or `qa ab --base main --perf`. If the cost is the price of a feature, `--update` and commit the
 baseline with the change, so the review sees it. After making something cheaper, `--update` too: the
 baseline is a ratchet, and a gain not written into it can be spent again unnoticed.
+
+The counts are taken over real-time windows (1200 ms after the page is ready, a probe's `settle` after its
+action), so what lands inside one follows the machine's speed: the on-demand chunk's prefetch, 2 s after
+mount, falls inside the load window at 4× here but not on a faster runner. Two prototypes, which print their
+counts rather than check them, aim at counts that hold on any machine:
+
+```sh
+npm run qa -- budget --calls --clock fake --out .qa/counts.json   # fake clock, plus JS function calls
+npm run qa -- budget-diff .qa/counts.json ci-counts.json          # which counts match in every run on both
+```
+
+- `--calls` counts the JS functions the app's scripts call in each window (V8 precise coverage), in all and
+  by chunk.
+- `--clock fake` runs the page on Playwright's clock: its timers, frames and idle callbacks fire only as the
+  windows advance it, in 50 ms steps that each wait for fetches to finish. Interactions start 3 s after ready,
+  past the prefetch. Layouts that real frames draw, and events Playwright sends in real time (wheel, mouse
+  moves), can still vary a little.
+- `--clock virtual` (Chromium's virtual time, `--cpu 1` only) is kept for reference: Chromium hardly draws
+  under it, so Playwright's clicks can wait for a frame forever, and counts still vary.
+- `--out file.json` writes every run's counts in any mode, with the Chromium version and CPU.
 - `sheet` takes `{ "panels": [{ "title", "note", "before", "after", "box": [l, t, r, b], "scale" }] }`
   (paths relative to the spec; `before` optional) and renders it with real text, for a PR description.
 
