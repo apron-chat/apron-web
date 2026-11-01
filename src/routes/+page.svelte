@@ -45,7 +45,6 @@
 	import ThreadCard from '$lib/components/ThreadCard.svelte';
 	import ThreadDescription from '$lib/components/ThreadDescription.svelte';
 	import TimelineDivider from '$lib/design/components/TimelineDivider.svelte';
-	import ReadReceipts from '$lib/design/components/ReadReceipts.svelte';
 	import TypingIndicator from '$lib/design/components/TypingIndicator.svelte';
 	import NoticeLine from '$lib/components/NoticeLine.svelte';
 	import MembershipLine from '$lib/components/MembershipLine.svelte';
@@ -2488,7 +2487,7 @@
 	// --- Message rows ---
 
 	/** The test ids interop finds a message's parts by. */
-	const MESSAGE_TESTIDS: MessageTestids = { handle: 'sender-handle', reply: 'reply-reference', reactions: 'reactions', chip: 'reaction-chip', select: 'select-message', writing: 'message-writing' };
+	const MESSAGE_TESTIDS: MessageTestids = { handle: 'sender-handle', reply: 'reply-reference', reactions: 'reactions', chip: 'reaction-chip', select: 'select-message', writing: 'message-writing', receipts: 'read-receipts' };
 
 	/** What every row reads from, each field only where a row needs it. */
 	const messageContext: MessageContext = {
@@ -3244,15 +3243,14 @@
 									selecting: selection.active,
 									selected: selection.has(item.event.message_id),
 									editing: editingId === item.event.message_id,
-									caps: capsFor(item.event)
+									caps: capsFor(item.event),
+									seenBy: receipts.get(item.event.message_id)
 								}, messageContext)}
 								on={messageHandlers}
 								testids={MESSAGE_TESTIDS}
 								editor={(view) => (view.editing && messageEditor.component ? editMessage : undefined)}
 								embed={messageEmbed}
 							/>
-							{@const seenBy = receipts.get(event.message_id)}
-							{#if seenBy}<ReadReceipts people={seenBy} decorative testid="read-receipts" />{/if}
 						{/if}
 					{/each}
 				{/if}

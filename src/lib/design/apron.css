@@ -1688,10 +1688,12 @@ a.ap-linkchip-elsewhere:hover { background: var(--hover); }
 
 /* Private rooms (§4.2.4) as people talk in them. Faces — who one is with: a person's avatar with their status, or the
    first two of a group, the second stacked behind the first, cut clear of it so it reads on any ground. */
-/* Read receipts: a short row under the message read up to, its faces at the end, overlapping, ringed in the page's background. */
-.ap-receipts { display: flex; justify-content: flex-end; align-items: center; gap: 0; min-height: var(--avatar-xs); margin: 2px var(--space-4) 0; }
-.ap-receipts > .ap-avatar { box-shadow: 0 0 0 2px var(--bg-100); }
-.ap-receipts > .ap-avatar + .ap-avatar { margin-inline-start: -4px; }
+/* Read receipts: the faces of those who read up to a message, at the end of its first line, overlapping a little, ringed in the page's background. */
+.ap-receipts { display: flex; justify-content: flex-end; align-items: center; gap: 0; min-height: var(--avatar-xs); }
+.ap-receipts > .ap-avatar { box-shadow: 0 0 0 1.5px var(--bg-100); }
+.ap-receipts > .ap-avatar + .ap-avatar { margin-inline-start: -3px; }
+/* In a message: at the end of its first line, text wrapping around it. */
+.ap-msg-receipts { float: inline-end; margin-block-start: 3px; margin-inline-start: var(--space-2); }
 .ap-receipts-more { margin-inline-start: var(--space-1); font-size: var(--text-xs); line-height: var(--leading-sm); color: var(--ink-muted); }
 .ap-faces { flex: none; display: inline-flex; align-items: center; }
 .ap-faces-group { --faces-d: var(--avatar-sm); --faces-overlap: 6px; --faces-gap: 2px; }
