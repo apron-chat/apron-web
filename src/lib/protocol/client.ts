@@ -224,6 +224,8 @@ export class ChatClient {
 	private greatestLogId?: string;
 	/** Read cursors per room, per user (§4.6). */
 	private readonly reads = new Map<string, Map<string, string>>();
+	/** The read cursor last sent for each room on this connection's account, so turning Read Receipts back on sends only what moved. */
+	private readonly readSent = new Map<string, string>();
 	/** Read Receipts turned off on this device (`setReadReceipts`): your cursor in a private room stays here. */
 	private receiptsOff = false;
 	private readonly uploads = new Map<string, UploadState>();
@@ -2282,6 +2284,7 @@ export class ChatClient {
 		if (wait <= 0 && !waiting) {
 			this.readSentAt.set(roomId, this.now());
 			this.sendFrame({ method: 'activity', params: { room_id: roomId, read_message_id: messageId } });
+			this.readSent.set(roomId, messageId);
 			return;
 		}
 		this.readWaiting.set(roomId, {
@@ -2301,7 +2304,10 @@ export class ChatClient {
 			}
 			this.readWaiting.delete(room);
 			this.readSentAt.set(room, this.now());
-			if (serverSettings(this.server).read_cursors && !this.withholdsRead(room)) this.sendFrame({ method: 'activity', params: { room_id: room, read_message_id: waiting.messageId } });
+			if (serverSettings(this.server).read_cursors && !this.withholdsRead(room)) {
+				this.sendFrame({ method: 'activity', params: { room_id: room, read_message_id: waiting.messageId } });
+				this.readSent.set(room, waiting.messageId);
+			}
 		}
 	}
 
@@ -2316,7 +2322,7 @@ export class ChatClient {
 		// Back on: how far you read while it was off goes now, as it would have.
 		for (const roomId of this.reads.keys()) {
 			const cursor = this.readCursor(roomId);
-			if (cursor !== undefined && this.store.room(roomId)?.private === true && serverSettings(this.server).read_receipts === 'private') this.sendReadCursor(roomId, cursor);
+			if (cursor !== undefined && cursor !== this.readSent.get(roomId) && this.store.room(roomId)?.private === true && serverSettings(this.server).read_receipts === 'private') this.sendReadCursor(roomId, cursor);
 		}
 	}
 
@@ -2330,6 +2336,7 @@ export class ChatClient {
 		for (const waiting of this.readWaiting.values()) clearTimeout(waiting.timer);
 		this.readWaiting.clear();
 		this.readSentAt.clear();
+		this.readSent.clear();
 	}
 
 	/** Visible rooms in the order they were listed, joined, or opened. */

@@ -267,7 +267,7 @@
 		</div>
 		<div class="ap-msg-main">
 			<!-- Floated to the end of the first line (the header, or a follower's first line of text), so it adds no height. Decorative inside the timeline's live log. -->
-			{#if view.seenBy?.length}<ReadReceipts people={view.seenBy} decorative class="ap-msg-receipts" testid={testids?.receipts} />{/if}
+			{#if view.seenBy?.length && !view.editing}<ReadReceipts people={view.seenBy} decorative class="ap-msg-receipts" testid={testids?.receipts} />{/if}
 			{#if !grouped}
 				<header class="ap-msg-head">
 					<button class="ap-msg-sender ap-msg-who" type="button" data-user-id={view.sender.user_id} aria-haspopup="dialog" title="Show profile">{view.sender.name}</button>

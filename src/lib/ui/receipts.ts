@@ -1,6 +1,6 @@
 import type { RoomSnapshot } from '$lib/protocol/client';
 import { compareLogIds } from '$lib/protocol/reducer';
-import type { Identity } from '$lib/protocol/types';
+import { isSystemId, type Identity } from '$lib/protocol/types';
 import type { Face } from '$lib/design/components/types';
 import type { TimelineItem } from './timeline';
 
@@ -10,7 +10,7 @@ const NONE: ReadonlyMap<string, Identity[]> = new Map();
 /**
  * Where read receipts show in a private room's timeline (`readers`, from
  * `ext.settings.read_receipts` `'private'`): each other member under the
- * newest message shown that they have read through, by `message_id`, in
+ * newest message shown, not a system one, that they have read through, by `message_id`, in
  * the order the room lists them. A reader whose cursor is older than
  * everything shown, who is you, or who is no longer a member (where the
  * members are known) shows nowhere. Each is the room's member object
@@ -24,7 +24,8 @@ export function receiptsByMessage(
 	const readers = room?.readers?.filter((reader) => reader.user_id !== you);
 	if (!readers?.length) return NONE;
 	const ids: string[] = [];
-	for (const item of timeline) if (item.kind === 'message') ids.push(item.event.message_id);
+	// Not on a system message (`~…`), which draws as a line without them: the newest other one before it instead.
+	for (const item of timeline) if (item.kind === 'message' && !isSystemId(item.event.from?.user_id)) ids.push(item.event.message_id);
 	if (!ids.length) return NONE;
 	const placed = new Map<string, Identity[]>();
 	for (const reader of readers) {

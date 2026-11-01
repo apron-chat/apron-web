@@ -38,4 +38,10 @@ describe('steadyReceipts', () => {
 		expect(moved.get('20')).toBe(last.get('20'));
 		expect(moved.get('40')).toEqual([{ user_id: 'cy', name: 'Cy' }]);
 	});
+
+	it('places a receipt on the newest message before a system one, which draws none', () => {
+		const system = { kind: 'message', key: '40', grouped: false, event: { message_id: '40', log_id: '40', room_id: 'private_1', from: { user_id: '~room' }, body: { text: 'renamed' } } } as TimelineItem;
+		const placed = receiptsByMessage([...timeline, system], { members, readers: [{ user_id: 'bob', message_id: '40' }] }, 'ada');
+		expect(Object.fromEntries(placed)).toEqual({ '30': [{ user_id: 'bob', name: 'Bob' }] });
+	});
 });
