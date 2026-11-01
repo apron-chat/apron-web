@@ -437,6 +437,11 @@ export class MemoryProtocolServer {
 		for (const reader of live.readers) reader.enqueue(bytes);
 	}
 
+	/** What its writer sent so far, as decoded text with its edits (backspaces and form feeds) still in it. */
+	liveWritten(embedId: string): string {
+		return liveTextDecoder().decode(concat(this.lives.get(embedId)?.chunks ?? []));
+	}
+
 	/** How many times its `url` was read (`GET`), from the first. */
 	liveReads(embedId: string): number {
 		return this.lives.get(embedId)?.reads ?? 0;

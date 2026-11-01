@@ -856,9 +856,12 @@ message is posted at once, as Markdown with an empty `body.text` and one
 thread first as a message would). Its `write_url` gets one streaming `PUT`
 (`fetch` with a `ReadableStream` body), and each change to the draft, typed,
 pasted, a mention chip or an emoji, goes out as the edit that turns what was
-sent into the new text: backspaces (U+0008), one per code point, for what
-follows their common start, then what was added; or a form feed (U+000C) and
-the whole text when that is shorter. Backspace and form feed in the draft
+sent into the new text, as typing makes it: what was added at the end goes as
+it is, and one character deleted from the end (a grapheme, such as an emoji
+with its skin tone) as backspaces (U+0008), one per code point. Any other
+change replaced text, such as a selection deleted or typed over, a word
+deleted at once, or an edit before the end: it goes as a form feed (U+000C)
+and the whole text, a full reset to what the composer shows. Backspace and form feed in the draft
 itself are left out of what is sent. So the timeline, the sender's own
 included, shows the message growing and changing as it is typed, with
 Writing… under it, while the draft is still in the composer. It takes no

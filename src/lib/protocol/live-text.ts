@@ -90,7 +90,7 @@ function dropEmpty(starts: number[], ends: number[]): void {
 	ends.pop();
 }
 
-export const isHigh = (unit: number) => unit >= 0xd800 && unit <= 0xdbff;
+const isHigh = (unit: number) => unit >= 0xd800 && unit <= 0xdbff;
 const isLow = (unit: number) => unit >= 0xdc00 && unit <= 0xdfff;
 
 /** Where the code point that ends at `end` in `text` starts: a surrogate pair is one. */

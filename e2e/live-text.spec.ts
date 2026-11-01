@@ -365,6 +365,34 @@ test.describe('live typing (/live)', () => {
 		expect((await preview.sent('message')).filter((params) => isAppend(params.body))).toHaveLength(1);
 	});
 
+	test('a selection deleted or typed over resets the live text to what the composer shows', async ({ preview, page }) => {
+		await preview.open();
+		await preview.composer().click();
+		await page.keyboard.insertText('/live');
+		await page.keyboard.press('Enter');
+		await expect(page.getByTestId('live-tag')).toBeVisible();
+		await page.keyboard.type('Hello there, world');
+		await expect(preview.message('Hello there, world')).toBeVisible();
+		const id = await page.evaluate(() => [...(window as any).__apronPreview.lives.keys()].at(-1) as string);
+		// The second half, selected and deleted, then typed again.
+		for (let i = 0; i < 12; i++) await page.keyboard.press('Shift+ArrowLeft');
+		await page.keyboard.press('Backspace');
+		await expect(preview.message('Hello')).toBeVisible();
+		await page.keyboard.type('everyone');
+		await expect(preview.message('Hello everyone')).toBeVisible();
+		// The first word, selected and typed over.
+		await page.keyboard.press('Home');
+		for (let i = 0; i < 5; i++) await page.keyboard.press('Shift+ArrowRight');
+		await page.keyboard.type('Hi');
+		await expect(preview.message('Hi everyone')).toBeVisible();
+		await expect(preview.composer()).toHaveText('Hi everyone');
+		// Each replacement went as a form feed and the whole text; typing and one Backspace as themselves.
+		expect(await preview.liveWritten(id)).toBe('Hello there, world\fHello everyone\fH everyone\fHi everyone');
+		await page.keyboard.press('Enter');
+		const saved = await preview.waitForSent('message', (params) => params.message_id !== undefined);
+		expect(saved.body).toEqual({ text: 'Hi everyone', format: 'markdown' });
+	});
+
 	test('Send with nothing typed takes the live message back', async ({ preview, page }) => {
 		await preview.open();
 		await preview.composer().click();

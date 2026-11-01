@@ -1,22 +1,28 @@
-import { isHigh, lastCodePoint, writeLiveText } from '$lib/protocol/live-text';
+import { lastCodePoint, writeLiveText } from '$lib/protocol/live-text';
 
 /**
- * The edit that turns live text the sender wrote, `sent`, into `next` (§4.8.5): backspaces for what follows their
- * common start, then the rest of `next`; or a form feed and all of `next`, when that is shorter. Backspaces count code
- * points, as readers apply them (`editLiveText`), so a surrogate pair is never split. Backspace and form feed in the
- * texts themselves would read as edits, so a sender leaves them out of both (`liveTextOf`).
+ * The edit that turns live text the sender wrote, `sent`, into `next` (§4.8.5), as typing makes it: what was typed
+ * at the end goes as it is, and one character deleted from the end (one grapheme, such as an emoji with its skin
+ * tone) as one backspace per code point, as readers apply them (`editLiveText`). Any other change replaced text: a
+ * selection deleted or typed over, a word removed at once, an edit before the end. That goes as a form feed and all
+ * of `next`, a full reset to what the composer shows. Backspace and form feed in the texts themselves would read as
+ * edits, so a sender leaves them out of both (`liveTextOf`).
  */
 export function liveEdit(sent: string, next: string): string {
 	if (sent === next) return '';
-	const shorter = Math.min(sent.length, next.length);
-	let common = 0;
-	while (common < shorter && sent.charCodeAt(common) === next.charCodeAt(common)) common++;
-	// A shared high surrogate whose low ones differ is half a character: it goes too.
-	if (common > 0 && isHigh(sent.charCodeAt(common - 1)) && common < sent.length) common--;
-	let removed = 0;
-	for (let end = sent.length; end > common; end = lastCodePoint(sent, end)) removed++;
-	const edit = '\b'.repeat(removed) + next.slice(common);
-	return removed > 0 && next.length + 1 < edit.length ? `\f${next}` : edit;
+	if (next.startsWith(sent)) return next.slice(sent.length);
+	if (sent.startsWith(next) && graphemes(sent.slice(next.length)) === 1) {
+		let removed = 0;
+		for (let end = sent.length; end > next.length; end = lastCodePoint(sent, end)) removed++;
+		return '\b'.repeat(removed);
+	}
+	return `\f${next}`;
+}
+
+/** How many characters, as a reader sees them (grapheme clusters), `text` holds; code points where the browser can't tell. */
+function graphemes(text: string): number {
+	if (typeof Intl !== 'undefined' && 'Segmenter' in Intl) return [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text)].length;
+	return [...text].length;
 }
 
 /** A composer's text as it goes out as live text: without backspace and form feed, which would read as edits (§4.8.5). */

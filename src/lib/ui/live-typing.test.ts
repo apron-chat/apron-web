@@ -101,27 +101,34 @@ describe('LiveTyping', () => {
 });
 
 describe('liveEdit (a sender of append live text, §4.8.5)', () => {
-	it('adds typing at the end as it is, and nothing for no change', () => {
+	it('sends typing at the end as it is, and nothing for no change', () => {
 		expect(liveEdit('', 'hi')).toBe('hi');
 		expect(liveEdit('hi', 'hi there')).toBe(' there');
 		expect(liveEdit('same', 'same')).toBe('');
 	});
 
-	it('backspaces what changed after the common start, by code point', () => {
-		expect(liveEdit('hello', 'help')).toBe('\b\bp');
+	it('backspaces one character deleted from the end, by code point', () => {
+		expect(liveEdit('hello', 'hell')).toBe('\b');
 		expect(liveEdit('a😀', 'a')).toBe('\b');
-		// The same high surrogate, a different low one: the whole character goes.
-		expect(liveEdit('a😀', 'a😃')).toBe('\b😃');
+		// An emoji with its skin tone is one character of two code points.
+		expect(liveEdit('ok 👍🏽', 'ok ')).toBe('\b\b');
 	});
 
-	it('clears with a form feed when that is shorter', () => {
-		expect(liveEdit('a long line of text', 'b')).toBe('\fb');
+	it('resets to the whole text when text was replaced', () => {
+		// The second half selected and deleted, then typed over.
+		expect(liveEdit('Hello there, world', 'Hello th')).toBe('\fHello th');
+		expect(liveEdit('Hello th', 'Hello thx')).toBe('x');
+		// The first half selected and deleted.
+		expect(liveEdit('Hello there, world', 'ere, world')).toBe('\fere, world');
+		// A selection typed over, and an edit before the end.
+		expect(liveEdit('Hello wrold', 'Hello world')).toBe('\fHello world');
+		expect(liveEdit('Helo world', 'Hello world')).toBe('\fHello world');
+		expect(liveEdit('a😀', 'a😃')).toBe('\fa😃');
 		expect(liveEdit('abc', '')).toBe('\f');
-		expect(liveEdit('ab', 'a')).toBe('\b');
 	});
 
 	it('gives readers the new text, whatever the change', () => {
-		const texts = ['', 'h', 'he', 'hello', 'help', 'help 😀', 'help 😃!', 'x', 'xy\nz', '', '日本語', '日本'];
+		const texts = ['', 'h', 'he', 'hello', 'hell', 'help', 'help 😀', 'help 😃!', 'x', 'xy\nz', '', '日本語', '日本', '日本 👍🏽', '日本 '];
 		let shown = '';
 		let sent = '';
 		for (const next of texts) {
