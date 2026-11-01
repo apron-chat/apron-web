@@ -732,7 +732,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 	 */
 	.ap-shell-peeking { --shell-peek: clamp(32px, 9vw, 44px); grid-template-columns: minmax(0, 1fr) var(--shell-peek); }
 	.ap-shell-peeking .ap-shell-side { z-index: 1; box-shadow: var(--shadow-float); }
-	.ap-shell.ap-shell-peeking[data-pane='rooms'] .ap-shell-main { display: flex; position: absolute; top: 0; bottom: 0; inset-inline-start: calc(100% - var(--shell-peek)); width: 100%; opacity: 0.45; pointer-events: none; }
+	.ap-shell.ap-shell-peeking[data-pane='rooms'] .ap-shell-main { display: flex; position: absolute; top: 0; bottom: 0; inset-inline-start: calc(100% - var(--shell-peek)); width: 100%; opacity: var(--opacity-dim); pointer-events: none; }
 	.ap-shell-peek { position: absolute; z-index: 1; top: 0; bottom: 0; inset-inline-end: 0; width: var(--shell-peek); margin: 0; padding: 0; border: 0; background: transparent; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 	.ap-shell-peek:active { background: var(--hover); }
 }
