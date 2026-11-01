@@ -10,7 +10,7 @@ import { loadMediaSettings, MEDIA_KEY, saveMediaSettings } from './storage';
  *   Media in the timeline from anywhere else waits for a click; avatars and
  *   custom emoji from anywhere else don't show.
  * - `any`: any site.
- * Either way, nothing loads from the origins the viewer blocked (`blocked`), whatever trusts them.
+ * Either way, nothing loads from the origins the viewer blocked (`blocked`), or from under them, whatever trusts them.
  * Inline images (`data:`) always show.
  */
 export const MEDIA_POLICIES = [
@@ -32,20 +32,39 @@ function known(value: unknown): value is MediaPolicy {
 }
 
 /**
+ * The `http(s):` URL an entry names: a full URL (`https://cdn.example/a.png`), else a bare host (`cdn.example`, or
+ * `cdn.example:443`, which `URL` alone reads as a scheme), as `https:`. One naming another scheme (`ftp://`) is
+ * none. Else undefined.
+ */
+function entryUrl(entry: string): URL | undefined {
+	// Only one that starts with a scheme and `//` names it: a bare host can have `://` further on, in its query.
+	for (const candidate of /^[a-z][a-z0-9+.-]*:\/\//i.test(entry) ? [entry] : [entry, `https://${entry}`]) {
+		try {
+			const url = new URL(candidate);
+			if (url.protocol === 'https:' || url.protocol === 'http:') return url;
+		} catch {
+			// Not a URL as it stands: try it as a bare host.
+		}
+	}
+	return undefined;
+}
+
+/** What `keep` makes of each URL named in `text`, separated by spaces, commas or lines: each once, in order. */
+function parseEntries(text: string, keep: (url: URL) => string | undefined): string[] {
+	const kept = text.split(/[\s,]+/).flatMap((entry) => {
+		const url = entry ? entryUrl(entry) : undefined;
+		const value = url && keep(url);
+		return value ? [value] : [];
+	});
+	return [...new Set(kept)];
+}
+
+/**
  * The `https:` origins named in `text`, each once, in order: full URLs (`https://cdn.example/a.png`) or bare hosts
  * (`cdn.example`), separated by spaces, commas or lines. Anything else is dropped.
  */
 export function parseMediaOrigins(text: string): string[] {
-	const origins = text.split(/[\s,]+/).flatMap((entry) => {
-		if (!entry) return [];
-		try {
-			const url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(entry) ? entry : `https://${entry}`);
-			return url.protocol === 'https:' && url.hostname.includes('.') ? [url.origin] : [];
-		} catch {
-			return [];
-		}
-	});
-	return [...new Set(origins)];
+	return parseEntries(text, (url) => (url.protocol === 'https:' && url.hostname.includes('.') ? url.origin : undefined));
 }
 
 /**
@@ -59,20 +78,17 @@ export function blockableHost(url: URL): string {
 /**
  * The sites named in `text` to block, each once, in order, as `https:` origins of their hosts: full URLs of any
  * `http(s):` scheme, or bare hosts, separated by spaces, commas or lines; the port and scheme dropped, since a block
- * holds for the host whatever they are. Wildcards and anything else are dropped.
+ * holds for the host whatever they are. Wildcards, single labels but localhost, and anything else are dropped.
  */
 export function parseBlockedOrigins(text: string): string[] {
-	const origins = text.split(/[\s,]+/).flatMap((entry) => {
-		if (!entry || entry.includes('*')) return [];
-		try {
-			const url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(entry) ? entry : `https://${entry}`);
-			const host = blockableHost(url);
-			return (url.protocol === 'https:' || url.protocol === 'http:') && host ? [`https://${host}`] : [];
-		} catch {
-			return [];
-		}
+	return parseEntries(text, (url) => {
+		const host = blockableHost(url);
+		const labels = host.split('.');
+		// Each label something, no wildcards; and a single label other than localhost (`com`, or `tracker:` read as
+		// one) would block a whole top-level domain.
+		const named = labels.every(Boolean) && !host.includes('*') && (labels.length > 1 || host === 'localhost');
+		return named ? `https://${host}` : undefined;
 	});
-	return [...new Set(origins)];
 }
 
 /** Where media loads from, shared by the page and Preferences. */

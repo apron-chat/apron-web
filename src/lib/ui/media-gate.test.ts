@@ -48,8 +48,13 @@ describe('mediaGate', () => {
 			expect(gate.ask(url), url).toBeUndefined();
 		}
 		expect(gate.src('https://elsewhere.example/a.png')).toBe('https://elsewhere.example/a.png');
-		// A block is of that host, not the ones under it.
-		expect(gate.src('https://a.tracker.example/t.gif')).toBe('https://a.tracker.example/t.gif');
+		// A block is of that host and every one under it, not those it is under or that merely end alike.
+		for (const url of ['https://a.tracker.example/t.gif', 'https://x.y.tracker.example./t.gif']) {
+			expect(gate.src(url), url).toBeUndefined();
+			expect(gate.ask(url), url).toBeUndefined();
+		}
+		expect(gate.src('https://eviltracker.example/t.gif')).toBe('https://eviltracker.example/t.gif');
+		expect(gate.src('https://example/t.gif')).toBe('https://example/t.gif');
 		expect(gate.src('https://chat.example/a.png')).toBe('https://chat.example/a.png');
 		expect(gate.src(PIXEL)).toBe(PIXEL);
 		expect(gate.key).not.toBe(mediaGate('https://chat.example', ['https://media.example', ANY_ORIGIN], { asks: true, once: ['https://tracker.example/t.gif'] }).key);

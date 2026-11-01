@@ -39,7 +39,7 @@ export interface MediaGateOptions {
 	/**
 	 * Origins whose media never loads, nor is asked for: Preferences' Blocked origins. They win over everything else
 	 * that would let media load (the trusted origins, Any site, a click on Load), and match by host (`blockableHost`),
-	 * whatever the scheme or port.
+	 * whatever the scheme or port, and every host under it (blocking `tracker.example` blocks `a.tracker.example`).
 	 */
 	blocked?: readonly string[];
 }
@@ -56,11 +56,13 @@ function hostOf(url: string): string | undefined {
 /** A gate for the chat server at `origin` and the origins trusted besides it (`embedMedia`). */
 export function mediaGate(origin: string | undefined, trusted: readonly string[], options: MediaGateOptions = {}): MediaGate {
 	const once = options.once ?? [];
-	const blocked = new Set((options.blocked ?? []).flatMap((entry) => hostOf(entry) ?? []));
-	const key = `${origin ?? ''} ${trusted.join(' ')}${options.httpsElsewhere ? ' https' : ''}${options.asks ? ' ask' : ''}${blocked.size ? ` -${[...blocked].join(' -')}` : ''}${once.length ? `\n${once.join('\n')}` : ''}`;
+	const blocked = [...new Set((options.blocked ?? []).flatMap((entry) => hostOf(entry) || []))];
+	const key = `${origin ?? ''} ${trusted.join(' ')}${options.httpsElsewhere ? ' https' : ''}${options.asks ? ' ask' : ''}${blocked.length ? ` -${blocked.join(' -')}` : ''}${once.length ? `\n${once.join('\n')}` : ''}`;
 	const isBlocked = (value: unknown): boolean => {
-		const link = blocked.size ? safeLink(value) : undefined;
-		return link !== undefined && blocked.has(blockableHost(new URL(link)));
+		const link = blocked.length ? safeLink(value) : undefined;
+		if (link === undefined) return false;
+		const host = blockableHost(new URL(link));
+		return blocked.some((site) => host === site || host.endsWith(`.${site}`));
 	};
 	const src = (value: unknown): MediaSrc | undefined => {
 		if (isBlocked(value)) return undefined;
