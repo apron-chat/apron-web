@@ -44,7 +44,7 @@ jobs:
     name: perf-budget (${{ matrix.shard }}/3)
     # Pinned: Playwright 1.56 installs Chromium for Ubuntu 24.04, not 26.04, and a fixed OS keeps the counts steady.
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -71,6 +71,11 @@ jobs:
         run: npx playwright-core install --with-deps chromium
       - run: APRON_PREVIEW=1 npm run build
       - run: npm run qa -- budget --build build --shard ${{ matrix.shard }}/3
+      # TEMPORARY: the machine-independent prototypes, for comparing CI with local runs. Remove before merging.
+      - if: ${{ !cancelled() }}
+        run: npm run qa -- budget --build build --shard ${{ matrix.shard }}/3 --calls --clock fake --out .qa/fake-${{ matrix.shard }}.json && cat .qa/fake-${{ matrix.shard }}.json
+      - if: ${{ !cancelled() }}
+        run: npm run qa -- budget --build build --shard ${{ matrix.shard }}/3 --calls --out .qa/wall-${{ matrix.shard }}.json && cat .qa/wall-${{ matrix.shard }}.json
 
   # The check branch protection and reviewers see: passes once every shard has.
   perf-budget:
