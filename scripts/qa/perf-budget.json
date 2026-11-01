@@ -6,16 +6,16 @@
 	"probes": {
 		"load": {
 			"requests": 21,
-			"startupJsKB": 987.7,
+			"startupJsKB": 987.9,
 			"domNodes": 542,
-			"layouts": 12,
-			"styleRecalcs": 20,
-			"calls": 238849,
+			"layouts": 10,
+			"styleRecalcs": 18,
+			"calls": 237503,
 			"heapMB": 8.4
 		},
 		"load-busy": {
 			"requests": 19,
-			"startupJsKB": 960.4,
+			"startupJsKB": 960.5,
 			"domNodes": 1198,
 			"layouts": 13,
 			"styleRecalcs": 20,
@@ -60,7 +60,7 @@
 		"scroll-timeline": {
 			"layouts": 9,
 			"styleRecalcs": 9,
-			"calls": 8767
+			"calls": 8796
 		},
 		"type-composer": {
 			"layouts": 36,
@@ -70,7 +70,7 @@
 		"hover-messages": {
 			"layouts": 7,
 			"styleRecalcs": 10,
-			"calls": 7254
+			"calls": 7255
 		}
 	},
 	"bundle": {
