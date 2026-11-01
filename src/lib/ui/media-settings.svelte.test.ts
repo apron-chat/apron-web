@@ -40,6 +40,26 @@ describe('media settings', () => {
 		expect(settings.origins).toContain('https://more.example');
 	});
 
+	it('blocks origins over the trusted ones; Block adds one, and they are saved', () => {
+		const settings = new MediaSettings();
+		settings.update('trusted', ['https://cdn.example']);
+		settings.block('https://cdn.example/a.png');
+		settings.block('cdn.example');
+		settings.block('http://plain.example');
+		settings.block('ads.example');
+		expect(settings.blocked).toEqual(['https://cdn.example', 'https://ads.example']);
+		// Trusted still lists it: the gates leave it out.
+		expect(settings.origins).toEqual(['https://cdn.example']);
+		settings.update('any');
+		expect(settings.blocked).toEqual(['https://cdn.example', 'https://ads.example']);
+		const again = new MediaSettings();
+		again.load();
+		expect(again.blocked).toEqual(['https://cdn.example', 'https://ads.example']);
+		localStorage.setItem('apron.media', JSON.stringify({ policy: 'trusted', origins: [], blocked: ['https://kept.example', 'http://x.example', 7] }));
+		again.load();
+		expect(again.blocked).toEqual(['https://kept.example']);
+	});
+
 	it('loads what was saved, what earlier versions saved as its nearest, and the default for anything else', () => {
 		const settings = new MediaSettings();
 		settings.update('trusted', ['https://cdn.example']);

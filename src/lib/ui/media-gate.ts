@@ -18,11 +18,11 @@ export interface MediaGate {
 	readonly key: string;
 	/** `value` as media to load, where it may load from; else undefined. */
 	src(value: unknown): MediaSrc | undefined;
-	/** `value`, media that may not load but may on a click (Load, or Always load from its site); else undefined. */
+	/** `value`, media that may not load but may on a click (Load, or Always load or Block its site); else undefined. */
 	ask(value: unknown): MediaAsk | undefined;
 }
 
-/** Media that waits for a click: where it is, its site, and its origin when that can be trusted from now on (`https:`). */
+/** Media that waits for a click: where it is, its site, and its origin when that can be trusted or blocked from now on (`https:`). */
 export interface MediaAsk {
 	url: string;
 	host: string;
@@ -36,13 +36,33 @@ export interface MediaGateOptions {
 	once?: readonly string[];
 	/** Media from anywhere else may be asked for (`ask`), rather than never loading. */
 	asks?: boolean;
+	/**
+	 * Origins whose media never loads, nor is asked for: Preferences' Blocked origins. They win over everything else
+	 * that would let media load (the trusted origins, Any site, a click on Load), and match by host, whatever the scheme.
+	 */
+	blocked?: readonly string[];
+}
+
+/** The host of `url`, an `http(s):` URL; else undefined. */
+function hostOf(url: string): string | undefined {
+	try {
+		return new URL(url).host;
+	} catch {
+		return undefined;
+	}
 }
 
 /** A gate for the chat server at `origin` and the origins trusted besides it (`embedMedia`). */
 export function mediaGate(origin: string | undefined, trusted: readonly string[], options: MediaGateOptions = {}): MediaGate {
 	const once = options.once ?? [];
-	const key = `${origin ?? ''} ${trusted.join(' ')}${options.httpsElsewhere ? ' https' : ''}${options.asks ? ' ask' : ''}${once.length ? `\n${once.join('\n')}` : ''}`;
+	const blocked = new Set((options.blocked ?? []).flatMap((entry) => hostOf(entry) ?? []));
+	const key = `${origin ?? ''} ${trusted.join(' ')}${options.httpsElsewhere ? ' https' : ''}${options.asks ? ' ask' : ''}${blocked.size ? ` -${[...blocked].join(' -')}` : ''}${once.length ? `\n${once.join('\n')}` : ''}`;
+	const isBlocked = (value: unknown): boolean => {
+		const link = blocked.size ? safeLink(value) : undefined;
+		return link !== undefined && blocked.has(new URL(link).host);
+	};
 	const src = (value: unknown): MediaSrc | undefined => {
+		if (isBlocked(value)) return undefined;
 		const url = embedMedia(value, origin, trusted);
 		if (url === undefined) {
 			const link = safeLink(value);
@@ -55,7 +75,7 @@ export function mediaGate(origin: string | undefined, trusted: readonly string[]
 		key,
 		src,
 		ask(value) {
-			if (!options.asks || src(value) !== undefined) return undefined;
+			if (!options.asks || isBlocked(value) || src(value) !== undefined) return undefined;
 			const url = safeLink(value);
 			if (!url) return undefined;
 			const [trustable] = parseMediaOrigins(url);

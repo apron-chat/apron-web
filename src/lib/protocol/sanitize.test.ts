@@ -36,7 +36,7 @@ describe('sanitizeHtml: media in an HTML embed (§4.8)', () => {
 		expect(embed('<p><img src="/relative.png" alt="Chart"></p>', NOWHERE)).toBe('<p>Chart</p>');
 	});
 
-	it('asks before loading what a click may load: Load, and Always load where its site can be trusted', () => {
+	it('asks before loading what a click may load: Load, and Always load and Block where its site can be trusted', () => {
 		const asking: MediaCheck = {
 			key: 'chat.example ask',
 			src: fromServer.src,
@@ -45,7 +45,10 @@ describe('sanitizeHtml: media in an HTML embed (§4.8)', () => {
 		const box = (what: string, url: string, host: string, origin?: string) =>
 			`<span class="ap-media-ask"><span class="ap-media-ask-label"><span class="ap-media-ask-what">${what}</span> <span class="ap-media-ask-url">${url}</span></span>` +
 			`<span class="ap-media-ask-actions"><button class="ap-btn ap-btn-quiet ap-btn-sm" type="button" data-media-load="${url}" aria-label="Load ${what} from ${host}">Load</button>` +
-			(origin ? `<button class="ap-btn ap-btn-quiet ap-btn-sm" type="button" data-media-trust="${origin}" title="Adds ${host} to Trusted origins">Always load from ${host}</button>` : '') +
+			(origin
+				? `<button class="ap-btn ap-btn-quiet ap-btn-sm" type="button" data-media-trust="${origin}" title="Adds ${host} to Trusted origins"><span class="ap-media-ask-btntext">Always load from ${host}</span></button>` +
+					`<button class="ap-btn ap-btn-quiet ap-btn-sm" type="button" data-media-block="${origin}" title="Adds ${host} to Blocked origins"><span class="ap-media-ask-btntext">Block ${host}</span></button>`
+				: '') +
 			'</span></span>';
 		expect(embed('<p><img src="https://tracker.example/t.gif" alt="Chart"></p>', asking)).toBe(`<p>${box('Chart', 'https://tracker.example/t.gif', 'tracker.example', 'https://tracker.example')}</p>`);
 		expect(embed('<img src="http://plain.example/t.gif">', asking)).toBe(box('Image', 'http://plain.example/t.gif', 'plain.example'));
@@ -60,8 +63,8 @@ describe('sanitizeHtml: media in an HTML embed (§4.8)', () => {
 		expect(sanitizeHtml('<img class="ap-cemoji" src="https://tracker.example/e.png" alt=":e:">', 'message', asking)).toBe(':e:');
 	});
 
-	it('keeps no Load or Always load from the markup itself: only the sanitizer writes them', () => {
-		const html = embed('<span data-media-load="https://tracker.example/t.gif" data-media-trust="https://tracker.example">x</span><button data-media-trust="https://tracker.example">Always load</button>');
+	it('keeps no Load, Always load or Block from the markup itself: only the sanitizer writes them', () => {
+		const html = embed('<span data-media-load="https://tracker.example/t.gif" data-media-trust="https://tracker.example">x</span><button data-media-trust="https://tracker.example">Always load</button><button data-media-block="https://tracker.example">Block</button>');
 		expect(html).not.toContain('data-media');
 		expect(sanitizeHtml('<span data-media-trust="https://tracker.example">x</span>', 'message', fromServer)).not.toContain('data-media');
 	});

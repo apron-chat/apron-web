@@ -41,7 +41,7 @@ const KEY = {
 	readPositions: 'apron.readPositions',
 	/** How long history is kept on this device (`$lib/history/retention`). */
 	historyRetention: 'apron.historyRetention',
-	/** Where images and other media load from (`$lib/ui/media-settings`): `{policy, origins}`. */
+	/** Where images and other media load from (`$lib/ui/media-settings`): `{policy, origins, blocked}`. */
 	media: 'apron.media',
 	/** Read Receipts (`ext.settings.read_receipts`) turned off on this device: `'off'`, else absent. */
 	readReceipts: 'apron.readReceipts',
@@ -525,7 +525,7 @@ export function loadMediaSettings(): unknown {
 	}
 }
 
-export function saveMediaSettings(value: { policy: string; origins: readonly string[] }): void {
+export function saveMediaSettings(value: { policy: string; origins: readonly string[]; blocked: readonly string[] }): void {
 	write(KEY.media, JSON.stringify(value));
 }
 

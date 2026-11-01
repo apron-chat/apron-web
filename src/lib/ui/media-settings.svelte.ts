@@ -10,6 +10,7 @@ import { loadMediaSettings, MEDIA_KEY, saveMediaSettings } from './storage';
  *   Media in the timeline from anywhere else waits for a click; avatars and
  *   custom emoji from anywhere else don't show.
  * - `any`: any site.
+ * Either way, nothing loads from the origins the viewer blocked (`blocked`), whatever trusts them.
  * Inline images (`data:`) always show.
  */
 export const MEDIA_POLICIES = [
@@ -52,14 +53,20 @@ export class MediaSettings {
 	policy = $state<MediaPolicy>(DEFAULT_MEDIA_POLICY);
 	/** The origins the viewer trusts besides the server's, Preferences' Trusted origins. */
 	origins = $state.raw<string[]>([]);
+	/** The origins whose media never loads, whatever trusts them, Preferences' Blocked origins. */
+	blocked = $state.raw<string[]>([]);
 	/** Held to the server's origins on this page (`limit`), until something is chosen. */
 	private limited = $state(false);
 
 	load(): void {
 		const saved = loadMediaSettings();
-		const origins = isJsonObject(saved) && Array.isArray(saved.origins) ? saved.origins : [];
+		const list = (key: string) => {
+			const value = isJsonObject(saved) ? saved[key] : undefined;
+			return parseMediaOrigins((Array.isArray(value) ? value : []).filter((origin) => typeof origin === 'string').join(' '));
+		};
 		this.policy = this.limited ? DEFAULT_MEDIA_POLICY : policyOf(isJsonObject(saved) ? saved.policy : undefined);
-		this.origins = parseMediaOrigins(origins.filter((origin) => typeof origin === 'string').join(' '));
+		this.origins = list('origins');
+		this.blocked = list('blocked');
 	}
 
 	/** Another tab changed `key` in storage: what it chose holds here too. */
@@ -67,18 +74,25 @@ export class MediaSettings {
 		if (key === MEDIA_KEY || key === null) this.load();
 	}
 
-	update(policy: string, origins: readonly string[] = this.origins): void {
+	update(policy: string, origins: readonly string[] = this.origins, blocked: readonly string[] = this.blocked): void {
 		if (!known(policy)) return;
 		this.limited = false;
 		this.policy = policy;
 		this.origins = [...origins];
-		saveMediaSettings({ policy, origins });
+		this.blocked = [...blocked];
+		saveMediaSettings({ policy, origins, blocked });
 	}
 
 	/** Trusts `origin` from now on, as Always load does: it joins the Trusted origins, whatever the policy. */
 	trust(origin: string): void {
 		const [parsed] = parseMediaOrigins(origin);
 		if (parsed && !this.origins.includes(parsed)) this.update(this.policy, [...this.origins, parsed]);
+	}
+
+	/** Blocks `origin` from now on, as Block does: it joins the Blocked origins, which win over the trusted ones. */
+	block(origin: string): void {
+		const [parsed] = parseMediaOrigins(origin);
+		if (parsed && !this.blocked.includes(parsed)) this.update(this.policy, this.origins, [...this.blocked, parsed]);
 	}
 
 	/**

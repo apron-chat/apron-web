@@ -1442,6 +1442,8 @@ label.ap-pref-setting-title { color: var(--ink); font-weight: 600; cursor: point
 .ap-pref-setting-text > p, .ap-pref-setting > p, .ap-pref-theme-css form > .ap-pref-note { max-width: var(--pref-note-w); margin: var(--space-1) 0 0; }
 /* `stacked`: the control under the title. (With `below`, the title and control are a row of their own, above it.) */
 .ap-pref-setting-stacked { display: block; }
+/* Its description runs as wide as the control under it, rather than stopping short beside nothing. */
+.ap-pref-setting-stacked > .ap-pref-setting-text > p { max-width: none; }
 /* Preferences' rows: a note on how a setting stands, and a row of buttons under it */
 .ap-pref-note { margin: var(--space-3) 0; color: var(--ap-tone, var(--ink-muted)); font-size: var(--text-ui); line-height: var(--leading-ui); }
 .ap-pref-help { margin: var(--space-1) 0 0; color: var(--ap-tone, var(--ink-muted)); font-size: var(--text-sm); line-height: var(--leading-sm); }
@@ -1620,8 +1622,9 @@ a.ap-embed-ogcard:hover { background: var(--hover); }
 .ap-media-ask-what { font-weight: 600; }
 .ap-media-ask-url { color: var(--ink-muted); }
 .ap-media-ask-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); max-width: 100%; }
-/* A long host wraps in its button rather than running out of the box. */
-.ap-media-ask-actions .ap-btn { max-width: 100%; height: auto; min-height: var(--control-md); white-space: normal; overflow-wrap: anywhere; text-align: start; background: var(--bg-100); }
+.ap-media-ask-actions .ap-btn { max-width: 100%; min-width: 0; background: var(--bg-100); }
+/* A long host stays on one line in its button, cut short: the URL above shows it in full. */
+.ap-media-ask-btntext { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 /* An embed whose media waits: the embed without it, and the ask under it. */
 .ap-embed-held { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); max-width: min(100%, var(--embed-max-w)); }
 .ap-embed-held > .ap-media-ask { margin-block: 0; }

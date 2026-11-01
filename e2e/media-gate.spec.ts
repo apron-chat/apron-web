@@ -163,3 +163,27 @@ test('with Any site, everything loads from anywhere, but a srcset, a background 
 	await expect.poll(() => [...new Set(asked)].sort()).toEqual(expect.arrayContaining(['/grace.png', '/markdown.png', '/emoji-still.png', '/html.png', '/poster.jpg', '/sound.mp3', '/server.png', '/og.png', '/upload.png']));
 	for (const never of ['/html-2x.png', '/bg.png', '/ping']) expect(asked).not.toContain(never);
 });
+
+test('Block hides what its site would show, whatever trusts it, and lists it in Preferences', async ({ preview, page }) => {
+	const asked = watchTracker(page);
+	await preview.open();
+	await postEverything(preview);
+	await expect(page.getByText('A file')).toBeVisible();
+	await page.getByRole('button', { name: 'Block tracker.example' }).first().click();
+	// Nothing from it waits for a click any more, and nothing loads.
+	await expect(page.locator('.ap-media-ask')).toHaveCount(0);
+	await page.getByRole('button', { name: /^Open preferences/ }).click();
+	const preferences = page.getByRole('dialog', { name: 'Preferences' });
+	await preferences.getByRole('navigation').getByRole('button', { name: 'Media' }).click();
+	await expect(preferences.getByTestId('media-blocked')).toHaveValue('tracker.example');
+	// Blocked wins over trusted, and over Any site.
+	await preferences.getByTestId('media-sites').fill('tracker.example');
+	await preferences.getByTestId('media-sites').blur();
+	await preferences.getByTestId('media-policy').selectOption('any');
+	await page.waitForTimeout(500);
+	expect(asked).toEqual([]);
+	// Unblocked, it loads as Any site says.
+	await preferences.getByTestId('media-blocked').fill('');
+	await preferences.getByTestId('media-blocked').blur();
+	await expect.poll(() => asked).toContain('/markdown.png');
+});
