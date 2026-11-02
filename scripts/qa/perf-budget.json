@@ -6,75 +6,75 @@
 	"probes": {
 		"load": {
 			"requests": 21,
-			"startupJsKB": 1001,
-			"domNodes": 542,
+			"startupJsKB": 941.4,
+			"domNodes": 537,
 			"layouts": 10,
 			"styleRecalcs": 18,
-			"calls": 237503,
-			"heapMB": 8.4
+			"calls": 238093,
+			"heapMB": 8.3
 		},
 		"load-busy": {
 			"requests": 19,
-			"startupJsKB": 973.6,
-			"domNodes": 1198,
+			"startupJsKB": 914,
+			"domNodes": 1193,
 			"layouts": 13,
 			"styleRecalcs": 20,
-			"calls": 1838890,
-			"heapMB": 10.9
+			"calls": 1841360,
+			"heapMB": 10.8
 		},
 		"switch-room-busy": {
 			"layouts": 2,
 			"styleRecalcs": 12,
-			"calls": 90041
+			"calls": 90127
 		},
 		"send-message-busy": {
 			"layouts": 38,
 			"styleRecalcs": 16,
-			"calls": 294826
+			"calls": 295661
 		},
 		"sidebar-collapse": {
 			"layouts": 3,
 			"styleRecalcs": 5,
-			"calls": 2597
+			"calls": 2598
 		},
 		"member-list-hide": {
 			"layouts": 1,
 			"styleRecalcs": 5,
-			"calls": 1229
+			"calls": 1226
 		},
 		"member-list-overlay-open": {
 			"layouts": 0,
 			"styleRecalcs": 4,
-			"calls": 448
+			"calls": 452
 		},
 		"open-thread": {
 			"layouts": 4,
 			"styleRecalcs": 14,
-			"calls": 70008
+			"calls": 70080
 		},
 		"open-preferences": {
 			"layouts": 3,
 			"styleRecalcs": 9,
-			"calls": 4210
+			"calls": 4297
 		},
 		"scroll-timeline": {
 			"layouts": 9,
 			"styleRecalcs": 9,
-			"calls": 8796
+			"calls": 8763
 		},
 		"type-composer": {
 			"layouts": 36,
 			"styleRecalcs": 6,
-			"calls": 41853
+			"calls": 41977
 		},
 		"hover-messages": {
 			"layouts": 7,
 			"styleRecalcs": 10,
-			"calls": 7255
+			"calls": 7278
 		}
 	},
 	"bundle": {
-		"jsGzipKB": 609.4,
+		"jsGzipKB": 607.1,
 		"cssGzipKB": 25.8
 	}
 }
