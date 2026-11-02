@@ -555,7 +555,7 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-roomhead-tag::before { content: ''; position: absolute; z-index: -1; inset-inline-start: -7.78px; top: 3.22px; width: 15.56px; height: 15.56px; border-bottom-left-radius: 3px; background: inherit; transform: rotate(45deg); }
 /* Mirrored, the tag points the other way: the turned square's tip is its top right corner. */
 :where([dir='rtl']) .ap-roomhead-tag::before { border-bottom-left-radius: 0; border-top-right-radius: 3px; }
-.ap-roomhead-tag-quiet { background: color-mix(in srgb, color-mix(in srgb, var(--ink) 85%, var(--bg-100)) 88%, var(--denim)); color: var(--bg-100); }
+.ap-roomhead-tag-quiet { background: color-mix(in srgb, color-mix(in srgb, var(--ink) 85%, var(--bg-100)) 82%, var(--denim)); color: var(--bg-100); }
 .ap-roomhead-tag-at { background: var(--accent); color: var(--on-accent); }
 @media (max-width: 719px) {
 	.ap-roomhead-back { display: inline-grid; }
@@ -1525,7 +1525,7 @@ button.ap-mention, a.ap-linkchip { max-width: 100%; white-space: normal; overflo
 .ap-count-at { font-weight: 600; }
 .ap-count-quiet { background: var(--bg-300); color: var(--ink); }
 /* Unread in a room or thread that isn't muted: ink softened with a little of the rooms list's ground and a touch of denim, so it reads cool, not grey; plain to see where the grey was not. Muted rows keep the grey. */
-.ap-room-unread .ap-count-quiet { background: color-mix(in srgb, color-mix(in srgb, var(--ink) 85%, var(--bg-000)) 88%, var(--denim)); color: var(--bg-000); }
+.ap-room-unread .ap-count-quiet { background: color-mix(in srgb, color-mix(in srgb, var(--ink) 85%, var(--bg-000)) 82%, var(--denim)); color: var(--bg-000); }
 .ap-jumpbar-at { border-color: var(--accent); }
 
 /* System messages — from ~-prefixed user_ids (Appendix A.1): a quiet centered line, no avatar */
