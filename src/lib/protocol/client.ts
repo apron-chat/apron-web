@@ -1074,7 +1074,10 @@ export class ChatClient {
 		} catch (cause) {
 			// The diagnostics load only now: they decode what the browser handed back, which no ceremony that works needs.
 			const report = { action, stage, cause, server: this.serverUrl, requestedName: requested, publicKey: begun?.publicKey, credential };
-			void import('./passkey-diagnostics').then(({ logPasskeyFailure }) => logPasskeyFailure(report)).catch(() => undefined);
+			void import('./passkey-diagnostics').then(({ logPasskeyFailure }) => logPasskeyFailure(report)).catch(() => {
+				// They couldn't be fetched (offline, or a deploy since): say what failed, without the decoding.
+				console.warn(`[apron] passkey ${action} failed during ${stage}`, { error: describeError(cause), server: report.server });
+			});
 			throw cause;
 		} finally {
 			if (this.passkeyStarting === controller) this.passkeyStarting = undefined;

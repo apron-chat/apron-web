@@ -119,11 +119,18 @@
 	 * the page loads to start. Until then a room can't be dragged (Alt+↑/↓ still move it, and a click still opens it).
 	 * The list is marked `data-reorderable` once it can.
 	 */
+	let askedForDrag = false;
 	function reorderable(node: HTMLElement, options: DndOptions<RoomSnapshot>): ActionReturn<DndOptions<RoomSnapshot>, DndZoneAttributes<RoomSnapshot>> {
 		let latest = options;
 		let zone: ActionReturn<DndOptions<RoomSnapshot>, DndZoneAttributes<RoomSnapshot>> | undefined;
 		let gone = false;
-		const ask = () => void roomDrag.load().catch(() => undefined);
+		// Asked once, by either list: a load that fails is left to the page's own retries (a dialog opening, the
+		// prefetch), not to every pointer that crosses a row, each of which would fetch again (and say Apron was updated).
+		const ask = () => {
+			if (askedForDrag) return;
+			askedForDrag = true;
+			roomDrag.load().catch(() => undefined);
+		};
 		node.addEventListener('pointerover', ask);
 		void roomDrag.whenLoaded().then((loaded) => {
 			if (gone) return;
