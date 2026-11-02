@@ -66,6 +66,8 @@ export interface RoomState {
 	 * `loadRoom` takes it over.
 	 */
 	catchUp?: { promise: Promise<void>; requestId?: string; background: boolean };
+	/** A thread's catch-up by itself failed on this connection: it doesn't try again until opened or reconnected. */
+	catchUpFailed?: boolean;
 	/** The published timeline; rebuilt from the store when dirty and not recovering. */
 	timeline: TimelineState;
 	dirty: boolean;

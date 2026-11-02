@@ -242,7 +242,11 @@ export class ChatClient {
 	 * while it runs, in place of their own resumes: which rooms, from where each was complete (`position`), the
 	 * head its first page fixed, and the pages so far. `done` settles when it ends, however it ends.
 	 */
-	private joinedCatchUp?: { rooms: Set<string>; position: string; head?: string; pages: number; done: Promise<void>; settle: () => void };
+	private joinedCatchUp?: {
+		rooms: Set<string>; position: string; head?: string; pages: number; done: Promise<void>; settle: () => void;
+		/** Each room's `loadRoom` while this runs, one per room however often it's asked, so it loads at most once after. */
+		waits: Map<string, Promise<void>>;
+	};
 	/** The server that answered a `history` without `room_id` with `unsupported`: rooms catch up one by one there. */
 	private joinedHistoryUnsupportedOn?: string;
 	/** Transient notices per room, for the session (§3.5). */
@@ -2699,7 +2703,12 @@ export class ChatClient {
 		if (!this.hasCap('history')) return Promise.resolve();
 		// Catching up with the other joined rooms: once that's over, this has only what it left, if anything.
 		const together = this.joinedCatchUp;
-		if (together?.rooms.has(roomId)) return together.done.then(() => this.loadRoom(roomId));
+		if (together?.rooms.has(roomId)) {
+			// The page asks again on every snapshot while the room isn't loaded: one load after, not one per ask.
+			let wait = together.waits.get(roomId);
+			if (!wait) together.waits.set(roomId, (wait = together.done.then(() => this.loadRoom(roomId))));
+			return wait;
+		}
 		if (!this.loadsOnOpen(room)) {
 			const head = room.latestLogId;
 			const needed = Boolean(room.recovery) || Boolean(head && (room.recoveryError || room.checkpoint === undefined || compareLogIds(head, room.checkpoint) > 0));
@@ -2798,7 +2807,10 @@ export class ChatClient {
 			room.loadCheckpoint = maxDefined(checkpoint, head);
 			room.resumed = false;
 		} catch (cause) {
-			if (!stale() && !background()) room.recoveryError = cause instanceof Error ? cause.message : 'History failed';
+			if (!stale()) {
+				if (background()) room.catchUpFailed = true;
+				else room.recoveryError = cause instanceof Error ? cause.message : 'History failed';
+			}
 			throw cause;
 		} finally {
 			if (!stale()) room.loading = false;
@@ -3411,7 +3423,7 @@ export class ChatClient {
 	private catchUpJoined(position: string, rooms: Set<string>): void {
 		let settle!: () => void;
 		const done = new Promise<void>((resolve) => (settle = resolve));
-		const run = { rooms, position, pages: 0, done, settle };
+		const run = { rooms, position, pages: 0, done, settle, waits: new Map<string, Promise<void>>() };
 		this.joinedCatchUp = run;
 		this.requestJoinedPage(run, increment(position));
 	}
@@ -3947,6 +3959,8 @@ export class ChatClient {
 		if (!this.isThread(room.id) || !this.authenticated || !this.hasCap('history')) return;
 		if (this.joinedCatchUp?.rooms.has(room.id)) return;
 		if (compareLogIds(head, room.loadCheckpoint) <= 0) return;
+		// One that failed on this connection waits to be opened, or the next connection: no retry on every listing of it.
+		if (room.catchUpFailed) return;
 		this.loadThread(room, true).catch(() => undefined);
 	}
 
@@ -4528,6 +4542,7 @@ export class ChatClient {
 		room.loadingOlder = false;
 		room.recoveryError = undefined;
 		room.limited = false;
+		room.catchUpFailed = false;
 		// A thread's checkpoint predates the gap; the next load catches up from it.
 		if (room.loadCheckpoint !== undefined) room.resumed = true;
 		// Reaction summaries depend on the viewer, who may be a new guest.
