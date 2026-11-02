@@ -107,7 +107,7 @@ describe('one explicit ceremony per tap', () => {
 		await ceremony(socket, { user_id: 'u_1', name: 'shazow' });
 		await pending;
 		// The browser labels the passkey with it too, whatever the server put in the options.
-		expect(vi.mocked(requestPasskey).mock.calls[0]?.[3]).toBe('shazow');
+		expect(vi.mocked(requestPasskey).mock.calls[0]?.[4]).toBe('shazow');
 	});
 
 	it('sends no name with a login, which signs in to an account that has one', async () => {
@@ -238,7 +238,7 @@ describe('console diagnostics', () => {
 
 describe('a failed session resume never prompts on its own', () => {
 	const key = 'apron.session:ws://fake.test/';
-	const server = { method: 'server', params: { apron: 9, auth: ['webauthn', 'token', 'guest'], capabilities: [] } };
+	const server = { method: 'server', params: { apron: 10, auth: ['webauthn', 'token', 'guest'], capabilities: [] } };
 
 	async function resuming(): Promise<{ client: ChatClient; socket: FakeSocket; auth: { id: string } }> {
 		storage.set(key, 'session-1');

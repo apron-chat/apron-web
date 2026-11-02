@@ -115,6 +115,18 @@
 	/** Each section's rooms while one is carried in it, as they'd land; none between drags. */
 	let carried = $state<Partial<Record<Section, RoomSnapshot[]>>>({});
 	let reordering = $derived(Object.keys(carried).length > 0);
+	/**
+	 * Each section's rooms as last listed, kept while their ids and order hold: the list's `animate:` reads every row's
+	 * place before and after each change to it, and the drag zone takes its rooms again and restyles every row, while
+	 * nearly every change (a message, an unread count) leaves the rooms where they were. Rows take their room as it is
+	 * now from `session.room`. Not state: it only remembers what was shown.
+	 */
+	const listed: Partial<Record<Section, RoomSnapshot[]>> = {};
+	function steady(section: Section, list: RoomSnapshot[]): RoomSnapshot[] {
+		const last = listed[section];
+		if (last && last.length === list.length && last.every((room, index) => room.id === list[index].id)) return last;
+		return (listed[section] = list);
+	}
 	/** Ends keeping the carried room in its section's column. */
 	let uncontain: (() => void) | undefined;
 	$effect(() => () => uncontain?.());
@@ -431,9 +443,10 @@
 
 	let canBrowse = $derived(session.canManageRooms && session.steady);
 	/**
-	 * The sections folded to their rows with news, as picking the open room folds its threads: Rooms and Private keep the
-	 * rooms with unread messages or mentions, in them or their threads, and the open one, which reading would otherwise
-	 * take away; Other Rooms, whose rooms have none, keeps nothing. All open from the start, and kept as left, on this device.
+	 * The sections folded to their rows with news, as picking the open room folds its threads: each keeps the rooms with
+	 * unread messages or mentions, in them or their threads, and the open one, which reading would otherwise take away
+	 * (Other Rooms, whose rooms have no news, the one open to read without joining). All open from the start, and kept as
+	 * left, on this device.
 	 */
 	let folds = $state(new Set(loadSidebarFolds()));
 	function fold(key: string, shut: boolean): void {
@@ -444,11 +457,27 @@
 		saveSidebarFolds([...next]);
 	}
 	const newsIn = (id: string) => (unread[id] ?? 0) > 0 || (mentions[id] ?? 0) > 0;
+	/**
+	 * Each room's threads, in the order of `session.rooms`: grouped once per snapshot, where each row looking
+	 * through every room for its own would take rooms × rooms for the list.
+	 */
+	let threadsOf = $derived.by(() => {
+		const byParent = new Map<string, RoomSnapshot[]>();
+		for (const room of session.rooms) {
+			if (room.parentRoomId === undefined) continue;
+			const list = byParent.get(room.parentRoomId);
+			if (list) list.push(room);
+			else byParent.set(room.parentRoomId, [room]);
+		}
+		return byParent;
+	});
 	/** News in the room, or in a thread of it you've joined (as `threadsWithNews` counts them, without building their entries). */
-	const hasNews = (room: RoomSnapshot) => newsIn(room.id) || session.rooms.some((thread) => thread.parentRoomId === room.id && thread.joined && newsIn(thread.id));
-	const shown = (list: RoomSnapshot[], key: string) => (folds.has(key) ? list.filter((room) => room.id === session.activeRoomId || hasNews(room)) : list);
+	const hasNews = (room: { id: string }) => newsIn(room.id) || (threadsOf.get(room.id) ?? []).some((thread) => thread.joined && newsIn(thread.id));
+	const shown = <T extends { id: string }>(list: T[], key: string) => (folds.has(key) ? list.filter((room) => room.id === session.activeRoomId || hasNews(room)) : list);
 	let listError = $state('');
 	let createOpen = $state(false);
+	/** Joining and leaving threads (capability `rooms`, not read-only). */
+	let canJoinThreads = $derived(!session.readOnly && session.canManageRooms);
 	let canCreateRoom = $derived(session.canManageRooms && session.steady && !session.readOnly);
 	/** Visible rooms this user hasn't joined (or has left), from the latest `room_list`. */
 	let unjoined = $derived((session.snapshot.directory ?? []).filter((listing) => !listing.joined));
@@ -526,13 +555,13 @@
 	{#if reordering}
 		<!-- While a room is carried, every room's threads are folded away. -->
 	{:else if active && !isFolded}
-		<ThreadList roomId={room.id} roomTitle={room.title} {threads} others={otherThreads} {activeThread} {mentions} {unread} muted={session.snapshot.roomMutes} canJoin={!session.readOnly && session.canManageRooms} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
+		<ThreadList roomId={room.id} roomTitle={room.title} {threads} others={otherThreads} foldInactive {activeThread} {mentions} {unread} muted={session.snapshot.roomMutes} canJoin={canJoinThreads} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
 	{:else}
 		<!-- Under a room that isn't open (or is folded, when its row has a … that unfolds it), only its joined threads with news, so activity there isn't missed; and the one open in it, which stays while you read it. -->
-		{@const news = threadsWithNews(session.rooms, room.id, unread, mentions)}
+		{@const news = threadsWithNews(threadsOf.get(room.id) ?? [], room.id, unread, mentions)}
 		{@const kept = active ? threads.filter((entry) => entry.id === activeThread || news.some((other) => other.id === entry.id)) : news}
 		{#if kept.length > 0}
-			<ThreadList roomId={room.id} roomTitle={room.title} threads={kept} others={[]} activeThread={active ? activeThread : undefined} {mentions} {unread} muted={session.snapshot.roomMutes} canJoin={!session.readOnly && session.canManageRooms} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
+			<ThreadList roomId={room.id} roomTitle={room.title} threads={kept} others={[]} activeThread={active ? activeThread : undefined} {mentions} {unread} muted={session.snapshot.roomMutes} canJoin={canJoinThreads} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
 		{/if}
 	{/if}
 {/snippet}
@@ -543,7 +572,7 @@
 	in for them, and it keeps no outline on the list while a room is carried.
 -->
 {#snippet roomList(section: Section, list: RoomSnapshot[], withFaces: boolean)}
-	{@const items = carried[section] ?? list}
+	{@const items = carried[section] ?? steady(section, list)}
 	<!-- The rows inside are the controls; the list takes their keys to reorder them. -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
@@ -551,7 +580,10 @@
 		use:dndzone={{ items, type: section, flipDurationMs: FLIP_MS, delayTouchStart: HOLD_MS, zoneTabIndex: -1, zoneItemTabIndex: -1, autoAriaDisabled: true, dropTargetStyle: {}, transformDraggedElement: lift }}
 		onconsider={(event) => consider(section, event)} onfinalize={(event) => finalize(section, event)} onkeydown={(event) => reorderKey(event, list)} {@attach guard}
 	>
-		{#each items as room (room.id)}
+		{#each items as listedRoom (listedRoom.id)}
+			<!-- The library's stand-in for the carried room isn't listed: it's shown as it was given. -->
+			<!-- Each row takes its room as it is now on its own, so a message redraws (and marks to check) only its room's row. -->
+			{@const room = session.room(listedRoom.id) ?? listedRoom}
 			<!-- The others make way for a carried room; a fold or a new room isn't animated. -->
 			<div class="ap-roomblock" animate:flip={{ duration: reordering ? FLIP_MS : 0 }}>
 				<div class="ap-roomgrip" {@attach grip}>{@render roomRow(room, withFaces ? roomFaces(room, session.you) : undefined)}</div>
@@ -579,16 +611,27 @@
 		{#if canBrowse && unjoined.length > 0}
 			<!-- Servers may list only the most active rooms (§4.2.1), so this never claims to be all of them. -->
 			<SidebarSection title="Other Rooms" folded={folds.has('otherRooms')} onfold={(shut) => { fold('otherRooms', shut); if (!shut) list(); }} toggleTestid="browse-rooms" bodyTestid="room-directory">
-				{#if !folds.has('otherRooms')}
-					{#each unjoined as listing (listing.id)}
-						<!-- A server may list only the most active members of a large room, with the total (§4.2.1). -->
-						{@const members = listing.memberCount ?? listing.members.length}
-						{@const count = members > 0 ? `${members} ${members === 1 ? 'member' : 'members'}` : ''}
-						<!-- Picking one joins it; one that can't join (reading as a guest) opens it to read, which needs no word. -->
-						<RoomItem room={listing.id} name={listing.title} topic={session.readOnly ? count || undefined : [count, 'Join'].filter(Boolean).join(' · ')} listed onselect={() => onjoin(listing.id)} />
-					{/each}
-					{#if listError}<p class="ap-sect-note ap-tone-danger" role="alert">{listError}</p>{/if}
-				{/if}
+				{#each shown(unjoined, 'otherRooms') as listing (listing.id)}
+					<!-- A server may list only the most active members of a large room, with the total (§4.2.1). -->
+					{@const members = listing.memberCount ?? listing.members.length}
+					{@const count = members > 0 ? `${members} ${members === 1 ? 'member' : 'members'}` : ''}
+					<!-- Picking one joins it; one that can't join (reading as a guest) opens it to read, which needs no word, and it shows as open as a joined room does. -->
+					<RoomItem room={listing.id} name={listing.title} topic={session.readOnly ? count || undefined : [count, 'Join'].filter(Boolean).join(' · ')} listed active={listing.id === session.activeRoomId && !activeThread} onselect={() => onjoin(listing.id)} />
+					<!-- The one open to read without joining lists its threads under it, to explore them without joining either. -->
+					{#if listing.id === session.activeRoomId}
+						<ThreadList
+							roomId={listing.id} roomTitle={listing.title} {threads} others={otherThreads} foldInactive roomUnjoined {activeThread}
+							{mentions} {unread} muted={session.snapshot.roomMutes} canJoin={canJoinThreads} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread}
+						/>
+					{:else}
+						<!-- Another lists its threads you've joined with news, as a joined room's row does: once opened it holds them, so they're no longer listed on their own. -->
+						{@const news = threadsWithNews(threadsOf.get(listing.id) ?? [], listing.id, unread, mentions)}
+						{#if news.length > 0}
+							<ThreadList roomId={listing.id} roomTitle={listing.title} threads={news} others={[]} {mentions} {unread} muted={session.snapshot.roomMutes} canJoin={canJoinThreads} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
+						{/if}
+					{/if}
+				{/each}
+				{#if listError && !folds.has('otherRooms')}<p class="ap-sect-note ap-tone-danger" role="alert">{listError}</p>{/if}
 			</SidebarSection>
 		{/if}
 	</div>

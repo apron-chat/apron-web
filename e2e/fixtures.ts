@@ -112,6 +112,34 @@ export class Preview {
 		);
 	}
 
+	/**
+	 * Someone posts a message with a live `terminal` or `append` embed (§4.8.3), as if their `PUT` just began (the
+	 * memory server's `startLive`). Returns its `embed_id`, for `liveWrite` and `liveEnd`.
+	 */
+	startLive(room: string, from: string, kind: 'terminal' | 'append', fields: { title?: string; body?: Record<string, unknown> } = {}): Promise<string> {
+		return this.page.evaluate(([room, from, kind, fields]) => (window as any).__apronPreview.startLive(room, from, kind, fields) as string, [room, from, kind, fields] as const);
+	}
+
+	/** Writes to a live text, as its `PUT` body would. */
+	liveWrite(embedId: string, data: string): Promise<void> {
+		return this.page.evaluate(([embedId, data]) => (window as any).__apronPreview.liveWrite(embedId, data), [embedId, data] as const);
+	}
+
+	/** What a live text's writer sent so far, edits and all (the memory server's `liveWritten`). */
+	liveWritten(embedId: string): Promise<string> {
+		return this.page.evaluate((embedId) => (window as any).__apronPreview.liveWritten(embedId) as string, embedId);
+	}
+
+	/** How many times the client has read (`GET`) a live text's url. */
+	liveReads(embedId: string): Promise<number> {
+		return this.page.evaluate((embedId) => (window as any).__apronPreview.liveReads(embedId) as number, embedId);
+	}
+
+	/** Ends a live text: the snapshot that finishes it follows. */
+	liveEnd(embedId: string): Promise<void> {
+		return this.page.evaluate((embedId) => (window as any).__apronPreview.liveEnd(embedId), embedId);
+	}
+
 	/** Someone else sets their complete reaction set on a message (§4.7), delivered live. */
 	reactAs(from: string, messageId: string, emojis: string[]): Promise<void> {
 		return this.page.evaluate(([from, messageId, emojis]) => (window as any).__apronPreview.reactAs(from, messageId, emojis), [from, messageId, emojis] as const);

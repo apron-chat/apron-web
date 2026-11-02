@@ -112,6 +112,25 @@ describe('MessageEditor', () => {
 		expect(onsave).toHaveBeenCalledWith('@ada see these cc @alan ', undefined, ['ada', 'alan']);
 	});
 
+	it('suggests roles after people, giving them the room people leave, and a space after a role\u2019s prefix closes the picker so Enter saves', () => {
+		const roles = ['ops', 'oncall', 'owner', 'observer', 'outreach'];
+		const people = [{ id: 'me', name: 'Me', roles, me: true }, { id: 'olga', name: 'Olga', roles }];
+		const { onsave } = render({ text: 'hi', embeds: [], people });
+		const options = () => [...document.querySelectorAll('[role="option"]')].map((option) => option.textContent?.replace(/\s+/g, ' ').trim());
+
+		// One person matches, so all five roles fit in the list, not just three.
+		typeAtEnd(' @o');
+		expect(options()).toHaveLength(6);
+		expect(options()[0]).toContain('Olga');
+		expect(options().slice(1).every((option) => option?.startsWith('@o') && option.includes('1 person'))).toBe(true);
+
+		// A space after a prefix no role is named by closes the picker, and Enter saves the text as typed.
+		typeAtEnd('wn ');
+		expect(options()).toEqual([]);
+		dom.press(field(), 'Enter');
+		expect(onsave).toHaveBeenCalledWith('hi @own ', undefined, []);
+	});
+
 	it('opens a message as written: a name in plain text stays text, and nothing changed cancels', () => {
 		const { onsave, oncancel } = render({ text: '@Ada Lovelace hi @ada', embeds: [], people: [{ id: 'ada', name: 'Ada Lovelace' }] });
 		// Only the `@user_id` is a chip, the last word as well.

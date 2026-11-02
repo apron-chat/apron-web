@@ -33,8 +33,15 @@ md.renderer.rules.table_close = () => '</table></div>\n';
  */
 /** `untitled`: a thread without a title, whose `title` is "Untitled"; its chip names its `room_id` on hover. */
 export type RoomMentionTarget = { kind: 'room'; id: string; title: string; untitled?: true };
+/**
+ * `@&role`: everyone in the room with a role (§3.3.4) the sender's client
+ * listed in `body.mentions` one by one. An `&` can't start an ID (Appendix
+ * A.3), so other clients read the text as no mention at all; this client
+ * draws it as a role chip, whoever holds the role now.
+ */
+export type RoleMentionTarget = { kind: 'role'; id: string };
 /** `shared` marks a user whose display name another known user also shows under, so their ID shows beside it. */
-export type MentionTarget = { kind: 'user'; id: string; name: string; me?: boolean; shared?: boolean } | RoomMentionTarget;
+export type MentionTarget = { kind: 'user'; id: string; name: string; me?: boolean; shared?: boolean } | RoomMentionTarget | RoleMentionTarget;
 
 /** Looks an `@id` up; only a user answers it. A resolver may also answer rooms, for `#id` without a `RoomMentionResolver`. */
 export type MentionResolver = (id: string) => MentionTarget | undefined;
@@ -78,6 +85,8 @@ export interface MentionPerson {
 	avatar?: string;
 	/** The viewer. */
 	me?: boolean;
+	/** Their roles (§3.3.4), for `@&role` mentions. */
+	roles?: string[];
 }
 
 /**
@@ -93,8 +102,15 @@ export function textId(text: string): string | undefined {
 	return LEADING_ID.exec(text)?.[0];
 }
 
-/** `@user_id` or `#room_id`, its prefix not right after a letter or digit (Appendix A.3). */
-const MENTION = new RegExp(`(?<![A-Za-z0-9])(?:@(${TEXT_ID.source})|#(${TEXT_ID.source}))`, 'g');
+/** Whether a role can be written `@&role`: it reads whole as one ID (Appendix A.3). */
+export function isMentionableRole(role: string): boolean {
+	return textId(role) === role;
+}
+
+/** `@&role`, `@user_id` or `#room_id`, its prefix not right after a letter or digit (Appendix A.3). */
+const MENTION = new RegExp(`(?<![A-Za-z0-9])(?:@&(${TEXT_ID.source})|@(${TEXT_ID.source})|#(${TEXT_ID.source}))`, 'g');
+/** The same in escaped text, where the `&` of `@&role` is `&amp;`. */
+const ESCAPED_MENTION = new RegExp(`(?<![A-Za-z0-9])(?:@&amp;(${TEXT_ID.source})|@(${TEXT_ID.source})|#(${TEXT_ID.source}))`, 'g');
 
 /**
  * A bare `http(s)://` link, or an Apron link in its `apron:?` form (Appendix
@@ -200,20 +216,23 @@ export type MentionSegment = string | Mention;
  * or a room's title, `#title` when written `#room_id`.
  */
 export function mentionLabel({ target, hash }: Mention): string {
+	if (target.kind === 'role') return `@${target.id}`;
 	if (target.kind === 'user') return target.shared && target.name !== target.id ? `@${target.name} (${target.id})` : `@${target.name}`;
 	return `${hash ? '#' : ''}${target.title}`;
 }
 
 export function mentionClass({ target, hash }: Mention): string {
+	if (target.kind === 'role') return 'ap-mention ap-mention-role';
 	if (target.kind === 'user') return target.me ? 'ap-mention ap-mention-me' : 'ap-mention';
 	return `ap-mention ap-mention-room${hash ? ' ap-mention-hash-room' : ''}`;
 }
 
-/** A user as a button that opens their profile card, with their ID on hover when their name differs; a room as a button that opens it. */
+/** A user as a button that opens their profile card, with their ID on hover when their name differs; a room as a button that opens it; a role as a chip that only reads. */
 function mentionChip(mention: Mention): string {
 	const { target } = mention;
 	const label = escapeHtml(mentionLabel(mention));
 	const className = mentionClass(mention);
+	if (target.kind === 'role') return `<span class="${className}" title="${escapeHtml(roleMentionTip(target.id))}">${label}</span>`;
 	if (target.kind === 'room') {
 		return `<button type="button" class="${className}" data-room-id="${escapeHtml(target.id)}" title="Open ${escapeHtml(target.title)}${target.untitled ? ` (#${escapeHtml(target.id)})` : ''}">${label}</button>`;
 	}
@@ -331,7 +350,7 @@ function emojiText(text: string): string {
  * emoji in the text between them; entities never contain ID or key characters.
  */
 function chipText(text: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver, resolveEmoji?: EmojiResolver): string {
-	return mentionSegments(text, resolve, resolveRoom)
+	return mentionSegments(text, resolve, resolveRoom, true)
 		.map((segment) => (typeof segment === 'string' ? customEmojiText(segment, resolveEmoji) : mentionChip(segment)))
 		.join('');
 }
@@ -360,22 +379,28 @@ export function customEmojiTag(emoji: CustomEmojiImage): string {
 	return `<img class="ap-cemoji" src="${escapeHtml(emoji.src)}" alt="${alt}" title="${alt}" style="aspect-ratio: ${ratio}">`;
 }
 
+/** A role chip's tooltip. */
+export function roleMentionTip(role: string): string {
+	return `Everyone with the role ${role}`;
+}
+
 /**
- * Splits text around its mentions of known users (`@user_id`) and references
- * to known rooms (`#room_id`). Unknown IDs, and an `@` or `#` right after a
- * letter or digit, stay text.
+ * Splits text around its mentions of known users (`@user_id`), of roles
+ * (`@&role`, wherever mentions are resolved at all), and references to known
+ * rooms (`#room_id`). Unknown IDs, and an `@` or `#` right after a letter or
+ * digit, stay text. `escaped`: the text is HTML-escaped, as it is on its way to markup.
  */
-export function mentionSegments(written: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver): MentionSegment[] {
+export function mentionSegments(written: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver, escaped = false): MentionSegment[] {
 	// Shown, so without bidi embeddings and overrides (§3.5.2).
 	const text = withoutBidiOverrides(written);
 	if (!resolve && !resolveRoom) return [text];
 	const segments: MentionSegment[] = [];
 	let last = 0;
-	for (const match of text.matchAll(MENTION)) {
-		const [whole, user, room] = match;
+	for (const match of text.matchAll(escaped ? ESCAPED_MENTION : MENTION)) {
+		const [whole, role, user, room] = match;
 		const offset = match.index;
-		const target = user !== undefined ? resolve?.(user) : resolveRoom?.(room) ?? resolve?.(room);
-		if (!target || target.kind !== (user !== undefined ? 'user' : 'room')) continue;
+		const target: MentionTarget | undefined = role !== undefined ? { kind: 'role', id: role } : user !== undefined ? resolve?.(user) : resolveRoom?.(room) ?? resolve?.(room);
+		if (!target || target.kind !== (role !== undefined ? 'role' : user !== undefined ? 'user' : 'room')) continue;
 		if (offset > last) segments.push(text.slice(last, offset));
 		segments.push({ target, hash: room !== undefined });
 		last = offset + whole.length;

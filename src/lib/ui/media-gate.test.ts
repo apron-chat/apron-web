@@ -40,6 +40,26 @@ describe('mediaGate', () => {
 		expect(asking.key).not.toBe(mediaGate('https://chat.example', ['https://media.example'], { asks: true }).key);
 	});
 
+	it('never lets through nor asks for what is blocked, whatever trusts it or was clicked to load, by host', () => {
+		const blocked = ['https://tracker.example', 'https://media.example'];
+		const gate = mediaGate('https://chat.example', ['https://media.example', ANY_ORIGIN], { asks: true, once: ['https://tracker.example/t.gif'], blocked });
+		for (const url of ['https://tracker.example/t.gif', 'http://tracker.example/t.gif', 'https://media.example/b.png', 'https://tracker.example./t.gif', 'https://tracker.example:8443/t.gif', 'http://tracker.example:443/t.gif', 'https://TRACKER.example/t.gif']) {
+			expect(gate.src(url), url).toBeUndefined();
+			expect(gate.ask(url), url).toBeUndefined();
+		}
+		expect(gate.src('https://elsewhere.example/a.png')).toBe('https://elsewhere.example/a.png');
+		// A block is of that host and every one under it, not those it is under or that merely end alike.
+		for (const url of ['https://a.tracker.example/t.gif', 'https://x.y.tracker.example./t.gif']) {
+			expect(gate.src(url), url).toBeUndefined();
+			expect(gate.ask(url), url).toBeUndefined();
+		}
+		expect(gate.src('https://eviltracker.example/t.gif')).toBe('https://eviltracker.example/t.gif');
+		expect(gate.src('https://example/t.gif')).toBe('https://example/t.gif');
+		expect(gate.src('https://chat.example/a.png')).toBe('https://chat.example/a.png');
+		expect(gate.src(PIXEL)).toBe(PIXEL);
+		expect(gate.key).not.toBe(mediaGate('https://chat.example', ['https://media.example', ANY_ORIGIN], { asks: true, once: ['https://tracker.example/t.gif'] }).key);
+	});
+
 	it('keys each gate by what it lets through', () => {
 		expect(mediaGate('https://chat.example', []).key).not.toBe(mediaGate('https://chat.example', ['https://media.example']).key);
 		expect(mediaGate('https://chat.example', [ANY_ORIGIN]).key).not.toBe(mediaGate('https://chat.example', [ANY_ORIGIN], { httpsElsewhere: true }).key);

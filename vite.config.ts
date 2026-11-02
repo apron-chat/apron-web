@@ -8,14 +8,17 @@ const fs = (await import(/* @vite-ignore */ fsModule)) as { readdirSync(path: UR
 const src = new URL('./src/', import.meta.url);
 
 /**
- * The node tests that mock a module (`vi.mock`). A mock takes only where the module is imported afresh, so these
- * run isolated, each file in a fresh module graph; the other node tests share their worker's modules, which takes
- * about half the time. Found by reading the files, so a new test that mocks is isolated without listing it here.
+ * The tests that mock a module (`vi.mock`). A mock takes only where the module is imported afresh, so these
+ * run isolated, each file in a fresh module graph; the other tests share their worker's modules, which takes
+ * under half the time (for the rune tests, it saves a worker spawn per file). So module state outlives a test file:
+ * reset what a test changes. Found by reading the files, so a new test that mocks is isolated without listing it here.
  */
 const MOCKING = fs.readdirSync(src, { recursive: true })
-	.filter((path) => path.endsWith('.test.ts') && !path.endsWith('.svelte.test.ts'))
+	.filter((path) => path.endsWith('.test.ts'))
 	.filter((path) => /\bvi\.(doMock|mock)\(/.test(fs.readFileSync(new URL(path, src), 'utf8')))
 	.map((path) => `src/${path.replaceAll('\\', '/')}`);
+const MOCKING_NODE = MOCKING.filter((path) => !path.endsWith('.svelte.test.ts'));
+const MOCKING_RUNES = MOCKING.filter((path) => path.endsWith('.svelte.test.ts'));
 
 /**
  * The in-memory `/__preview` page is for development: `vite dev`, and builds made with `APRON_PREVIEW=1` (the QA
@@ -42,9 +45,10 @@ export default defineConfig(({ command }) => {
 		test: {
 			projects: [
 				{ extends: true, test: { name: 'unit', include: ['src/**/*.test.ts'], exclude: ['src/**/*.svelte.test.ts', ...MOCKING], isolate: false } },
-				{ extends: true, test: { name: 'mocking', include: MOCKING.length ? MOCKING : ['no-such-file'] } },
+				{ extends: true, test: { name: 'mocking', include: MOCKING_NODE.length ? MOCKING_NODE : ['no-such-file'] } },
 				// Rune tests need Svelte's client compile and runtime, where effects run.
-				{ extends: true, resolve: { conditions: ['browser'] }, test: { name: 'runes', include: ['src/**/*.svelte.test.ts'], environment: './src/lib/test/runes-environment.ts' } }
+				{ extends: true, resolve: { conditions: ['browser'] }, test: { name: 'runes', include: ['src/**/*.svelte.test.ts'], exclude: MOCKING_RUNES, environment: './src/lib/test/runes-environment.ts', isolate: false } },
+				{ extends: true, resolve: { conditions: ['browser'] }, test: { name: 'runes-mocking', include: MOCKING_RUNES.length ? MOCKING_RUNES : ['no-such-file'], environment: './src/lib/test/runes-environment.ts' } }
 			]
 		},
 		server: {
@@ -53,10 +57,10 @@ export default defineConfig(({ command }) => {
 					target: 'ws://127.0.0.1:8080',
 					ws: true
 				},
-				// Upload, file, and stream URLs the Go server mints from this host.
+				// Upload, file, and live text URLs the Go server mints from this host.
 				'/write/': 'http://127.0.0.1:8080',
 				'/files/': 'http://127.0.0.1:8080',
-				'/streams/': 'http://127.0.0.1:8080'
+				'/live/': 'http://127.0.0.1:8080'
 			}
 		}
 	};

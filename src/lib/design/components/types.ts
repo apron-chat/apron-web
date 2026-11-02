@@ -14,20 +14,24 @@ export interface OG {
 	audio?: { url?: MediaSrc; type?: string; ask?: MediaAskProps };
 }
 
-/** Media that waits for a click (MediaAsk): its site, and what Load and Always load do. */
+/** Media that waits for a click (MediaAsk): where it is, its site, and what Load, Always load and Block do. */
 export interface MediaAskProps {
+	/** Where it is, in full, for the viewer to judge before loading it. */
+	url: string;
 	/** The site it is on, as its host. */
 	host: string;
 	/** Loads it, this once. */
 	onload: () => void;
 	/** Trusts its site from now on; absent where it can't be (not `https:`). */
 	ontrust?: () => void;
+	/** Blocks its site from now on, over its trust; absent where it can't be (not `https:`). */
+	onblock?: () => void;
 }
 
 /** One entry of `body.embeds` (§4.8). `kind` picks the renderer; unknown kinds render from `og`, else EmbedFallback (§3.5). */
 export interface EmbedProps {
 	embed_id?: string;
-	kind: 'upload' | 'stream' | 'iframe' | 'html' | (string & {});
+	kind: 'upload' | 'terminal' | 'iframe' | 'html' | (string & {});
 	url?: string;
 	title?: string;
 	og?: OG;
@@ -46,17 +50,18 @@ export interface EmbedProps {
 	 * `-title`, `-alt`, `-detail`, `-width` and `-height`, which a viewer reads to page through a timeline's images.
 	 */
 	viewer?: Partial<Omit<MediaItem, 'href'>>;
-	/** stream (§4.8.5): `format` plain | markdown | terminal. Live while `url` is set and not `done`. */
-	format?: string;
+	/** terminal (§4.8.6): live while `url` is set and not `done`. A terminal's plain text without `attach`; on the fallback card, a note in place of a link (EmbedFrame's, for an address it can't use). */
 	text?: string;
 	done?: boolean;
-	truncated?: boolean;
-	/** stream: what the header says once it isn't live, in place of Finished (such as Ended). */
+	/** terminal: what the header says once it isn't live, in place of Finished (such as Ended). */
 	status?: string;
-	/** stream: the body's content, such as rendered and sanitized Markdown or colored terminal spans; `text` otherwise. */
-	children?: Snippet;
-	/** stream with format markdown: an attachment for the body, such as one that highlights its code blocks. */
-	attach?: (body: HTMLElement) => void | (() => void);
+	/** terminal: an attachment that draws the screen in the box it is given, such as an xterm.js terminal; `text` otherwise. */
+	attach?: (screen: HTMLElement) => void | (() => void);
+	/**
+	 * terminal: shows Expand in the header, which calls this with that button (focus goes back to it), to show the
+	 * terminal full screen in a TerminalViewer. On a touch screen, a tap on the screen calls it too.
+	 */
+	onexpand?: (expand: HTMLButtonElement) => void;
 	/** iframe: `height` is a suggestion, clamped to iframe-max-h; `live` false shows the paused placeholder. */
 	height?: number;
 	live?: boolean;
@@ -208,6 +213,13 @@ export interface PickerRoom {
 	title: string;
 }
 
+/** A role an `@` can name, in the MentionPicker: everyone else in the room who holds it (`@&role`). */
+export interface PickerRole {
+	role: string;
+	/** How many people it mentions. */
+	count: number;
+}
+
 /** An emoji a `:shortcode` can put in, in the MentionPicker. */
 export interface PickerEmoji {
 	/** The shortcode, without its colons. */
@@ -275,7 +287,7 @@ export interface MessageSender {
 }
 
 /** A mention in a reply's snippet (Appendix A.3), as a Mention that only reads: a user, or a room. */
-export type MessageMention = { user_id: string; name: string; me?: boolean } | { roomId: string; name?: string; thread?: boolean; hash?: boolean };
+export type MessageMention = { user_id: string; name: string; me?: boolean } | { roomId: string; name?: string; thread?: boolean; hash?: boolean } | { role: string };
 
 /** The message a reply quotes (§3.5), resolved by you, maybe in another room. Without `id` it couldn't be found: "Message unavailable". */
 export interface MessageReply {
@@ -358,6 +370,8 @@ export interface MessageEmbed {
 export interface MessageView {
 	/** The `message_id`; absent on a transient notice (§3.5), which is rendered, never stored. */
 	id?: string;
+	/** Read receipts (§4.6, a private room's members): those who have read up to this message and no further. */
+	seenBy?: Face[];
 	sender: MessageSender;
 	/** Epoch ms of the creation `log_id` (the `message_id`): the time and its tooltip. */
 	timestamp?: number;
@@ -389,6 +403,10 @@ export interface MessageView {
 	selected?: boolean;
 	/** Its editor is open: no toolbar. */
 	editing?: boolean;
+	/** Its text is still arriving (an `append` embed, §4.8.5): a quiet Writing… after it. */
+	writing?: boolean;
+	/** Its text waits for its writer to start (an `append` embed without `url`, §4.8.5): a quiet Waiting to stream… after it. */
+	waiting?: boolean;
 	caps?: MessageCaps;
 }
 
@@ -441,6 +459,12 @@ export interface MessageTestids {
 	reactions?: string;
 	chip?: string;
 	select?: string;
+	/** The Writing… of a message whose text is still arriving. */
+	writing?: string;
+	/** The Waiting to stream… of a message whose text waits for its writer. */
+	waiting?: string;
+	/** Its read receipts (`seenBy`). */
+	receipts?: string;
 }
 
 /** A status line's tone: StatusBanner colors its line with it. */

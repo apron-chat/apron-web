@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { collapseMentions, draftLength, draftMentions, draftText, insertMention, insertText, mentionQuery, unchip, type DraftChip, type DraftPart } from './draft';
+import { collapseMentions, draftLength, draftMentions, draftText, insertMention, insertText, mentionQuery, partLength, unchip, type DraftChip, type DraftPart } from './draft';
 
 const people = [
 	{ id: 'ada_1', name: 'Ada' },
@@ -180,7 +180,7 @@ describe('composer room chips', () => {
 	const thread = { id: '1790473611343', room: true } as const;
 
 	it('chips a picked room or thread, sends #room_id, and mentions no one', () => {
-		const inserted = insertMention(['see #17'], 4, 7, thread.id, true);
+		const inserted = insertMention(['see #17'], 4, 7, thread.id, 'room');
 		expect(inserted).toEqual({ parts: ['see ', thread, ' '], caret: 19 });
 		expect(draftText(inserted.parts)).toBe('see #1790473611343 ');
 		expect(draftMentions(['hi ', { id: 'bob' }, ' in ', thread])).toEqual(['bob']);
@@ -216,5 +216,43 @@ describe('backspace against a chip', () => {
 		expect(unchip(parts, 3, label)).toBeUndefined();
 		expect(unchip(parts, 14, label)).toBeUndefined();
 		expect(unchip([], 0, label)).toBeUndefined();
+	});
+});
+
+describe('role chips (@&role)', () => {
+	const mods = { id: 'mods', role: true } as const;
+
+	it('sends @&role, two characters longer than the role, spaced like any chip', () => {
+		expect(draftText(['ping ', mods, ' now'])).toBe('ping @&mods now');
+		expect(draftText(['x', mods, '.x'])).toBe('x @&mods .x');
+		expect(partLength(mods)).toBe(6);
+		expect(draftLength(['ping ', mods])).toBe('ping @&mods'.length);
+	});
+
+	it('mentions everyone the role names, after and among people, each once', () => {
+		const members = (role: string) => (role === 'mods' ? ['ada', 'bob'] : []);
+		expect(draftMentions([{ id: 'bob' }, ' and ', mods, ' ', { id: 'cy' }], members)).toEqual(['bob', 'ada', 'cy']);
+		expect(draftMentions([mods])).toEqual([]);
+	});
+
+	it('chips a finished @&role it knows, moving the caret across it, and leaves an unknown one as text', () => {
+		const collapsed = collapseMentions(['hi @&mods there'], people, { caret: 15, roles: ['mods'] });
+		expect(collapsed.parts).toEqual(['hi ', mods, ' there']);
+		expect(collapsed.caret).toBe(15);
+		expect(collapseMentions(['hi @&nope there'], people, { caret: 15, roles: ['mods'] }).parts).toEqual(['hi @&nope there']);
+		// Still being typed: the caret is in it.
+		expect(collapseMentions(['hi @&mods'], people, { caret: 9, roles: ['mods'] }).changed).toBe(false);
+		// Set from outside, a role ending the text is a chip too.
+		expect(collapseMentions(['@&mods'], people, { caret: 6, final: true, names: false, roles: ['mods'] }).parts).toEqual([mods]);
+	});
+
+	it('puts a picked role in as a chip and the caret after its space', () => {
+		const inserted = insertMention(['ask @mo'], 4, 7, 'mods', 'role');
+		expect(inserted.parts).toEqual(['ask ', mods, ' ']);
+		expect(inserted.caret).toBe('ask @&mods '.length);
+	});
+
+	it('turns back into its text on backspace', () => {
+		expect(unchip(['ask ', mods], 10, (chip) => (chip.role ? `@&${chip.id}` : `@${chip.id}`))).toEqual({ parts: ['ask @&mods'], caret: 10 });
 	});
 });

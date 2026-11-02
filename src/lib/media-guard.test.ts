@@ -18,9 +18,9 @@ describe('media loads only through the gate', () => {
 		expect(using(/as MediaSrc\b/)).toEqual(['lib/ui/media-gate.ts']);
 	});
 
-	it('asks where media may load from only in the gate (streams, their own: only from the server)', () => {
+	it('asks where media may load from only in the gate (live text, its own: only from the server)', () => {
 		expect(using(/\bembedMedia\(/)).toEqual(['lib/protocol/embeds.ts', 'lib/ui/media-gate.ts']);
-		expect(using(/\bsameOriginMedia\(/)).toEqual(['lib/components/embeds/EmbedStream.svelte', 'lib/protocol/embeds.ts', 'lib/ui/media-gate.ts']);
+		expect(using(/\bsameOriginMedia\(/)).toEqual(['lib/components/embeds/EmbedTerminal.svelte', 'lib/protocol/embeds.ts', 'lib/ui/media-gate.ts', 'lib/ui/message-view.ts']);
 	});
 
 	it('loads media only in the design components that take a MediaSrc for it', () => {
@@ -54,9 +54,10 @@ describe('media loads only through the gate', () => {
 });
 
 describe('media loads on a click only where the viewer clicks', () => {
-	it('writes Load and Always load into markup only in the sanitizer, and answers them only in media-ask', () => {
-		expect(using(/data-media-(?:load|trust)/)).toEqual(['lib/protocol/sanitize.ts', 'lib/ui/media-ask.ts']);
+	it('writes Load, Always load and Block into markup only in the sanitizer, and answers them only in media-ask', () => {
+		expect(using(/data-media-(?:load|trust|block)/)).toEqual(['lib/protocol/sanitize.ts', 'lib/ui/media-ask.ts']);
 		expect(using(/\bloadOnce\(|\.trust\(/)).toEqual(['lib/ui/directory.svelte.ts', 'lib/ui/media-ask.ts']);
+		expect(using(/mediaSettings\.block\(/)).toEqual(['lib/ui/media-ask.ts']);
 	});
 });
 
@@ -73,7 +74,6 @@ describe('markup from anyone else goes through the one sanitizer', () => {
 			'lib/components/ProfileCard.svelte',
 			'lib/components/ServerPane.svelte',
 			'lib/components/ThreadDescription.svelte',
-			'lib/components/embeds/EmbedStream.svelte',
 			'lib/design/components/EmbedHtml.svelte',
 			'lib/design/components/Message.svelte'
 		]);

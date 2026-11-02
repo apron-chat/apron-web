@@ -12,6 +12,8 @@ import { DEVICES, expect, test, type Frame } from './fixtures';
 test.use(DEVICES.desktop);
 
 const DAY = 24 * 60 * 60 * 1000;
+/** The longest a batch of changes waits to be written (`FLUSH_MS`, `$lib/history/history-keeper`). */
+const FLUSH_MS = 2_000;
 const ada = { user_id: 'ada', name: 'Ada' };
 const you = { user_id: 'kept_1', name: 'Kept' };
 
@@ -43,13 +45,24 @@ async function keptServer(page: Page, messages: Array<Record<string, unknown>>, 
 					if (frame.id !== undefined) reply({});
 			}
 		});
-		ws.send(JSON.stringify({ method: 'server', params: { apron: 9, agent: 'apron-e2e-kept', auth: ['guest', 'token'], ping: 60, capabilities: ['history', 'rooms'] } }));
+		ws.send(JSON.stringify({ method: 'server', params: { apron: 10, agent: 'apron-e2e-kept', auth: ['guest', 'token'], ping: 60, capabilities: ['history', 'rooms'] } }));
 	});
 }
 
 /** How many history databases this device has: one per account on each server. */
 function keptServers(page: Page): Promise<number> {
 	return page.evaluate(async () => (await indexedDB.databases()).filter((entry) => entry.name?.startsWith('apron-history:')).length);
+}
+
+/**
+ * How many messages are kept on this device once what waits to be written has been: the page's clock moves on past
+ * each wait, rather than the test waiting for it in real time.
+ */
+async function keptAfterFlush(page: Page, count: number): Promise<void> {
+	await expect.poll(async () => {
+		await page.clock.fastForward(FLUSH_MS);
+		return keptMessages(page);
+	}, { intervals: [0] }).toBe(count);
 }
 
 /** How many messages are kept on this device, for every server and account. */
@@ -75,6 +88,7 @@ function keptMessages(page: Page): Promise<number> {
 
 test('a reload shows what it kept, and asks only for what came since', async ({ page }) => {
 	const base = process.env.E2E_URL;
+	await page.clock.install();
 	await page.clock.setFixedTime(NOW);
 	const start = NOW.getTime() - 2 * DAY;
 	const message = (n: number, text = `Message ${n}`) => ({ message_id: String(start + n * 1000), log_id: String(start + n * 1000), room_id: 'general', from: ada, body: { text } });
@@ -85,7 +99,7 @@ test('a reload shows what it kept, and asks only for what came since', async ({ 
 	await page.goto(`${base}/`);
 	await expect(page.getByText('Message 79', { exact: true })).toBeVisible();
 	// Written within a couple of seconds, or as the tab hides: the room's checkpoint with its messages.
-	await expect.poll(() => keptMessages(page), { timeout: 10_000 }).toBe(80);
+	await keptAfterFlush(page, 80);
 	expect(await keptServers(page)).toBe(1);
 
 	messages.push(message(80, 'While you were away'));
@@ -153,6 +167,7 @@ test('Sign out keeps history for the account by default, and History clears one 
 
 test('search finds a message only this device still has, and opens it where it is', async ({ page }) => {
 	const base = process.env.E2E_URL;
+	await page.clock.install();
 	await page.clock.setFixedTime(NOW);
 	const start = NOW.getTime() - 2 * DAY;
 	const message = (n: number, text = `Message ${n}`) => ({ message_id: String(start + n * 1000), log_id: String(start + n * 1000), room_id: 'general', from: ada, body: { text } });
@@ -168,7 +183,7 @@ test('search finds a message only this device still has, and opens it where it i
 		await list.evaluate((el) => (el.scrollTop = 0));
 		await expect(page.getByText('Message 0', { exact: true })).toBeVisible({ timeout: 500 });
 	}).toPass();
-	await expect.poll(() => keptMessages(page), { timeout: 10_000 }).toBe(150);
+	await keptAfterFlush(page, 150);
 
 	// A reload holds only the newest of it: the needle is on this device alone.
 	await page.reload();

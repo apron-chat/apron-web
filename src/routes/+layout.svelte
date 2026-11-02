@@ -4,10 +4,12 @@
 	import { prefetchLazy } from '$lib/ui/lazy.svelte';
 	import '$lib/design/tokens.css';
 	import '$lib/design/apron.css';
+	import '$lib/design/fonts.css';
 	import '../app.css';
 	import favicon from '$lib/assets/favicon.svg';
 	import EmojiPopover from '$lib/components/EmojiPopover.svelte';
 	import MediaViewerHost from '$lib/components/MediaViewerHost.svelte';
+	import TerminalViewerHost from '$lib/components/TerminalViewerHost.svelte';
 	import UpdateNotice from '$lib/components/UpdateNotice.svelte';
 
 	let { children } = $props();
@@ -28,4 +30,6 @@
 <EmojiPopover />
 <!-- The one image viewer, full screen over everything. -->
 <MediaViewerHost />
+<!-- The one terminal viewer, a terminal embed full screen. -->
+<TerminalViewerHost />
 <UpdateNotice />

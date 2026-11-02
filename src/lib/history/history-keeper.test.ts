@@ -238,6 +238,47 @@ describe('HistoryKeeper', () => {
 		await writer.stop();
 	});
 
+	it('restores what it read ahead of the session (`prepare`), still paging from this device after pruning since', async () => {
+		const server = new MemoryProtocolServer({ account: true });
+		for (let n = 0; n < 400; n++) server.post('general', 'ada', `#${n}`);
+		const indexedDB = new IDBFactory();
+		const first = new ChatClient(URL, 'Ada', server.factory);
+		clients.push(first);
+		const keeper = new HistoryKeeper({ indexedDB, locks: null });
+		keeper.watch(saved(first));
+		first.start();
+		await waitFor(() => Boolean(room(first.snapshot(), 'general')?.loaded));
+		while (room(first.snapshot(), 'general')?.olderAvailable) await first.loadOlder('general');
+		const all = ids(first.snapshot(), 'general');
+		await keeper.stop();
+		first.stop();
+
+		// The next visit keeps only the newer half, and reads what it restores before its prune drops the older.
+		const now = Number(all.at(-1)) + 1;
+		const cutoff = Number(all[200]);
+		const db = await accountDb(indexedDB);
+		const second = new ChatClient(URL, 'Ada', server.factory);
+		clients.push(second);
+		const ahead = new HistoryKeeper({ indexedDB, locks: null, retentionMs: now - cutoff, now: () => now });
+		await ahead.prepare(URL);
+		const read = (await readKept(db))!.meta.version;
+		ahead.watch(saved(second));
+		for (let i = 0; (await readKept(db))!.meta.version === read; i++) {
+			if (i > 400) throw new Error('Did not prune');
+			await new Promise((resolve) => setTimeout(resolve, 5));
+		}
+		const from = server.frames.length;
+		second.start();
+		await waitFor(() => Boolean(room(second.snapshot(), 'general')?.loaded));
+		while (room(second.snapshot(), 'general')?.olderAvailable) await second.loadOlder('general');
+		expect(ids(second.snapshot(), 'general')).toEqual(all);
+		// Down to the cutoff from this device, as kept since the prune: the server only for what is older.
+		const older = historyOf(server, 'general', from).filter((params) => params?.before !== undefined);
+		expect(older.length).toBeGreaterThan(0);
+		expect(older.filter((params) => Number(params!.before) > cutoff)).toEqual([]);
+		await ahead.stop();
+	});
+
 	it('writes nothing when nothing kept changed, and the users only when they did', async () => {
 		const server = new MemoryProtocolServer({ account: true });
 		const indexedDB = new IDBFactory();

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ProtocolStore, applyRecords, decodeHistoryRecords, timelineEvents, type MembershipRecord } from '$lib/protocol/reducer';
 import { markdownText } from '$lib/protocol/markdown';
 import type { MessageRecord } from '$lib/protocol/types';
-import { byActivity, escapeMarkdown, buildRoomTimeline, inHeldOrder, newDividerBefore, sidebarRooms, sidebarSections, threadEntries, threadEntry, threadDescriptionFor, threadDescriptionText, threadLatest, threadsWithNews, threadLostPrivacy, threadStartedFrom, threadTitleFor, type TimelineItem } from './timeline';
+import { byActivity, escapeMarkdown, buildRoomTimeline, inHeldOrder, newDividerBefore, sidebarRooms, sidebarSections, steady, threadEntries, threadEntry, threadDescriptionFor, threadDescriptionText, threadLatest, threadsWithNews, threadLostPrivacy, threadStartedFrom, threadTitleFor, type TimelineItem } from './timeline';
 import { isGrouped, dayLabel, GROUP_WINDOW_MS } from './time';
 import { messageSnippet, peopleIn, rangeBetween, spanOf } from './messages';
 import { roomSnapshot as room } from '$lib/test/builders';
@@ -207,6 +207,26 @@ describe('room view', () => {
 		expect(kinds(plainItems)).toEqual(['date', 'message', 'message']);
 		expect(plainItems[2]).toMatchObject({ grouped: true });
 		expect(buildRoomTimeline({ messages: [], threads: [bare], now }).map((item) => item.kind)).toEqual(['date', 'thread']);
+	});
+
+	it('keeps the items and entries that say the same as last time (steady), and the whole list while they all do', () => {
+		const build = (threads = [threadEntry(room(String(base + 500), [], { parentRoomId: 'general', title: 'Deploy' }))]) => buildRoomTimeline({ messages: [first, plain, later], threads, now });
+		const last = build();
+		// Made afresh from the same records: every item a new object, the list the same.
+		expect(steady(last, build())).toBe(last);
+		// A message more: the rest kept as they were, and the new one as it comes.
+		const more = message(2 * DAY + 1000, 'bob');
+		const next = steady(last, buildRoomTimeline({ messages: [first, plain, later, more], threads: [threadEntry(room(String(base + 500), [], { parentRoomId: 'general', title: 'Deploy' }))], now }));
+		expect(next).not.toBe(last);
+		expect(next.slice(0, last.length).every((item, index) => item === last[index])).toBe(true);
+		expect(next[last.length]).toMatchObject({ event: more, grouped: false });
+		// A renamed thread: its card is new, the messages kept.
+		const renamed = steady(last, build([threadEntry(room(String(base + 500), [], { parentRoomId: 'general', title: 'Ship' }))]));
+		expect(renamed.filter((item, index) => item !== last[index]).map((item) => item.key)).toEqual([`thread:${base + 500}`]);
+		// Entries by id, the same way.
+		const entries = [started, moved];
+		expect(steady(entries, [{ ...started }, { ...moved, participants: [...moved.participants] }])).toBe(entries);
+		expect(steady(entries, [{ ...started, count: 3 }, { ...moved }])[1]).toBe(moved);
 	});
 });
 

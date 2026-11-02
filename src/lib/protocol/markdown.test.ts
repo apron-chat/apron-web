@@ -439,3 +439,28 @@ describe('custom emoji in text (ext:emoji)', () => {
 		expect(renderMarkdown(':a:', undefined, undefined, undefined, odd, any)).toContain('style="aspect-ratio: 1 / 1"');
 	});
 });
+
+describe('role mentions (@&role)', () => {
+	it('picks out @&role as a role, leaving @role a user mention and an & after a letter text', () => {
+		expect(mentionSegments('ping @&mods and @alice', resolve)).toEqual([
+			'ping ',
+			{ target: { kind: 'role', id: 'mods' }, hash: false },
+			' and ',
+			{ target: { kind: 'user', id: 'alice', name: 'Alice Chen' }, hash: false }
+		]);
+		// `@mods` is a user ID (unknown here), never a role; `x@&mods` has no prefix.
+		expect(mentionSegments('@mods x@&mods', resolve)).toEqual(['@mods x@&mods']);
+		// Without resolving mentions at all, nothing is picked out.
+		expect(mentionSegments('@&mods')).toEqual(['@&mods']);
+	});
+
+	it('renders a role as a chip that only reads, showing @role', () => {
+		expect(renderPlain('hey @&mods.', resolve)).toBe('hey <span class="ap-mention ap-mention-role" title="Everyone with the role mods">@mods</span>.');
+	});
+});
+
+describe('role mentions in Markdown', () => {
+	it('chips @&role in rendered Markdown, but not inside code', () => {
+		expect(renderMarkdown('**@&mods** `@&mods`', resolve)).toContain('<strong><span class="ap-mention ap-mention-role" title="Everyone with the role mods">@mods</span></strong> <code>@&amp;mods</code>');
+	});
+});

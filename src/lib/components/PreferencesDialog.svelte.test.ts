@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { flushSync, tick } from 'svelte';
 import { describe, expect, it, vi } from 'vitest';
+import { appearanceSettings, DEFAULT_APPEARANCE } from '$lib/ui/appearance.svelte';
 import PreferencesDialog from './PreferencesDialog.svelte';
 import { render, cleanup } from '$lib/test/dom';
 
@@ -38,22 +39,22 @@ function notifications(props: Record<string, unknown>) {
 
 describe('PreferencesDialog', () => {
 	it('has one Notifications switch that says how far it reaches, open or closed', () => {
-		expect(notifications({ webPush: { ...push, enabled: true } })).toEqual({ note: 'On · alerts on this device, even when Apron is closed.', action: undefined, switches: 1 });
-		expect(notifications({ webPush: undefined }).note).toBe('On · alerts while Apron is open. This server doesn’t alert when it’s closed.');
-		expect(notifications({ webPush: { ...push, signIn: true } }).note).toBe('On · alerts while Apron is open. Sign in to be alerted when it’s closed, too.');
-		expect(notifications({ webPush: { ...push, supported: false, homeScreen: true } }).note).toBe('On · alerts while Apron is open. To be alerted when it’s closed, add Apron to your Home Screen.');
-		expect(notifications({ webPush: { ...push, supported: false } }).note).toBe('On · alerts while Apron is open. This browser can’t alert when it’s closed.');
-		expect(notifications({ webPush: { ...push, enabled: true }, notifyScopes: ['joined'] }).note).toBe('On · alerts while Apron is open. This server sends none of your choices above when it’s closed.');
+		expect(notifications({ webPush: { ...push, enabled: true } })).toEqual({ note: 'On, even when Apron is closed.', action: undefined, switches: 1 });
+		expect(notifications({ webPush: undefined }).note).toBe('On while Apron is open. This server can’t alert when it’s closed.');
+		expect(notifications({ webPush: { ...push, signIn: true } }).note).toBe('On while Apron is open. Sign in to be alerted when it’s closed.');
+		expect(notifications({ webPush: { ...push, supported: false, homeScreen: true } }).note).toBe('On while Apron is open. Add it to your Home Screen to be alerted when it’s closed.');
+		expect(notifications({ webPush: { ...push, supported: false } }).note).toBe('On while Apron is open. This browser can’t alert when it’s closed.');
+		expect(notifications({ webPush: { ...push, enabled: true }, notifyScopes: ['joined'] }).note).toBe('On while Apron is open. None of your choices below alert when it’s closed.');
 		// Off, before and after permission; blocked.
-		expect(notifications({ notificationsEnabled: false, notificationPermission: 'default', webPush: push }).note).toBe('Turning this on will ask your browser for permission.');
+		expect(notifications({ notificationsEnabled: false, notificationPermission: 'default', webPush: push }).note).toBe('Your browser will ask for permission.');
 		expect(notifications({ notificationsEnabled: false, webPush: push }).note).toBe('Off.');
-		expect(notifications({ notificationsEnabled: false, notificationPermission: 'denied', webPush: push }).note).toMatch(/^Notifications are blocked/);
+		expect(notifications({ notificationsEnabled: false, notificationPermission: 'denied', webPush: push }).note).toMatch(/^Blocked by your browser/);
 	});
 
 	it('offers to alert when Apron is closed too, or for this server instead, where push could but doesn\'t yet', () => {
-		expect(notifications({ webPush: push })).toEqual({ note: 'On · alerts while Apron is open. Not yet when it’s closed.', action: 'Alert when it’s closed, too', switches: 1 });
+		expect(notifications({ webPush: push })).toEqual({ note: 'On while Apron is open.', action: 'Alert when it’s closed, too', switches: 1 });
 		const held = notifications({ webPush: { ...push, enabled: true, heldBy: 'chat.example' } });
-		expect(held.note).toBe('On · alerts while Apron is open. When it’s closed, this browser alerts for one server at a time: now chat.example.');
+		expect(held.note).toBe('On while Apron is open. When it’s closed, this browser alerts only for chat.example.');
 		expect(held.action).toBe('Alert for this server instead');
 		// The action is push's.
 		let pushed = 0;
@@ -62,6 +63,20 @@ describe('PreferencesDialog', () => {
 		expect(pushed).toBe(1);
 	});
 
+
+	it('offers Read Receipts in Profile only where the server shows them, and hands the switch to the caller', () => {
+		render(PreferencesDialog, notificationProps({ section: 'profile' }));
+		expect(document.querySelector('[role="switch"][aria-label="Read Receipts"]')).toBeNull();
+		cleanup();
+		const onchange = vi.fn();
+		render(PreferencesDialog, notificationProps({ section: 'profile', readReceipts: { on: true, onchange } }));
+		const toggle = document.querySelector<HTMLButtonElement>('[role="switch"][aria-label="Read Receipts"]')!;
+		expect(toggle.getAttribute('aria-checked')).toBe('true');
+		expect(toggle.closest('.ap-pref-receipts')?.textContent).toContain('Sent while you’re online, not while invisible.');
+		toggle.click();
+		expect(onchange).toHaveBeenCalledWith(false);
+		cleanup();
+	});
 
 	it('exports without private rooms unless Include private rooms is checked, and says how many were left out', async () => {
 		const onexport = vi.fn(async ({ privateRooms }: { privateRooms: boolean }) => ({ name: 'apron-chat.example-2026-10-30.jsonl', rooms: 3, messages: 10, privateLeftOut: privateRooms ? 0 : 2 }));
@@ -123,5 +138,88 @@ describe('PreferencesDialog', () => {
 		await tick();
 		flushSync();
 		expect(live.textContent).toBe('This server doesn’t offer Invisible. Your status is None.');
+	});
+
+	it('applies a premade theme at once, and shows the CSS only for Custom, starting from the theme before', () => {
+		appearanceSettings.update({ ...DEFAULT_APPEARANCE });
+		render(PreferencesDialog, notificationProps({ section: 'appearance' }));
+		const root = document.documentElement;
+		const select = document.querySelector<HTMLSelectElement>('#ap-theme')!;
+		const css = () => document.querySelector<HTMLTextAreaElement>('#ap-theme-css');
+		const apply = () => document.querySelector<HTMLButtonElement>('.ap-pref-theme-css button[type="submit"]')!;
+		const choose = (theme: string) => {
+			select.value = theme;
+			select.dispatchEvent(new Event('change', { bubbles: true }));
+			flushSync();
+		};
+		const edit = (text: string) => {
+			css()!.value = text;
+			css()!.dispatchEvent(new Event('input', { bubbles: true }));
+			flushSync();
+			apply().click();
+			flushSync();
+		};
+
+		expect(css()).toBeNull();
+		choose('ferrous');
+		expect(root.style.getPropertyValue('--font-mono')).toBe('"RecMonoCasual Nerd Font", "Rec Mono Casual", "Apron Rec Mono Casual", var(--font-mono-system)');
+		expect(css()).toBeNull();
+
+		choose('custom');
+		expect(appearanceSettings.current.theme).toBe('custom');
+		expect(css()!.value).toContain('Recursive Sans Casual Static');
+		expect(root.style.getPropertyValue('--font-mono')).toBe('"RecMonoCasual Nerd Font", "Rec Mono Casual", "Apron Rec Mono Casual", var(--font-mono-system)');
+		expect(apply().disabled).toBe(true);
+
+		// CSS that doesn't read says why, and changes nothing.
+		edit('--accent: url(x);');
+		expect(document.querySelector('[role="alert"]')?.textContent).toMatch(/url\(\)/);
+		expect(root.style.getPropertyValue('--font-mono')).not.toBe('');
+
+		// CSS that reads shows as it's typed, unsaved; Discard goes back.
+		css()!.value = '--accent: #123456;';
+		css()!.dispatchEvent(new Event('input', { bubbles: true }));
+		flushSync();
+		expect(root.style.getPropertyValue('--accent')).toBe('#123456');
+		expect(root.style.getPropertyValue('--font-mono')).toBe('');
+		expect(appearanceSettings.current.customCss).toContain('Recursive Sans Casual Static');
+		[...document.querySelectorAll<HTMLButtonElement>('.ap-pref-theme-actions button')].find((button) => button.textContent === 'Discard changes')!.click();
+		flushSync();
+		expect(root.style.getPropertyValue('--accent')).toBe('light-dark(#2a2926, #f0e9d8)');
+		expect(root.style.getPropertyValue('--font-mono')).not.toBe('');
+
+		edit('--accent: #3cb4f2;');
+		expect(appearanceSettings.current).toEqual({ mode: 'system', theme: 'custom', customCss: '--accent: #3cb4f2;' });
+		expect(root.style.getPropertyValue('--accent')).toBe('#3cb4f2');
+		// The previous theme's tokens go.
+		expect(root.style.getPropertyValue('--font-mono')).toBe('');
+		expect(JSON.parse(localStorage.getItem('apron.appearance')!).vars).toEqual([['--accent', '#3cb4f2']]);
+
+		// A premade theme hides the CSS and keeps it for the next time Custom is chosen.
+		choose('apron');
+		expect(root.style.getPropertyValue('--accent')).toBe('');
+		expect(css()).toBeNull();
+		choose('custom');
+		expect(css()!.value).toBe('--accent: #3cb4f2;');
+
+		// CSS that stops reading as it's typed leaves the last that did on show, and says so quietly.
+		css()!.value = '--accent: #123456; --line: (';
+		css()!.dispatchEvent(new Event('input', { bubbles: true }));
+		flushSync();
+		expect(document.getElementById('ap-theme-css-error')?.textContent).toMatch(/^Not showing yet: --line/);
+		expect(document.getElementById('ap-theme-css-error')?.getAttribute('role')).toBeNull();
+		expect(css()!.getAttribute('aria-describedby')).toBe('ap-theme-css-hint ap-theme-css-error');
+		expect(root.style.getPropertyValue('--accent')).toBe('#3cb4f2');
+
+		// Closing Preferences with edits not applied puts back what's kept.
+		css()!.value = '--accent: #123456;';
+		css()!.dispatchEvent(new Event('input', { bubbles: true }));
+		flushSync();
+		expect(root.style.getPropertyValue('--accent')).toBe('#123456');
+		document.querySelector('dialog')!.dispatchEvent(new Event('close'));
+		flushSync();
+		expect(root.style.getPropertyValue('--accent')).toBe('#3cb4f2');
+		expect(appearanceSettings.current.customCss).toBe('--accent: #3cb4f2;');
+		appearanceSettings.update({ ...DEFAULT_APPEARANCE });
 	});
 });

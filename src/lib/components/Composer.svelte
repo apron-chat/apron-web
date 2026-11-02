@@ -70,6 +70,11 @@
 		 * with a Command tag in monospace and sent with Run.
 		 */
 		canCommand?: boolean;
+		/**
+		 * Live typing (`/live`): the draft is a message others see as it is typed (an `append` embed, §4.8.5), so it is
+		 * no command and takes no link previews, and Send finishes it.
+		 */
+		live?: boolean;
 		/** Who an `@` can name: the room's members, else its recent senders. */
 		people: MentionPerson[];
 		/** Rooms and threads available for `#room` mentions. */
@@ -90,7 +95,7 @@
 		/** Sending waits until then, as the server asked (`retry_after`, epoch milliseconds): Send counts down, and the draft stays. */
 		waitUntil?: number;
 	}
-	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled, holdSend = false, canUpload, files = [], uploadLimits, canCommand = false, people, rooms = [], reply, oninput, onsend, onfiles, onunstage, onrename, oncancelreply, onmention, waitUntil }: Props = $props();
+	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled, holdSend = false, canUpload, files = [], uploadLimits, canCommand = false, live, people, rooms = [], reply, oninput, onsend, onfiles, onunstage, onrename, oncancelreply, onmention, waitUntil }: Props = $props();
 
 	/** The field: chips and autocomplete, as in the message editor. */
 	let field = $state<MessageField | undefined>();
@@ -118,14 +123,16 @@
 	});
 	/** Voice messages need uploads, a type the server takes, and a browser that can record. */
 	let canRecord = $derived(canUpload && voice !== undefined && Boolean(navigator.mediaDevices?.getUserMedia));
-	let command = $derived(canCommand && isCommand(value));
+	let command = $derived(canCommand && isCommand(value) && !live);
 	let emojiOpen = $derived(emojiPicker.isOpenFor(emojiButton));
 	/** Bumped when a fetched preview arrives, so the previews below are redrawn. */
 	let previewsArrived = $state(0);
 	/** The link embeds the draft will be sent with (a command takes none). */
 	let previews = $derived.by(() => {
 		void previewsArrived;
-		return command || disabled ? [] : linkPreviews.embeds(value, dismissed);
+		if (command || disabled) return [];
+		const embeds = linkPreviews.embeds(value, dismissed);
+		return embeds.length && live ? [] : embeds;
 	});
 	/** Those as the design system's Composer takes them: their pictures only from where link previews may load from (each is drawn by `preview` below, which asks the same). */
 	let previewCards = $derived(previews.map((embed) => ({ ...embed, og: loadableOg(embed.og, directory.mediaGate) })));
@@ -134,7 +141,7 @@
 	// Typed links are looked up once typing pauses, so a half-typed URL isn't.
 	$effect(() => {
 		const text = value;
-		if (command || disabled || linkPreviews.links(text).length === 0) return;
+		if (command || disabled || linkPreviews.links(text).length === 0 || live) return;
 		const timer = setTimeout(() => void linkPreviews.prefetch(text), PREVIEW_TYPING_PAUSE_MS);
 		return () => clearTimeout(timer);
 	});
@@ -249,6 +256,7 @@
 	{disabled}
 	canSend={holdSend ? false : undefined}
 	{canCommand}
+	{live}
 	{canUpload}
 	{canRecord}
 	{onfiles}
@@ -275,6 +283,7 @@
 	previewsTestid="link-previews"
 	fileInputTestid="attach-input"
 	commandTestid="command-tag"
+	liveTestid="live-tag"
 	emojiTestid="emoji-button"
 	sendTestid="send-button"
 />

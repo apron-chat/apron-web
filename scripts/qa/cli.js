@@ -4,9 +4,11 @@
  * commands; scripts/qa/README.md explains the workflow and how to add a suite.
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpus } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { ab } from './lib/ab.js';
 import { int, list, parseArgs } from './lib/args.js';
+import { compareBudget, countsOf, diffSamples, formatBudget, formatSamples, readBudget, samplesOf, shardOf, writeBudget } from './lib/budget.js';
 import { launch } from './lib/browser.js';
 import { compareDirs, diffDirs, formatDiff, summarize } from './lib/images.js';
 import { extractInteropContract, interopDir } from './lib/interop-contract.js';
@@ -33,7 +35,14 @@ const HELP = `npm run qa -- <command> [options]
                          Diff, plus before|after crops of each changed shot and <dir>/index.html.
   perf --url A --url B   Load and interaction metrics, strictly interleaved; medians and spread.
                          [--label a --label b] [--runs 5] [--cpu 4] [--suite main] [--only load,type-composer]
-                         [--build dirA --build dirB] [--out file.json]
+                         [--build dirA --build dirB] [--out file.json] [--calls: JS function calls too]
+  budget --build <dir>   Check a preview build's counts (layouts, style recalcs, DOM nodes, requests,
+                         bytes) per perf probe against scripts/qa/perf-budget.json; exits 1 when one is
+                         over. --update rewrites the baseline. Counts JS function calls too, and times the
+                         windows on Playwright's fake clock. [--runs 3] [--cpu 4] [--only p] [--shard i/n]
+                         [--out file.json]: every run's counts, to diff between machines.
+  budget-diff <a.json> <b.json>
+                         Two files written by budget --out, side by side: which counts match in every run.
   prof --url A --url B   CPU-profile page load; biggest per-function changes. [--runs 6] [--cpu 4]
   sheet <spec.json>      Render hand-picked before/after panels (title, note, crop box, scale) to a PNG.
                          [--out <spec>.png]
@@ -45,9 +54,10 @@ const HELP = `npm run qa -- <command> [options]
   clean                  Remove .qa/snap (cached builds); --all removes all of .qa.
 
 Filters match any part of a shot id, <scene>--<viewport>--<theme>; commas give several.
-Chromium: QA_CHROMIUM, else playwright-core's build under PLAYWRIGHT_BROWSERS_PATH.`;
+Chromium: QA_CHROMIUM, else playwright-core's build under PLAYWRIGHT_BROWSERS_PATH. budget checks only in the
+Chromium its baseline was recorded with.`;
 
-const BOOLEAN = ['perf', 'recheck', 'rebuild', 'install', 'keep', 'clean', 'all', 'help', 'check'];
+const BOOLEAN = ['perf', 'recheck', 'rebuild', 'install', 'keep', 'clean', 'all', 'help', 'check', 'update', 'calls'];
 const MULTI = ['url', 'label', 'build', 'suite', 'filter', 'only'];
 
 async function main() {
@@ -131,7 +141,7 @@ async function main() {
 			const browser = await launch();
 			let result;
 			try {
-				result = await runPerf({ browser, urls, labels, runs: int(o.runs, 5), cpu: int(o.cpu, 4), probes, path: suite.path, builds: o.build ?? [] });
+				result = await runPerf({ browser, urls, labels, runs: int(o.runs, 5), cpu: int(o.cpu, 4), probes, path: suite.path, builds: o.build ?? [], calls: !!o.calls });
 			} finally {
 				await browser.close();
 			}
@@ -140,6 +150,72 @@ async function main() {
 			writeFileSync(out, JSON.stringify(result, null, 1));
 			console.log(formatPerf(result));
 			console.log(`json: ${relative(process.cwd(), out)}`);
+			return 0;
+		}
+		case 'budget': {
+			const dir = o.build?.[0] ?? 'build';
+			if (!existsSync(join(dir, '__preview.html'))) throw new Error(`budget needs a preview build: no ${join(dir, '__preview.html')} (APRON_PREVIEW=1 npm run build)`);
+			const suite = await loadSuite('main');
+			// `--shard 2/3`: this machine's share of the probes, checked against the same baseline; the first also
+			// checks the bundle's size.
+			const [index, count] = o.shard ? String(o.shard).split('/').map(Number) : [1, 1];
+			if (!(Number.isInteger(index) && Number.isInteger(count) && index >= 1 && index <= count)) throw new Error(`--shard takes <index>/<count>, e.g. 2/3, not ${o.shard}`);
+			if (o.update && (count > 1 || o.only)) throw new Error('--update rewrites the whole baseline: run it without --shard or --only');
+			const probes = shardOf(selectProbes(suite, list(o.only)).filter((p) => p.budget !== false), index, count);
+			if (!probes.length) throw new Error(`shard ${index}/${count} has no probes to check`);
+			const runs = int(o.runs, 3);
+			const cpu = int(o.cpu, 4);
+			const path = join(repo, 'scripts/qa/perf-budget.json');
+			const budget = readBudget(path);
+			const server = await serveDir(dir);
+			const browser = await launch();
+			let result;
+			const started = Date.now();
+			try {
+				// A Chromium other than the baseline's counts differently (one version to the next moves style recalcs
+				// by a few per probe), so the check runs only on the baseline's.
+				// With --out the counts are still written, to diff between machines, but not checked.
+				if (!o.update && !o.out && budget.chromium && budget.chromium !== browser.version())
+					throw new Error(`the baseline was recorded on Chromium ${budget.chromium}, this is ${browser.version()}: install playwright-core's build (\`npx playwright-core install chromium\`), or after upgrading Playwright, record a new baseline with --update`);
+				// On the fake clock, so what lands in a window doesn't follow the machine's speed, and under reduced
+				// motion, so an animation's layouts don't count once per frame drawn.
+				result = await runPerf({ browser, urls: [server.url], labels: ['now'], runs, cpu, reducedMotion: 'reduce', probes, path: suite.path, builds: index === 1 ? [dir] : [], chunkBuilds: [dir], calls: true, clock: 'fake' });
+			} finally {
+				await browser.close();
+				await server.close();
+			}
+			const counts = countsOf(result, probes);
+			if (o.out) {
+				console.log(`${formatSamples(samplesOf(result, probes))}\n`);
+				const out = resolve(o.out);
+				mkdirSync(dirname(out), { recursive: true });
+				const meta = { calls: true, clock: 'fake', runs, cpu, shard: `${index}/${count}`, seconds: Math.round((Date.now() - started) / 1000), chromium: browser.version(), cpus: cpus().length, cpuModel: cpus()[0]?.model, loadavg: result.loadavg };
+				writeFileSync(out, `${JSON.stringify({ ...meta, probes: samplesOf(result, probes), bundle: counts.bundle }, null, 1)}\n`);
+				console.log(`json: ${relative(process.cwd(), out)}`);
+			}
+			if (o.update) {
+				writeBudget(path, counts, { runs, cpu, chromium: browser.version() });
+				console.log(`wrote ${relative(process.cwd(), path)}`);
+				return 0;
+			}
+			if (budget.chromium && budget.chromium !== browser.version()) {
+				console.log(`Not checked: the baseline was recorded on Chromium ${budget.chromium}, this is ${browser.version()}.`);
+				return 1;
+			}
+			const rows = compareBudget(counts, budget);
+			console.log(formatBudget(rows));
+			const over = rows.filter((r) => r.status === 'over');
+			if (over.length) console.log(`\n${over.length} over budget. If that cost is meant, run \`npm run qa -- budget --update\` and commit scripts/qa/perf-budget.json with the change.`);
+			else if (rows.some((r) => r.status === 'under')) console.log('\nSome counts are well under budget: `npm run qa -- budget --update` locks the gain in.');
+			return over.length ? 1 : 0;
+		}
+		case 'budget-diff': {
+			const [a, b] = o._;
+			if (!a || !b) throw new Error('budget-diff needs two files written by `budget --out`');
+			const [ja, jb] = [a, b].map((f) => JSON.parse(readFileSync(f, 'utf8')));
+			for (const [f, j] of [[a, ja], [b, jb]]) if (!j.probes || !j.shard) throw new Error(`${f} wasn't written by \`budget --out\``);
+			for (const [name, j] of [['a', ja], ['b', jb]]) console.log(`${name}: ${j.clock ?? 'wall'} clock${j.calls ? ', calls' : ''}, cpu ${j.cpu}, ${j.runs} runs, shard ${j.shard}, ${j.chromium}, ${j.cpus}x ${j.cpuModel}, ${j.seconds}s`);
+			console.log(diffSamples(ja, jb).text);
 			return 0;
 		}
 		case 'prof': {

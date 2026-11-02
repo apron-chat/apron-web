@@ -102,6 +102,13 @@
 		const content = container.clientWidth - (parseFloat(s.paddingLeft) || 0) - (parseFloat(s.paddingRight) || 0);
 		return Math.max(0, content - used - gaps);
 	}
+
+	/**
+	 * Whether the `--ap-role-overflow` token stacked when a row last read it: a new row's first guess, so that it renders
+	 * stacked (or not) from the start. A row that has to change its mind once it reads the token is laid out twice
+	 * before it's painted, once each way, and with a row per message and per member that's a layout per batch of them.
+	 */
+	let tokenStacks = true;
 </script>
 
 <script lang="ts">
@@ -127,7 +134,7 @@
 	const shown = $derived([...new Set(roles.filter((role) => typeof role === 'string' && role.trim()))]);
 
 	let row = $state<HTMLElement>();
-	let stack = $state(false);
+	let stack = $state(untrack(() => (overflow ?? (tokenStacks ? 'stack' : 'drop')) === 'stack'));
 	let fit = $state<{ shown: number; room?: number }>({ shown: Infinity });
 	/** A badge's font size in px, as last measured: the count's width is in em of it. */
 	let em = $state(10);
@@ -172,6 +179,7 @@
 	$effect(() => {
 		if (!row) return;
 		const token = getComputedStyle(row).getPropertyValue('--ap-role-overflow').trim();
+		tokenStacks = token === 'stack';
 		stack = (overflow ?? token) === 'stack';
 		if (!stack || typeof ResizeObserver === 'undefined') { fit = { shown: Infinity }; return; }
 		void shown.join('\n');

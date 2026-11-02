@@ -26,26 +26,32 @@ const baseline: Baseline = (() => {
 	}
 })();
 
+/** Each screen as reached from the one before it: the connect screen on `/`; then, on the preview, a room, Preferences over it, and a thread. */
+const CONNECT = async (preview: Preview) => {
+	await preview.openRoot();
+	await preview.openConnect();
+};
 const SCREENS: Record<string, (preview: Preview) => Promise<void>> = {
-	connect: async (preview) => {
-		await preview.openRoot();
-		await preview.openConnect();
-	},
 	room: (preview) => preview.open(),
 	preferences: async (preview) => {
-		await preview.open();
 		await preview.roomsPane();
 		await preview.press(preview.page.getByRole('button', { name: /^Open preferences/ }));
 		await expect(preview.page.getByRole('dialog', { name: 'Preferences' })).toBeVisible();
 	},
-	thread: (preview) => preview.open('#room=general&thread=thread_deploy')
+	thread: async (preview) => {
+		await preview.page.keyboard.press('Escape');
+		await expect(preview.page.getByRole('dialog', { name: 'Preferences' })).toHaveCount(0);
+		await preview.openThread('thread_deploy');
+		await expect(preview.page.getByTestId('message-list').locator('article[data-message-id]').first()).toBeVisible();
+	}
 };
 
 /** The gated violations on the page now, by rule. */
 async function audit(preview: Preview): Promise<Record<string, Finding>> {
 	const { page } = preview;
 	await page.evaluate(() => document.fonts.ready.then(() => undefined));
-	await page.addScriptTag({ path: AXE });
+	// Once per page: the screens after the first are reached without a reload.
+	if (!(await page.evaluate(() => 'axe' in window))) await page.addScriptTag({ path: AXE });
 	const violations = await page.evaluate(async () => {
 		const axe = (window as unknown as { axe: { run: (context: Document, options: object) => Promise<{ violations: { id: string; impact: string; help: string; nodes: { target: string[] }[] }[] }> } }).axe;
 		const result = await axe.run(document, { resultTypes: ['violations'] });
@@ -61,25 +67,36 @@ function regressions(now: Record<string, Finding>, before: Record<string, Findin
 		.map(([rule, finding]) => `${rule} (${finding.impact}): ${finding.help}: ${finding.targets.length} element(s), baseline ${before[rule]?.targets.length ?? 0}: ${finding.targets.slice(0, 5).join(' | ')}`);
 }
 
+/** Fails on anything worse than this screen's baseline; with `E2E_UPDATE_A11Y`, writes what it found instead. */
+async function check(preview: Preview, key: string): Promise<void> {
+	const now = await audit(preview);
+	if (UPDATE) {
+		const current: Baseline = JSON.parse(readFileSync(BASELINE_FILE, 'utf8').trim() || '{}');
+		current[key] = now;
+		writeFileSync(BASELINE_FILE, `${JSON.stringify(Object.fromEntries(Object.entries(current).sort()), null, '\t')}\n`);
+		return;
+	}
+	expect(regressions(now, baseline[key]), `axe on ${key}; if intended, update the baseline with E2E_UPDATE_A11Y=1`).toEqual([]);
+}
+
 if (UPDATE) test.describe.configure({ mode: 'serial' });
 
 for (const device of ['desktop', 'phone'] as const) {
 	test.describe(device, () => {
 		test.use(DEVICES[device]);
 
-		for (const [screen, open] of Object.entries(SCREENS)) {
-			test(`${screen} has no new serious or critical violations`, async ({ preview }) => {
-				await open(preview);
-				const key = `${screen}--${device}`;
-				const now = await audit(preview);
-				if (UPDATE) {
-					const current: Baseline = JSON.parse(readFileSync(BASELINE_FILE, 'utf8').trim() || '{}');
-					current[key] = now;
-					writeFileSync(BASELINE_FILE, `${JSON.stringify(Object.fromEntries(Object.entries(current).sort()), null, '\t')}\n`);
-					return;
-				}
-				expect(regressions(now, baseline[key]), `axe on ${key}; if intended, update the baseline with E2E_UPDATE_A11Y=1`).toEqual([]);
-			});
-		}
+		test('connect has no new serious or critical violations', async ({ preview }) => {
+			await CONNECT(preview);
+			await check(preview, `connect--${device}`);
+		});
+
+		test(`${Object.keys(SCREENS).join(', ')} have no new serious or critical violations`, async ({ preview }) => {
+			for (const [screen, open] of Object.entries(SCREENS)) {
+				await test.step(`${screen} has no new serious or critical violations`, async () => {
+					await open(preview);
+					await check(preview, `${screen}--${device}`);
+				});
+			}
+		});
 	});
 }

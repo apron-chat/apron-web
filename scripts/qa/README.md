@@ -2,8 +2,8 @@
 
 Screenshots, pixel diffs and perf comparisons of the app on `/__preview`, which runs the full client
 against the in-memory server (`src/lib/preview/memory-server.ts`), so nothing needs a backend; and the
-browser tests in `e2e/` (`npm run e2e`, [below](#npm-run-e2e-the-browser-tests)). They run locally, not in
-CI. Everything they write goes under `.qa/` (gitignored). `/__preview` exists only in builds made with
+browser tests in `e2e/` (`npm run e2e`, [below](#npm-run-e2e-the-browser-tests)). They run locally; CI runs
+only the perf budget ([below](#qa-budget-the-perf-budget-in-ci)). Everything they write goes under `.qa/` (gitignored). `/__preview` exists only in builds made with
 `APRON_PREVIEW=1` (and under `vite dev`): the QA snapshots and `npm run e2e` set it, and a production `npm run build`
 leaves the page and its code out. To serve a build of your own here, make it with `APRON_PREVIEW=1 npm run build`.
 
@@ -14,8 +14,8 @@ npm run qa -- ab --base main --filter desktop--dark  # while iterating
 npm run qa -- help                                  # every command and option
 ```
 
-It needs Chromium: `QA_CHROMIUM=/path/to/chrome`, or the build playwright-core 1.56 expects
-(chromium-1194) under `PLAYWRIGHT_BROWSERS_PATH` or Playwright's cache
+It needs Chromium: `QA_CHROMIUM=/path/to/chrome`, or the build playwright-core 1.64 expects
+(chromium-1248) under `PLAYWRIGHT_BROWSERS_PATH` or Playwright's cache
 (`npx playwright-core install chromium` installs it).
 
 ## `qa ab`: before and after a change
@@ -55,9 +55,54 @@ npm run qa -- sheet .qa/sheet.json                        # curated before/after
   ranges overlap (noise), and writes all samples as JSON. Use several runs (5–7) and read the spread:
   the machine may be busy, and it warns when its load average is high. `--only load,type-composer` picks
   probes; `qa ab --perf` runs it on both builds and adds bundle sizes.
+- Probes named `-busy` load an account at scale (the memory server's `manyRooms` and `filler` knobs: 40
+  more rooms, 1500 messages in general), where costs that grow with rooms or history show. A probe
+  without an `action` measures the load, which also counts `startupJsKB`: the JS the page parses to start.
 - `prof` CPU-profiles page load and lists the functions whose self time changed most.
 - `sheet` takes `{ "panels": [{ "title", "note", "before", "after", "box": [l, t, r, b], "scale" }] }`
   (paths relative to the spec; `before` optional) and renders it with real text, for a PR description.
+
+## `qa budget`: the perf budget in CI
+
+Timings swing by tens of percent between runs and machines; counts don't. `qa budget` loads a preview build
+and runs every perf probe (3 runs, medians, under reduced motion so animations don't count per frame), then
+checks the counts against `scripts/qa/perf-budget.json`: layouts, style recalcs and JS function calls per
+probe; requests, startup JS, DOM nodes and heap per load; gzipped bundle sizes. CI runs it on every pull
+request (`perf-budget` in `.github/workflows/ci.yml`), split across three runners with `--shard 1/3` to
+`3/3`: each checks its share of the probes, and the first the bundle's size.
+
+```sh
+APRON_PREVIEW=1 npm run build && npm run qa -- budget         # check the build in build/
+npm run qa -- budget --update                                  # a cost that's meant, or a gain: rewrite the baseline
+npm run qa -- budget --out .qa/counts.json                     # also write every run's counts
+npm run qa -- budget-diff .qa/counts.json ci-counts.json       # which counts match in every run on both
+```
+
+When it fails, the table names the probe and count. Find the cause with `qa perf` and `qa prof` against
+`main`, or `qa ab --base main --perf`. If the cost is the price of a feature, `--update` and commit the
+baseline with the change, so the review sees it. After making something cheaper, `--update` too: the
+baseline is a ratchet, and a gain not written into it can be spent again unnoticed.
+
+The counts hold on any machine, fast or slow, busy or idle, because nothing in them follows real time:
+
+- **Fake clock.** The page runs on Playwright's clock: its timers, frames and idle callbacks fire only as the
+  windows advance it, in 50 ms steps that each wait for fetches to finish, so a slow runner's timers fire at
+  the same moments as a fast one's. Interactions start 3 s after ready, past the start-up timers (the
+  on-demand chunk's prefetch, 2 s after mount); nothing is counted then, so those 3 s run in 500 ms steps.
+  A step that waits 15 s for requests fails, naming them.
+- **JS calls** are counted with V8's precise coverage: the functions the app's own scripts call in each
+  window, in all and by chunk (`--out` lists the chunks).
+- **Slack.** An interaction's layouts and style recalcs may go 1 over its baseline. The load's may go a few
+  over, since the browser still draws its frames in real time. Calls may go 0.5% over, for mouse moves
+  Playwright sends in real time. Bytes 1%.
+- **One Chromium.** A different version counts differently (one to the next moves style recalcs by a few per
+  probe), so the baseline records its Chromium and the check refuses another: run it in the build
+  playwright-core installs. After upgrading Playwright, record a new baseline with `--update`.
+
+Across an Intel machine and three CI runners with different AMD CPUs, 38 of 42 counts were the same in every
+run, against 21 of 42 when the windows were real time. Under full CPU load on every core, every interaction's
+counts matched the baseline exactly.
+
 
 Shot ids are `<scene>--<viewport>--<theme>.png` (extra shots add `--<suffix>`); `--filter` keeps the ids
 containing any of its comma-separated parts.
@@ -112,7 +157,8 @@ against the built `/__preview`, so they need no backend either. Like the rest of
 locally, not in CI.
 
 ```sh
-npm run e2e                                    # build, serve build/, run everything (about 75 s)
+npm run e2e                                    # build, serve build/, run everything (before merging)
+npm run e2e:short                              # between iterations: about half the time (see below)
 npm run e2e -- composer layout                 # build, then only these spec files
 npx playwright test -c e2e/playwright.config.ts navigation   # without rebuilding
 npx playwright test -c e2e/playwright.config.ts --ui         # step through, with the page alongside
@@ -120,6 +166,9 @@ npx playwright show-report .qa/e2e/report                    # after a run: trac
 ```
 
 `E2E_BUILD=<dir>` serves another build (a snapshot, a mutant); `E2E_URL=<url>` uses one already served.
+`npm run e2e:short` (`E2E_TIER=short`) leaves out the interop contract, the files `FULL_ONLY` in
+`e2e/playwright.config.ts` names, and tests tagged `@full`. Tag a test or `describe` `{ tag: '@full' }` when it is
+slow for what it adds between iterations: many viewports, axe, or real timers.
 Results, traces and the report go to `.qa/e2e/`. There are no retries: a test that fails once is a finding.
 
 | Spec | Checks |

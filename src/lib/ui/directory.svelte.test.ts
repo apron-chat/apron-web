@@ -194,7 +194,7 @@ describe('directory', () => {
 		const home: Identity = { user_id: 'di', name: 'Di', avatar: 'https://example.com/di.png' };
 		const image = () => directory.mediaGate.src('https://gravatar.example/x.png');
 		const plain: Identity = { user_id: 'ed', name: 'Ed', avatar: 'http://gravatar.example/ed.png' };
-		directory.apply(snapshot([ada, away, home, plain], { server: { apron: 9, auth: ['guest'], capabilities: ['ext:media'], ext: { media: { origins: ['https://media.example'] } } } }), 'https://example.com');
+		directory.apply(snapshot([ada, away, home, plain], { server: { apron: 10, auth: ['guest'], capabilities: ['ext:media'], ext: { media: { origins: ['https://media.example'] } } } }), 'https://example.com');
 		try {
 			// Server and trusted sites: the server's own and those it names; anything else in the timeline asks.
 			mediaSettings.update('trusted', []);
@@ -215,6 +215,15 @@ describe('directory', () => {
 			expect(directory.avatar(away)).toBe('https://gravatar.example/cy.png');
 			expect(directory.avatar(plain)).toBeUndefined();
 			expect(directory.mediaGate.src('https://gravatar.example/y.png')).toBe('https://gravatar.example/y.png');
+			// Block: over the trust, avatars too.
+			mediaSettings.block('https://gravatar.example');
+			expect(directory.avatar(away)).toBeUndefined();
+			expect(directory.mediaGate.src('https://gravatar.example/x.png')).toBeUndefined();
+			expect(directory.mediaGate.ask('https://gravatar.example/z.png')).toBeUndefined();
+			mediaSettings.update('any', [], ['https://gravatar.example']);
+			expect(directory.mediaGate.src('https://gravatar.example/x.png')).toBeUndefined();
+			expect(directory.avatarGateFor('wss://elsewhere.example').src('https://gravatar.example/x.png')).toBeUndefined();
+			mediaSettings.update('any', ['https://gravatar.example'], []);
 			mediaSettings.update('any', []);
 			expect(directory.mediaGate.src('https://anywhere.example/a.png')).toBe('https://anywhere.example/a.png');
 			expect(directory.mediaGate.ask('https://anywhere.example/a.png')).toBeUndefined();
@@ -226,7 +235,7 @@ describe('directory', () => {
 			expect(mediaSettings.policy).toBe('trusted');
 			expect(directory.avatar(away)).toBeUndefined();
 		} finally {
-			mediaSettings.update('trusted', []);
+			mediaSettings.update('trusted', [], []);
 		}
 	});
 });

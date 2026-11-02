@@ -11,7 +11,7 @@ import { anyWindowVisible, appWindows, askPushId, handleClick, handlePush, isNew
  * Keeps each deploy's app files cached so the app opens fast, still opens
  * offline, and a tab left open across a deploy can still load its lazy chunks.
  * Only the app's own files and page loads are handled: the WebSocket,
- * uploads, files, streams and every backend's URLs go straight to the network.
+ * uploads, files, live text and every backend's URLs go straight to the network.
  * It also shows message notifications where a page can't show its own, and
  * the messages the server pushes (§4.9).
  */
@@ -22,8 +22,13 @@ const CACHE = `${PREFIX}${version}`;
 /** Deploys whose files stay cached: this one and the ones older tabs may still be running. */
 const KEEP = 3;
 const APP_PAGE = `${base}/`;
-/** `version.json` is left out: it must always come from the network to tell a deploy happened. */
-const ASSETS = new Set([...build, ...files, ...prerendered].filter((path) => !path.endsWith('/_app/version.json')));
+/** A font a theme carries (fonts.css), which loads only for a theme that uses it. */
+const isFont = (path: string) => path.endsWith('.woff2');
+/**
+ * `version.json` is left out: it must always come from the network to tell a deploy happened. So are the fonts:
+ * installing each for everyone would download the themes' fonts whatever the theme. One is kept once a theme loads it.
+ */
+const ASSETS = new Set([...build, ...files, ...prerendered].filter((path) => !path.endsWith('/_app/version.json') && !isFont(path)));
 
 sw.addEventListener('install', (event) => {
 	// Take over right away: older tabs keep finding their files in the older caches.
@@ -55,7 +60,15 @@ sw.addEventListener('fetch', (event) => {
 
 	// This deploy's copy first; then an older deploy's, for a chunk an older tab still asks for.
 	if (ASSETS.has(url.pathname) || url.pathname.startsWith(`${base}/_app/immutable/`)) {
-		event.respondWith((async () => (await (await caches.open(CACHE)).match(request)) ?? (await caches.match(request)) ?? fetch(request))());
+		event.respondWith((async () => {
+			const cache = await caches.open(CACHE);
+			const cached = (await cache.match(request)) ?? (await caches.match(request));
+			if (cached) return cached;
+			const response = await fetch(request);
+			// A theme's font, once loaded, stays for offline as the installed files do.
+			if (isFont(url.pathname) && response.ok) await cache.put(request, response.clone());
+			return response;
+		})());
 	}
 });
 

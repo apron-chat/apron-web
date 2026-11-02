@@ -1,4 +1,5 @@
 import { markdownText, type MentionPerson } from '$lib/protocol/markdown';
+import { embedsLabel } from '$lib/protocol/embeds';
 import { cleanPlainText } from '$lib/protocol/plain-text';
 import { isJsonObject, isSystemId, type Embed, type Identity, type MessageRecord } from '$lib/protocol/types';
 import { directory } from './directory.svelte';
@@ -65,7 +66,7 @@ export function hueOf(userId: string | undefined): number | undefined {
 export function messageSnippet(target: MessageRecord, lines = 1, max = 120): string {
 	const text = cleanPlainText(plainTextOf(target)).split('\n').map((line) => line.trim()).filter(Boolean).slice(0, lines).join('\n');
 	const short = text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
-	return short || (embedsOf(target).length ? 'Attachment' : 'Empty message');
+	return short || embedsLabel(target.body?.embeds) || 'Empty message';
 }
 
 export function isOwn(event: MessageRecord, me: Identity | undefined): boolean {
@@ -100,7 +101,7 @@ export function mentionsMe(event: MessageRecord, me: Identity | undefined): bool
  * Who a composer can mention: the room's members (§4.2.2), kept current by
  * memberships, those who spoke most recently first; without a member list,
  * the room's recent senders. The viewer is marked `me` and is always present.
- * Names and avatars are the latest known.
+ * Names, avatars and roles (for `@&role`) are the latest known.
  */
 export function peopleIn(messages: MessageRecord[], me: Identity | undefined, members?: Identity[]): MentionPerson[] {
 	const people: MentionPerson[] = [];
@@ -112,10 +113,12 @@ export function peopleIn(messages: MessageRecord[], me: Identity | undefined, me
 		seen.add(from.user_id);
 		const latest = directory.person(from) ?? from;
 		const avatar = directory.avatar(from);
+		const roles = Array.isArray(latest.roles) ? latest.roles.filter((role) => typeof role === 'string') : [];
 		people.push({
 			id: from.user_id,
 			...(latest.name ? { name: latest.name } : {}),
 			...(avatar ? { avatar } : {}),
+			...(roles.length ? { roles } : {}),
 			...(from.user_id === me?.user_id ? { me: true } : {})
 		});
 	};

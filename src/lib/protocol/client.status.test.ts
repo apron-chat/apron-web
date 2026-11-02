@@ -32,7 +32,7 @@ const statuses = () => socket.sent.filter((frame) => frame.method === 'status').
 
 async function greet(caps: string[] = ['rooms', 'status'], you: Record<string, unknown> = { user_id: 'guest_1', name: 'Guest' }, auth = ['guest']): Promise<void> {
 	socket.open();
-	socket.receive({ method: 'server', params: { apron: 9, auth, capabilities: caps } });
+	socket.receive({ method: 'server', params: { apron: 10, auth, capabilities: caps } });
 	await socket.reply('auth', { you });
 	if (caps.includes('rooms')) await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General' }] });
 }
@@ -54,7 +54,7 @@ describe('idle reports', () => {
 	it('sends status as a request with an id, and nothing before the auth result', async () => {
 		client.setIdle(true);
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['status'] } });
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['status'] } });
 		// Not signed in yet (§3.2): no status, even for a page already idle.
 		expect(socket.sent.map((frame) => frame.method)).toEqual(['auth']);
 		await socket.reply('auth', { you: { user_id: 'guest_1' } });
@@ -70,7 +70,7 @@ describe('idle reports', () => {
 		vi.advanceTimersByTime(60_000);
 		expect(statuses()).toEqual([]);
 		// A replacing server frame says nothing either.
-		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['rooms', 'status'] } });
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['rooms', 'status'] } });
 		expect(statuses()).toEqual([]);
 		client.setIdle(true);
 		expect(statuses()).toEqual([{ idle: 0 }]);
@@ -224,13 +224,13 @@ describe('idle reports', () => {
 
 	it('sends no status to a server without the capability, push or not', async () => {
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['activity'], push: { webpush: { key: 'BNcR' } } } });
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['activity'], push: { webpush: { key: 'BNcR' } } } });
 		await socket.reply('auth', { you: { user_id: 'guest_1' } });
 		client.setIdle(true);
 		client.setMute(true);
 		expect(statuses()).toEqual([]);
 		// A replacing server frame with the capability hears the current state.
-		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['status'] } });
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['status'] } });
 		expect(statuses()).toEqual([{ idle: 0 }]);
 	});
 });
@@ -238,7 +238,7 @@ describe('idle reports', () => {
 describe('mutes', () => {
 	it('keeps a room\'s mute from the server\'s status for it (§4.5), joined or not', async () => {
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['rooms', 'status'] } });
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['rooms', 'status'] } });
 		await socket.reply('auth', { you: { user_id: 'guest_1' } });
 		await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General' }, { room_id: 'random', title: 'Random' }, { room_id: 'ops', title: 'Ops' }] });
 		const muted = () => Object.fromEntries(snapshot.rooms.map((room) => [room.id, room.mutedUntil]));
@@ -425,8 +425,8 @@ describe('your own status', () => {
 describe('server.status', () => {
 	it('takes the server as it is: status, its sign-ins and member changes all apply, and the strings server.status lists', async () => {
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['rooms', 'status'], status: ['dnd'] } });
-		expect(snapshot.server?.apron).toBe(9);
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['rooms', 'status'], status: ['dnd'] } });
+		expect(snapshot.server?.apron).toBe(10);
 		expect(snapshot.server?.status).toEqual(['dnd']);
 		await socket.reply('auth', { you: { user_id: 'ada', status: 'online' } });
 		expect(snapshot.authenticated).toBe(true);
@@ -434,11 +434,11 @@ describe('server.status', () => {
 		client.setStatus('dnd').catch(() => undefined);
 		expect(socket.request('me').params).toEqual({ status: 'dnd' });
 		// It takes the strings listed, and a replacing frame without it leaves none.
-		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['status'], status: ['dnd', 'invisible', 7] } });
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['status'], status: ['dnd', 'invisible', 7] } });
 		expect(snapshot.server?.status).toEqual(['dnd', 'invisible']);
-		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['status'] } });
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['status'] } });
 		expect(snapshot.server && Object.hasOwn(snapshot.server, 'status')).toBe(false);
-		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['status'], status: 'dnd' } });
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['status'], status: 'dnd' } });
 		expect(snapshot.server && Object.hasOwn(snapshot.server, 'status')).toBe(false);
 	});
 });
@@ -452,7 +452,7 @@ describe('server.status', () => {
 describe('kept statuses and sign-ins', () => {
 	function hello(): void {
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['rooms', 'status'] } });
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['rooms', 'status'] } });
 	}
 
 	async function listed(you: Record<string, unknown>, members: Record<string, unknown>[]): Promise<void> {
@@ -493,7 +493,7 @@ describe('kept statuses and sign-ins', () => {
 		await listed({ user_id: 'ada', status: 'online' }, seen);
 		reconnect();
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['status'] } });
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['status'] } });
 		await socket.reply('auth', { you: { user_id: 'ada' } });
 		expect(snapshot.statusesBeforeResume).toBeUndefined();
 		expect(snapshot.heldStatuses).toBeUndefined();
@@ -558,7 +558,7 @@ describe('kept statuses and sign-ins', () => {
 describe('seen', () => {
 	function hello(): void {
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['rooms', 'status'], status: ['dnd', 'invisible'] } });
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['rooms', 'status'], status: ['dnd', 'invisible'] } });
 	}
 
 	async function listed(you: Record<string, unknown>, users: Record<string, unknown>[]): Promise<void> {
@@ -636,7 +636,7 @@ describe('seen', () => {
 
 	it('shows no stale seen for someone who came back and went again while this page was away, until an object sets it again', async () => {
 		socket.open();
-		const server = { method: 'server', params: { apron: 9, auth: ['guest', 'token'], capabilities: ['history', 'rooms', 'status'] } };
+		const server = { method: 'server', params: { apron: 10, auth: ['guest', 'token'], capabilities: ['history', 'rooms', 'status'] } };
 		socket.receive(server);
 		await socket.reply('auth', { you: { user_id: 'ada', status: 'online' }, token: 'secret' });
 		const general = { room_id: 'general', log_id: '10', title: 'General', latest_log_id: '12', history_log_id: '10', members: [{ user_id: 'ada' }, { user_id: 'bo' }] };

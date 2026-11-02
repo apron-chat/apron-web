@@ -10,6 +10,7 @@ import { linkedRoomIn, messageView, noticeView, sourceEmbed, UPLOAD_STALE_MS, ty
 import { avatarHue } from './messages';
 import { idWhen } from './time';
 import { blankSnapshot } from './session.svelte';
+import { setLiveFetch } from '$lib/protocol/live-text';
 
 const you: Identity = { user_id: 'you', name: 'You' };
 const ada: Identity = { user_id: 'ada', name: 'Ada', roles: ['admin', '', 'admin', 7 as unknown as string], avatar: 'data:image/png;base64,iVBORw0KGgo=' };
@@ -283,6 +284,158 @@ describe('messageView', () => {
 			expect(seen[1]).toContain('@Ada L');
 		});
 		cleanup();
+	});
+});
+
+describe('messageView read receipts', () => {
+	it('keeps the same view while its receipts are the same array, and makes a new one when they change', () => {
+		const event = messageRecord(1710000000500);
+		const faces = [{ user_id: 'bob', name: 'Bob' }];
+		const first = messageView(event, row({ seenBy: faces }), context());
+		expect(first.seenBy).toBe(faces);
+		expect(messageView(event, row({ seenBy: faces }), context())).toBe(first);
+		const moved = messageView(event, row({ seenBy: [{ user_id: 'cy' }] }), context());
+		expect(moved).not.toBe(first);
+		expect(messageView(event, row(), context())).not.toHaveProperty('seenBy');
+	});
+});
+
+describe('a message with live text appended (§4.8.5)', () => {
+	/** `GET url`'s response, written by the test as bytes; every request is counted. */
+	function serve() {
+		let controller!: ReadableStreamDefaultController<Uint8Array>;
+		const urls: string[] = [];
+		setLiveFetch(async (url) => {
+			urls.push(url);
+			return new Response(new ReadableStream<Uint8Array>({ start: (c) => (controller = c) }));
+		});
+		return { urls, push: (chunk: Uint8Array | string) => controller.enqueue(typeof chunk === 'string' ? new TextEncoder().encode(chunk) : chunk), end: () => controller.close() };
+	}
+
+	/** The views a tracked reader of the message's view gets, as they come. */
+	function follow(event: MessageRecord): { views: ReturnType<typeof messageView>[]; stop: () => void } {
+		const views: ReturnType<typeof messageView>[] = [];
+		const stop = $effect.root(() => {
+			$effect(() => {
+				views.push(messageView(event, row(), context()));
+			});
+		});
+		flushSync();
+		return { views, stop };
+	}
+
+	afterEach(() => setLiveFetch());
+
+	const append = (url: string, text = 'Here is the plan:\n\n') =>
+		messageRecord(1710000000500, 'ops', { body: { text, format: 'markdown', embeds: [{ embed_id: 'e1', kind: 'append', url }] } });
+
+	it('shows the body and the text so far as one Markdown text, with no card, Writing… until GET ends, then the text whole', async () => {
+		const server = serve();
+		const { views, stop } = follow(append('https://chat.example/a/1'));
+		try {
+			const last = () => views.at(-1)!;
+			expect(last().body?.html).toContain('Here is the plan:');
+			expect([last().writing, last().embeds]).toEqual([true, undefined]);
+			await vi.waitFor(() => expect(server.urls).toEqual(['https://chat.example/a/1']));
+			// Bytes cut mid-character decode as one: → is E2 86 92.
+			server.push('1. **Roll back** the index ');
+			server.push(new Uint8Array([0xe2, 0x86]));
+			server.push(new Uint8Array([0x92]));
+			server.push(' then **renew');
+			await vi.waitFor(() => expect(last().body?.html).toContain('<strong>renew</strong>'));
+			expect(last().body?.html).toMatch(/<p>Here is the plan:<\/p>\s*<ol>\s*<li><strong>Roll back<\/strong> the index → then <strong>renew<\/strong><\/li>/);
+			expect(last().body?.markdown).toBe(true);
+			expect(last().writing).toBe(true);
+			server.push(' the cert');
+			server.end();
+			// Ended: shown as written, no longer settled, and no Writing… while the snapshot that finishes it is on its way.
+			await vi.waitFor(() => expect(last().writing).toBeUndefined());
+			expect(last().body?.html).toContain('then **renew the cert');
+		} finally {
+			stop();
+		}
+	});
+
+	it('shows the text after its edits: a backspace and a form feed revise only the streamed text, never body.text', async () => {
+		const server = serve();
+		const event = append('https://chat.example/a/4', 'Plan:');
+		const { views, stop } = follow(event);
+		try {
+			const last = () => views.at(-1)!;
+			await vi.waitFor(() => expect(server.urls).toEqual(['https://chat.example/a/4']));
+			server.push(' roll bakc');
+			await vi.waitFor(() => expect(last().body?.html).toContain('Plan: roll bakc'));
+			server.push('\b\bck the **index');
+			await vi.waitFor(() => expect(last().body?.html).toContain('Plan: roll back the <strong>index</strong>'));
+			// More backspaces than the streamed text has: it is gone, and the body as recorded shows whole.
+			server.push('\b'.repeat(40));
+			await vi.waitFor(() => expect(last().body?.html).not.toContain('roll'));
+			expect(last().body?.html).toContain('<p>Plan:</p>');
+			server.push(' draft\f renew the *cert*');
+			await vi.waitFor(() => expect(last().body?.html).toContain('<p>Plan: renew the <em>cert</em></p>'));
+			expect(last().body?.html).not.toContain('draft');
+			server.end();
+			await vi.waitFor(() => expect(last().writing).toBeUndefined());
+			expect(last().body?.html).toContain('<p>Plan: renew the <em>cert</em></p>');
+			expect(event.body?.text).toBe('Plan:');
+		} finally {
+			stop();
+		}
+	});
+
+	it('stops at a definitive refusal of GET url, as at its end: keeps what it shows, without Writing…', async () => {
+		const urls: string[] = [];
+		setLiveFetch(async (url) => {
+			urls.push(url);
+			return new Response('Too many readers', { status: 403 });
+		});
+		const { views, stop } = follow(append('https://chat.example/a/3'));
+		try {
+			await vi.waitFor(() => expect(views.at(-1)!.writing).toBeUndefined());
+			expect(views.at(-1)!.body?.html).toContain('Here is the plan:');
+			await new Promise((resolve) => setTimeout(resolve, 10));
+			expect(urls).toEqual(['https://chat.example/a/3']);
+		} finally {
+			stop();
+		}
+	});
+
+	it('loads live text only from the chat server, and then shows just the body', async () => {
+		const server = serve();
+		const { views, stop } = follow(append('https://elsewhere.example/a/1'));
+		try {
+			await new Promise((resolve) => setTimeout(resolve, 10));
+			expect(server.urls).toEqual([]);
+			expect([views.at(-1)!.body?.html.includes('Here is the plan'), views.at(-1)!.writing]).toEqual([true, undefined]);
+		} finally {
+			stop();
+		}
+	});
+
+	it('shows Waiting to stream… while an append has no url, its write not started, and loads nothing', async () => {
+		const server = serve();
+		const event = messageRecord(1710000000502, 'ops', { body: { text: 'Plan:', format: 'markdown', embeds: [{ embed_id: 'e1', kind: 'append' }] } });
+		const { views, stop } = follow(event);
+		try {
+			await new Promise((resolve) => setTimeout(resolve, 10));
+			expect(server.urls).toEqual([]);
+			expect([views.at(-1)!.body?.html.includes('Plan:'), views.at(-1)!.waiting, views.at(-1)!.writing]).toEqual([true, true, undefined]);
+		} finally {
+			stop();
+		}
+	});
+
+	it('shows nothing of a body still empty but Writing…, and lists the other embeds as usual', () => {
+		serve();
+		const event = messageRecord(1710000000501, 'ops', { body: { text: '', embeds: [{ embed_id: 'e1', kind: 'append', url: 'https://chat.example/a/2' }, { embed_id: 'e2', kind: 'terminal', url: 'https://chat.example/t/2' }] } });
+		const { views, stop } = follow(event);
+		try {
+			expect(views.at(-1)!.body).toBeUndefined();
+			expect(views.at(-1)!.writing).toBe(true);
+			expect(views.at(-1)!.embeds?.map((item) => item.embed.kind)).toEqual(['terminal']);
+		} finally {
+			stop();
+		}
 	});
 });
 

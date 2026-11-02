@@ -2,16 +2,21 @@ import { textId, type MentionPerson } from '$lib/protocol/markdown';
 
 /**
  * A composer draft: text and mention chips. A chip shows a person's name, or
- * with `room` a room's or thread's title, but is sent as `@user_id`
- * (Appendix A.3) or `#room_id`, so the wire text is what a reader's client
- * resolves, whatever it is called by then.
+ * with `room` a room's or thread's title, or with `role` a role, but is sent
+ * as `@user_id` (Appendix A.3), `#room_id` or `@&role`, so the wire text is
+ * what a reader's client resolves, whatever it is called by then.
  */
-export type DraftChip = { id: string; room?: true };
+export type DraftChip = { id: string; room?: true; role?: true };
 export type DraftPart = string | DraftChip;
 
-/** A chip as sent: `@user_id` or `#room_id`, one character longer than its ID. */
+/** A chip as sent: `@user_id` or `#room_id`, one character longer than its ID, or `@&role`, two. */
 export function chipText(chip: DraftChip): string {
-	return `${chip.room ? '#' : '@'}${chip.id}`;
+	return `${chip.room ? '#' : chip.role ? '@&' : '@'}${chip.id}`;
+}
+
+/** A part's length in caret positions: a chip counts as its text as sent (`chipText`). */
+export function partLength(part: DraftPart): number {
+	return typeof part === 'string' ? part.length : part.id.length + (part.role ? 2 : 1);
 }
 
 /**
@@ -36,17 +41,24 @@ export function draftText(parts: DraftPart[]): string {
 	return out;
 }
 
-/** The draft's length in caret positions: a chip counts as its `@user_id` or `#room_id`, with no added space. */
+/** The draft's length in caret positions: a chip counts as its `@user_id`, `#room_id` or `@&role`, with no added space. */
 export function draftLength(parts: DraftPart[]): number {
-	return parts.reduce((sum, part) => sum + (typeof part === 'string' ? part.length : part.id.length + 1), 0);
+	return parts.reduce((sum, part) => sum + partLength(part), 0);
 }
 
 /**
- * The users a draft mentions (§3.5): one `user_id` per chip, in order. A
- * chip deleted from the text takes its mention with it.
+ * The users a draft mentions (§3.5): one `user_id` per person's chip, and
+ * for a role's chip everyone `members` gives for it, in order, each once.
+ * A chip deleted from the text takes its mentions with it.
  */
-export function draftMentions(parts: DraftPart[]): string[] {
-	return [...new Set(parts.filter((part): part is DraftChip => typeof part !== 'string' && !part.room).map((part) => part.id))];
+export function draftMentions(parts: DraftPart[], members: (role: string) => string[] = () => []): string[] {
+	const ids: string[] = [];
+	for (const part of parts) {
+		if (typeof part === 'string' || part.room) continue;
+		if (part.role) ids.push(...members(part.id));
+		else ids.push(part.id);
+	}
+	return [...new Set(ids)];
 }
 
 /** Merges adjacent text and drops empty text, so equal drafts compare equal. */
@@ -69,6 +81,8 @@ export interface CollapseOptions {
 	isUser?: (id: string) => boolean;
 	/** The rooms and threads a typed `#room_id` can name. */
 	rooms?: string[];
+	/** The roles a typed `@&role` can name. */
+	roles?: string[];
 	/** False: names are text, only IDs become chips, as for a draft set from outside, which nobody is typing. */
 	names?: boolean;
 }
@@ -99,6 +113,7 @@ export function collapseMentions(parts: DraftPart[], people: MentionPerson[], op
 	const { caret, final = false } = options;
 	const isUser = (id: string) => people.some((person) => person.id === id) || (options.isUser?.(id) ?? false);
 	const rooms = options.rooms ?? [];
+	const roles = options.roles ?? [];
 	const out: DraftPart[] = [];
 	let changed = false;
 	let newCaret = caret;
@@ -107,7 +122,7 @@ export function collapseMentions(parts: DraftPart[], people: MentionPerson[], op
 	parts.forEach((part, index) => {
 		if (typeof part !== 'string') {
 			out.push(part);
-			offset += part.id.length + 1;
+			offset += partLength(part);
 			return;
 		}
 		const followed = index < parts.length - 1;
@@ -131,16 +146,22 @@ export function collapseMentions(parts: DraftPart[], people: MentionPerson[], op
 				continue;
 			}
 			const typing = { final, followed, caret: caret - (offset + at + 1), names: options.names !== false };
-			const hit = room ? roomAt(part.slice(at + 1), rooms, typing) : mentionAt(part.slice(at + 1), people, isUser, typing);
-			if (!hit) {
+			// `@&role`: the `&` is part of the prefix, so the role's run starts after it.
+			const role = !room && part[at + 1] === '&';
+			const found = room ? roomAt(part.slice(at + 1), rooms, typing)
+				: role ? roomAt(part.slice(at + 2), roles, { ...typing, caret: typing.caret - 1 })
+				: mentionAt(part.slice(at + 1), people, isUser, typing);
+			if (!found) {
 				at += 1;
 				continue;
 			}
+			const hit = role ? { id: found.id, length: found.length + 1 } : found;
 			if (at > last) out.push(part.slice(last, at));
-			out.push(room ? { id: hit.id, room: true } : { id: hit.id });
+			const chip: DraftChip = room ? { id: hit.id, room: true } : role ? { id: hit.id, role: true } : { id: hit.id };
+			out.push(chip);
 			const end = at + 1 + hit.length;
-			if (caret >= offset + end) newCaret += hit.id.length - hit.length;
-			else if (caret > offset + at) newCaret = newCaret - (caret - (offset + at)) + hit.id.length + 1;
+			if (caret >= offset + end) newCaret += partLength(chip) - 1 - hit.length;
+			else if (caret > offset + at) newCaret = newCaret - (caret - (offset + at)) + partLength(chip);
 			changed = true;
 			last = at = end;
 		}
@@ -198,7 +219,7 @@ function mentionAt(
 	return winner;
 }
 
-/** The room `rest` (the text after a `#`) names, if the `#room_id` is finished; as `mentionAt`, for IDs only. */
+/** The room `rest` (the text after a `#`) names, if the `#room_id` is finished; as `mentionAt`, for IDs only. A role after `@&` too. */
 function roomAt(
 	rest: string,
 	rooms: string[],
@@ -218,7 +239,7 @@ function roomAt(
 export function mentionQuery(parts: DraftPart[], caret: number): { query: string; start: number } | undefined {
 	let offset = 0;
 	for (const part of parts) {
-		const length = typeof part === 'string' ? part.length : part.id.length + 1;
+		const length = partLength(part);
 		if (typeof part === 'string' && caret >= offset && caret <= offset + length) {
 			const match = /(?:^|\s)@([^\s@][^@\n]{0,63}|)$/.exec(part.slice(0, caret - offset));
 			if (match) return { query: match[1], start: caret - match[1].length - 1 };
@@ -244,7 +265,7 @@ export interface CaretToken {
 export function tokenAtCaret(parts: DraftPart[], caret: number, trigger: string, char: RegExp, minLength = 0): CaretToken | undefined {
 	let offset = 0;
 	for (const [index, part] of parts.entries()) {
-		const length = typeof part === 'string' ? part.length : part.id.length + 1;
+		const length = partLength(part);
 		if (typeof part === 'string' && caret >= offset && caret <= offset + length) {
 			const local = caret - offset;
 			let from = local;
@@ -262,14 +283,14 @@ export function tokenAtCaret(parts: DraftPart[], caret: number, trigger: string,
 	return undefined;
 }
 
-/** Replaces the draft text from `start` to `end` with a chip for `id` (a room's with `room`) and a space; the caret goes after the space. */
-export function insertMention(parts: DraftPart[], start: number, end: number, id: string, room = false): { parts: DraftPart[]; caret: number } {
-	const chip: DraftChip = room ? { id, room: true } : { id };
+/** Replaces the draft text from `start` to `end` with a chip for `id` (a room's or a role's with `kind`) and a space; the caret goes after the space. */
+export function insertMention(parts: DraftPart[], start: number, end: number, id: string, kind?: 'room' | 'role'): { parts: DraftPart[]; caret: number } {
+	const chip: DraftChip = kind === 'room' ? { id, room: true } : kind === 'role' ? { id, role: true } : { id };
 	const out: DraftPart[] = [];
 	let offset = 0;
 	let placed = false;
 	for (const part of parts) {
-		const length = typeof part === 'string' ? part.length : part.id.length + 1;
+		const length = partLength(part);
 		if (typeof part === 'string' && !placed && start >= offset && end <= offset + length) {
 			const after = part.slice(end - offset);
 			out.push(part.slice(0, start - offset), chip, after.startsWith(' ') ? after : ` ${after}`);
@@ -280,7 +301,7 @@ export function insertMention(parts: DraftPart[], start: number, end: number, id
 		offset += length;
 	}
 	if (!placed) out.push(chip, ' ');
-	return { parts: normalizeDraft(out), caret: (placed ? start : offset) + id.length + 2 };
+	return { parts: normalizeDraft(out), caret: (placed ? start : offset) + partLength(chip) + 1 };
 }
 
 /**
@@ -290,7 +311,7 @@ export function insertMention(parts: DraftPart[], start: number, end: number, id
  * after it. Positions are clamped to the draft.
  */
 export function insertText(parts: DraftPart[], start: number, end: number, text: string): { parts: DraftPart[]; caret: number } {
-	const length = (part: DraftPart) => (typeof part === 'string' ? part.length : part.id.length + 1);
+	const length = partLength;
 	const total = parts.reduce((sum, part) => sum + length(part), 0);
 	let from = Math.max(0, Math.min(start, end, total));
 	let to = Math.max(0, Math.min(Math.max(start, end), total));
@@ -343,7 +364,7 @@ export function insertText(parts: DraftPart[], start: number, end: number, text:
 export function unchip(parts: DraftPart[], caret: number, label: (chip: DraftChip) => string): { parts: DraftPart[]; caret: number } | undefined {
 	let offset = 0;
 	for (const [index, part] of parts.entries()) {
-		const length = typeof part === 'string' ? part.length : part.id.length + 1;
+		const length = partLength(part);
 		offset += length;
 		if (offset < caret) continue;
 		if (offset > caret || typeof part === 'string') return undefined;

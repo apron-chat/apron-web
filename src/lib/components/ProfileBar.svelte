@@ -1,11 +1,14 @@
 <script lang="ts">
 	import { tick, untrack } from 'svelte';
 	import { preferencesDialog } from './lazy';
-	import { preferencesOpener } from '$lib/ui/preferences.svelte';
+	import { pushState, replaceState } from '$app/navigation';
+	import { page } from '$app/state';
+	import { preferencesOpener, preferencesUrl, readPreferences } from '$lib/ui/preferences.svelte';
 	import { pausedUntilLabel } from '$lib/ui/pause';
 	import { isJsonObject } from '$lib/protocol/types';
 	import { shownPerson } from '$lib/protocol/plain-text';
-	import { bioOf, cleanBio, keepsBio, MAX_BIO_CHARS, serverMedia, type ChatClient, type OperationHandle } from '$lib/protocol/client';
+	import { bioOf, cleanBio, keepsBio, MAX_BIO_CHARS, serverMedia, serverSettings, type ChatClient, type OperationHandle } from '$lib/protocol/client';
+	import { receiptSettings } from '$lib/ui/receipt-settings.svelte';
 	import { addError, passkeyMessage, statusLabel, wayBackNudge, wayBackWords } from '$lib/ui/connection';
 	import { returnUrl } from '$lib/ui/sign-in-link';
 	import { directory } from '$lib/ui/directory.svelte';
@@ -265,6 +268,45 @@
 			showPreferences();
 		});
 	});
+
+	// The address names the open section (`#preferences=notifications`): a link to it opens Preferences there, and
+	// Back and Forward, through the sections opened, change it.
+	$effect(() => {
+		const follow = () => {
+			const section = readPreferences(window.location.hash);
+			if (!section) {
+				preferencesOpen = false;
+				return;
+			}
+			preferencesSection = section;
+			if (!preferencesOpen) showPreferences();
+		};
+		untrack(follow);
+		window.addEventListener('hashchange', follow);
+		return () => window.removeEventListener('hashchange', follow);
+	});
+
+	// Opening Preferences, and each section chosen, is a history entry; closing it returns to where it opened from.
+	$effect(() => {
+		const section = preferencesOpen ? preferencesSection : undefined;
+		untrack(() => recordPreferences(section));
+	});
+	// Leaving with it open (Sign in opens the connect screen in its place) closes it in the address too.
+	$effect(() => () => recordPreferences(undefined));
+
+	function recordPreferences(section: string | undefined): void {
+		if (readPreferences(window.location.hash) === section) return;
+		/** How many entries Preferences has added since it opened. */
+		const depth = page.state.preferences ?? 0;
+		try {
+			if (section) pushState(preferencesUrl(window.location.href, section), { ...page.state, preferences: depth + 1 });
+			// Back past the entries it added; one opened by a link has none, so it closes in place.
+			else if (depth) window.history.go(-depth);
+			else replaceState(preferencesUrl(window.location.href, undefined), { ...page.state, preferences: undefined });
+		} catch {
+			// The router isn't started yet (in development): Preferences just isn't in the address.
+		}
+	}
 
 	/** A handle the user typed in the editor, as opposed to the one it opened with. */
 	function chosenName(): string | undefined {
@@ -584,6 +626,7 @@
 			{onnotifications} {onnotifyscopes} {ontestnotifications} {webPush} {onwebpush} {oninstallapp} {pause} {onpause} {onresume}
 			status={canSetStatus ? { value: you?.status, accepted: session.server?.status ?? [], unsupported, onchoose: chooseStatus, onunsupported: noteUnsupported, disabled: !connected } : undefined}
 			onexport={exportChats}
+			readReceipts={serverSettings(session.server).read_receipts === 'private' && session.passkeySession ? { on: receiptSettings.on, onchange: (on: boolean) => receiptSettings.set(on) } : undefined}
 			{keptHistory}
 			{keptAccount}
 			mediaHosts={serverMedia(session.server).origins.map((origin) => new URL(origin).host)}

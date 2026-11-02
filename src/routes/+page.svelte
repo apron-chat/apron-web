@@ -6,7 +6,7 @@
 	import { page } from '$app/state';
 	import { passkeySupportError } from '$lib/protocol/webauthn';
 	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, editableTitle, findMessage, keepsBio, normalizeWebSocketUrl, serverArchive, serverLook, serverMedia, serverSettings, timelineMessages, webPushKey, yourPermissions, type ClientSnapshot, type EmbedEdits, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
-	import { serverOrigin } from '$lib/protocol/embeds';
+	import { embedsLabel, serverOrigin } from '$lib/protocol/embeds';
 	import { withoutBidiOverrides } from '$lib/protocol/plain-text';
 	import { compareLogIds } from '$lib/protocol/reducer';
 	import { destinationUrl, readDestination, type Destination } from '$lib/ui/address';
@@ -19,9 +19,9 @@
 	import { SettleFlag } from '$lib/ui/settle-flag';
 	import type { Scheme } from '$lib/ui/sign-in';
 	import JumpBar from '$lib/components/JumpBar.svelte';
-	import Message from '$lib/design/components/Message.svelte';
+	import TimelineMessage from '$lib/components/TimelineMessage.svelte';
 	import EmbedItem from '$lib/components/embeds/Embed.svelte';
-	import type { MessageEmbed, MessageHandlers, MessageTestids } from '$lib/design/components/types';
+	import type { Face, MessageEmbed, MessageHandlers, MessageTestids } from '$lib/design/components/types';
 	import { linkedRoomIn, messageView, sourceEmbed, type LinkedRoom, type MessageCaps, type MessageContext, type MessageView } from '$lib/ui/message-view';
 	import { decorateCode } from '$lib/ui/copy-code';
 	import { emojiAnchor, emojiPicker, type EmojiPickerRequest } from '$lib/ui/emoji-picker.svelte';
@@ -52,11 +52,13 @@
 	import AddedBanner from '$lib/design/components/AddedBanner.svelte';
 	import { ArrivalWatch, addRoomMembers, othersIn, reachesStart } from '$lib/ui/private-rooms';
 	import { couldNotAdd } from '$lib/ui/members';
-	import { roomFaces } from '$lib/ui/faces';
+	import { faceOf, roomFaces } from '$lib/ui/faces';
+	import { receiptsByMessage, steadyReceipts } from '$lib/ui/receipts';
 	import { attachmentLimits, composerAction } from '$lib/ui/commands';
 	import { backendHost, statusLabel } from '$lib/ui/connection';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { FeedbackState, type Feedback } from '$lib/ui/feedback.svelte';
+	import type { LiveComposer } from '$lib/ui/live-composer.svelte';
 	import { prepareUpload } from '$lib/ui/images';
 	import { MentionTracker } from '$lib/ui/mentions.svelte';
 	import { IncomingMessageTracker } from '$lib/ui/incoming-messages';
@@ -64,6 +66,7 @@
 	import { ReadPositions } from '$lib/ui/read-positions';
 	import { RoomOrder } from '$lib/ui/room-order.svelte';
 	import { embedsOf, isOwn, mayMove, mentionsMe, peopleIn, messageSnippet, plainTextOf, senderName, textOf } from '$lib/ui/messages';
+	import { removeEmbedQuestion } from '$lib/ui/attachments';
 	import { messageLog, messageLogHtml } from '$lib/ui/message-log';
 	import { reactionChips, type ReactionChip } from '$lib/ui/reactions';
 	import { MessageSelection, type MoveAuthors } from '$lib/ui/selection.svelte';
@@ -80,12 +83,14 @@
 	import FloatingDayPill from '$lib/design/components/FloatingDay.svelte';
 	import PanelToggle from '$lib/design/components/PanelToggle.svelte';
 	import { ViewKeeper } from '$lib/ui/view-keeper';
-	import { HistoryKeeper } from '$lib/history/history-keeper';
+	import type { HistoryKeeper } from '$lib/history/history-keeper';
+	import { takeKeeper } from '$lib/history/startup';
 	import { historySettings } from '$lib/history/settings.svelte';
 	import { mediaAskClick } from '$lib/ui/media-ask';
 	import { mediaSettings } from '$lib/ui/media-settings.svelte';
-	import { preferencesOpener } from '$lib/ui/preferences.svelte';
-	import { buildRoomTimeline, newDividerBefore, threadEntries, threadStartedFrom, threadDescriptionFor, threadTitleFor } from '$lib/ui/timeline';
+	import { receiptSettings } from '$lib/ui/receipt-settings.svelte';
+	import { onlyPreferencesDiffer, preferencesOpener } from '$lib/ui/preferences.svelte';
+	import { buildRoomTimeline, newDividerBefore, steady, threadEntries, threadStartedFrom, threadDescriptionFor, threadTitleFor, type ThreadEntry, type TimelineItem } from '$lib/ui/timeline';
 	import { takeSignInLink } from '$lib/ui/sign-in-link';
 	import { SignInLinks } from '$lib/ui/link-controller.svelte';
 	import { findProposal } from '$lib/protocol/proposals';
@@ -288,6 +293,8 @@
 	const previewMode = untrack(() => webSocketFactory !== undefined);
 
 	let client = $state<ChatClient | undefined>();
+	// Read Receipts on this device: off, your cursor in a private room isn't sent where the server would show it.
+	$effect(() => client?.setReadReceipts(receiptSettings.on));
 	let serverInput = $state('');
 	let displayName = $state('');
 	/** The `user_id`s the composer's chips mention (§3.5), sent as `body.mentions`. */
@@ -363,6 +370,8 @@
 	let mobilePane = $state<'rooms' | 'main'>('main');
 	/** Wide screens give the member list a column of its own; narrower ones overlay it on the conversation. */
 	let memberListWide = $state(false);
+	/** One pane at a time (under 720px). */
+	let narrow = $state(false);
 	/** The narrow overlay, closed until asked for. */
 	let memberListOverlay = $state(false);
 	/**
@@ -413,7 +422,9 @@
 	let activeRoom = $derived(session.activeRoom);
 	/** The active room's threads: the joined ones, then those listed as not joined, which get cards too. */
 	let threadSource = $derived(session.threadSource(activeRoom?.id));
-	let threads = $derived(threadEntries(threadSource.rooms, activeRoom?.id, threadSource.directory));
+	// Kept entry by entry while each says the same (`steady`), as the timeline's items are: not state, only what was last worked out.
+	let lastThreads: ThreadEntry[] = [];
+	let threads = $derived((lastThreads = steady(lastThreads, threadEntries(threadSource.rooms, activeRoom?.id, threadSource.directory))));
 	let joinedThreads = $derived(threads.filter((entry) => entry.joined));
 	/** The sidebar lists joined threads, and a thread open without joining while it is open. */
 	let listedThreads = $derived(threads.filter((entry) => entry.joined || entry.id === activeThread));
@@ -541,18 +552,39 @@
 	/** Nothing held to show while the room's threads are listed: placeholders, so its messages and thread cards appear together. */
 	let paneHeldBack = $derived(awaitingThreads && !activeThread && !session.activeRoomHeld);
 	let messages = $derived(timelineMessages(paneRoom));
-	let timeline = $derived(buildRoomTimeline({
+	// Kept item by item while each says the same (`steady`), so a change elsewhere redraws no row: not state, only what was last worked out.
+	let lastTimeline: TimelineItem[] = [];
+	let timeline = $derived((lastTimeline = steady(lastTimeline, buildRoomTimeline({
 		messages, threads: activeThread ? [] : threads, renames: paneRoom?.renames, notices: paneRoom?.notices, memberships: paneRoom?.timeline.memberships
-	}));
+	}))));
+	const NO_RECEIPTS: ReadonlyMap<string, Face[]> = new Map();
+	// The receipts last shown, which `steadyReceipts` keeps what is unchanged from; not state, only a memo.
+	let lastReceipts: ReadonlyMap<string, Face[]> = NO_RECEIPTS;
 	let shownTimeline = $derived(reveal.hidden > 0 ? timeline.slice(Math.min(reveal.hidden, timeline.length)) : timeline);
+	/**
+	 * Read receipts (`ext.settings.read_receipts`, private rooms only): the other members' faces under the newest message
+	 * shown that each has read through, by `message_id`. Empty, and the same map, wherever there are none.
+	 */
+	let receipts = $derived.by(() => {
+		// Read Receipts turned off here: others' aren't shown either.
+		const placed = receiptsByMessage(shownTimeline, paneRoom?.private && receiptSettings.on ? paneRoom : undefined, session.you?.user_id);
+		const next = placed.size ? new Map([...placed].map(([messageId, people]) => [messageId, people.map((person) => faceOf(person, false))])) : NO_RECEIPTS;
+		return (lastReceipts = steadyReceipts(lastReceipts, next));
+	});
 	/** The pane is live: its room is listed, and no sign-in is under way. */
 	let paneReady = $derived(Boolean(paneRoom && session.ready && !snapshot.authBusy));
 	/** `paneReady`, or a quiet reconnect from it: what shows stays as it was, and what's asked waits for the connection. */
 	let paneSteady = $derived(Boolean(paneRoom && session.steady && !snapshot.authBusy));
 	/** Writing here: posting, replying, reacting, and editing threads. A guest who only reads can't. */
 	let canCompose = $derived(paneReady && !session.readOnly);
+	/** Live typing (`/live`), loaded the first time it is used: see `startLive`. */
+	let liveComposer = $state.raw<LiveComposer | undefined>();
+	/** The same, read where typing reads it: not reactive, so that typing reads nothing of it until it loads. */
+	let liveLoaded: LiveComposer | undefined;
+	/** The open pane's draft is a live message. */
+	let composingLive = $derived(liveComposer?.composing ?? false);
 	/** Files dropped on the conversation or pasted outside the field attach to the draft while the composer is showing. */
-	let canAttach = $derived(paneSteady && !session.readOnly && session.capabilities['embed:upload'] && !selection.active);
+	let canAttach = $derived(paneSteady && !session.readOnly && session.capabilities['embed:upload'] && !selection.active && !composingLive);
 	/** Files are being dragged over the conversation. */
 	let dropping = $state(false);
 	/** Files dropped on the conversation pane's `<main>`. */
@@ -607,7 +639,9 @@
 	 * You are reading the open pane's latest message: it is on screen, as
 	 * measured in this pane, and the pane has opened at its divider.
 	 */
-	let readingLatest = $derived(latestVisible && latestVisibleIn === paneRoom?.id && newDivider.room === paneRoom?.id && newDivider.landed);
+	/** The conversation shows: not behind the phone's rooms list, where only a faded sliver of it peeks out. */
+	let paneShown = $derived(!(narrow && mobilePane === 'rooms'));
+	let readingLatest = $derived(paneShown && latestVisible && latestVisibleIn === paneRoom?.id && newDivider.room === paneRoom?.id && newDivider.landed);
 	/** The pane's messages this viewer may pick, in order: what shift-click ranges run along. */
 	let selectableOrder = $derived(messages.filter(canSelect).map((event) => event.message_id));
 	/** Picked messages move with `message` requests (capability `edit`), which a reader who may not write makes none of. */
@@ -705,7 +739,7 @@
 	// they're chosen on this device), and while you're away they notify. Never from a held view (`arrivalAlerts`).
 	$effect(() => {
 		const alerts = arrivalAlerts(
-			{ held: session.showingHeld, rooms: session.rooms, you: session.you, pane: paneRoom?.id, latestVisible, readThrough: syncsReads ? (room) => readPositions.through(room, session.you) : () => undefined },
+			{ held: session.showingHeld, rooms: session.rooms, you: session.you, pane: paneRoom?.id, latestVisible: latestVisible && paneShown, readThrough: syncsReads ? (room) => readPositions.through(room, session.you) : () => undefined },
 			{ mentions, messages: incomingMessages },
 			{
 				offerable: untrack(() => !notifyOffer && !installOffer && offersNotifications({ chosen: notificationsChoiceMade, active: notificationsActive, permission: notificationState, silenced })),
@@ -879,7 +913,10 @@
 	// Reading the latest message advances your read position, and your read cursor (capability `activity`),
 	// which the server syncs to your other devices.
 	// Only from a live, visible, loaded pane at its latest message, once it has opened at its divider (`readAction`).
-	$effect(() => {
+	// Before the page draws (`$effect.pre`): a message that arrives while you read the latest is marked read, and the
+	// client's snapshot of that comes, before the timeline and sidebar work out the message's own. They then work out
+	// the two together once, where after drawing each row and room was worked out again for the read.
+	$effect.pre(() => {
 		const action = readAction(
 			{ server: client?.url, room: paneRoom, last: messages[messages.length - 1]?.message_id, ready: session.ready, readingLatest, visible: presence.visible, away: presence.away },
 			untrack(() => ({ pushId: accountPushId, closedThrough }))
@@ -1018,9 +1055,14 @@
 	// Not only after the frame: the list is the same element from pane to pane, kept where the last pane left it, and the
 	// browser's scroll anchoring can move it on the swap (to a day divider both panes have). That scroll's event
 	// comes before the frame, and against the last pane's position it would read as the reader scrolling up.
+	// By the count and the room's id, not the list and the room themselves, which are new with every snapshot (each
+	// room listed as the page loads, say): each time it scrolls it lays the page out, and what else changes in the
+	// pane is followed below.
+	let paneCount = $derived(messages.length);
+	let paneId = $derived(paneRoom?.id);
 	$effect(() => {
-		messages.length;
-		paneRoom?.id;
+		void paneCount;
+		void paneId;
 		if (!stickToBottom || !messageScroll) return;
 		scrollToLatest();
 		requestAnimationFrame(() => {
@@ -1096,8 +1138,23 @@
 				latestVisibleIn = pane;
 				return;
 			}
-			observer = new IntersectionObserver(([entry]) => {
-				latestVisible = entry.isIntersecting;
+			observer = new IntersectionObserver((entries) => {
+				// An entry says where the latest was at a frame since gone: on a busy main thread several frames'
+				// entries arrive together, and the pane may have been pinned again before this runs. Out of view is
+				// checked against now.
+				let visible = entries[entries.length - 1].isIntersecting;
+				if (!visible) {
+					const at = latest.getBoundingClientRect();
+					const box = scroll.getBoundingClientRect();
+					visible = at.bottom > box.top && at.top < box.bottom;
+				}
+				// Pinned, and pushed down by something laying out above it without a mutation or a scroll (an image's
+				// size arriving): it follows the latest, as the pane does while it fills in, rather than offering a jump.
+				if (!visible && stickToBottom && !atLatest(scroll)) {
+					scrollToLatest();
+					return;
+				}
+				latestVisible = visible;
 				latestVisibleIn = pane;
 				if (latestVisible) {
 					seenThrough = messages[messages.length - 1]?.message_id;
@@ -1126,10 +1183,16 @@
 		};
 		memberListMediaChange(memberListMedia);
 		memberListMedia.addEventListener('change', memberListMediaChange);
+		const narrowMedia = window.matchMedia(`(max-width: ${NARROW_MAX - 1}px)`);
+		const narrowMediaChange = ({ matches }: { matches: boolean }) => (narrow = matches);
+		narrowMediaChange(narrowMedia);
+		narrowMedia.addEventListener('change', narrowMediaChange);
 		// Taken, and scrubbed from the address bar, before anything else can read or keep the URL.
 		const signInLink = previewMode ? undefined : takeSignInLink(window.location, scrubUrl);
 		// A link pasted into this tab later is a same-document fragment change: take (and scrub) it too.
-		const hashChanged = () => {
+		const hashChanged = (event: HashChangeEvent) => {
+			// Preferences opening, closing or changing section (`ProfileBar`) doesn't move the page.
+			if (onlyPreferencesDiffer(event.oldURL, event.newURL)) return;
 			const link = previewMode ? undefined : takeSignInLink(window.location, scrubUrl);
 			if (link) {
 				links.follow(link);
@@ -1153,6 +1216,7 @@
 		if (!previewMode) pushSettings.load();
 		// Where images load from holds for an export read here too.
 		mediaSettings.load();
+		receiptSettings.load();
 		webPushAvailable = webPushSupported();
 		runsInstalled = isStandalone();
 		// Push turned on or off, and descriptions put away, in another tab apply here too.
@@ -1162,6 +1226,7 @@
 			// Not keeping history, or keeping less, chosen in another tab: this one stops or prunes too.
 			historySettings.storageChanged(event.key);
 			mediaSettings.storageChanged(event.key);
+			receiptSettings.storageChanged(event.key);
 			if (event.key === NOTIFY_SCOPES_KEY) notifyScopesSaved += 1;
 			// A description put away or brought back in another tab is here too.
 			if (event.key === HIDDEN_DESCRIPTIONS_KEY) hiddenDescriptions = loadHiddenDescriptions();
@@ -1217,9 +1282,9 @@
 			webSocketFactory
 		);
 		if (!previewMode) {
-			historySettings.load();
+			// Made as the app started, and reading what it restores since (`$lib/history/startup`).
+			historyKeeper = takeKeeper();
 			keptRetention = historySettings.retention;
-			historyKeeper = new HistoryKeeper({ retentionMs: historySettings.ms, onfailure: (message) => (historySettings.failure = message) });
 		}
 		const keeper = historyKeeper;
 		// The view from this device's last visit, while this one signs in and catches up: only for the session
@@ -1247,6 +1312,7 @@
 		}
 		return () => {
 			memberListMedia.removeEventListener('change', memberListMediaChange);
+			narrowMedia.removeEventListener('change', narrowMediaChange);
 			window.removeEventListener('hashchange', hashChanged);
 			document.removeEventListener('click', apronLinkClicked);
 			window.removeEventListener('storage', storageChanged);
@@ -1409,7 +1475,7 @@
 			...(id ? { pushId: id, messageId: event.message_id, group: notificationGroup(id, room.id) } : {})
 		};
 		const shown = await showNotification(notificationTitle(senderName(event), room), {
-			body: body || 'New message',
+			body: body || embedsLabel(event.body?.embeds) || 'New message',
 			// One per message, shared with the server's push of it (§4.9), which replaces it quietly;
 			// a newer message in the room closes it. Without a `push_id`, one per room.
 			...(id ? { tag: messageNotificationTag(id, event.message_id), renotify: false } : { tag: `apron:${client.url}:${room.id}`, renotify: true }),
@@ -1991,6 +2057,8 @@
 	function composerInput(): void {
 		if (!client || !paneRoom) return;
 		drafts.saveText();
+		// A live message shows itself as it is typed: no typing indicator besides.
+		if (liveLoaded?.composing) return;
 		const roomId = paneRoom.id;
 		client.sendTyping(roomId, true);
 		if (typingTimer) clearTimeout(typingTimer);
@@ -2007,6 +2075,16 @@
 	 */
 	function sendMessage(): void {
 		if (!client || !paneRoom || !canCompose) return;
+		if (composingLive) {
+			liveComposer?.send();
+			composer?.focus();
+			return;
+		}
+		// `/live` starts with an empty composer: files staged first would wait unseen, so they go or stay first.
+		if (drafts.files.length && snapshot.capabilities['embed:append'] && /^\/live\s*$/i.test(drafts.text)) {
+			feedback.error('Send or remove the attached files before typing live');
+			return;
+		}
 		// Sending waits as the server asked, files or not (the client holds back any message meanwhile): Send
 		// counts down, the draft and its files stay, and nothing goes by itself. A notice put away shows again.
 		if (sendWait && sendWait.until > Date.now()) {
@@ -2029,7 +2107,11 @@
 		const originKey = draftKey(roomId);
 		const mentions = composerMentions;
 		const dismissed = composerDismissed;
-		const action = composerAction(draft, { command: snapshot.capabilities.command, rooms: session.canManageRooms, members: !snapshot.memberChangesUnsupported }, mentions);
+		const action = composerAction(draft, { command: snapshot.capabilities.command, rooms: session.canManageRooms, members: !snapshot.memberChangesUnsupported, append: snapshot.capabilities['embed:append'] }, mentions);
+		if (action.kind === 'live') {
+			startLive(chat, paneRoom, reply);
+			return;
+		}
 		// A draft given back keeps the link previews that were removed from it.
 		const restore = () => {
 			if (!drafts.restore(originKey, draft, reply)) return;
@@ -2085,6 +2167,35 @@
 		chat.sendTyping(roomId, false);
 		if (typingTimer) clearTimeout(typingTimer);
 		composer?.focus();
+	}
+
+	/**
+	 * `/live` (capability `embed:append`): the composer types the next message live (`LiveComposer`, loaded on demand,
+	 * so the composer costs nothing more until then).
+	 */
+	function startLive(chat: ChatClient, room: RoomSnapshot, reply: string | undefined): void {
+		const key = draftKey(room.id);
+		import('$lib/ui/live-composer.svelte').then(({ LiveComposer }) => {
+			if (client !== chat || !paneRoom || draftKey(paneRoom.id) !== key) return;
+			liveComposer ??= liveLoaded = new LiveComposer({
+				client: () => client,
+				paneKey: () => (paneRoom ? draftKey(paneRoom.id) : undefined),
+				draft: () => ({ text: drafts.text, mentions: composerMentions, reply: drafts.reply }),
+				canEdit: () => session.canEdit,
+				forget: (forgotten) => drafts.forget(forgotten),
+				restore: (restored, text, replyTo) => {
+					if (drafts.restore(restored, text, replyTo)) composer?.focus();
+				},
+				started: () => {
+					if (typingTimer) clearTimeout(typingTimer);
+					stickToBottom = true;
+					pins++;
+					composer?.focus();
+				},
+				error: (cause, fallback) => feedback.error(cause, fallback)
+			});
+			liveComposer.start(chat, room.id, key, reply, joinFirst(chat, room));
+		}, (cause: unknown) => feedback.error(cause, 'Unable to start live typing'));
 	}
 
 	/** `/join`: a room you're in opens; another, found by ID or title among those listed, is joined and opens once it arrives. */
@@ -2436,9 +2547,12 @@
 		return { name: senderName(target), text: messageSnippet(target) };
 	}
 
-	/** A message's reaction chips, from the timeline of the room it lives in. */
+	/**
+	 * A message's reaction chips, from the timeline of the room it lives in: that room on its own (`session.room`), so
+	 * a message drawn on screen isn't worked out again with each change in another room.
+	 */
 	function reactionsFor(event: MessageRecord): ReactionChip[] {
-		const room = session.rooms.find((candidate) => candidate.id === event.room_id);
+		const room = session.room(event.room_id);
 		return reactionChips(room?.timeline.reactions[event.message_id], session.you?.user_id, event.deleted === true, (user) => directory.name(user), directory.emojiImage);
 	}
 
@@ -2450,7 +2564,7 @@
 	// --- Message rows ---
 
 	/** The test ids interop finds a message's parts by. */
-	const MESSAGE_TESTIDS: MessageTestids = { handle: 'sender-handle', reply: 'reply-reference', reactions: 'reactions', chip: 'reaction-chip', select: 'select-message' };
+	const MESSAGE_TESTIDS: MessageTestids = { handle: 'sender-handle', reply: 'reply-reference', reactions: 'reactions', chip: 'reaction-chip', select: 'select-message', writing: 'message-writing', waiting: 'message-waiting', receipts: 'read-receipts' };
 
 	/** What every row reads from, each field only where a row needs it. */
 	const messageContext: MessageContext = {
@@ -2480,6 +2594,12 @@
 
 	/** The picker the React action opened last, and on which message: it's open for that row while it is the open one. */
 	let reactPick: { id: string; request: EmojiPickerRequest } | undefined;
+	/**
+	 * A row on show has its React picker open: the timeline's `ap-timeline-picking`, so the other rows don't take the
+	 * hover look meanwhile. A class rather than `:has()` on the timeline, which the browser re-checks over every row
+	 * on each hover change (each step of a wheel scroll under the pointer).
+	 */
+	let pickingRow = $derived(emojiPicker.current !== undefined && emojiPicker.current === reactPick?.request && shownTimeline.some((item) => item.kind === 'message' && item.event.message_id === reactPick?.id));
 
 	/** One set of handlers for every row; each finds its message by the row's id. */
 	const messageHandlers: MessageHandlers = {
@@ -2644,7 +2764,9 @@
 		// pins again, and setting the scroll top there would snap the bounce back under the finger every frame.
 		const end = messageScroll.scrollHeight - messageScroll.clientHeight;
 		if (messageScroll.scrollTop < end - 1) messageScroll.scrollTop = messageScroll.scrollHeight;
-		lastScrollTop = messageScroll.scrollTop;
+		// Held at the end, not wherever within a pixel of it the list sits: what a slow drag moved
+		// it short of the end so far still counts toward letting go (trackScroll).
+		lastScrollTop = end;
 	}
 
 	/** Takes you to the oldest mention that arrived while you were reading back. */
@@ -2655,24 +2777,37 @@
 	}
 
 	function trackScroll(): void {
-		if (!messageScroll) return;
-		const top = messageScroll.scrollTop;
-		const scrolledUp = lastScrollTop === undefined || top < lastScrollTop - 1;
-		lastScrollTop = top;
+		const scroller = messageScroll;
+		if (!scroller) return;
+		const pinned = stickToBottom;
+		const top = scroller.scrollTop;
+		let scrolledUp = true;
 		// While pinned, only the reader scrolling up lets go. The pane grows under us as a room's
 		// history, its threads' cards and long messages lay out; our own scroll's event can land
 		// after that, and scroll anchoring moves the list down, before the next frame catches up.
-		if (stickToBottom && !scrolledUp) {
+		// Up is measured from where the pane was last held, not from the last event: a slow drag
+		// (on iOS, a third of a pixel at a time) moves less than a pixel between events, each step
+		// too small to count, and pinning back after each would hold it until the drag gathered
+		// speed. Held no further down than the end as it is now, so bouncing back out of iOS's
+		// rubber band below the latest isn't read as scrolling up, nor is the list shrinking under it.
+		if (pinned && lastScrollTop !== undefined) {
+			const end = scroller.scrollHeight - scroller.clientHeight;
+			const held = Math.min(lastScrollTop, end);
+			scrolledUp = top < held - 1;
+			lastScrollTop = Math.min(Math.max(top, held), end);
+		} else lastScrollTop = top;
+		if (pinned && !scrolledUp) {
+			// Unless the reader has gone on up by then: a drag can move the list again before this frame.
 			requestAnimationFrame(() => {
-				if (stickToBottom) scrollToLatest();
+				if (stickToBottom && messageScroll && lastScrollTop !== undefined && messageScroll.scrollTop >= lastScrollTop - 1) scrollToLatest();
 			});
 			return;
 		}
-		const atBottom = atLatest(messageScroll);
+		const atBottom = atLatest(scroller);
 		if (top < OLDER_REPLIES_MARGIN_PX) void loadOlderReplies();
-		if (!atBottom && stickToBottom) seenThrough = messages[messages.length - 1]?.message_id;
+		if (!atBottom && pinned) seenThrough = messages[messages.length - 1]?.message_id;
 		stickToBottom = atBottom;
-		floatingDay.update(messageScroll, atBottom);
+		floatingDay.update(scroller, atBottom);
 	}
 
 	/**
@@ -2773,10 +2908,11 @@
 		feedback.track(client.deleteMessage(event.message_id), 'Deleting message…');
 	}
 
-	/** The (x) on one of your embeds: saves the message without it. Hosted files go with it, so those ask first. */
+	/** The (x) on one of your embeds: saves the message without it. Hosted files and live output go with it, so those ask first. */
 	function removeEmbed(event: MessageRecord, embed: Embed): void {
 		if (!client || !session.canEdit) return;
-		if ((embed.kind === 'upload' || embed.kind === 'stream') && !confirm('Remove this attachment? Its file will be deleted.')) return;
+		const question = removeEmbedQuestion(embed);
+		if (question && !confirm(question)) return;
 		feedback.track(client.removeEmbed(event.message_id, embed), 'Removing embed…');
 	}
 
@@ -3070,6 +3206,8 @@
 	membersOpen={memberListOpen}
 	membersWide={memberListWide}
 	pane={mobilePane}
+	peek={narrow && activeRoom !== undefined}
+	onpeek={closeRooms}
 	sideWidth={sidebar.width}
 	membersWidth={memberList.width}
 	mainLabel="Conversation"
@@ -3158,7 +3296,7 @@
 
 			<!-- Outside the log, so it's announced once as a status rather than as an entry each time older messages load. -->
 			{#if olderLoading}<TimelineLoading top label={activeThread ? 'Loading earlier replies…' : 'Loading earlier messages…'} />{/if}
-			<div class="ap-timeline" bind:this={messageScroll} onscroll={trackScroll} data-testid="message-list" role="log" aria-live="polite" aria-label={`${activeThread ? threadTitle(activeThread) : activeRoom.title} messages`}>
+			<div class={['ap-timeline', pickingRow && 'ap-timeline-picking']} bind:this={messageScroll} onscroll={trackScroll} data-testid="message-list" role="log" aria-live="polite" aria-label={`${activeThread ? threadTitle(activeThread) : activeRoom.title} messages`}>
 				<FloatingDayPill label={floatingDay.label} shown={floatingDay.shown && !olderLoading} testid="floating-day" />
 				{#if snapshot.showReconnectDivider}
 					<TimelineDivider kind="gap" testid="reconnect-divider" />
@@ -3186,21 +3324,27 @@
 							<SystemLine timestamp={idMillis(item.logId)} timelineItem testid={activeThread ? 'thread-renamed' : 'room-renamed'}>{#if item.title}{what} renamed to <span class="ap-msg-text">“{item.title}”</span>{:else}{what} name cleared{/if}</SystemLine>
 						{:else}
 							{@const event = item.event}
-							{@const view = messageView(event, {
-								grouped: item.grouped,
-								reactions: reactionsFor(event),
-								mention: mentionsMe(event, session.you),
-								pinged: mentions.pinged.includes(event.message_id),
-								highlighted: highlightedId === event.message_id,
-								selecting: selection.active,
-								selected: selection.has(event.message_id),
-								editing: editingId === event.message_id,
-								caps: capsFor(event)
-							}, messageContext)}
 							{#if event.message_id === newDividerAt}
 								<TimelineDivider kind="new" testid="new-divider" />
 							{/if}
-							<Message {view} on={messageHandlers} testids={MESSAGE_TESTIDS} editor={view.editing && messageEditor.component ? editMessage : undefined} embed={messageEmbed} />
+							<TimelineMessage
+								row={() => messageView(item.event, {
+									grouped: item.grouped,
+									reactions: reactionsFor(item.event),
+									mention: mentionsMe(item.event, session.you),
+									pinged: mentions.pinged.includes(item.event.message_id),
+									highlighted: highlightedId === item.event.message_id,
+									selecting: selection.active,
+									selected: selection.has(item.event.message_id),
+									editing: editingId === item.event.message_id,
+									caps: capsFor(item.event),
+									seenBy: receipts.get(item.event.message_id)
+								}, messageContext)}
+								on={messageHandlers}
+								testids={MESSAGE_TESTIDS}
+								editor={(view) => (view.editing && messageEditor.component ? editMessage : undefined)}
+								embed={messageEmbed}
+							/>
 						{/if}
 					{/each}
 				{/if}
@@ -3248,7 +3392,8 @@
 					placeholder={activeThread ? `Reply in ${threadTitle(activeThread)}` : `Message ${activeRoom.title}`}
 					disabled={!paneSteady || session.readOnly}
 					holdSend={!canCompose}
-					canUpload={session.capabilities['embed:upload']}
+					canUpload={session.capabilities['embed:upload'] && !composingLive}
+					live={composingLive}
 					uploadLimits={serverMedia(session.server).upload}
 					canCommand={session.capabilities.command}
 					{people}

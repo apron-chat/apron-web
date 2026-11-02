@@ -1,4 +1,4 @@
-<!-- @dsCard group="Input" height=640 subtitle="@ people filtering on a prefix, # rooms, : emoji" -->
+<!-- @dsCard group="Input" height=640 subtitle="@ people and roles filtering on a prefix, # rooms, : emoji" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>MentionPicker</title></head>
@@ -13,7 +13,7 @@
     root.appendChild(box);
     add(A.Composer, { room: 'Ops', canUpload: true, value: value, picker: A.part(A.MentionPicker, picker) }, box);
   }
-  pair('Handing this to @da', { query: 'da', active: 0, people: [{ user_id: 'dana', name: 'Dana' }, { user_id: 'dave.k', name: 'Dave Kim' }, { user_id: 'amanda', name: 'Amanda' }] });
+  pair('Handing this to @da', { query: 'da', active: 0, people: [{ user_id: 'dana', name: 'Dana' }, { user_id: 'dave.k', name: 'Dave Kim' }, { user_id: 'amanda', name: 'Amanda' }, { role: 'data', count: 4 }] });
   pair('Moved to #dep', { query: 'dep', active: 0, rooms: [{ id: 'deploy', title: 'Deploy' }, { id: 'deploy-4-2', title: 'Deploy 4.2' }] });
   pair('Ship it :tad', { query: 'tad', active: 0, emoji: [{ id: 'tada', native: '🎉', name: 'Party Popper' }] });
 </script>

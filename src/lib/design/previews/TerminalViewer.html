@@ -1,0 +1,18 @@
+<!-- @dsCard group="Embeds" height=520 subtitle="A terminal embed full screen: its title, Live, Close, and the whole 80 by 40 screen, which scrolls inside it where it doesn't fit" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>TerminalViewer</title></head>
+<body>
+<div id="root"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  // The app draws the screen with xterm.js through `attach`, its font fitted to the stage; without it, the text shows as it is.
+  A.render(A.TerminalViewer, root, {
+    open: true,
+    title: 'make deploy',
+    live: true,
+    text: '$ make deploy\nbuilding api… ok\nrunning migrations 0041..0042… ok\npushing image registry/api:4f2c… 63%  ██████████████████████████▎               \n'
+  });
+</script>
+</body>
+</html>

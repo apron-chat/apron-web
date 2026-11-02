@@ -71,59 +71,59 @@ async function openPicker(preview: Preview, id: string): Promise<void> {
 	await expect(preview.page.getByRole('dialog', { name: 'Emoji picker', exact: true })).toHaveAttribute('data-state', 'ready');
 }
 
-test('by default, nothing loads from anywhere else until asked, whatever names it', async ({ preview, page }) => {
+test('by default, nothing loads from anywhere else until asked; Load loads that one, Always load its whole site', async ({ preview, page }) => {
 	const asked = watchTracker(page);
 	await preview.open();
 	const markdown = await postEverything(preview);
-	await expect(page.getByText('A file')).toBeVisible();
-	// The catalog has arrived: its emoji is offered, without its picture.
-	await preview.composer().pressSequentially(':track');
-	const suggestion = page.getByRole('listbox', { name: 'Emoji suggestions' }).getByRole('option').first();
-	await expect(suggestion).toContainText(':tracked:');
-	await expect(suggestion.locator('img')).toHaveCount(0);
-	// What may not load waits for a click: images, video and audio in messages, embeds and cards; the emoji is its key,
-	// the avatar initials.
-	for (const what of ['a pixel', 'Chart', 'Video', 'Audio']) await expect(page.getByRole('button', { name: `Load ${what} from tracker.example` }).first()).toBeVisible();
-	for (const card of ['A story', 'file.png']) await expect(page.locator('.ap-embed-held').filter({ hasText: card }).getByRole('button', { name: 'Load Image from tracker.example' })).toBeVisible();
-	await expect(page.getByText('Plain :tracked:')).toBeVisible();
-	await page.keyboard.press('Escape');
-	// The picker leaves out an emoji it may not show.
-	await openPicker(preview, markdown);
-	await page.getByRole('dialog', { name: 'Emoji picker', exact: true }).locator('em-emoji-picker input[type="search"]').fill('tracked');
-	await expect(page.getByRole('button', { name: ':tracked:', exact: true })).toHaveCount(0);
-	await expect(page.locator('img[src^="https://tracker.example"]')).toHaveCount(0);
-	await page.waitForTimeout(500);
-	expect(asked).toEqual([]);
-});
 
-test('Load loads that one, and nothing else from its site', async ({ preview, page }) => {
-	const asked = watchTracker(page);
-	await preview.open();
-	await postEverything(preview);
-	await page.getByRole('button', { name: 'Load a pixel from tracker.example' }).click();
-	await expect(page.locator(`img[src="${TRACKER}/markdown.png"]`)).toHaveCount(1);
-	await expect(page.getByRole('button', { name: 'Load Chart from tracker.example' })).toBeVisible();
-	await page.waitForTimeout(500);
-	expect([...new Set(asked)]).toEqual(['/markdown.png']);
-});
+	await test.step('by default, nothing loads from anywhere else until asked, whatever names it', async () => {
+		await expect(page.getByText('A file')).toBeVisible();
+		// The catalog has arrived: its emoji is offered, without its picture.
+		await preview.composer().pressSequentially(':track');
+		const suggestion = page.getByRole('listbox', { name: 'Emoji suggestions' }).getByRole('option').first();
+		await expect(suggestion).toContainText(':tracked:');
+		await expect(suggestion.locator('img')).toHaveCount(0);
+		// What may not load waits for a click: images, video and audio in messages, embeds and cards; the emoji is its key,
+		// the avatar initials.
+		for (const what of ['a pixel', 'Chart', 'Video', 'Audio']) await expect(page.getByRole('button', { name: `Load ${what} from tracker.example` }).first()).toBeVisible();
+		for (const card of ['A story', 'file.png']) await expect(page.locator('.ap-embed-held').filter({ hasText: card }).getByRole('button', { name: 'Load Image from tracker.example' })).toBeVisible();
+		await expect(page.getByText('Plain :tracked:')).toBeVisible();
+		await page.keyboard.press('Escape');
+		// The picker leaves out an emoji it may not show.
+		await openPicker(preview, markdown);
+		const picker = page.getByRole('dialog', { name: 'Emoji picker', exact: true });
+		await picker.locator('em-emoji-picker input[type="search"]').fill('tracked');
+		await expect(page.getByRole('button', { name: ':tracked:', exact: true })).toHaveCount(0);
+		await expect(page.locator('img[src^="https://tracker.example"]')).toHaveCount(0);
+		await page.waitForTimeout(500);
+		expect(asked).toEqual([]);
+		await page.keyboard.press('Escape');
+		await expect(picker).toHaveCount(0);
+	});
 
-test('Always load trusts the site from now on, in Preferences too', async ({ preview, page }) => {
-	const asked = watchTracker(page);
-	await preview.open();
-	await postEverything(preview);
-	await page.getByRole('button', { name: 'Always load from tracker.example' }).first().click();
-	await expect(page.locator(`img[src="${TRACKER}/markdown.png"]`)).toHaveCount(1);
-	await expect(page.getByRole('button', { name: /^Load .* from tracker\.example$/ })).toHaveCount(0);
-	// A card's and an upload's pictures load lazily: in view.
-	await page.locator(`img[src="${TRACKER}/upload.png"]`).scrollIntoViewIfNeeded();
-	// Avatars, images, emoji, embeds, cards and uploads. (The emoji's still copy: a headless browser prefers reduced motion.)
-	await expect.poll(() => [...new Set(asked)].sort()).toEqual(expect.arrayContaining(['/grace.png', '/markdown.png', '/emoji-still.png', '/html.png', '/poster.jpg', '/sound.mp3', '/server.png', '/og.png', '/upload.png']));
-	// A srcset, a background and a ping never stay.
-	for (const never of ['/html-2x.png', '/bg.png', '/ping']) expect(asked).not.toContain(never);
-	await page.getByRole('button', { name: /^Open preferences/ }).click();
-	const preferences = page.getByRole('dialog', { name: 'Preferences' });
-	await preferences.getByRole('navigation').getByRole('button', { name: 'Media' }).click();
-	await expect(preferences.getByTestId('media-sites')).toHaveValue('tracker.example');
+	await test.step('Load loads that one, and nothing else from its site', async () => {
+		await page.getByRole('button', { name: 'Load a pixel from tracker.example' }).click();
+		await expect(page.locator(`img[src="${TRACKER}/markdown.png"]`)).toHaveCount(1);
+		await expect(page.getByRole('button', { name: 'Load Chart from tracker.example' })).toBeVisible();
+		await page.waitForTimeout(500);
+		expect([...new Set(asked)]).toEqual(['/markdown.png']);
+	});
+
+	await test.step('Always load trusts the site from now on, in Preferences too', async () => {
+		await page.getByRole('button', { name: 'Always load from tracker.example' }).first().click();
+		await expect(page.locator(`img[src="${TRACKER}/markdown.png"]`)).toHaveCount(1);
+		await expect(page.getByRole('button', { name: /^Load .* from tracker\.example$/ })).toHaveCount(0);
+		// A card's and an upload's pictures load lazily: in view.
+		await page.locator(`img[src="${TRACKER}/upload.png"]`).scrollIntoViewIfNeeded();
+		// Avatars, images, emoji, embeds, cards and uploads. (The emoji's still copy: a headless browser prefers reduced motion.)
+		await expect.poll(() => [...new Set(asked)].sort()).toEqual(expect.arrayContaining(['/grace.png', '/markdown.png', '/emoji-still.png', '/html.png', '/poster.jpg', '/sound.mp3', '/server.png', '/og.png', '/upload.png']));
+		// A srcset, a background and a ping never stay.
+		for (const never of ['/html-2x.png', '/bg.png', '/ping']) expect(asked).not.toContain(never);
+		await page.getByRole('button', { name: /^Open preferences/ }).click();
+		const preferences = page.getByRole('dialog', { name: 'Preferences' });
+		await preferences.getByRole('navigation').getByRole('button', { name: 'Media' }).click();
+		await expect(preferences.getByTestId('media-sites')).toHaveValue('tracker.example');
+	});
 });
 
 test.describe('a catalog of custom emoji on another site', () => {
@@ -162,4 +162,28 @@ test('with Any site, everything loads from anywhere, but a srcset, a background 
 	await page.locator(`img[src="${TRACKER}/upload.png"]`).scrollIntoViewIfNeeded();
 	await expect.poll(() => [...new Set(asked)].sort()).toEqual(expect.arrayContaining(['/grace.png', '/markdown.png', '/emoji-still.png', '/html.png', '/poster.jpg', '/sound.mp3', '/server.png', '/og.png', '/upload.png']));
 	for (const never of ['/html-2x.png', '/bg.png', '/ping']) expect(asked).not.toContain(never);
+});
+
+test('Block hides what its site would show, whatever trusts it, and lists it in Preferences', async ({ preview, page }) => {
+	const asked = watchTracker(page);
+	await preview.open();
+	await postEverything(preview);
+	await expect(page.getByText('A file')).toBeVisible();
+	await page.getByRole('button', { name: 'Block tracker.example' }).first().click();
+	// Nothing from it waits for a click any more, and nothing loads.
+	await expect(page.locator('.ap-media-ask')).toHaveCount(0);
+	await page.getByRole('button', { name: /^Open preferences/ }).click();
+	const preferences = page.getByRole('dialog', { name: 'Preferences' });
+	await preferences.getByRole('navigation').getByRole('button', { name: 'Media' }).click();
+	await expect(preferences.getByTestId('media-blocked')).toHaveValue('tracker.example');
+	// Blocked wins over trusted, and over Any site.
+	await preferences.getByTestId('media-sites').fill('tracker.example');
+	await preferences.getByTestId('media-sites').blur();
+	await preferences.getByTestId('media-policy').selectOption('any');
+	await page.waitForTimeout(500);
+	expect(asked).toEqual([]);
+	// Unblocked, it loads as Any site says.
+	await preferences.getByTestId('media-blocked').fill('');
+	await preferences.getByTestId('media-blocked').blur();
+	await expect.poll(() => asked).toContain('/markdown.png');
 });

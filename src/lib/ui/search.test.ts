@@ -13,6 +13,16 @@ describe('matchesText', () => {
 		expect(matchesText(message('3', 'cafe deploying'), text)).toBe(true);
 	});
 
+	it('takes any kind of space as one, alone or in a run, in plain ASCII as in other text', () => {
+		const { text } = parseQuery('ship it');
+		expect(matchesText(message('1', 'ship\tit'), text)).toBe(true);
+		expect(matchesText(message('2', 'Ship\nIT now'), text)).toBe(true);
+		expect(matchesText(message('3', 'ship it'), text)).toBe(true);
+		expect(matchesText(message('4', ' ship \n it '), text)).toBe(true);
+		expect(matchesText(message('5', 'shïp it'), text)).toBe(true);
+		expect(matchesText(message('6', 'shipit'), text)).toBe(false);
+	});
+
 	it('never matches a deleted message, one without text, or an empty query', () => {
 		expect(matchesText(message('1', 'deploy', '2', { deleted: true }), 'deploy')).toBe(false);
 		expect(matchesText({ ...message('1', ''), body: {} }, 'deploy')).toBe(false);

@@ -1,4 +1,4 @@
-<!-- @dsCard group="Layout" height=600 subtitle="Preferences: a large flush Dialog whose body is a nav of sections beside the open one, its heading, a line under it and its SettingRows" -->
+<!-- @dsCard group="Layout" height=600 subtitle="Preferences: a large flush Dialog whose body is a nav of sections beside the open one and its SettingRows" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>SettingsSections</title></head>
@@ -7,20 +7,20 @@
 <script>
   var A = window.Apron, root = document.getElementById('root');
   var rows = A.parts(
+    A.part(A.SettingRow, { title: 'Notifications', class: 'ap-pref-notifications',
+      children: A.html('<p class="ap-pref-note" id="note-1">Off.</p>'),
+      control: A.part(A.Switch, { checked: false, label: 'Notifications', describedby: 'note-1', onchange: function () {} }) }),
     A.part(A.SettingRow, { title: 'Pause notifications', hint: 'Silence desktop and push notifications on all your devices for a while. Only you see it.', class: 'ap-pref-pause',
       control: A.part(A.MenuButton, { label: 'Pause…', choices: [{ value: '1h', label: 'For 1 hour', hint: 'until 15:42' }, { value: 'resume', label: 'Until I resume' }], onselect: function () {} }) }),
-    A.html('<div class="ap-pref-scopes"><p class="ap-pref-help">Whether Apron is open or closed. At least one stays on; the switch below turns notifications off.</p></div>'),
-    A.part(A.SettingRow, { title: 'Notifications', hint: 'Alerts on this device while you’re away from Apron, and when it’s closed where your browser and this server can.', class: 'ap-pref-notifications',
-      children: A.html('<p class="ap-pref-note" id="note-1">Off.</p>'),
-      control: A.part(A.Switch, { checked: false, label: 'Notifications', describedby: 'note-1', onchange: function () {} }) })
+    A.html('<div class="ap-pref-scopes"><p class="ap-pref-help">Whether Apron is open or closed. At least one stays on; the switch above turns notifications off.</p></div>')
   );
   A.render(A.Dialog, root, {
     open: true, title: 'Preferences', size: 'lg', flush: true, closeLabel: 'Close preferences',
     children: A.part(A.SettingsSections, {
       current: 'notifications',
       sections: [
-        { value: 'notifications', label: 'Notifications', hint: 'Choose when Apron can interrupt you.', id: 'pref-notifications' },
-        { value: 'appearance', label: 'Appearance', hint: 'Adjust the theme and reading fonts on this device.', id: 'pref-appearance' }
+        { value: 'notifications', label: 'Notifications', id: 'pref-notifications' },
+        { value: 'appearance', label: 'Appearance', id: 'pref-appearance' }
       ],
       children: rows
     })

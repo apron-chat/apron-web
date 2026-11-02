@@ -1,10 +1,11 @@
 import { childRooms, timelineMessages, type Notice, type RoomListing, type RoomRename, type RoomSnapshot } from '$lib/protocol/client';
 import { compareLogIds, type MembershipRecord } from '$lib/protocol/reducer';
 import { isLogId, type Identity, type MessageRecord } from '$lib/protocol/types';
+import { embedsLabel } from '$lib/protocol/embeds';
 import { markdownText } from '$lib/protocol/markdown';
 import { withoutBidiOverrides } from '$lib/protocol/plain-text';
 import { isBaseline, MembershipRun } from './membership';
-import { embedsOf, isOwn, senderName, textOf } from './messages';
+import { isOwn, senderName, textOf } from './messages';
 import { dayKey, dayKeyOf, dayLabel, dayLabelOf, isGrouped } from './time';
 
 /** Longest title a thread started from a message gets, in characters. */
@@ -207,7 +208,7 @@ export function threadLatest(entry: Pick<ThreadEntry, 'latestMessage'>): { sende
 	if (!event) return undefined;
 	if (event.deleted) return { sender: '', text: 'Message deleted' };
 	const text = withoutBidiOverrides(textOf(event)).replace(/\s+/g, ' ').trim();
-	return { sender: senderName(event), text: text || (embedsOf(event).length ? 'Attachment' : 'Empty message') };
+	return { sender: senderName(event), text: text || embedsLabel(event.body?.embeds) || 'Empty message' };
 }
 
 /** A title for a thread started from a message: its first non-empty line, shortened, else "Thread". */
@@ -450,6 +451,37 @@ export function buildRoomTimeline({ messages, threads = [], renames = [], notice
 	pushGap();
 	closeRun();
 	return items;
+}
+
+/** The same keys holding the same values, and lists the same items in order: two items or entries that show the same. */
+function sameShallow(a: object, b: object): boolean {
+	if (a === b) return true;
+	const left = a as Record<string, unknown>, right = b as Record<string, unknown>;
+	const keys = Object.keys(left);
+	if (keys.length !== Object.keys(right).length) return false;
+	return keys.every((key) => {
+		const x = left[key], y = right[key];
+		if (x === y) return true;
+		if (Array.isArray(x) && Array.isArray(y)) return x.length === y.length && x.every((item, index) => item === y[index]);
+		// A thread card's entry, worked out afresh with each snapshot.
+		return key === 'entry' && typeof x === 'object' && typeof y === 'object' && x !== null && y !== null && sameShallow(x, y);
+	});
+}
+
+/**
+ * `next`, worked out afresh, with each entry or item that says the same as the one with its id or key in `last`
+ * replaced by that one, and `last` itself while all of them do. Thread entries and timeline items are made anew from
+ * each snapshot, the client's for any room: kept, a message in another room (or a read) doesn't hand every row on
+ * screen a new item to draw again, only those that changed.
+ */
+export function steady<T extends ThreadEntry | TimelineItem>(last: readonly T[], next: T[]): T[] {
+	const keyOf = (value: T): string => ('key' in value ? value.key : value.id);
+	const before = new Map(last.map((value) => [keyOf(value), value]));
+	const kept = next.map((value) => {
+		const old = before.get(keyOf(value));
+		return old && sameShallow(old, value) ? old : value;
+	});
+	return kept.length === last.length && kept.every((value, index) => value === last[index]) ? (last as T[]) : kept;
 }
 
 /**
