@@ -753,15 +753,23 @@ forever, or not at all; its note says only that signing out deletes
 stored history), and with it how far each joined room is caught up. The next visit shows it
 at once and goes on as a reconnect does: each room asks the server only for what
 came after its checkpoint (§4.3.5), and the joined listing only for rooms that
-changed since (`latest_log_id`, §4.2.1). When every joined room kept was complete up to
-a point at most a day old (on servers whose `log_id`s are times; elsewhere always), they
-wait for that listing instead and ask together: one `history` without `room_id` (§4.3),
-which pages every joined room's log as one, threads included, from where the rooms the
-listing names were all complete (the others have nothing new, and if it names none,
-nothing is asked), so a thread's new reply is in even if it was never opened here, up
-to five pages; a server that answers `unsupported` (it is then not asked again), an
-error or a wait, or more than five pages, leaves each room to go on by itself from where
-that got to. A thread opened again goes on from
+changed since (`latest_log_id`, §4.2.1). Once a room has caught up on a connection,
+what live delivery brings it (messages, reactions, joins and leaves, its room record)
+moves its checkpoint along, and a thread opened on the connection the point its last
+load reached, so a reconnect or the next visit asks only for what came while away. A
+room frame whose head is past that says live delivery missed something, and the room
+(or the thread, by itself) catches up on it; a record a server drops below a later one
+of the same room isn't recovered. When some joined room kept was complete up to a point
+at most a day old (on servers whose `log_id`s are times; elsewhere always), they wait for
+that listing instead and ask together: one `history` without `room_id` (§4.3), which
+pages every joined room's log as one, threads included, from where the rooms the listing
+names were all complete (the others have nothing new, and if it names none, nothing is
+asked), so a thread's new reply is in even if it was never opened here, up to five pages.
+A named room complete only up to more than an hour before the newest of them (quiet for
+a while before the connection was lost) catches up by itself instead, so the others'
+records from back then aren't asked for again. A server that answers `unsupported` (it
+is then not asked again), an error or a wait, or more than five pages, leaves each room
+to go on by itself from where that got to. A thread opened again goes on from
 where its last load got to, and a joined thread loaded before that the listing
 says moved on catches up by itself, behind the open room's history, so its row
 shows its latest reply and counts what's new before it is opened. Each room opens with the newest fifty entries of its

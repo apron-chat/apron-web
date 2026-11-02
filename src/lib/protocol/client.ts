@@ -101,6 +101,7 @@ import {
 	HISTORY_PAGE_SIZE,
 	JOINED_CATCH_UP_MS,
 	JOINED_CATCH_UP_PAGES,
+	JOINED_SPREAD_MS,
 	absent,
 	pageHidden,
 	canonicalJson,
@@ -3383,9 +3384,9 @@ export class ChatClient {
 		if (!this.hasCap('rooms')) return;
 		const since = sameIdentity ? this.keptPosition() : undefined;
 		this.listJoinedRooms(since);
-		// Where every kept room is complete is at most as recent as where the changed ones are: when even that is recent,
-		// they wait for the listing to catch up together; otherwise each resumes right behind `auth`.
-		const together = since !== undefined && this.hasCap('history') && this.joinedHistoryUnsupportedOn !== this.serverUrl && this.catchesUpTogether(since)
+		// When some kept room is complete up to recently, the changed ones may catch up together: they wait for the
+		// listing to say which; otherwise each resumes right behind `auth`.
+		const together = since !== undefined && this.hasCap('history') && this.joinedHistoryUnsupportedOn !== this.serverUrl && this.someRecent()
 			? new Set<string>() : undefined;
 		for (const [roomId, kept] of [...this.retainedRooms]) {
 			if (this.rooms.has(roomId)) continue;
@@ -3412,23 +3413,41 @@ export class ChatClient {
 		for (const value of Array.isArray(result?.joined) ? result.joined : []) {
 			if (isJsonObject(value) && typeof value.room_id === 'string' && planned.has(value.room_id)) listed.add(value.room_id);
 		}
-		let position: string | undefined;
+		// Where each is complete up to, as for the listing's `latest_log_id` (`keptPosition`).
+		const positions = new Map<string, string>();
 		for (const roomId of listed) {
 			const room = this.rooms.get(roomId);
-			// Where it's complete up to, as for the listing's `latest_log_id` (`keptPosition`).
-			const synced = !room ? undefined : this.isThread(roomId) ? room.latestLogId : room.recoveryError ? undefined : room.checkpoint;
-			if (synced === undefined) {
-				position = undefined;
-				break;
-			}
+			const synced = room ? this.syncedPosition(room) : undefined;
+			if (synced !== undefined) positions.set(roomId, synced);
+		}
+		// Together: the ones complete up to within JOINED_SPREAD_MS of the newest; the others, and any without a
+		// position, each by itself (`showRoom`, as the listing applies).
+		let newest: string | undefined;
+		for (const synced of positions.values()) if (newest === undefined || compareLogIds(synced, newest) > 0) newest = synced;
+		const newestAt = newest === undefined ? NaN : Number(newest);
+		const together = new Set<string>();
+		let position: string | undefined;
+		for (const [roomId, synced] of positions) {
+			const at = Number(synced);
+			if (Number.isSafeInteger(newestAt) && Number.isSafeInteger(at) && newestAt - at > JOINED_SPREAD_MS) continue;
+			together.add(roomId);
 			if (position === undefined || compareLogIds(synced, position) < 0) position = synced;
 		}
 		if (result && position !== undefined && this.catchesUpTogether(position)) {
-			this.catchUpJoined(position, listed);
+			this.catchUpJoined(position, together);
 			return;
 		}
 		// Each by itself: a listed room as the listing shows it (`showRoom`), one not listed as it would have behind `auth`.
 		if (!result) this.resumeEach(planned);
+	}
+
+	/** Whether some joined room kept from the last connection is complete up to recently enough to catch up together. */
+	private someRecent(): boolean {
+		for (const room of this.retainedRooms.values()) {
+			const synced = room.kind === 'viewed' ? undefined : this.syncedPosition(room);
+			if (synced !== undefined && this.catchesUpTogether(synced)) return true;
+		}
+		return false;
 	}
 
 	/**
@@ -3548,7 +3567,12 @@ export class ChatClient {
 			if (!room) continue;
 			room.dirty = true;
 			if (!complete || run.head === undefined) continue;
-			if (this.isThread(roomId) && room.loadCheckpoint !== undefined && compareLogIds(room.loadCheckpoint, run.head) >= 0) room.resumed = false;
+			if (this.isThread(roomId)) {
+				if (room.loadCheckpoint !== undefined && compareLogIds(room.loadCheckpoint, run.head) >= 0) room.resumed = false;
+			} else if (!room.recovery && room.checkpoint !== undefined && compareLogIds(room.checkpoint, run.head) >= 0) {
+				// Complete up to H, and live from there: what arrives now moves its checkpoint (`noteLive`).
+				room.synced = true;
+			}
 		}
 		if (complete) {
 			for (const roomId of run.rooms) {
@@ -3574,11 +3598,16 @@ export class ChatClient {
 		let position: string | undefined;
 		for (const room of this.retainedRooms.values()) {
 			if (room.kind === 'viewed') continue;
-			const synced = this.isThread(room.id) ? room.latestLogId : room.recoveryError ? undefined : room.checkpoint;
+			const synced = this.syncedPosition(room);
 			if (synced === undefined) return undefined;
 			if (position === undefined || compareLogIds(synced, position) < 0) position = synced;
 		}
 		return position;
+	}
+
+	/** Where a joined room is complete up to: its checkpoint (a room that recovers, unless that failed) or its head (a thread). */
+	private syncedPosition(room: RoomState): string | undefined {
+		return this.isThread(room.id) ? room.latestLogId : room.recoveryError ? undefined : room.checkpoint;
 	}
 
 	/**
@@ -3692,7 +3721,10 @@ export class ChatClient {
 		const { log_id: logId, room_id: roomId } = entries[0];
 		this.observeLogId(logId);
 		const room = this.rooms.get(roomId);
-		if (room) this.observeHead(room, logId);
+		if (room) {
+			this.observeHead(room, logId);
+			this.noteLive(room, logId);
+		}
 		for (const entry of entries) {
 			this.noteRecorded(entry.user, logId);
 			this.store.putMembership(entry);
@@ -3947,7 +3979,10 @@ export class ChatClient {
 			const decoded = decodeRoom(value);
 			if (!decoded) continue;
 			this.observeLogId(decoded.delivery.latest_log_id);
-			if (this.rooms.has(decoded.record.room_id)) {
+			const shown = this.rooms.get(decoded.record.room_id);
+			if (shown) {
+				// Its record came live too: only a head past it then says live delivery missed something.
+				if (decoded.record.log_id !== undefined) this.noteLive(shown, decoded.record.log_id);
 				this.showRoom(decoded);
 			} else {
 				this.installRoom(decoded.record);
@@ -3985,6 +4020,10 @@ export class ChatClient {
 			this.observeBoundary(room, decoded.delivery.history_log_id, listedHead ?? room.latestLogId);
 		}
 		this.recoverIfBehind(room, !existing);
+		// A joined thread current on this connection whose head is past what it has missed records live delivery didn't
+		// bring: it catches up on them.
+		if (room.kind === 'joined' && !room.resumed && !room.loading && room.loadCheckpoint !== undefined && listedHead !== undefined &&
+			compareLogIds(listedHead, room.loadCheckpoint) > 0 && this.isThread(roomId)) room.resumed = true;
 		this.catchUpThread(room);
 		if (listedHead !== undefined) this.settleQueuedResume(room, room.latestLogId);
 	}
@@ -4236,6 +4275,7 @@ export class ChatClient {
 			this.observeHead(room, sets[0].log_id);
 		}
 		this.observeLogId(sets[0].log_id);
+		if (room) this.noteLive(room, sets[0].log_id);
 		for (const set of sets) {
 			this.noteRecorded(set.from, set.log_id);
 			if (room?.recovery && !this.bufferLive(room, { kind: 'reaction', record: set })) return;
@@ -4262,6 +4302,7 @@ export class ChatClient {
 			if (delivered && room.floor !== undefined && compareLogIds(record.log_id, room.floor) < 0) return;
 			if (delivered) this.observeHead(room, record.log_id);
 			if (room.recovery && !this.bufferLive(room, { kind: 'message', record, embedded: !delivered })) return;
+			if (delivered) this.noteLive(room, record.log_id);
 		}
 		this.installMessage(record);
 	}
@@ -4280,6 +4321,7 @@ export class ChatClient {
 
 	private startRecovery(room: RoomState, head: string | undefined, rebuild: boolean, preserveBuffer = false): void {
 		room.limited = false;
+		room.synced = false;
 		const retained = preserveBuffer
 			? (room.recovery?.buffer ?? []).filter((live) => isEmbedded(live) || room.floor === undefined || compareLogIds(live.record.log_id, room.floor) >= 0)
 			: [];
@@ -4451,9 +4493,31 @@ export class ChatClient {
 		// A response may report a newer head than this recovery's fixed H. That
 		// metadata must not turn H+1 and later live records into a checkpoint.
 		room.checkpoint = maxDefined(room.checkpoint, recovery.head);
+		// What arrived live meanwhile did arrive, in order, after live delivery started (before H was fixed): the room
+		// is complete up to the newest of them.
+		for (const live of recovery.buffer) if (!isEmbedded(live)) room.checkpoint = maxDefined(room.checkpoint, live.record.log_id);
+		room.synced = true;
 		room.recovery = undefined;
 		room.dirty = true;
 		for (const waiter of room.waiters.splice(0)) waiter.resolve();
+	}
+
+	/**
+	 * A record delivered live for `room` (a snapshot, a reaction set, a membership, its room record): once the room is
+	 * complete up to its checkpoint on this connection, live delivery keeps it complete (a connection's live records
+	 * come in log order, §3.5.3), so the checkpoint moves with it and a reconnect asks only for what came after. A
+	 * thread loaded on this connection moves the point its last load reached the same way. Not while anything is still
+	 * to fill in: a recovery or load under way, one that failed or waits, a thread not loaded since the last connection,
+	 * the joined rooms' catch-up. A room record frame whose head is past it still reveals what live delivery missed
+	 * (`recoverIfBehind`, `showRoom`); a record a server dropped below a later live one is not recovered.
+	 */
+	private noteLive(room: RoomState, logId: string): void {
+		if (room.kind !== 'joined' || this.joinedCatchUp?.rooms.has(room.id)) return;
+		if (room.synced) {
+			if (!room.recovery && room.checkpoint !== undefined && compareLogIds(logId, room.checkpoint) > 0) room.checkpoint = logId;
+		} else if (room.loadCheckpoint !== undefined && !room.resumed && !room.loading && compareLogIds(logId, room.loadCheckpoint) > 0 && this.isThread(room.id)) {
+			room.loadCheckpoint = logId;
+		}
 	}
 
 	private observeHead(room: RoomState, advertised: unknown): void {
@@ -4525,6 +4589,7 @@ export class ChatClient {
 		}
 		this.retireRecoveryRequest(room);
 		room.recoveryError = message;
+		room.synced = false;
 		// Live delivery remains authoritative even when history is incomplete:
 		// publish it without advancing the checkpoint past an unrecovered gap.
 		room.recovery = undefined;
@@ -4548,6 +4613,7 @@ export class ChatClient {
 		room.recovery = undefined;
 		room.loadGeneration += 1;
 		room.catchUp = undefined;
+		room.synced = false;
 		for (const waiter of room.waiters.splice(0)) waiter.reject(new Error(reason));
 	}
 

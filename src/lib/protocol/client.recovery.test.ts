@@ -146,9 +146,9 @@ describe('history per room', () => {
 		await older;
 		expect(room('ops').timeline.order).toEqual(['40', '80', '90', '91']);
 		expect(room('ops').olderAvailable).toBeUndefined();
-		// Its checkpoint is the head it opened at: a newer head resumes forward from there.
+		// Its checkpoint is the newest it has, the live 91 included: a newer head resumes forward from there.
 		socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'ops', log_id: '30', title: 'Ops', latest_log_id: '93', history_log_id: '30' }] } });
-		expect(bounds(socket.request('history').params)).toEqual({ room_id: 'ops', after: '91', before: '93' });
+		expect(bounds(socket.request('history').params)).toEqual({ room_id: 'ops', after: '92', before: '93' });
 	});
 
 	it('opens a room with no lower bound known on its newest page too, and skips one whose history is all gone', async () => {
@@ -562,6 +562,30 @@ describe('after a reconnect', () => {
 		expect(room('20').timeline.order).toEqual(['22', '24']);
 	});
 
+	it('moves a loaded thread\u2019s last load with what comes live, and catches up when a head says something was missed', async () => {
+		const side = { room_id: '20', log_id: '20', parent_room_id: 'general', title: 'Side', latest_log_id: '22', history_log_id: '20' };
+		await latest().greet(['history', 'rooms'], { room: general });
+		await latest().reply('history', { messages: [], more: false, latest_log_id: '12', history_log_id: '10' });
+		latest().receive({ method: 'room_update', params: { joined: [side] } });
+		const load = client.loadRoom('20');
+		await latest().reply('history', { messages: [{ ...entry('22'), room_id: '20' }], more: false, latest_log_id: '22', history_log_id: '20' });
+		await load;
+		latest().receive({ method: 'message', params: { ...entry('23'), room_id: '20' } });
+		const threadRequests = () => latest().sent.filter((frame) => frame.method === 'history' && (frame.params as { room_id?: string }).room_id === '20');
+		// A room frame at what came live needs nothing.
+		latest().receive({ method: 'room_update', params: { updated: [{ ...side, latest_log_id: '23' }] } });
+		await settle();
+		expect(threadRequests()).toHaveLength(1);
+		// A head past it (a frame whose own record is older): live delivery missed records, which the thread catches up on.
+		latest().receive({ method: 'room_update', params: { updated: [{ ...side, latest_log_id: '25' }] } });
+		await settle();
+		expect(bounds(threadRequests().at(-1)!.params as Record<string, unknown>)).toEqual({ room_id: '20', after: '24', before: '25' });
+		await latest().reply('history', { messages: [{ ...entry('25'), room_id: '20' }], more: false, latest_log_id: '25', history_log_id: '20' });
+		await settle();
+		expect(room('20').timeline.order).toEqual(['22', '23', '25']);
+		expect(room('20')).toMatchObject({ loaded: true });
+	});
+
 	it('keeps the listings of rooms and threads to join through a drop, and drops them at a sign-in as someone else', async () => {
 		await latest().greet(['history', 'rooms'], { room: general });
 		const rooms = client.listRooms();
@@ -748,14 +772,14 @@ describe('after a reconnect', () => {
 		// auth, the listing, and the kept room's recovery go out together, before any reply (§3.2).
 		expect(socket.sent.map((frame) => frame.method)).toEqual(['auth', 'room_list', 'history']);
 		expect(socket.request('room_list').params).toEqual({ filter: 'joined', members: true });
-		// Without a head yet, it pages from the checkpoint to the end of the log.
-		expect(bounds(socket.request('history').params)).toEqual({ room_id: 'general', after: '11' });
+		// Without a head yet, it pages from the checkpoint, which the live notice moved, to the end of the log.
+		expect(bounds(socket.request('history').params)).toEqual({ room_id: 'general', after: '16' });
 		await socket.reply('auth', { you: { user_id: 'guest_2', name: 'Guest' } });
-		await socket.reply('room_list', { joined: [{ room_id: 'general', log_id: '10', title: 'General', latest_log_id: '15', history_log_id: '10', members: [{ user_id: 'guest_2' }] }], users: [] });
-		await socket.reply('history', { messages: [{ message_id: '12', log_id: '12', room_id: 'general', from: { user_id: 'bob', name: 'Bob' }, body: { text: 'hi' } }], first_log_id: '12', last_log_id: '15', more: false, latest_log_id: '15', history_log_id: '10' });
+		await socket.reply('room_list', { joined: [{ room_id: 'general', log_id: '10', title: 'General', latest_log_id: '17', history_log_id: '10', members: [{ user_id: 'guest_2' }] }], users: [] });
+		await socket.reply('history', { messages: [{ message_id: '17', log_id: '17', room_id: 'general', from: { user_id: 'bob', name: 'Bob' }, body: { text: 'hi' } }], first_log_id: '17', last_log_id: '17', more: false, latest_log_id: '17', history_log_id: '10' });
 		// One page settles it.
 		expect(socket.sent.filter((frame) => frame.method === 'history')).toHaveLength(1);
-		expect(general().timeline.order).toEqual(['12', '15']);
+		expect(general().timeline.order).toEqual(['15', '17']);
 		expect(general().members?.map((member) => member.user_id)).toEqual(['guest_2']);
 		expect(general().recovering).toBe(false);
 	});
@@ -931,6 +955,67 @@ describe('catching up every joined room together (`history` without `room_id`)',
 		await settle();
 		expect(room(side.room_id).timeline.order).toEqual([at(21), at(22), at(23)]);
 		expect(histories(next)).toHaveLength(1);
+	});
+
+	it('starts after what came live, which moved every room\u2019s checkpoint', async () => {
+		const next = await reconnected();
+		await next.reply('auth', { you: { user_id: 'ada', name: 'Ada' } });
+		await next.reply('room_list', { joined: [{ ...general, latest_log_id: at(14) }, side], left: [], users: [] });
+		await next.reply('history', { messages: [entry(13), entry(14)], more: false, latest_log_id: at(14), history_log_id: at(10) });
+		await settle();
+		// Live: a message and a reaction in the room, a reply in the thread; then a room frame at that head, which needs nothing.
+		next.receive({ method: 'message', params: entry(15) });
+		next.receive({ method: 'reactions', params: { log_id: at(16), message_id: at(15), room_id: 'general', reactions: [{ from: { user_id: 'bob' }, emojis: ['👍'] }] } });
+		next.receive({ method: 'message', params: entry(23, side.room_id) });
+		next.receive({ method: 'room_update', params: { updated: [{ ...general, latest_log_id: at(16) }] } });
+		await settle();
+		expect(histories(next)).toHaveLength(1);
+
+		next.drop();
+		vi.advanceTimersByTime(5_000);
+		const again = latest();
+		again.open();
+		again.receive({ method: 'server', params: { apron: 10, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
+		expect(again.request('room_list').params).toMatchObject({ latest_log_id: at(16) });
+		await again.reply('auth', { you: { user_id: 'ada', name: 'Ada' } });
+		await again.reply('room_list', { joined: [{ ...general, latest_log_id: at(30) }, { ...side, latest_log_id: at(31) }], left: [], users: [] });
+		expect(histories(again)).toEqual([{ after: at(17) }]);
+	});
+
+	it('leaves a room\u2019s checkpoint where the catch-up got to when it fails, whatever came live meanwhile', async () => {
+		const next = await reconnected();
+		await next.reply('auth', { you: { user_id: 'ada', name: 'Ada' } });
+		await next.reply('room_list', { joined: [{ ...general, latest_log_id: at(16) }, side], left: [], users: [] });
+		// Live during the catch-up: not yet a sign the room is complete up to there.
+		next.receive({ method: 'message', params: entry(17) });
+		next.receive({ id: next.request('history').id, error: { code: -32603, message: 'internal' } });
+		await settle();
+		expect(histories(next).at(-1)).toEqual({ room_id: 'general', after: at(13), before: at(17) });
+	});
+
+	it('lets a changed room that was quiet long before catch up by itself, and the rest together from where they were', async () => {
+		// General was last caught up two hours before the thread's latest reply.
+		const HOUR = 60 * 60 * 1000;
+		const busy = { ...side, latest_log_id: at(2 * HOUR + 22) };
+		vi.setSystemTime(NOW + 2 * HOUR + 60_000);
+		const first = latest();
+		first.open();
+		first.receive({ method: 'server', params: { apron: 10, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
+		await first.reply('auth', { you: { user_id: 'ada', name: 'Ada' }, token: 'secret' });
+		await first.reply('room_list', { joined: [general, busy], users: [] });
+		await first.reply('history', { messages: [entry(11), entry(12)], more: false, latest_log_id: at(12), history_log_id: at(10) });
+		first.drop();
+		vi.advanceTimersByTime(5_000);
+		const next = latest();
+		next.open();
+		next.receive({ method: 'server', params: { apron: 10, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
+		await next.reply('auth', { you: { user_id: 'ada', name: 'Ada' } });
+		await next.reply('room_list', { joined: [{ ...general, latest_log_id: at(2 * HOUR + 30) }, { ...busy, latest_log_id: at(2 * HOUR + 31) }], left: [], users: [] });
+		// The thread's records from where it was; general from its own checkpoint, each request in turn.
+		expect(histories(next)).toEqual([{ after: at(2 * HOUR + 23) }]);
+		await next.reply('history', { messages: [entry(2 * HOUR + 30), entry(2 * HOUR + 31, side.room_id)], more: false, latest_log_id: at(2 * HOUR + 31), history_log_id: at(10) });
+		await settle();
+		expect(histories(next)).toEqual([{ after: at(2 * HOUR + 23) }, { room_id: 'general', after: at(13), before: at(2 * HOUR + 30) }]);
 	});
 
 	it('loads a thread opened during the catch-up once after it, however often it is asked meanwhile', async () => {
