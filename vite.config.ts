@@ -47,6 +47,8 @@ export default defineConfig(({ command }) => {
 			})
 		],
 		test: {
+			// Bundled for the tests too, so they meet the linkify-it stub as the app does (rather than Node's linkify-it).
+			server: { deps: { inline: ['markdown-it'] } },
 			projects: [
 				{ extends: true, test: { name: 'unit', include: ['src/**/*.test.ts'], exclude: ['src/**/*.svelte.test.ts', ...MOCKING], isolate: false } },
 				{ extends: true, test: { name: 'mocking', include: MOCKING_NODE.length ? MOCKING_NODE : ['no-such-file'] } },

@@ -10,8 +10,8 @@
 			"domNodes": 537,
 			"layouts": 10,
 			"styleRecalcs": 18,
-			"calls": 238093,
-			"heapMB": 8.3
+			"calls": 237503,
+			"heapMB": 8.4
 		},
 		"load-busy": {
 			"requests": 19,
@@ -19,62 +19,62 @@
 			"domNodes": 1193,
 			"layouts": 13,
 			"styleRecalcs": 20,
-			"calls": 1841360,
-			"heapMB": 10.8
+			"calls": 1838890,
+			"heapMB": 10.9
 		},
 		"switch-room-busy": {
 			"layouts": 2,
 			"styleRecalcs": 12,
-			"calls": 90127
+			"calls": 90041
 		},
 		"send-message-busy": {
 			"layouts": 38,
 			"styleRecalcs": 16,
-			"calls": 295661
+			"calls": 294826
 		},
 		"sidebar-collapse": {
 			"layouts": 3,
 			"styleRecalcs": 5,
-			"calls": 2598
+			"calls": 2597
 		},
 		"member-list-hide": {
 			"layouts": 1,
 			"styleRecalcs": 5,
-			"calls": 1226
+			"calls": 1229
 		},
 		"member-list-overlay-open": {
 			"layouts": 0,
 			"styleRecalcs": 4,
-			"calls": 452
+			"calls": 448
 		},
 		"open-thread": {
 			"layouts": 4,
 			"styleRecalcs": 14,
-			"calls": 70080
+			"calls": 70008
 		},
 		"open-preferences": {
 			"layouts": 3,
 			"styleRecalcs": 9,
-			"calls": 4297
+			"calls": 4287
 		},
 		"scroll-timeline": {
 			"layouts": 9,
 			"styleRecalcs": 9,
-			"calls": 8763
+			"calls": 8796
 		},
 		"type-composer": {
 			"layouts": 36,
 			"styleRecalcs": 6,
-			"calls": 41977
+			"calls": 41853
 		},
 		"hover-messages": {
 			"layouts": 7,
 			"styleRecalcs": 10,
-			"calls": 7278
+			"calls": 7255
 		}
 	},
 	"bundle": {
-		"jsGzipKB": 607.1,
+		"jsGzipKB": 609.4,
 		"cssGzipKB": 25.8
 	}
 }

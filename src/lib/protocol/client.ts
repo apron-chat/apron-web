@@ -1,4 +1,4 @@
-import { describeError, type PasskeyStage } from './passkey-notes';
+import { describeError, isCancelled, type PasskeyStage } from './passkey-notes';
 import { requestPasskey, signalPasskeyLabel } from './webauthn';
 import { writeEmbed } from './embeds';
 import { SignInConnection, type RpcFailure } from './signin-connection';
@@ -1075,8 +1075,10 @@ export class ChatClient {
 			// The diagnostics load only now: they decode what the browser handed back, which no ceremony that works needs.
 			const report = { action, stage, cause, server: this.serverUrl, requestedName: requested, publicKey: begun?.publicKey, credential };
 			void import('./passkey-diagnostics').then(({ logPasskeyFailure }) => logPasskeyFailure(report)).catch(() => {
-				// They couldn't be fetched (offline, or a deploy since): say what failed, without the decoding.
-				console.warn(`[apron] passkey ${action} failed during ${stage}`, { error: describeError(cause), server: report.server });
+				// They couldn't be fetched (offline, or a deploy since): say what failed, as they would, without the decoding.
+				const error = describeError(cause);
+				const line = `[apron] passkey ${action} failed during ${stage}: ${error.message}`;
+				(isCancelled(error, stage) ? console.info : console.warn)(line, { stage, error, server: report.server });
 			});
 			throw cause;
 		} finally {

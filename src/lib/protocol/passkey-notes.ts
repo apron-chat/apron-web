@@ -30,3 +30,8 @@ export function describeError(cause: unknown): { name: string; message: string; 
 	}
 	return { name: typeof cause, message: String(cause) };
 }
+
+/** A ceremony the person called off (dismissed the browser's sheet, or it was aborted): logged as info, not a warning. */
+export function isCancelled(error: { name: string }, stage: PasskeyStage): boolean {
+	return error.name === 'AbortError' || (error.name === 'NotAllowedError' && stage === 'browser');
+}

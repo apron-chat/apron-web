@@ -119,16 +119,19 @@
 	 * the page loads to start. Until then a room can't be dragged (Alt+↑/↓ still move it, and a click still opens it).
 	 * The list is marked `data-reorderable` once it can.
 	 */
-	let askedForDrag = false;
+	/** When a pointer over the room lists last asked for the drag code; it asks again only after `DRAG_ASK_EVERY_MS`. */
+	let dragAskedAt = -Infinity;
+	const DRAG_ASK_EVERY_MS = 30_000;
 	function reorderable(node: HTMLElement, options: DndOptions<RoomSnapshot>): ActionReturn<DndOptions<RoomSnapshot>, DndZoneAttributes<RoomSnapshot>> {
 		let latest = options;
 		let zone: ActionReturn<DndOptions<RoomSnapshot>, DndZoneAttributes<RoomSnapshot>> | undefined;
 		let gone = false;
-		// Asked once, by either list: a load that fails is left to the page's own retries (a dialog opening, the
-		// prefetch), not to every pointer that crosses a row, each of which would fetch again (and say Apron was updated).
+		// Asked by either list, at most every 30 s: a load that failed (offline, say) is tried again by a later pointer, or
+		// by anything else that loads the chunk (a dialog opening), not by every pointer that crosses a row, each of which
+		// would fetch again (and say Apron was updated).
 		const ask = () => {
-			if (askedForDrag) return;
-			askedForDrag = true;
+			if (performance.now() - dragAskedAt < DRAG_ASK_EVERY_MS) return;
+			dragAskedAt = performance.now();
 			roomDrag.load().catch(() => undefined);
 		};
 		node.addEventListener('pointerover', ask);

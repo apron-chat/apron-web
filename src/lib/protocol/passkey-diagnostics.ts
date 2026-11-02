@@ -9,7 +9,7 @@
  *
  * Loaded only when a ceremony fails (`ChatClient`'s dynamic import): what runs on every ceremony is `passkey-notes`.
  */
-import { credentialSource, describeError, type PasskeyStage } from './passkey-notes';
+import { credentialSource, describeError, isCancelled, type PasskeyStage } from './passkey-notes';
 import { isJsonObject, type JsonObject } from './types';
 
 export { credentialSource, describeError, noteCredentialSource, type CredentialSource, type PasskeyStage } from './passkey-notes';
@@ -161,7 +161,7 @@ export async function logPasskeyFailure(report: {
 		...(publicKey ? { options: describeOptions(action, publicKey) } : {}),
 		...(credential ? { credential: await describeCredential(credential, { challenge, origin, rpId: rpId ?? globalThis.location?.hostname }).catch((failure) => ({ error: String(failure) })) } : {})
 	};
-	const cancelled = error.name === 'AbortError' || (error.name === 'NotAllowedError' && stage === 'browser');
+	const cancelled = isCancelled(error, stage);
 	const line = `[apron] passkey ${action} failed during ${stage}: ${error.message}`;
 	if (cancelled) console.info(line, details);
 	else console.warn(line, details);
