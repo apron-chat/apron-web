@@ -247,6 +247,11 @@ export class ChatClient {
 		/** Each room's `loadRoom` while this runs, one per room however often it's asked, so it loads at most once after. */
 		waits: Map<string, Promise<void>>;
 	};
+	/**
+	 * Joined rooms kept from the last connection that wait for the listing of changes since (`listJoinedRooms`) to
+	 * catch up together: only those it lists changed, and they start from the oldest of their checkpoints.
+	 */
+	private joinedPlanned?: Set<string>;
 	/** The server that answered a `history` without `room_id` with `unsupported`: rooms catch up one by one there. */
 	private joinedHistoryUnsupportedOn?: string;
 	/** Transient notices per room, for the session (§3.5). */
@@ -2459,15 +2464,19 @@ export class ChatClient {
 			// Behind an `auth` that failed, the listing ran with the connection's authentication as
 			// that left it (§3.2), none here: whatever it says is no one's rooms, so it is dropped.
 			if (!this.authenticated) {
+				this.joinedPlanned = undefined;
 				this.emit();
 				return;
 			}
 			if (listing.since !== undefined && this.you?.user_id !== listing.userId) {
 				// Another identity than the kept rooms': what changed since is someone else's story.
+				this.joinedPlanned = undefined;
 				this.listJoinedRooms();
 				this.emit();
 				return;
 			}
+			// Before the listing applies, so its rooms wait for the catch-up rather than each resuming.
+			if (listing.since !== undefined) this.startPlannedCatchUp(result);
 			this.applyRoomList(result, true);
 			this.joinedComplete = true;
 			this.settleHeldStatuses();
@@ -2488,6 +2497,7 @@ export class ChatClient {
 				return;
 			}
 			this.settleHeldStatuses();
+			this.startPlannedCatchUp(undefined);
 			// Behind a failed `auth` the listing likely failed too; that failure speaks for itself.
 			if (this.authenticated) this.error = `Unable to list your rooms: ${cause.message}`;
 			this.emit();
@@ -3373,7 +3383,10 @@ export class ChatClient {
 		if (!this.hasCap('rooms')) return;
 		const since = sameIdentity ? this.keptPosition() : undefined;
 		this.listJoinedRooms(since);
-		const together = since !== undefined && this.catchesUpTogether(since) ? new Set<string>() : undefined;
+		// Where every kept room is complete is at most as recent as where the changed ones are: when even that is recent,
+		// they wait for the listing to catch up together; otherwise each resumes right behind `auth`.
+		const together = since !== undefined && this.hasCap('history') && this.joinedHistoryUnsupportedOn !== this.serverUrl && this.catchesUpTogether(since)
+			? new Set<string>() : undefined;
 		for (const [roomId, kept] of [...this.retainedRooms]) {
 			if (this.rooms.has(roomId)) continue;
 			const room = this.adoptRetainedRoom(roomId)!;
@@ -3383,17 +3396,47 @@ export class ChatClient {
 			if (together) together.add(roomId);
 			else if (this.recoversAutomatically(room) && room.checkpoint !== undefined && !room.recovery) this.startRecovery(room, undefined, false);
 		}
-		if (together?.size) this.catchUpJoined(since!, together);
-		else if (together) this.resumeEach(together);
+		this.joinedPlanned = together?.size ? together : undefined;
 	}
 
 	/**
-	 * Whether the joined rooms kept from the last connection, all complete up to `position`, catch up together, with
-	 * one `history` without `room_id` (§4.3): where the server hasn't said it can't, and `position` is recent enough
-	 * (JOINED_CATCH_UP_MS) on a server whose `log_id`s are times.
+	 * The listing of changes since arrived (`result`, not yet applied): the kept rooms it lists catch up together
+	 * from the oldest of their checkpoints, if that is recent enough (`catchesUpTogether`); the others have nothing
+	 * new. Otherwise, as when the listing fails, each room catches up by itself.
+	 */
+	private startPlannedCatchUp(result: JsonObject | undefined): void {
+		const planned = this.joinedPlanned;
+		this.joinedPlanned = undefined;
+		if (!planned) return;
+		const listed = new Set<string>();
+		for (const value of Array.isArray(result?.joined) ? result.joined : []) {
+			if (isJsonObject(value) && typeof value.room_id === 'string' && planned.has(value.room_id)) listed.add(value.room_id);
+		}
+		let position: string | undefined;
+		for (const roomId of listed) {
+			const room = this.rooms.get(roomId);
+			// Where it's complete up to, as for the listing's `latest_log_id` (`keptPosition`).
+			const synced = !room ? undefined : this.isThread(roomId) ? room.latestLogId : room.recoveryError ? undefined : room.checkpoint;
+			if (synced === undefined) {
+				position = undefined;
+				break;
+			}
+			if (position === undefined || compareLogIds(synced, position) < 0) position = synced;
+		}
+		if (result && position !== undefined && this.catchesUpTogether(position)) {
+			this.catchUpJoined(position, listed);
+			return;
+		}
+		// Each by itself: a listed room as the listing shows it (`showRoom`), one not listed as it would have behind `auth`.
+		if (!result) this.resumeEach(planned);
+	}
+
+	/**
+	 * Whether the changed joined rooms kept from the last connection, all complete up to `position`, catch up
+	 * together, with one `history` without `room_id` (§4.3): when `position` is recent enough (JOINED_CATCH_UP_MS) on
+	 * a server whose `log_id`s are times. Older, the other joined rooms' records since would be mostly ones this has.
 	 */
 	private catchesUpTogether(position: string): boolean {
-		if (!this.hasCap('history') || this.joinedHistoryUnsupportedOn === this.serverUrl) return false;
 		const at = Number(position);
 		return !Number.isSafeInteger(at) || Date.now() - at <= JOINED_CATCH_UP_MS;
 	}
@@ -3504,9 +3547,8 @@ export class ChatClient {
 			const room = this.rooms.get(roomId);
 			if (!room) continue;
 			room.dirty = true;
-			if (complete && this.isThread(roomId) && room.loadCheckpoint !== undefined && run.head !== undefined && compareLogIds(room.loadCheckpoint, run.head) >= 0) {
-				room.resumed = false;
-			}
+			if (!complete || run.head === undefined) continue;
+			if (this.isThread(roomId) && room.loadCheckpoint !== undefined && compareLogIds(room.loadCheckpoint, run.head) >= 0) room.resumed = false;
 		}
 		if (complete) {
 			for (const roomId of run.rooms) {
@@ -4599,6 +4641,7 @@ export class ChatClient {
 		this.memberChangesUnsupported = false;
 		this.joinedCatchUp?.settle();
 		this.joinedCatchUp = undefined;
+		this.joinedPlanned = undefined;
 	}
 
 	/** The room to show when none is chosen: the first joined top-level room, else the first joined one. */

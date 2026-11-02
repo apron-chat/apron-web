@@ -822,11 +822,13 @@ describe('catching up every joined room together (`history` without `room_id`)',
 
 	it('asks once for what came in every joined room since they were all complete, threads included', async () => {
 		const next = await reconnected();
-		// Right behind auth, in place of each room's resume: the joined rooms' log from where all were complete.
-		expect(histories(next)).toEqual([{ after: at(13) }]);
+		// No resume right behind auth: the listing of changes since says which rooms need one.
+		expect(histories(next)).toEqual([]);
 		expect(next.request('room_list').params).toMatchObject({ latest_log_id: at(12) });
 		await next.reply('auth', { you: { user_id: 'ada', name: 'Ada' } });
 		await next.reply('room_list', { joined: [{ ...general, latest_log_id: at(14) }, { ...side, latest_log_id: at(23) }], left: [], users: [] });
+		// In place of each room's resume: the joined rooms' log from where the changed ones were all complete.
+		expect(histories(next)).toEqual([{ after: at(13) }]);
 		expect(room('general').recovering).toBe(true);
 		await next.reply('history', { messages: [entry(14), entry(23, side.room_id)], more: false, latest_log_id: at(23), history_log_id: at(10) });
 		await settle();
@@ -907,6 +909,28 @@ describe('catching up every joined room together (`history` without `room_id`)',
 		later.receive({ method: 'server', params: { apron: 10, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
 		expect(later.request('room_list').params).toMatchObject({ latest_log_id: at(22) });
 		expect(histories(later)).toEqual([{ room_id: 'general', after: at(23) }]);
+	});
+
+	it('asks nothing when the listing says nothing changed', async () => {
+		const next = await reconnected();
+		await next.reply('auth', { you: { user_id: 'ada', name: 'Ada' } });
+		await next.reply('room_list', { joined: [], left: [], users: [] });
+		await settle();
+		expect(histories(next)).toEqual([]);
+		expect(room('general')).toMatchObject({ loaded: true, recovering: false });
+		expect(room(side.room_id).timeline.order).toEqual([at(21), at(22)]);
+	});
+
+	it('starts from where the changed rooms were complete, however far back a quiet one was', async () => {
+		const next = await reconnected();
+		await next.reply('auth', { you: { user_id: 'ada', name: 'Ada' } });
+		// Only the thread changed: general, complete only up to 12, has nothing new and doesn't hold the start back.
+		await next.reply('room_list', { joined: [{ ...side, latest_log_id: at(23) }], left: [], users: [] });
+		expect(histories(next)).toEqual([{ after: at(23) }]);
+		await next.reply('history', { messages: [entry(23, side.room_id)], more: false, latest_log_id: at(23), history_log_id: at(10) });
+		await settle();
+		expect(room(side.room_id).timeline.order).toEqual([at(21), at(22), at(23)]);
+		expect(histories(next)).toHaveLength(1);
 	});
 
 	it('loads a thread opened during the catch-up once after it, however often it is asked meanwhile', async () => {
