@@ -754,7 +754,9 @@ stored history), and with it how far each joined room is caught up. The next vis
 at once and goes on as a reconnect does: each room asks the server only for what
 came after its checkpoint (§4.3.5), and the joined listing only for rooms that
 changed since (`latest_log_id`, §4.2.1); a thread opened again goes on from
-where its last load got to. Each room opens with the newest fifty entries of its
+where its last load got to, and a joined thread loaded before that the listing
+says moved on catches up by itself, behind the open room's history, so its row
+shows its latest reply and counts what's new before it is opened. Each room opens with the newest fifty entries of its
 log (messages, reaction sets and joins and leaves); as
 you scroll back, older pages come from this device first, then from the server
 once what is kept runs out, as messages older than the retention do. The retention counts by when a message
@@ -923,7 +925,7 @@ never pulse or notify. That takes a server that keeps your read cursors
 (capability `activity`, without `read_cursors: false`), which carry what you
 read on your other devices; elsewhere, as without a read position for a room,
 only what arrives while the page is open counts, so nothing you read on
-another device counts again here. A thread counts once it is opened, as its replies load only then.
+another device counts again here. A thread counts once it has loaded here: opened once, it catches up by itself after a reconnect or a reload (a joined one); never opened, its replies load only when it is.
 A room someone else added you to counts from your join.
 
 With the `rooms` capability, rooms come by request ([PROTOCOL.md §4.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#42-rooms)): right behind

@@ -60,6 +60,12 @@ export interface RoomState {
 	loadingOlder?: boolean;
 	loadGeneration: number;
 	loading: boolean;
+	/**
+	 * A thread's load under way that nobody asked for (`catchUpThread`), while it is: its `history` request out or
+	 * waiting (`requestId`), and whether it still waits behind what the reader waits for (`background`), until a
+	 * `loadRoom` takes it over.
+	 */
+	catchUp?: { promise: Promise<void>; requestId?: string; background: boolean };
 	/** The published timeline; rebuilt from the store when dirty and not recovering. */
 	timeline: TimelineState;
 	dirty: boolean;

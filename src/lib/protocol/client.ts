@@ -2673,7 +2673,9 @@ export class ChatClient {
 
 	/**
 	 * Loads a room's history (§4.3). Threads and rooms opened without joining
-	 * never recover automatically: call this when one is opened. It loads the
+	 * never recover automatically: call this when one is opened (a joined
+	 * thread loaded before does catch up by itself when a listing says it moved
+	 * on, `catchUpThread`, and this then waits for that). It loads the
 	 * newest page the first time, and afterwards pages from the previous load's
 	 * checkpoint up to the head known at the call, resolving after the last
 	 * page. For a joined top-level room, which recovers automatically, it waits
@@ -2695,10 +2697,33 @@ export class ChatClient {
 			}
 			return settled;
 		}
+		if (room.catchUp) {
+			// Catching up by itself already: the reader waits for that load now, which goes as one asked for.
+			const run = room.catchUp;
+			run.background = false;
+			if (run.requestId !== undefined) this.historyQueue.hasten(run.requestId);
+			return run.promise;
+		}
 		return this.loadThread(room);
 	}
 
-	private async loadThread(room: RoomState): Promise<void> {
+	/**
+	 * Loads a thread's history: its newest page the first time, then forward from its last load's checkpoint.
+	 * In the `background` (a joined thread catching up by itself, `catchUpThread`) it waits behind what the reader
+	 * waits for, and a failure is no error to show: the thread loads again when opened.
+	 */
+	private loadThread(room: RoomState, background = false): Promise<void> {
+		if (!background) return this.runThreadLoad(room);
+		const run: NonNullable<RoomState['catchUp']> = { promise: Promise.resolve(), background: true };
+		room.catchUp = run;
+		run.promise = this.runThreadLoad(room, run).finally(() => {
+			if (room.catchUp === run) room.catchUp = undefined;
+		});
+		return run.promise;
+	}
+
+	private async runThreadLoad(room: RoomState, run?: NonNullable<RoomState['catchUp']>): Promise<void> {
+		const background = () => run?.background === true;
 		const head = room.latestLogId;
 		if (!head) {
 			room.resumed = false;
@@ -2728,7 +2753,9 @@ export class ChatClient {
 			let checkpoint: string | undefined = room.loadCheckpoint;
 			let after: string | undefined = maxDefined(checkpoint === undefined ? undefined : increment(checkpoint), room.floor) ?? FIRST_LOG_ID;
 			while (after === undefined || compareLogIds(after, head) <= 0) {
-				const result = await this.historyQueue.request(room.id, historyParams(room.id, after, head), { retry: true }).promise;
+				const request = this.historyQueue.request(room.id, historyParams(room.id, after, head), { retry: !background() });
+				if (run) run.requestId = request.id;
+				const result = await request.promise;
 				if (stale()) return;
 				if (!validHistoryMetadata(result)) throw new Error('Invalid history response');
 				this.observeHistoryResponse(room, result);
@@ -2757,7 +2784,7 @@ export class ChatClient {
 			room.loadCheckpoint = maxDefined(checkpoint, head);
 			room.resumed = false;
 		} catch (cause) {
-			if (!stale()) room.recoveryError = cause instanceof Error ? cause.message : 'History failed';
+			if (!stale() && !background()) room.recoveryError = cause instanceof Error ? cause.message : 'History failed';
 			throw cause;
 		} finally {
 			if (!stale()) room.loading = false;
@@ -3753,7 +3780,22 @@ export class ChatClient {
 			this.observeBoundary(room, decoded.delivery.history_log_id, listedHead ?? room.latestLogId);
 		}
 		this.recoverIfBehind(room, !existing);
+		this.catchUpThread(room);
 		if (listedHead !== undefined) this.settleQueuedResume(room, room.latestLogId);
+	}
+
+	/**
+	 * A joined thread loaded before (on this connection or kept on this device) whose head moved past that load
+	 * while the connection was away, a reconnect or a reload: it loads what it missed now, in the background,
+	 * rather than when it is next opened, so its row's latest reply and unread count are current meanwhile.
+	 * Live delivery covers it from the listing on. A thread never loaded here still waits to be opened.
+	 */
+	private catchUpThread(room: RoomState): void {
+		const head = room.latestLogId;
+		if (room.kind !== 'joined' || !room.resumed || room.loading || room.loadCheckpoint === undefined || head === undefined) return;
+		if (!this.isThread(room.id) || !this.authenticated || !this.hasCap('history')) return;
+		if (compareLogIds(head, room.loadCheckpoint) <= 0) return;
+		this.loadThread(room, true).catch(() => undefined);
 	}
 
 	/**
@@ -4279,6 +4321,7 @@ export class ChatClient {
 		room.limited = false;
 		room.recovery = undefined;
 		room.loadGeneration += 1;
+		room.catchUp = undefined;
 		for (const waiter of room.waiters.splice(0)) waiter.reject(new Error(reason));
 	}
 
