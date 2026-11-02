@@ -60,6 +60,19 @@ export interface RoomState {
 	loadingOlder?: boolean;
 	loadGeneration: number;
 	loading: boolean;
+	/**
+	 * A thread's load under way that nobody asked for (`catchUpThread`), while it is: its `history` request out or
+	 * waiting (`requestId`), and whether it still waits behind what the reader waits for (`background`), until a
+	 * `loadRoom` takes it over.
+	 */
+	catchUp?: { promise: Promise<void>; requestId?: string; background: boolean };
+	/**
+	 * A room recovered on this connection with nothing missing since: each record live delivery brings it moves its
+	 * checkpoint (`noteLive`).
+	 */
+	synced?: boolean;
+	/** A thread's catch-up by itself failed on this connection: it doesn't try again until opened or reconnected. */
+	catchUpFailed?: boolean;
 	/** The published timeline; rebuilt from the store when dirty and not recovering. */
 	timeline: TimelineState;
 	dirty: boolean;
@@ -180,7 +193,23 @@ export class RequestTimeout extends Error {
 export const AGENT = 'apron-web/0.4';
 /** The `unsupported` error code (§1.1): a method or an optional parameter the server does not implement. */
 export const UNSUPPORTED = -32601;
-const HISTORY_PAGE_SIZE = 200;
+export const HISTORY_PAGE_SIZE = 200;
+/**
+ * A reconnect catches up the joined rooms kept from the last connection that changed meanwhile with one `history`
+ * without `room_id` (§4.3) when where they are all complete is at most this old (on servers whose `log_id`s are
+ * times): about a day, so a laptop closed overnight still takes it. Live delivery moves a room's checkpoint, so
+ * that is about when the connection was lost (the rooms quiet long before then catch up by themselves,
+ * JOINED_SPREAD_MS).
+ */
+export const JOINED_CATCH_UP_MS = 24 * 60 * 60 * 1000;
+/**
+ * Changed rooms complete up to within this of the newest of them catch up together; one complete only up to earlier,
+ * quiet for a while before the connection was lost, catches up by itself, rather than have the joined rooms' log
+ * start back there and bring the others' records since, which this has (on servers whose `log_id`s are times).
+ */
+export const JOINED_SPREAD_MS = 60 * 60 * 1000;
+/** At most this many pages of the joined rooms' log; past them, each room catches up on its own from where it got to. */
+export const JOINED_CATCH_UP_PAGES = 5;
 /** A thread, or a room with no checkpoint, opens on its newest page this size; older pages load as the reader scrolls back. */
 export const THREAD_PAGE_SIZE = 50;
 /** The longest a new session's sign-in waits for what runs before it (`beforeFreshSession`). */

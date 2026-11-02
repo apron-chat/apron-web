@@ -755,16 +755,22 @@ export class MemoryProtocolServer {
 		return this.hidden(room.parent_room_id ? this.rooms.get(room.parent_room_id) : undefined);
 	}
 
+	/** A room's log (`room_id`), or without one every joined room's as one log (§4.3); messages only. */
 	private history(params: JsonObject): JsonObject {
-		const room = this.rooms.get(String(params.room_id ?? roomId));
-		if (!room) throw new Error('Unknown room');
+		const joined = params.room_id === undefined ? [...this.rooms.values()].filter((candidate) => candidate.members.has('preview_guest')) : undefined;
+		const room = joined ? undefined : this.rooms.get(String(params.room_id));
+		if (!joined && !room) throw new Error('Unknown room');
+		const rooms = joined ?? [room!];
 		const hasBefore = params.before !== undefined;
 		const before = Number(params.before ?? Number.MAX_SAFE_INTEGER);
 		const after = Number(params.after ?? 1);
 		const limit = Math.max(1, Math.min(Number(params.limit) || 200, 200));
-		const all = room.messages.filter((message) => Number(message.log_id) >= after && Number(message.log_id) <= before).sort((a, b) => Number(a.log_id) - Number(b.log_id));
+		const all = rooms.flatMap((candidate) => candidate.messages)
+			.filter((message) => Number(message.log_id) >= after && Number(message.log_id) <= before).sort((a, b) => Number(a.log_id) - Number(b.log_id));
 		const page = hasBefore ? all.slice(-limit) : all.slice(0, limit);
-		return { messages: page, more: all.length > page.length, latest_log_id: String(room.log_id), history_log_id: room.messages[0]?.log_id ?? null,
+		const starts = rooms.flatMap((candidate) => (candidate.messages[0] ? [Number(candidate.messages[0].log_id)] : []));
+		return { messages: page, more: all.length > page.length, latest_log_id: String(Math.max(0, ...rooms.map((candidate) => candidate.log_id))),
+			history_log_id: starts.length ? String(Math.min(...starts)) : null,
 			...(page.length ? { first_log_id: page[0].log_id, last_log_id: page.at(-1)!.log_id } : {}) };
 	}
 
