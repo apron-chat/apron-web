@@ -6,26 +6,13 @@
  * credential the browser handed back usually says why. Nothing logged is
  * secret: the options and the credential are public by design, and the
  * credential's signature is not logged.
+ *
+ * Loaded only when a ceremony fails (`ChatClient`'s dynamic import): what runs on every ceremony is `passkey-notes`.
  */
+import { credentialSource, describeError, type PasskeyStage } from './passkey-notes';
 import { isJsonObject, type JsonObject } from './types';
 
-export type PasskeyStage = 'waiting' | 'begin' | 'browser' | 'finish';
-
-/** How a credential was turned into JSON (see `credentialJSON`): the browser's `toJSON`, or its fields read one by one, and why. */
-export interface CredentialSource {
-	source: 'toJSON' | 'fields';
-	note?: string;
-}
-
-const sources = new WeakMap<JsonObject, CredentialSource>();
-
-export function noteCredentialSource(json: JsonObject, source: CredentialSource): void {
-	sources.set(json, source);
-}
-
-export function credentialSource(json: JsonObject): CredentialSource | undefined {
-	return sources.get(json);
-}
+export { credentialSource, describeError, noteCredentialSource, type CredentialSource, type PasskeyStage } from './passkey-notes';
 
 /** The parts of the server's options (§4.10 `public_key`) that decide what a browser or extension will do. */
 export function describeOptions(action: 'register' | 'login', publicKey: JsonObject | undefined): Record<string, unknown> | undefined {
@@ -178,14 +165,6 @@ export async function logPasskeyFailure(report: {
 	const line = `[apron] passkey ${action} failed during ${stage}: ${error.message}`;
 	if (cancelled) console.info(line, details);
 	else console.warn(line, details);
-}
-
-export function describeError(cause: unknown): { name: string; message: string; code?: number } {
-	if (cause instanceof Error || (typeof DOMException !== 'undefined' && cause instanceof DOMException)) {
-		const code = (cause as Error & { code?: unknown }).code;
-		return { name: cause.name, message: cause.message, ...(typeof code === 'number' ? { code } : {}) };
-	}
-	return { name: typeof cause, message: String(cause) };
 }
 
 function truncate(value: string): string {

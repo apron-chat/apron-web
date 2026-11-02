@@ -1,4 +1,4 @@
-import { describeError, logPasskeyFailure, type PasskeyStage } from './passkey-diagnostics';
+import { describeError, type PasskeyStage } from './passkey-notes';
 import { requestPasskey, signalPasskeyLabel } from './webauthn';
 import { writeEmbed } from './embeds';
 import { SignInConnection, type RpcFailure } from './signin-connection';
@@ -1072,7 +1072,9 @@ export class ChatClient {
 			if (controller.signal.aborted || connection !== this.connectionId) throw new Error('Connection changed; try again');
 			return await this.passkeyFinish(action, begun, credential, controller, connection, requested);
 		} catch (cause) {
-			void logPasskeyFailure({ action, stage, cause, server: this.serverUrl, requestedName: requested, publicKey: begun?.publicKey, credential });
+			// The diagnostics load only now: they decode what the browser handed back, which no ceremony that works needs.
+			const report = { action, stage, cause, server: this.serverUrl, requestedName: requested, publicKey: begun?.publicKey, credential };
+			void import('./passkey-diagnostics').then(({ logPasskeyFailure }) => logPasskeyFailure(report)).catch(() => undefined);
 			throw cause;
 		} finally {
 			if (this.passkeyStarting === controller) this.passkeyStarting = undefined;

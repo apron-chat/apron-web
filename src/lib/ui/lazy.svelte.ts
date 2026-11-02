@@ -9,16 +9,27 @@ export class Lazy<T> {
 	#component = $state<T>();
 	#loading?: Promise<T>;
 	#load: () => Promise<T>;
+	#arrived: Promise<T>;
 
 	/** `load` imports the code, once asked: `() => import('./on-demand').then((m) => m.Dialog)`. */
 	constructor(load: () => Promise<T>) {
-		this.#load = load;
+		let arrive!: (component: T) => void;
+		this.#arrived = new Promise((settle) => (arrive = settle));
+		this.#load = () => load().then((component) => (arrive(component), component));
 		registered.push(this);
 	}
 
 	get component(): T | undefined {
 		if (this.#component === undefined) this.load().catch(() => undefined);
 		return this.#component;
+	}
+
+	/**
+	 * Settles once the code has loaded, whoever asked for it (`prefetchLazy`, say), without asking for it itself: for
+	 * what can wait to be asked for, and should hold nothing up meanwhile.
+	 */
+	whenLoaded(): Promise<T> {
+		return this.#arrived;
 	}
 
 	load(): Promise<T> {

@@ -11,3 +11,8 @@ export const preferencesDialog = new Lazy(() => onDemand().then((m) => m.Prefere
 export const roomEditor = new Lazy(() => onDemand().then((m) => m.RoomEditor));
 export const searchDialog = new Lazy(() => onDemand().then((m) => m.SearchDialog));
 export const signInLinkDialog = new Lazy(() => onDemand().then((m) => m.SignInLinkDialog));
+export const profileEditor = new Lazy(() => onDemand().then((m) => m.ProfileEditor));
+/** Not a component: `archiveExport.load()` gives `exportArchive`. */
+export const archiveExport = new Lazy(() => onDemand().then((m) => m.exportArchive));
+/** svelte-dnd-action, for dragging rooms: `roomDrag.whenLoaded()` waits for it without fetching it (Sidebar's `reorderable`). */
+export const roomDrag = new Lazy(() => onDemand().then(({ dndzone, DRAGGED_ELEMENT_ID, SHADOW_PLACEHOLDER_ITEM_ID, TRIGGERS }) => ({ dndzone, DRAGGED_ELEMENT_ID, SHADOW_PLACEHOLDER_ITEM_ID, TRIGGERS })));

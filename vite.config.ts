@@ -6,6 +6,8 @@ import { defineConfig } from 'vitest/config';
 const fsModule = 'node:fs';
 const fs = (await import(/* @vite-ignore */ fsModule)) as { readdirSync(path: URL, options: { recursive: true }): string[]; readFileSync(path: URL, encoding: 'utf8'): string };
 const src = new URL('./src/', import.meta.url);
+const urlModule = 'node:url';
+const { fileURLToPath } = (await import(/* @vite-ignore */ urlModule)) as { fileURLToPath(url: URL): string };
 
 /**
  * The tests that mock a module (`vi.mock`). A mock takes only where the module is imported afresh, so these
@@ -30,6 +32,8 @@ export default defineConfig(({ command }) => {
 	const preview = command === 'serve' || env.APRON_PREVIEW === '1';
 	return {
 		define: { __APRON_PREVIEW__: JSON.stringify(preview) },
+		// markdown-it always constructs linkify-it, which Apron never uses (`linkify: false`): see the stub.
+		resolve: { alias: { 'linkify-it': fileURLToPath(new URL('lib/protocol/linkify-off.ts', src)) } },
 		plugins: [
 			sveltekit({
 				compilerOptions: {

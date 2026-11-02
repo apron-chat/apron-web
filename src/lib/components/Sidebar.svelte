@@ -14,7 +14,9 @@
 	import { loadSidebarFolds, loadThreadFolds, saveSidebarFolds, saveThreadFolds } from '$lib/ui/storage';
 	import { NARROW_MAX } from '$lib/ui/breakpoints';
 	import { flip } from 'svelte/animate';
-	import { dndzone, DRAGGED_ELEMENT_ID, SHADOW_PLACEHOLDER_ITEM_ID, TRIGGERS, type DndEvent } from 'svelte-dnd-action';
+	import type { DndEvent, DndZoneAttributes, Options as DndOptions } from 'svelte-dnd-action';
+	import type { ActionReturn } from 'svelte/action';
+	import { roomDrag } from './lazy';
 	import { RoomOrder } from '$lib/ui/room-order.svelte';
 	import type { SignOutHandler } from '$lib/ui/sign-in';
 	import type { KeptHistoryControls } from '$lib/history/history-keeper';
@@ -109,6 +111,39 @@
 	 * its section's column (`contain`), so it lands where it's seen: there's nowhere else to take it.
 	 */
 	const HOLD_MS = 350;
+	/** svelte-dnd-action, once it has come (`reorderable`): every drag event below is its, so they all find it here. */
+	let dnd: Awaited<ReturnType<typeof roomDrag.load>> | undefined;
+	/**
+	 * Makes a section's list one rooms are dragged in, once svelte-dnd-action has come: it's in the on-demand chunk,
+	 * fetched shortly after the page settles, or as soon as a pointer comes over the list, so it adds nothing to what
+	 * the page loads to start. Until then a room can't be dragged (Alt+↑/↓ still move it, and a click still opens it).
+	 * The list is marked `data-reorderable` once it can.
+	 */
+	function reorderable(node: HTMLElement, options: DndOptions<RoomSnapshot>): ActionReturn<DndOptions<RoomSnapshot>, DndZoneAttributes<RoomSnapshot>> {
+		let latest = options;
+		let zone: ActionReturn<DndOptions<RoomSnapshot>, DndZoneAttributes<RoomSnapshot>> | undefined;
+		let gone = false;
+		const ask = () => void roomDrag.load().catch(() => undefined);
+		node.addEventListener('pointerover', ask);
+		void roomDrag.whenLoaded().then((loaded) => {
+			if (gone) return;
+			dnd = loaded;
+			node.removeEventListener('pointerover', ask);
+			zone = loaded.dndzone(node, latest);
+			node.dataset.reorderable = '';
+		});
+		return {
+			update(next) {
+				latest = next;
+				zone?.update?.(next);
+			},
+			destroy() {
+				gone = true;
+				node.removeEventListener('pointerover', ask);
+				zone?.destroy?.();
+			}
+		};
+	}
 	/** How long the other rooms take to make way, none for reduced motion. */
 	const FLIP_MS = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 150;
 	type Section = 'rooms' | 'private';
@@ -133,6 +168,8 @@
 	/** The room button that had the keyboard as a drag began: the drag takes its row out of the page, and with it the keyboard. */
 	let refocus: string | undefined;
 	function consider(section: Section, event: CustomEvent<DndEvent<RoomSnapshot>>): void {
+		if (!dnd) return;
+		const { TRIGGERS, DRAGGED_ELEMENT_ID } = dnd;
 		const { items, info } = event.detail;
 		// Only a pointer carries a room: the library's keyboard drag is kept off (`guard`), but should one start, its end (with no drop) ends it here too.
 		if (info.trigger === TRIGGERS.DRAG_STOPPED) {
@@ -154,6 +191,8 @@
 	}
 	/** Dropped: next to the room shown before it in its section (or after it, at the top), so the ones a folded section hides keep their places. */
 	function finalize(section: Section, event: CustomEvent<DndEvent<RoomSnapshot>>): void {
+		if (!dnd) return;
+		const { TRIGGERS } = dnd;
 		const { items, info } = event.detail;
 		const { [section]: _done, ...rest } = carried;
 		carried = rest;
@@ -188,7 +227,7 @@
 	/** A room's block in its section's list, as `id` (the carried room's slot goes by the library's placeholder id at first). */
 	const roomOf = (block: Element, id: string) => {
 		const room = block.querySelector<HTMLElement>('button[data-room]')?.dataset.room;
-		return room === SHADOW_PLACEHOLDER_ITEM_ID ? id : room;
+		return room === dnd?.SHADOW_PLACEHOLDER_ITEM_ID ? id : room;
 	};
 	function seenLanding(copy: HTMLElement, zone: HTMLElement, id: string): string[] | undefined {
 		const box = copy.getBoundingClientRect();
@@ -577,7 +616,7 @@
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		class="ap-roomlist"
-		use:dndzone={{ items, type: section, flipDurationMs: FLIP_MS, delayTouchStart: HOLD_MS, zoneTabIndex: -1, zoneItemTabIndex: -1, autoAriaDisabled: true, dropTargetStyle: {}, transformDraggedElement: lift }}
+		use:reorderable={{ items, type: section, flipDurationMs: FLIP_MS, delayTouchStart: HOLD_MS, zoneTabIndex: -1, zoneItemTabIndex: -1, autoAriaDisabled: true, dropTargetStyle: {}, transformDraggedElement: lift }}
 		onconsider={(event) => consider(section, event)} onfinalize={(event) => finalize(section, event)} onkeydown={(event) => reorderKey(event, list)} {@attach guard}
 	>
 		{#each items as listedRoom (listedRoom.id)}

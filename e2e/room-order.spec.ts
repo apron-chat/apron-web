@@ -23,6 +23,9 @@ async function openGeneral(preview: Preview): Promise<void> {
 	await expect(preview.page.getByTestId('other-threads')).toBeAttached();
 	// And the rows they bring have grown into place: the rooms hold still from one look to the next.
 	const rooms = preview.page.getByRole('complementary', { name: 'Rooms' });
+	// Rooms can be dragged once svelte-dnd-action has come: the page fetches it after it settles (Sidebar's `reorderable`).
+	await expect(rooms.locator('.ap-roomlist[data-reorderable]').first()).toBeAttached();
+	await expect(rooms.locator('.ap-roomlist:not([data-reorderable])')).toHaveCount(0);
 	let last = '';
 	await expect.poll(async () => {
 		const now = JSON.stringify(await rooms.evaluate((side) => [...side.querySelectorAll('button[data-room]')].map((row) => Math.round(row.getBoundingClientRect().top))));
