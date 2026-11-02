@@ -36,7 +36,7 @@
 		note?: string;
 		/** Phones: a ‹ back to the rooms list. */
 		onback?: () => void;
-		/** Unread messages in the other rooms and threads, and how many mention you: the ‹ becomes the point of a tag holding the count, grey, or orange with an @ for a mention, as in the rooms list. */
+		/** Unread messages in the other rooms and threads, and how many mention you: the ‹ becomes the point of a tag holding the count, ink, or orange with an @ for a mention, as in the rooms list. */
 		unreadElsewhere?: number;
 		mentionsElsewhere?: number;
 		/** A thread is open in the main pane: shows `Parent › Thread`; the parent's title goes back via onroom. */
