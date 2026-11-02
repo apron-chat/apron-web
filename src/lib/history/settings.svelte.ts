@@ -61,6 +61,26 @@ export class HistorySettings {
 
 export const historySettings = new HistorySettings();
 
+/** What is kept on this device, as History's Clear buttons say it. */
+export interface KeptSummary {
+	/** Accounts with history kept, on every server. */
+	accounts: number;
+	/** Some of the signed-in account's is kept. */
+	current: boolean;
+	/** About how much this site keeps on this device (`storageUsed`). */
+	used?: string;
+}
+
+/**
+ * History's Clear buttons: the signed-in account's, and every account's (how many). Where the signed-in account
+ * is the only one kept, one button, with the space it takes.
+ */
+export function clearLabels({ accounts, current, used }: KeptSummary): { current?: string; all?: string } {
+	if (current && accounts <= 1) return { current: used ? `Clear current user (${used})` : 'Clear current user' };
+	const all = accounts ? `Clear all users (${accounts} ${accounts === 1 ? 'account' : 'accounts'}${used ? ` using ${used}` : ''})` : undefined;
+	return current ? { current: 'Clear current user', all } : { all };
+}
+
 /**
  * About how much this site keeps on this device, in words ("12 MB"), where the browser says: everything
  * of Apron's, history and the app's own files together.

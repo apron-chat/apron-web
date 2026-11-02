@@ -39,6 +39,9 @@ describe('persisted session tokens', () => {
 		await latest().greet([], { auth: ['webauthn', 'token', 'guest'], token: 'session-1' });
 		expect(authParams()).toEqual(expect.objectContaining({ scheme: 'guest' }));
 		expect(storage.get('apron.session:ws://fake.test/')).toBe('session-1');
+		// Whose it is, beside it: the history kept for that account is the one restored.
+		expect(storage.get('apron.session-user:ws://fake.test/')).toBe(snapshot.you?.user_id);
+		expect(snapshot.you?.user_id).toBeTruthy();
 		first.stop();
 
 		const { client: second } = startClient({ storage, onSnapshot: (next) => (snapshot = next) });
@@ -195,8 +198,10 @@ describe('persisted session tokens', () => {
 		storage.set('apron.session:ws://fake.test/', 'fresh');
 		const { client: again } = startClient({ storage });
 		await latest().greet([], { auth: ['webauthn', 'token', 'guest'], token: 'fresh' });
+		expect(storage.has('apron.session-user:ws://fake.test/')).toBe(true);
 		await again.signOut();
 		expect(storage.has('apron.session:ws://fake.test/')).toBe(false);
+		expect(storage.has('apron.session-user:ws://fake.test/')).toBe(false);
 		again.stop();
 	});
 

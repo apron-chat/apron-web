@@ -7,8 +7,9 @@
  *
  * Each account on each server has a database of its own, named for both
  * (`historyName`), so nothing read for one account can come from another's,
- * and forgetting one deletes its database. One account per server is kept, as
- * a saved session is: another account's sign-in there deletes the one before.
+ * and forgetting one deletes its database. Accounts' databases stay side by
+ * side, each restored as its account's saved session signs in again; one goes
+ * only when deleted on purpose (Sign out without Keep local history, or Clear).
  *
  * - `meta`, one row: whose it is, whether its joined set was complete, the
  *   kept users, and a `version` each write moves on, so a writer can tell

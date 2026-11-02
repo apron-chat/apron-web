@@ -1003,7 +1003,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-profedit-signout, .ap-profedit-inline { flex-direction: row; align-items: center; justify-content: space-between; gap: var(--space-3); }
 .ap-profedit-inline { display: flex; }
 .ap-profedit:not([role='dialog']) .ap-profedit-signin > .ap-profedit-inline { max-width: none; }
-.ap-profedit-signout .ap-form-hint, .ap-profedit-inline .ap-form-hint { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.ap-profedit-signout .ap-form-hint, .ap-profedit-inline .ap-form-hint, .ap-profedit-signout .ap-pref-check { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .ap-profedit-signout .ap-btn, .ap-profedit-inline .ap-btn { flex: none; }
 .ap-profedit-signout .ap-btn { color: var(--danger); }
 

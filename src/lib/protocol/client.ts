@@ -125,6 +125,7 @@ import {
 	roomTitle,
 	sameEmojiSet,
 	typingKey,
+	keptSessionUserKey,
 	untitledPrivate,
 	untitledThread,
 	userFacingRpcError,
@@ -3254,7 +3255,7 @@ export class ChatClient {
 			// Persist only when the server can actually resume with it, so a reload
 			// against a ceremony-only server does not turn into an unprompted
 			// passkey request at load time.
-			if (this.server?.auth.includes('token')) this.storeSession(result.token);
+			if (this.server?.auth.includes('token')) this.storeSession(result.token, identity.user_id);
 		}
 		this.error = undefined;
 		this.retryAfterUntil = 0;
@@ -4738,7 +4739,7 @@ export class ChatClient {
 			if (!key?.startsWith(prefix)) continue;
 			const url = key.slice(prefix.length);
 			if (url === this.serverUrl || addressOf(url) !== this.serverUrl) continue;
-			for (const kind of [prefix, 'apron.signin:', 'apron.signin-added:']) {
+			for (const kind of [prefix, 'apron.session-user:', 'apron.signin:', 'apron.signin-added:']) {
 				const value = storage.getItem(`${kind}${url}`);
 				if (value === null) continue;
 				storage.setItem(`${kind}${this.serverUrl}`, value);
@@ -4794,12 +4795,15 @@ export class ChatClient {
 		}
 	}
 
-	private storeSession(token: string | undefined): void {
+	/** Keeps the session's token, and whose it is (`userId`) where the sign-in said so; a token alone forgets whose. */
+	private storeSession(token: string | undefined, userId?: string): void {
 		try {
 			const storage = globalThis.localStorage;
 			if (!storage) return;
 			if (token) storage.setItem(this.sessionStorageKey(), token);
 			else storage.removeItem(this.sessionStorageKey());
+			if (token && userId) storage.setItem(keptSessionUserKey(this.serverUrl), userId);
+			else storage.removeItem(keptSessionUserKey(this.serverUrl));
 		} catch {
 			// Best effort; the in-memory token still covers this page's lifetime.
 		}

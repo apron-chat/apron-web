@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 import { IDBFactory } from 'fake-indexeddb';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ChatClient, timelineMessages, type ClientSnapshot } from '$lib/protocol/client';
 import { MemoryProtocolServer } from '$lib/preview/memory-server';
 import { readKept } from '$lib/test/kept-history';
@@ -483,6 +483,51 @@ describe('HistoryKeeper', () => {
 		await keeper.stop();
 	});
 
+	it('forgets one account when asked, and leaves the others', async () => {
+		const server = new MemoryProtocolServer({ account: true });
+		const indexedDB = new IDBFactory();
+		const client = new ChatClient(URL, 'Ada', server.factory);
+		clients.push(client);
+		const keeper = new HistoryKeeper({ indexedDB, locks: null });
+		keeper.watch(saved(client));
+		client.start();
+		await waitFor(() => Boolean(room(client.snapshot(), 'general')?.loaded));
+		await keeper.flush();
+		(await accountDb(indexedDB, URL, 'zed')).close();
+		expect((await keeper.accounts()).map((entry) => entry.userId).sort()).toEqual([ACCOUNT, 'zed'].sort());
+		await keeper.forget(URL, 'zed');
+		expect((await keeper.accounts()).map((entry) => entry.userId)).toEqual([ACCOUNT]);
+		await keeper.stop();
+	});
+
+	it('restores the account its saved session signed in as, where several are kept for the server', async () => {
+		const indexedDB = new IDBFactory();
+		const write = async (userId: string) => {
+			const db = await accountDb(indexedDB, URL, userId);
+			await writeHistory(db, { changes: [], dropped: [], whole: [], rooms: [], meta: { server: URL, userId, complete: true, users: [] } }, new Set());
+			db.close();
+		};
+		await write(ACCOUNT);
+		// Zed's written last.
+		await new Promise((resolve) => setTimeout(resolve, 5));
+		await write('zed');
+		const keeper = new HistoryKeeper({ indexedDB, locks: null });
+		const storage = new Map<string, string>();
+		vi.stubGlobal('localStorage', { getItem: (key: string) => storage.get(key) ?? null });
+		try {
+			// Not noted (a pasted token, or saved before this was): the one written last.
+			expect(await keeper['keptAccount'](URL)).toBe('zed');
+			storage.set(`apron.session-user:${URL}`, ACCOUNT);
+			expect(await keeper['keptAccount'](URL)).toBe(ACCOUNT);
+			// Noted, but nothing of that account's kept: none, rather than another's.
+			storage.set(`apron.session-user:${URL}`, 'nobody');
+			expect(await keeper['keptAccount'](URL)).toBeUndefined();
+		} finally {
+			vi.unstubAllGlobals();
+			await keeper.stop();
+		}
+	});
+
 	it('forgets a server on sign-out, and everything when keeping is turned off', async () => {
 		const server = new MemoryProtocolServer({ account: true });
 		const indexedDB = new IDBFactory();
@@ -555,9 +600,9 @@ describe('HistoryKeeper, when things go wrong', () => {
 		expect(client.snapshot().users.zed).toBeUndefined();
 		expect(client.snapshot().recordedUsers.zed).toBeUndefined();
 		expect(client.storedRecords().messages.map((message) => message.room_id)).not.toContain('secret');
-		// One account's is kept for the server: Zed's goes, and this one's starts.
+		// Zed's stays, for when Zed signs in again, beside this one's.
 		await keeper.flush();
-		expect((await listHistories(indexedDB)).map((entry) => entry.userId)).toEqual([ACCOUNT]);
+		expect((await listHistories(indexedDB)).map((entry) => entry.userId).sort()).toEqual([ACCOUNT, 'zed'].sort());
 		const mine = await readKept(await accountDb(indexedDB));
 		expect(mine?.meta.userId).toBe(ACCOUNT);
 		expect(mine?.rooms.map((row) => row.room)).not.toContain('secret');
