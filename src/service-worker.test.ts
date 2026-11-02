@@ -115,6 +115,12 @@ describe('the service worker', () => {
 		expect(openWindow).toHaveBeenCalledWith('/app/#push_room=general&push_id=a1');
 	});
 
+	it('opens a window for a clicked push at its message, in its room or thread', async () => {
+		tabs = [];
+		await dispatch('notificationclick', { notification: { close: vi.fn(), data: { push: true, roomId: 'th1', pushId: 'a1', messageId: '1724803200042', group: 'a1:th1' } } });
+		expect(openWindow).toHaveBeenCalledWith('/app/#push_room=th1&push_id=a1&push_message=1724803200042');
+	});
+
 	it('hands a clicked push to the tab signed in to its account, among all the app’s tabs', async () => {
 		const other = signedIn('b2');
 		const tab = signedIn('a1');
@@ -132,14 +138,14 @@ describe('the service worker', () => {
 		const first = signedIn();
 		const second = signedIn();
 		tabs = [first, second];
-		const data = { tab: 't1', server: 'wss://a/', roomId: 'general', threadId: 'th1' };
+		const data = { tab: 't1', server: 'wss://a/', roomId: 'general', threadId: 'th1', messageId: '5' };
 		await dispatch('notificationclick', { notification: { close: vi.fn(), data } });
 		expect(second.postMessage).toHaveBeenCalledWith({ type: NOTIFICATION_CLICK, target: data });
 		expect(first.focus).toHaveBeenCalled();
 		expect(openWindow).not.toHaveBeenCalled();
 		tabs = [];
 		await dispatch('notificationclick', { notification: { close: vi.fn(), data } });
-		expect(openWindow).toHaveBeenCalledWith('/app/#push_room=th1');
+		expect(openWindow).toHaveBeenCalledWith('/app/#push_room=th1&push_message=5');
 	});
 
 	it('installs the app’s files but not the themes’ fonts, and keeps a font once a theme loads it', async () => {

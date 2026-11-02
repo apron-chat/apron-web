@@ -44,6 +44,32 @@ test.describe('deep links', () => {
 	});
 });
 
+test.describe('a window opened for a push notification', () => {
+	test.use(DEVICES.desktop);
+
+	/** General's history: 60 messages from Ada, the pushed one far above the latest. */
+	const history = Array.from({ length: 60 }, (_, index) => {
+		const id = String(1001 + index);
+		return { log_id: id, message_id: id, room_id: 'general', from: { user_id: 'ada', name: 'Ada' }, body: { text: `Message number ${index + 1}` } };
+	});
+
+	test('opens at the pushed message, and leaves nothing of the push in the address', async ({ preview, page }) => {
+		await preview.openRoot({ history }, '#push_room=general&push_message=1003');
+		await expect(preview.heading()).toHaveText('General');
+		await expect(page.locator('article[data-message-id="1003"]')).toBeInViewport();
+		await expect(page.locator('article[data-message-id="1060"]')).not.toBeInViewport();
+		await expect(page).not.toHaveURL(/push_/);
+	});
+
+	test('opens at the room’s latest, saying nothing, when the pushed message is gone', async ({ preview, page }) => {
+		await preview.openRoot({ history }, '#push_room=general&push_message=1099');
+		await expect(preview.heading()).toHaveText('General');
+		await expect(page.locator('article[data-message-id="1060"]')).toBeInViewport();
+		await expect(page.getByText('The linked message isn’t available here.')).toHaveCount(0);
+		await expect(page).not.toHaveURL(/push_/);
+	});
+});
+
 test.describe('Back and Forward', () => {
 	test.use(DEVICES.desktop);
 

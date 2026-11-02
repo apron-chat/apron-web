@@ -103,7 +103,7 @@
 	import { PaneDrafts, pageDrafts, type StagedFile } from '$lib/ui/pane-drafts.svelte';
 	import { PagePresence } from '$lib/ui/presence.svelte';
 	import { ProgressiveReveal } from '$lib/ui/reveal.svelte';
-	import { setAppBadge, closeReadNotifications, messageNotificationTag, notificationBody, notificationClickTarget, notificationGroup, notificationTitle, notificationPermission, pushClickTarget, PUSH_ID_PARAM, PUSH_ID_QUERY, PUSH_ROOM_PARAM, pushRoute, offersAtSignIn, offersNotifications, requestNotificationPermission, showNotification, type PushTarget, type NotificationPermissionState, type NotificationTarget, type NotificationTestResult } from '$lib/ui/notifications';
+	import { setAppBadge, closeReadNotifications, messageNotificationTag, notificationBody, notificationClickTarget, notificationGroup, notificationTitle, notificationPermission, pushClickTarget, PUSH_ID_PARAM, PUSH_ID_QUERY, PUSH_MESSAGE_PARAM, PUSH_ROOM_PARAM, pushRoute, offersAtSignIn, offersNotifications, requestNotificationPermission, showNotification, type PushTarget, type NotificationPermissionState, type NotificationTarget, type NotificationTestResult } from '$lib/ui/notifications';
 	import { playPing } from '$lib/ui/attention';
 	import { isPaused, muteFor, type PausedUntil } from '$lib/ui/pause';
 	import { pageSilenced } from '$lib/ui/user-status';
@@ -259,7 +259,7 @@
 	/** The account's `push_id` (§4.9): it names the account in pushed payloads and in message notifications. */
 	let accountPushId = $derived(pushSettings.accountPushId);
 	/** A pushed room to open once it is listed, if its `push_id` is this account's. */
-	let pushRoom = $state<Pick<PushTarget, 'roomId' | 'pushId'> | undefined>();
+	let pushRoom = $state<Pick<PushTarget, 'roomId' | 'pushId' | 'messageId'> | undefined>();
 	/** A room, thread or message the page's URL named when it opened, to open once its server lists its rooms. */
 	/** A destination to open: a link's, or a search result's (`searched`). */
 	let linked = $state<(Destination & { server: string; room: string; searched?: boolean }) | undefined>();
@@ -851,7 +851,7 @@
 			return;
 		}
 		pushRoom = undefined;
-		untrack(() => openDestination(room.parentRoomId ?? room.id, room.parentRoomId ? room.id : undefined));
+		untrack(() => openAtMessage(room.parentRoomId ?? room.id, room.parentRoomId ? room.id : undefined, pending.messageId));
 	});
 
 	// A linked destination waits a while for its server's rooms, then goes.
@@ -1471,8 +1471,8 @@
 		const body = notificationBody(plainTextOf(event));
 		const id = accountPushId;
 		const target: NotificationTarget = {
-			tab: tabId, server: client.url, roomId: room.parentRoomId ?? room.id, ...(room.parentRoomId ? { threadId: room.id } : {}),
-			...(id ? { pushId: id, messageId: event.message_id, group: notificationGroup(id, room.id) } : {})
+			tab: tabId, server: client.url, roomId: room.parentRoomId ?? room.id, ...(room.parentRoomId ? { threadId: room.id } : {}), messageId: event.message_id,
+			...(id ? { pushId: id, group: notificationGroup(id, room.id) } : {})
 		};
 		const shown = await showNotification(notificationTitle(senderName(event), room), {
 			body: body || embedsLabel(event.body?.embeds) || 'New message',
@@ -1486,7 +1486,17 @@
 
 	function openNotificationTarget(target: NotificationTarget): void {
 		window.focus();
-		if (target.tab === tabId && target.server === client?.url) openDestination(target.roomId, target.threadId);
+		if (target.tab === tabId && target.server === client?.url) openAtMessage(target.roomId, target.threadId, target.messageId);
+	}
+
+	/**
+	 * Opens a notification's room or thread, then its message, as a link to it
+	 * would (`revealLinkedMessage`). The message no longer there (deleted, or
+	 * too far back) leaves the pane where it opened, as if none were named.
+	 */
+	function openAtMessage(roomId: string, thread: string | undefined, messageId: string | undefined): void {
+		openDestination(roomId, thread);
+		if (messageId) void revealLinkedMessage(roomId, thread, messageId, () => undefined);
 	}
 
 	/**
@@ -1505,7 +1515,7 @@
 	}
 
 	/** A push notification's room opens in a tab signed in to the account its `push_id` names. */
-	function openPushedRoom(target: Pick<PushTarget, 'roomId' | 'pushId'>): void {
+	function openPushedRoom(target: Pick<PushTarget, 'roomId' | 'pushId' | 'messageId'>): void {
 		window.focus();
 		pushRoom = target;
 	}
@@ -1515,7 +1525,7 @@
 	 * was pushed for, if push is on for that account here and it isn't the
 	 * remembered server, as the connect screen would.
 	 */
-	async function followPush(chat: ChatClient, target: Pick<PushTarget, 'roomId' | 'pushId'>): Promise<void> {
+	async function followPush(chat: ChatClient, target: Pick<PushTarget, 'roomId' | 'pushId' | 'messageId'>): Promise<void> {
 		const id = target.pushId;
 		if (id !== undefined) {
 			for (const account of pushSettings.accounts) {
@@ -1533,18 +1543,20 @@
 		openPushedRoom(target);
 	}
 
-	/** Takes, and scrubs from the address bar, the room and `push_id` of a push notification this tab was opened for, in its fragment. */
-	function takePushRoom(): Pick<PushTarget, 'roomId' | 'pushId'> | undefined {
+	/** Takes, and scrubs from the address bar, the room, `push_id` and message of a push notification this tab was opened for, in its fragment. */
+	function takePushRoom(): Pick<PushTarget, 'roomId' | 'pushId' | 'messageId'> | undefined {
 		const url = new URL(window.location.href);
 		const fragment = new URLSearchParams(url.hash.slice(1));
 		const roomId = fragment.get(PUSH_ROOM_PARAM) ?? undefined;
 		const id = fragment.get(PUSH_ID_PARAM) || undefined;
+		const messageId = fragment.get(PUSH_MESSAGE_PARAM) || undefined;
 		if (roomId === undefined) return undefined;
 		fragment.delete(PUSH_ROOM_PARAM);
 		fragment.delete(PUSH_ID_PARAM);
+		fragment.delete(PUSH_MESSAGE_PARAM);
 		url.hash = fragment.toString();
 		scrubUrl(url.toString());
-		return roomId ? { roomId, ...(id ? { pushId: id } : {}) } : undefined;
+		return roomId ? { roomId, ...(id ? { pushId: id } : {}), ...(messageId ? { messageId } : {}) } : undefined;
 	}
 
 	/** Pauses notifications everywhere (§4.5 `mute`): seconds from now, or until resumed. */
@@ -1680,7 +1692,7 @@
 			return;
 		}
 		linked = undefined;
-		if (target.message) void revealLinkedMessage(target.room, target.thread, target.message, target.searched);
+		if (target.message) void revealLinkedMessage(target.room, target.thread, target.message, () => abandonLink('message', target.searched));
 		if (target.user) void revealLinkedUser(target.thread ?? target.room, target.user);
 	}
 
@@ -1768,9 +1780,10 @@
 	 * Scrolls to a linked message in the open room or thread, paging back
 	 * through its history until it is loaded: a `message_id` is the `log_id` it
 	 * was created at (§2), so once what's loaded reaches back past that, it
-	 * isn't here. Only the linked room or thread is searched.
+	 * isn't here. Only the linked room or thread is searched; `missing` runs
+	 * when the message isn't in it.
 	 */
-	async function revealLinkedMessage(roomId: string, thread: string | undefined, id: string, searched = false): Promise<void> {
+	async function revealLinkedMessage(roomId: string, thread: string | undefined, id: string, missing: () => void): Promise<void> {
 		const paneId = thread ?? roomId;
 		const pane = () => session.rooms.find((room) => room.id === paneId);
 		const isOpen = () => activeRoom?.id === roomId && activeThread === thread;
@@ -1788,7 +1801,7 @@
 		}
 		if (!isOpen()) return;
 		if (!found()) {
-			abandonLink('message', searched);
+			missing();
 			return;
 		}
 		await jumpToMessage(id);

@@ -206,10 +206,10 @@ export function notificationClickTarget(message: unknown): NotificationTarget | 
 	if (!message || typeof message !== 'object') return undefined;
 	const { type, target } = message as { type?: unknown; target?: unknown };
 	if (type !== NOTIFICATION_CLICK || !target || typeof target !== 'object') return undefined;
-	const { tab, server, roomId, threadId } = target as Record<string, unknown>;
+	const { tab, server, roomId, threadId, messageId } = target as Record<string, unknown>;
 	if (typeof tab !== 'string' || typeof server !== 'string' || typeof roomId !== 'string') return undefined;
 	if (threadId !== undefined && typeof threadId !== 'string') return undefined;
-	return { tab, server, roomId, ...(threadId !== undefined ? { threadId } : {}) };
+	return { tab, server, roomId, ...(threadId !== undefined ? { threadId } : {}), ...(typeof messageId === 'string' && messageId ? { messageId } : {}) };
 }
 
 /** A message's text as a notification body: one line, at most 180 characters, without bidi embeddings and overrides (§3.5.2). */
@@ -233,9 +233,10 @@ export const PUSH_CLICK = 'apron:push-click';
 /** What the service worker asks each tab, with a port to answer on: `{pushId}` of the account it is signed in to. */
 export const PUSH_ID_QUERY = 'apron:push-id';
 
-/** The query parameters that carry a push notification's room, and its `push_id`, into a window opened for it. */
+/** The fragment parameters that carry a push notification's room, its `push_id` and its message into a window opened for it. */
 export const PUSH_ROOM_PARAM = 'push_room';
 export const PUSH_ID_PARAM = 'push_id';
+export const PUSH_MESSAGE_PARAM = 'push_message';
 
 /** What a push payload (§4.9) carries: the registration's `push_id`, the user's `unread` count, and the notification for its `message`. */
 export interface PushPayload {
@@ -393,13 +394,14 @@ export function pushRoute(target: Pick<PushTarget, 'pushId'>, pushId: string | u
 
 /**
  * A page notification's place as a push target, for a click with no tab
- * that raised it to open: the room or thread its message is in, and its
- * account's `push_id` if it has one.
+ * that raised it to open: the room or thread its message is in, the
+ * message, and its account's `push_id` if it has one.
  */
 export function pageTarget(data: unknown): PushTarget | undefined {
 	if (!isJsonObject(data) || typeof data.roomId !== 'string' || !data.roomId || typeof data.tab !== 'string') return undefined;
 	const roomId = typeof data.threadId === 'string' && data.threadId ? data.threadId : data.roomId;
-	return { push: true, roomId, ...(typeof data.pushId === 'string' && data.pushId ? { pushId: data.pushId } : {}) };
+	const text = (key: string) => (typeof data[key] === 'string' && data[key] ? { [key]: data[key] } : {});
+	return { push: true, roomId, ...text('pushId'), ...text('messageId') };
 }
 
 /** A `PUSH_CLICK` message's target, if the message is one. */

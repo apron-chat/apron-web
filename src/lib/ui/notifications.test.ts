@@ -141,6 +141,10 @@ describe('showing notifications', () => {
 		expect(notificationClickTarget({ type: NOTIFICATION_CLICK, target })).toEqual(target);
 		expect(notificationClickTarget({ type: 'other', target })).toBeUndefined();
 		expect(notificationClickTarget({ type: NOTIFICATION_CLICK, target: { tab: 't1', roomId: 'general' } })).toBeUndefined();
+		// Its message, so the click opens at it.
+		const at = { ...target, messageId: '1724803200042' };
+		expect(notificationClickTarget({ type: NOTIFICATION_CLICK, target: at })).toEqual(at);
+		expect(notificationClickTarget({ type: NOTIFICATION_CLICK, target: { ...target, messageId: 5 } })).toEqual(target);
 	});
 });
 
@@ -298,7 +302,8 @@ describe('push notifications', () => {
 	});
 
 	it('routes a clicked page notification by its room when the tab that raised it is gone', () => {
-		expect(pageTarget({ tab: 't1', server: 'wss://a/', roomId: 'general', threadId: 'th1', pushId: 'a1', messageId: '5', group: 'a1:th1' })).toEqual({ push: true, roomId: 'th1', pushId: 'a1' });
+		expect(pageTarget({ tab: 't1', server: 'wss://a/', roomId: 'general', threadId: 'th1', pushId: 'a1', messageId: '5', group: 'a1:th1' })).toEqual({ push: true, roomId: 'th1', pushId: 'a1', messageId: '5' });
+		expect(pageTarget({ tab: 't1', server: 'wss://a/', roomId: 'general', messageId: '5' })).toEqual({ push: true, roomId: 'general', messageId: '5' });
 		expect(pageTarget({ tab: 't1', server: 'wss://a/', roomId: 'general' })).toEqual({ push: true, roomId: 'general' });
 		expect(pageTarget({ push: true, roomId: 'general' })).toBeUndefined();
 	});
