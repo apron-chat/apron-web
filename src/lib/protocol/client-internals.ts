@@ -624,3 +624,17 @@ function sameKept(a: Identity, b: Identity): boolean {
 	}
 	return true;
 }
+
+/** Where the browser keeps whose session is saved for `serverUrl` (beside its token), as the sign-in named it. */
+export function keptSessionUserKey(serverUrl: string): string {
+	return `apron.session-user:${serverUrl}`;
+}
+
+/** Whose session is saved for `serverUrl`; undefined until a sign-in with it said whose (a token pasted, or one saved before this was noted). */
+export function loadKeptSessionUser(serverUrl: string): string | undefined {
+	try {
+		return globalThis.localStorage?.getItem(keptSessionUserKey(serverUrl)) ?? undefined;
+	} catch {
+		return undefined;
+	}
+}

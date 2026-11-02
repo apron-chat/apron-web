@@ -85,8 +85,6 @@
 	let passkeyNotice = $state('');
 	/** Sign out's Keep local history: checked each time, so deleting is always chosen. */
 	let keepHistory = $state(true);
-	/** History is kept on this device, so Sign out offers to keep this account's or delete it. */
-	let offersKeep = $derived(Boolean(keptHistory) && historySettings.retention !== 'off');
 	let bioDraft = $state('');
 	/** The bio the editor opened with; Save sends the bio only when the draft differs. */
 	let bioOpenedWith = $state('');
@@ -94,8 +92,12 @@
 	let avatarStatus = $state<'idle' | 'uploading' | 'removing'>('idle');
 	let avatarError = $state('');
 	let you = $derived(session.you);
-	/** The account whose history Preferences' Clear current user deletes: a session saved here. */
-	let keptAccount = $derived(session.passkeySession && you ? { server: client.url, userId: you.user_id } : undefined);
+	/** The account whose history is kept here, for Sign out and Preferences' Clear current user: a session saved here. */
+	let keptUserId = $derived(session.passkeySession ? you?.user_id : undefined);
+	/** The same object while the account is (not each time `you` changes), so History doesn't read again for a new name. */
+	let keptAccount = $derived(keptUserId ? { server: client.url, userId: keptUserId } : undefined);
+	/** This account's history is kept here, so Sign out offers to keep it or delete it. */
+	let offersKeep = $derived(Boolean(keptHistory && keptAccount) && historySettings.retention !== 'off');
 	/** You as the bar shows you: your name without bidi embeddings and overrides (§3.5.2); the editor starts from it as written. */
 	let shownYou = $derived(shownPerson(you));
 	/** While notifications are paused, when that ends in words ("until 14:30"). */
@@ -334,7 +336,7 @@
 				if (forget && !confirm(SIGN_OUT_DELETES_HISTORY)) return;
 				await signOutThen(client, onsignout);
 				// Deleting is its own step, once signing out worked, and only of this account's.
-				if (forget) await keptHistory?.clear(forget.server, forget.userId);
+				if (forget) await keptHistory?.forget(forget.server, forget.userId);
 				keepHistory = true;
 				passkeyNotice = forget ? 'Signed out, and this account’s local history deleted.' : 'Signed out.';
 			} else {
@@ -569,7 +571,7 @@
 {/snippet}
 {#snippet signout()}
 	<p class="ap-form-hint">Signed in to <bdi>{backendLabel}</bdi> as <bdi>{shownYou?.name || you?.user_id}</bdi>.</p>
-	<span class="ap-profedit-signout-actions">
+	<span class="ap-profedit-buttons">
 		{#if offersKeep}<label class="ap-pref-check"><input class="ap-checklist-box" type="checkbox" bind:checked={keepHistory} data-testid="keep-history" /> Keep local history</label>{/if}
 		<button class="ap-btn ap-btn-sm" type="button" disabled={!connected || status === 'saving'} onclick={() => passkey('logout')}>Sign out</button>
 	</span>

@@ -7,8 +7,9 @@
  *
  * Each account on each server has a database of its own, named for both
  * (`historyName`), so nothing read for one account can come from another's,
- * and forgetting one deletes its database. One account per server is kept, as
- * a saved session is: another account's sign-in there deletes the one before.
+ * and forgetting one deletes its database. Accounts' databases stay side by
+ * side, each restored as its account's saved session signs in again; one goes
+ * only when deleted on purpose (Sign out without Keep local history, or Clear).
  *
  * - `meta`, one row: whose it is, whether its joined set was complete, the
  *   kept users, and a `version` each write moves on, so a writer can tell
@@ -105,44 +106,6 @@ export async function listHistories(databases: Databases, server?: string): Prom
 		}
 	}
 	return found;
-}
-
-/**
- * How many messages the history database named `name` keeps, of every room: 0 where there is none, which this
- * never makes (a count racing a delete mustn't bring it back). Its connection closes once counted, and steps
- * aside for a delete meanwhile.
- */
-export function countMessages(databases: Databases, name: string): Promise<number> {
-	return new Promise((resolve) => {
-		const request = databases.open(name);
-		let made = false;
-		// None there: undone, so there is still none.
-		request.onupgradeneeded = () => {
-			made = true;
-			request.transaction?.abort();
-		};
-		request.onerror = () => resolve(0);
-		request.onblocked = () => resolve(0);
-		request.onsuccess = () => {
-			const db = request.result;
-			db.onversionchange = () => db.close();
-			if (made || !db.objectStoreNames.contains('records')) {
-				db.close();
-				return resolve(0);
-			}
-			try {
-				// The `key` index is [kind, id]: every message's sorts between ['m'] and ['m', []], as an array sorts after any string.
-				const transaction = db.transaction('records', 'readonly');
-				transaction.oncomplete = transaction.onabort = () => db.close();
-				const count = transaction.objectStore('records').index('key').count(IDBKeyRange.bound(['m'], ['m', []]));
-				count.onsuccess = () => resolve(count.result);
-				count.onerror = () => resolve(0);
-			} catch {
-				db.close();
-				resolve(0);
-			}
-		};
-	});
 }
 
 /**

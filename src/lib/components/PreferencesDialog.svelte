@@ -105,14 +105,15 @@
 		let current = true;
 		void (async () => {
 			const accounts = await keptHistory?.accounts() ?? [];
-			const mine = account && accounts.some((entry) => entry.server === account.server && entry.userId === account.userId);
-			const summary = { accounts: accounts.length, current: mine ? await keptHistory!.messagesKept(account.server, account.userId) : undefined, used: await storageUsed() };
+			const mine = Boolean(account && accounts.some((entry) => entry.server === account.server && entry.userId === account.userId));
+			const summary = { accounts: accounts.length, current: mine, used: await storageUsed() };
 			if (current) kept = summary;
 		})();
 		return () => { current = false; };
 	});
 	let clearing = $state<'current' | 'all' | undefined>();
-	let labels = $derived(kept ? clearLabels(kept) : {});
+	// None while keeping is off: what was kept is going, as Don't keep deletes it.
+	let labels = $derived(kept && historySettings.retention !== 'off' ? clearLabels(kept) : {});
 	/** Under the retention: why nothing more is kept. */
 	let historyNote = $derived<Note | undefined>(historySettings.failure ? { text: historySettings.failure, tone: 'err' } : undefined);
 
@@ -123,8 +124,8 @@
 		if (!confirm(`Delete the history this device keeps for ${whose}? This cannot be undone.`)) return;
 		clearing = which;
 		try {
-			if (which === 'current' && keptAccount) await keptHistory.clear(keptAccount.server, keptAccount.userId);
-			else if (which === 'all') await keptHistory.clear();
+			if (which === 'current' && keptAccount) await keptHistory.forget(keptAccount.server, keptAccount.userId);
+			else if (which === 'all') await keptHistory.forget();
 		} finally {
 			clearing = undefined;
 			keptRead++;
@@ -371,7 +372,7 @@
 			<SettingRow title="Retention" for="ap-history-retention" hint="How long this device keeps messages it has loaded." class="ap-pref-history-setting">
 				{#if historyNote}<p class={['ap-pref-note', historyNote.tone === 'err' && 'ap-tone-danger']}>{historyNote.text}</p>{/if}
 				{#if labels.current || labels.all}
-					<p class="ap-pref-note ap-pref-clear">
+					<p class="ap-pref-note ap-profedit-buttons">
 						{#if labels.current}<button class="ap-link" type="button" disabled={clearing !== undefined} onclick={() => clearKept('current')} data-testid="clear-history-current">{labels.current}</button>{/if}
 						{#if labels.all}<button class="ap-link" type="button" disabled={clearing !== undefined} onclick={() => clearKept('all')} data-testid="clear-history-all">{labels.all}</button>{/if}
 					</p>

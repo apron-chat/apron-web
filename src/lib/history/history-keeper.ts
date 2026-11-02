@@ -17,8 +17,8 @@
 import type { ClientSnapshot, KeptState, RestoredState, RoomSync } from '$lib/protocol/client-types';
 import { compareLogIds, type StoreChange, type StoredRecords } from '$lib/protocol/reducer';
 import type { JsonObject, MessageRecord, RoomRecord } from '$lib/protocol/types';
-import { decrement } from '$lib/protocol/client-internals';
-import { countMessages, deleteHistory, HistoryGone, historyName, listHistories, openHistory, pageHistory, pruneHistory, readHistory, readMeta, readRoomRows, scanMessages, timeLike, timeLikeLog, writeHistory, type Databases, type HistoryWrite, type KeptHistory, type RoomRow } from './history-db';
+import { decrement, loadKeptSessionUser } from '$lib/protocol/client-internals';
+import { deleteHistory, HistoryGone, historyName, listHistories, openHistory, pageHistory, pruneHistory, readHistory, readMeta, readRoomRows, scanMessages, timeLike, timeLikeLog, writeHistory, type Databases, type HistoryWrite, type KeptHistory, type RoomRow } from './history-db';
 import { historyResult } from './log';
 
 /** What the keeper needs of the chat client. */
@@ -167,8 +167,8 @@ interface Known {
 	synced: Set<string>;
 }
 
-/** What Preferences and Sign out do with what is kept: list whose it is, count it, delete it. */
-export type KeptHistoryControls = Pick<HistoryKeeper, 'accounts' | 'messagesKept' | 'clear'>;
+/** What Preferences and Sign out do with what is kept: list whose it is, delete it. */
+export type KeptHistoryControls = Pick<HistoryKeeper, 'accounts' | 'forget'>;
 
 export class HistoryKeeper {
 	private retentionMs: number | undefined | null;
@@ -179,8 +179,6 @@ export class HistoryKeeper {
 	/** The databases this tab has open, by name: each closes, and goes from here, when another tab deletes it. */
 	private dbs = new Map<string, Promise<IDBDatabase>>();
 	private client: HistoryClient | undefined;
-	/** An account cleared while signed in: nothing more is written for it until another signs in (or the page reloads). */
-	private paused: { server: string; userId: string } | undefined;
 	private unwatch: Array<() => void> = [];
 	/** Changes since the last write, in order. */
 	private queue: StoreChange[] = [];
@@ -313,14 +311,17 @@ export class HistoryKeeper {
 	}
 
 	/**
-	 * Whose history is kept for `server`: one account, as one session is saved; should a race have left more, the
-	 * one written last.
+	 * Whose history to restore for `server`: the account its saved session last signed in as, where that's noted
+	 * (`loadKeptSessionUser`), and none if nothing of that account's is kept. Otherwise (a pasted token, or a session
+	 * saved before that was noted) the account written last, which signing in confirms or drops.
 	 */
 	private async keptAccount(server: string): Promise<string | undefined> {
 		const found = await listHistories(this.factory, server);
+		const saved = loadKeptSessionUser(server);
+		if (saved !== undefined) return found.some((entry) => entry.userId === saved) ? saved : undefined;
 		if (found.length <= 1) return found[0]?.userId;
-		const saved = await Promise.all(found.map(async (entry) => ({ entry, meta: await readMeta(await this.openNamed(entry.name)).catch(() => undefined) })));
-		return saved.filter((each) => each.meta).sort((a, b) => b.meta!.savedAt - a.meta!.savedAt)[0]?.entry.userId;
+		const metas = await Promise.all(found.map(async (entry) => ({ entry, meta: await readMeta(await this.openNamed(entry.name)).catch(() => undefined) })));
+		return metas.filter((each) => each.meta).sort((a, b) => b.meta!.savedAt - a.meta!.savedAt)[0]?.entry.userId;
 	}
 
 	/**
@@ -449,30 +450,24 @@ export class HistoryKeeper {
 	/**
 	 * Deletes what is kept, only ever when asked: `userId`'s on `server`, every account's on `server`, or, with
 	 * neither (keeping turned off, Clear all), every account's everywhere. A writer for what goes stops; one for
-	 * the signed-in account starts again from the next change, writing what the page has.
+	 * the signed-in account starts again from the next change, writing what the page has: clearing is for the
+	 * space older history takes, not to stop keeping (that's Retention's Don't keep).
 	 */
 	async forget(server?: string, userId?: string): Promise<void> {
 		const goes = (entry: { server: string; userId: string }) => (server === undefined || entry.server === server) && (userId === undefined || entry.userId === userId);
-		if (this.writer && goes(this.writer)) this.endWriter();
+		if (this.writer && goes(this.writer)) {
+			this.endWriter();
+			// Its changes still to write go with it; another account's writer keeps its own.
+			this.queue = [];
+		}
 		if (this.known && goes(this.known)) this.known = undefined;
 		// What was read ahead for a restore may be of what goes: read again.
 		if (server === undefined || this.prepared?.server === server) this.prepared = undefined;
-		this.queue = [];
 		try {
 			await Promise.all((await listHistories(this.factory)).filter(goes).map((entry) => this.drop(entry.name)));
 		} catch {
 			// Nothing kept, or no IndexedDB.
 		}
-	}
-
-	/**
-	 * Clear, as asked from Preferences or Sign out: `forget`, and where the signed-in account's goes, nothing more
-	 * is written for it while it stays signed in here, so what the page has loaded doesn't come straight back.
-	 */
-	async clear(server?: string, userId?: string): Promise<void> {
-		const writer = this.writer;
-		if (writer && (server === undefined || writer.server === server) && (userId === undefined || writer.userId === userId)) this.paused = { server: writer.server, userId: writer.userId };
-		await this.forget(server, userId);
 	}
 
 	/** Whose history is kept on this device, every server's accounts; none without IndexedDB. */
@@ -483,12 +478,6 @@ export class HistoryKeeper {
 		} catch {
 			return [];
 		}
-	}
-
-	/** How many messages are kept of `userId`'s history on `server`: none where nothing is. */
-	async messagesKept(server: string, userId: string): Promise<number> {
-		if (typeof this.factory?.databases !== 'function') return 0;
-		return countMessages(this.factory, historyName(server, userId));
 	}
 
 	/** How long to keep, from now on (null: nothing, and what is kept goes; undefined: everything loaded). */
@@ -583,9 +572,6 @@ export class HistoryKeeper {
 	private consider(snapshot: ClientSnapshot): void {
 		const client = this.client;
 		const you = snapshot.you?.user_id;
-		// Cleared while signed in: paused until someone else is signed in here.
-		if (this.paused && client && you !== undefined && (this.paused.server !== client.url || this.paused.userId !== you)) this.paused = undefined;
-		if (this.paused) return;
 		if (!client || !this.keeping || !snapshot.authenticated || !snapshot.passkeySession || you === undefined) return;
 		// A writer running writes as the store changes (and as the page hides), not on every snapshot.
 		if (this.writer && this.writer.server === client.url && this.writer.userId === you) return;
