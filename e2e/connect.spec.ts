@@ -130,11 +130,31 @@ test.describe('the server pane', () => {
 		const preferences = page.getByRole('dialog', { name: 'Preferences' });
 		const bio = preferences.getByRole('textbox', { name: 'Bio' });
 		await expect(bio).toHaveValue('Writes the engines.');
+		// Keep local history is checked: Sign out keeps it, asking nothing.
+		await expect(preferences.getByTestId('keep-history')).toBeChecked();
+		page.on('dialog', () => { throw new Error('Sign out asked, keeping history'); });
 		await preferences.getByRole('button', { name: 'Sign out', exact: true }).click();
 		await expect(preferences).toContainText('Signed out.');
 		await expect(preferences.getByTestId('display-name-input')).toHaveValue('Guest 2');
 		await expect(bio).toHaveValue('');
 		await expect(preferences.getByRole('button', { name: 'Sign in', exact: true })).toBeFocused();
+	});
+
+	test('Sign out without Keep local history asks first, and declined stays signed in', async ({ preview, page }) => {
+		await preview.openRoot({ token: 'account-session', you: { user_id: 'lovelace', name: 'Ada' } });
+		await page.getByRole('button', { name: /^Open preferences/ }).click();
+		const preferences = page.getByRole('dialog', { name: 'Preferences' });
+		await preferences.getByTestId('keep-history').uncheck();
+		let asked = '';
+		page.once('dialog', (dialog) => { asked = dialog.message(); void dialog.dismiss(); });
+		await preferences.getByRole('button', { name: 'Sign out', exact: true }).click();
+		await expect.poll(() => asked).toBe('Signing out deletes local history. Continue?');
+		await expect(preferences.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
+		await expect(preferences.getByTestId('display-name-input')).toHaveValue('Ada');
+		await expect(preferences).not.toContainText('Signed out');
+		page.once('dialog', (dialog) => void dialog.accept());
+		await preferences.getByRole('button', { name: 'Sign out', exact: true }).click();
+		await expect(preferences).toContainText('Signed out, and this account’s local history deleted.');
 	});
 
 	test('opens and closes from the keyboard, Escape giving focus back', async ({ preview, page }) => {

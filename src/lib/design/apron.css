@@ -1006,6 +1006,8 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-profedit-signout .ap-form-hint, .ap-profedit-inline .ap-form-hint { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .ap-profedit-signout .ap-btn, .ap-profedit-inline .ap-btn { flex: none; }
 .ap-profedit-signout .ap-btn { color: var(--danger); }
+.ap-profedit-signout-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--space-2) var(--space-3); flex: none; }
+.ap-profedit-signout-actions .ap-pref-check { margin: 0; }
 
 /* Motion — short and soft; all of it off when the viewer asks */
 .ap-btn, .ap-room, .ap-thread, .ap-msg, .ap-rail-tile, .ap-actions-btn, .ap-profile-me, .ap-jumpbar-btn, .ap-composer, .ap-field { transition: background-color var(--duration-fast) ease, border-color var(--duration-fast) ease, border-radius var(--duration-slow) ease, color var(--duration-fast) ease; }
@@ -1469,6 +1471,8 @@ label.ap-pref-setting-title { color: var(--ink); font-weight: 600; cursor: point
 .ap-pref-scopes { max-width: var(--pref-panel-w); padding: var(--space-4) 0; }
 .ap-pref-theme-setting select { flex: none; }
 /* A choice that goes with a setting's action, such as Export's Include private rooms: a checkbox and its words. */
+.ap-pref-clear { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); }
+.ap-pref-clear .ap-link { color: var(--ink-muted); text-align: start; }
 .ap-pref-check { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-2); color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); cursor: pointer; }
 .ap-pref-check .ap-checklist-box { margin: 0; }
 .ap-pref-check:has(.ap-checklist-box:disabled) { cursor: default; opacity: var(--opacity-disabled); }
