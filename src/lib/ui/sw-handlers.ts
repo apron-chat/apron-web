@@ -1,8 +1,8 @@
 import { compareLogIds } from '$lib/protocol/reducer';
 import {
-	NOTIFICATION_CLICK, PUSH_CLICK, PUSH_ID_PARAM, PUSH_ID_QUERY, PUSH_ROOM_PARAM,
+	NOTIFICATION_CLICK, PUSH_CLICK, PUSH_ID_PARAM, PUSH_ID_QUERY, PUSH_MESSAGE_PARAM, PUSH_ROOM_PARAM,
 	closeOlderInGroup, pageTarget, planPush, pushTarget, readPush, tabWithPushId,
-	type PushPayload, type ShowNotificationOptions
+	type PushPayload, type PushTarget, type ShowNotificationOptions
 } from './notifications';
 
 /**
@@ -91,18 +91,22 @@ interface ClickContext<T extends Tab> {
 export async function handleClick<T extends Tab>(data: unknown, context: ClickContext<T>): Promise<void> {
 	const target = pushTarget(data) ?? pageTarget(data);
 	const tabs = await context.tabs();
+	// A window opened for it starts at its room or thread, and the message (`takePushRoom`).
+	const opening = (place: PushTarget, pushId?: string) => `${context.page}#${new URLSearchParams({
+		[PUSH_ROOM_PARAM]: place.roomId, ...(pushId !== undefined ? { [PUSH_ID_PARAM]: pushId } : {}), ...(place.messageId ? { [PUSH_MESSAGE_PARAM]: place.messageId } : {})
+	})}`;
 	if (target?.pushId !== undefined) {
 		const tab = await tabWithPushId(tabs, target.pushId, context.askPushId);
 		if (tab) {
 			tab.postMessage({ type: PUSH_CLICK, target });
 			await tab.focus();
 		} else {
-			await context.openWindow(`${context.page}#${new URLSearchParams({ [PUSH_ROOM_PARAM]: target.roomId, [PUSH_ID_PARAM]: target.pushId })}`);
+			await context.openWindow(opening(target, target.pushId));
 		}
 		return;
 	}
 	if (!tabs.length) {
-		await context.openWindow(target ? `${context.page}#${new URLSearchParams({ [PUSH_ROOM_PARAM]: target.roomId })}` : context.page);
+		await context.openWindow(target ? opening(target) : context.page);
 		return;
 	}
 	const message = pushTarget(data) ? { type: PUSH_CLICK, target: data } : { type: NOTIFICATION_CLICK, target: data };

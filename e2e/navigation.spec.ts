@@ -1,4 +1,5 @@
 import { DEVICES, expect, test, type Preview } from './fixtures';
+import type { MockOptions } from './mock-server';
 
 /** Deep links and the browser's Back and Forward (`src/lib/ui/address.ts`, the page's history entries). */
 
@@ -41,6 +42,44 @@ test.describe('deep links', () => {
 		await preview.open('#room=general&message=1710000000099');
 		await expect(page.getByText('The linked message isn’t available here.')).toBeVisible();
 		await at(preview, 'general', /#room=general$/);
+	});
+});
+
+test.describe('a window opened for a push notification', () => {
+	test.use(DEVICES.desktop);
+
+	/** General's history: 60 messages from Ada, the pushed one far above the latest. */
+	const history = Array.from({ length: 60 }, (_, index) => {
+		const id = String(1001 + index);
+		return { log_id: id, message_id: id, room_id: 'general', from: { user_id: 'ada', name: 'Ada' }, body: { text: `Message number ${index + 1}` } };
+	});
+
+	test('opens at the pushed message, and leaves nothing of the push in the address', async ({ preview, page }) => {
+		await preview.openRoot({ history }, '#push_room=general&push_message=1003');
+		await expect(preview.heading()).toHaveText('General');
+		await expect(page.locator('article[data-message-id="1003"]')).toBeInViewport();
+		await expect(page.locator('article[data-message-id="1060"]')).not.toBeInViewport();
+		await expect(page).not.toHaveURL(/push_/);
+	});
+
+	test('a click in a tab already at the room’s latest keeps it following the messages that come after', async ({ preview, page }) => {
+		const mock: MockOptions = { history };
+		await preview.openRoot(mock);
+		await expect(page.locator('article[data-message-id="1060"]')).toBeInViewport();
+		// The service worker hands the click to this tab (`PUSH_CLICK`), for the message it is already showing.
+		await page.evaluate(() => navigator.serviceWorker.dispatchEvent(new MessageEvent('message', { data: { type: 'apron:push-click', target: { push: true, roomId: 'general', messageId: '1060' } } })));
+		await expect(page.locator('article[data-message-id="1060"]')).toBeFocused();
+		mock.deliver?.({ method: 'message', params: { log_id: '1061', message_id: '1061', room_id: 'general', from: { user_id: 'ada', name: 'Ada' }, body: { text: 'Message number 61' } } });
+		await expect(page.locator('article[data-message-id="1061"]')).toBeInViewport({ ratio: 1 });
+		await expect(page.getByTestId('jump-button')).toHaveCount(0);
+	});
+
+	test('opens at the room’s latest, saying nothing, when the pushed message is gone', async ({ preview, page }) => {
+		await preview.openRoot({ history }, '#push_room=general&push_message=1099');
+		await expect(preview.heading()).toHaveText('General');
+		await expect(page.locator('article[data-message-id="1060"]')).toBeInViewport();
+		await expect(page.getByText('The linked message isn’t available here.')).toHaveCount(0);
+		await expect(page).not.toHaveURL(/push_/);
 	});
 });
 
