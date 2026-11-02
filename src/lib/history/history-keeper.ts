@@ -472,7 +472,6 @@ export class HistoryKeeper {
 
 	/** Whose history is kept on this device, every server's accounts; none without IndexedDB. */
 	async accounts(): Promise<Array<{ server: string; userId: string }>> {
-		if (typeof this.factory?.databases !== 'function') return [];
 		try {
 			return (await listHistories(this.factory)).map(({ server, userId }) => ({ server, userId }));
 		} catch {

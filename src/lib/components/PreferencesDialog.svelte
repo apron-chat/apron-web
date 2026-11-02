@@ -95,12 +95,11 @@
 	let exportNote = $state<string | undefined>();
 	/** What is kept on this device, read as History opens and again after a Clear. */
 	let kept = $state<KeptSummary | undefined>();
-	/** Read again after a Clear, or as keeping is turned on or off. */
+	/** Read again after a Clear. */
 	let keptRead = $state(0);
 	$effect(() => {
 		if (preferencesSection !== 'history' || !open) return;
 		void keptRead;
-		void historySettings.retention;
 		const account = keptAccount;
 		let current = true;
 		void (async () => {
@@ -111,7 +110,6 @@
 		})();
 		return () => { current = false; };
 	});
-	let clearing = $state<'current' | 'all' | undefined>();
 	// None while keeping is off: what was kept is going, as Don't keep deletes it.
 	let labels = $derived(kept && historySettings.retention !== 'off' ? clearLabels(kept) : {});
 	/** Under the retention: why nothing more is kept. */
@@ -119,17 +117,10 @@
 
 	/** Deletes what is kept, asked first: the signed-in account's, or every account's on this device. */
 	async function clearKept(which: 'current' | 'all'): Promise<void> {
-		if (!keptHistory || clearing) return;
-		const whose = which === 'current' ? 'this account' : 'every account';
-		if (!confirm(`Delete the history this device keeps for ${whose}? This cannot be undone.`)) return;
-		clearing = which;
-		try {
-			if (which === 'current' && keptAccount) await keptHistory.forget(keptAccount.server, keptAccount.userId);
-			else if (which === 'all') await keptHistory.forget();
-		} finally {
-			clearing = undefined;
-			keptRead++;
-		}
+		if (!keptHistory || !confirm(`Delete the history this device keeps for ${which === 'current' ? 'this account' : 'every account'}? This cannot be undone.`)) return;
+		if (which === 'all') await keptHistory.forget();
+		else if (keptAccount) await keptHistory.forget(keptAccount.server, keptAccount.userId);
+		keptRead++;
 	}
 	let exporting = $state(false);
 	/** Export's Include private rooms: off each time Preferences opens, so private rooms go only when asked for. */
@@ -373,8 +364,8 @@
 				{#if historyNote}<p class={['ap-pref-note', historyNote.tone === 'err' && 'ap-tone-danger']}>{historyNote.text}</p>{/if}
 				{#if labels.current || labels.all}
 					<p class="ap-pref-note ap-profedit-buttons">
-						{#if labels.current}<button class="ap-link" type="button" disabled={clearing !== undefined} onclick={() => clearKept('current')} data-testid="clear-history-current">{labels.current}</button>{/if}
-						{#if labels.all}<button class="ap-link" type="button" disabled={clearing !== undefined} onclick={() => clearKept('all')} data-testid="clear-history-all">{labels.all}</button>{/if}
+						{#if labels.current}<button class="ap-link" type="button" onclick={() => clearKept('current')} data-testid="clear-history-current">{labels.current}</button>{/if}
+						{#if labels.all}<button class="ap-link" type="button" onclick={() => clearKept('all')} data-testid="clear-history-all">{labels.all}</button>{/if}
 					</p>
 				{/if}
 				{#snippet control()}
