@@ -186,7 +186,16 @@ export class RequestTimeout extends Error {
 export const AGENT = 'apron-web/0.4';
 /** The `unsupported` error code (§1.1): a method or an optional parameter the server does not implement. */
 export const UNSUPPORTED = -32601;
-const HISTORY_PAGE_SIZE = 200;
+export const HISTORY_PAGE_SIZE = 200;
+/**
+ * A reconnect catches up every joined room kept from the last connection with one `history` without `room_id`
+ * (§4.3) when where they are all complete is at most this old (on servers whose `log_id`s are times): about a day,
+ * so a laptop closed overnight still takes it. That position is each room's last recovery, often the start of the
+ * last session rather than its end, so a shorter gate would miss the case the fast path is for.
+ */
+export const JOINED_CATCH_UP_MS = 24 * 60 * 60 * 1000;
+/** At most this many pages of the joined rooms' log; past them, each room catches up on its own from where it got to. */
+export const JOINED_CATCH_UP_PAGES = 5;
 /** A thread, or a room with no checkpoint, opens on its newest page this size; older pages load as the reader scrolls back. */
 export const THREAD_PAGE_SIZE = 50;
 /** The longest a new session's sign-in waits for what runs before it (`beforeFreshSession`). */
