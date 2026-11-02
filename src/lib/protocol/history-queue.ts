@@ -100,6 +100,17 @@ export class HistoryQueue {
 		return job && job.requestId === undefined ? job : undefined;
 	}
 
+	/**
+	 * A request someone now waits for (a load nobody asked for, taken over by one asked for): it goes as one asked for
+	 * does, ahead of the other rooms', and waits out a refusal for a wait (`retry_after`) rather than failing.
+	 */
+	hasten(id: string): void {
+		const job = this.jobs.get(id);
+		if (!job || job.retry) return;
+		job.retry = true;
+		this.pump();
+	}
+
 	/** Whether a request for `roomId` is held: waiting its turn, or for a wait to end. */
 	holds(roomId: string): boolean {
 		for (const job of this.jobs.values()) if (job.roomId === roomId && job.requestId === undefined) return true;

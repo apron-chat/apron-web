@@ -374,10 +374,10 @@ describe('HistoryKeeper', () => {
 		new HistoryKeeper({ indexedDB, locks: null }).watch(saved(second));
 		second.start();
 		await waitFor(() => Boolean(room(second.snapshot(), 'thread_deploy')));
-		// Shown at once as it was kept, its newest only.
+		// Shown at once as it was kept, its newest only (and, joined, catching up by itself on what came meanwhile).
 		const held = ids(second.snapshot(), 'thread_deploy');
 		expect(held.length).toBeLessThan(all.length);
-		expect(held).toEqual(all.slice(-held.length));
+		expect([all.slice(-held.length), [...all, posted].slice(-held.length)]).toContainEqual(held);
 		await second.loadRoom('thread_deploy');
 		while (room(second.snapshot(), 'thread_deploy')?.olderAvailable) await second.loadOlder('thread_deploy');
 		expect(ids(second.snapshot(), 'thread_deploy')).toEqual([...all, posted]);

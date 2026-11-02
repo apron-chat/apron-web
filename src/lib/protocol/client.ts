@@ -98,6 +98,10 @@ import {
 	TYPING_TIMEOUT_S,
 	AGENT,
 	UNSUPPORTED,
+	HISTORY_PAGE_SIZE,
+	JOINED_CATCH_UP_MS,
+	JOINED_CATCH_UP_PAGES,
+	JOINED_SPREAD_MS,
 	absent,
 	pageHidden,
 	canonicalJson,
@@ -234,6 +238,23 @@ export class ChatClient {
 	private readonly memberCounts = new Map<string, number>();
 	/** This server answered adding or removing another user `unsupported` (§4.2.2). */
 	private memberChangesUnsupported = false;
+	/**
+	 * The catch-up of every joined room kept from the last connection with one `history` without `room_id` (§4.3),
+	 * while it runs, in place of their own resumes: which rooms, from where each was complete (`position`), the
+	 * head its first page fixed, and the pages so far. `done` settles when it ends, however it ends.
+	 */
+	private joinedCatchUp?: {
+		rooms: Set<string>; position: string; head?: string; pages: number; done: Promise<void>; settle: () => void;
+		/** Each room's `loadRoom` while this runs, one per room however often it's asked, so it loads at most once after. */
+		waits: Map<string, Promise<void>>;
+	};
+	/**
+	 * Joined rooms kept from the last connection that wait for the listing of changes since (`listJoinedRooms`) to
+	 * catch up together: only those it lists changed, and they start from the oldest of their checkpoints.
+	 */
+	private joinedPlanned?: Set<string>;
+	/** The server that answered a `history` without `room_id` with `unsupported`: rooms catch up one by one there. */
+	private joinedHistoryUnsupportedOn?: string;
 	/** Transient notices per room, for the session (§3.5). */
 	private readonly notices = new Map<string, Notice[]>();
 	/** Notices that arrived before there was a room to show them in; the first room shown takes them. */
@@ -807,7 +828,7 @@ export class ChatClient {
 					...(room.latestLogId !== undefined ? { latestLogId: room.latestLogId } : {}),
 					...(room.historyLogId !== undefined ? { historyLogId: room.historyLogId } : {}),
 					timeline: room.timeline,
-					recovering: Boolean(room.recovery),
+					recovering: Boolean(room.recovery) || (this.joinedCatchUp !== undefined && this.joinedCatchUp.rooms.has(room.id) && !this.loadsOnOpen(room)),
 					...(room.recoveryError ? { recoveryError: room.recoveryError } : {}),
 					...(this.historyLimited(room) ? { limited: true as const } : {}),
 					loaded: !history || (this.loadsOnOpen(room) ? this.threadLoaded(room) : room.checkpoint !== undefined),
@@ -2444,15 +2465,19 @@ export class ChatClient {
 			// Behind an `auth` that failed, the listing ran with the connection's authentication as
 			// that left it (§3.2), none here: whatever it says is no one's rooms, so it is dropped.
 			if (!this.authenticated) {
+				this.joinedPlanned = undefined;
 				this.emit();
 				return;
 			}
 			if (listing.since !== undefined && this.you?.user_id !== listing.userId) {
 				// Another identity than the kept rooms': what changed since is someone else's story.
+				this.joinedPlanned = undefined;
 				this.listJoinedRooms();
 				this.emit();
 				return;
 			}
+			// Before the listing applies, so its rooms wait for the catch-up rather than each resuming.
+			if (listing.since !== undefined) this.startPlannedCatchUp(result);
 			this.applyRoomList(result, true);
 			this.joinedComplete = true;
 			this.settleHeldStatuses();
@@ -2473,6 +2498,7 @@ export class ChatClient {
 				return;
 			}
 			this.settleHeldStatuses();
+			this.startPlannedCatchUp(undefined);
 			// Behind a failed `auth` the listing likely failed too; that failure speaks for itself.
 			if (this.authenticated) this.error = `Unable to list your rooms: ${cause.message}`;
 			this.emit();
@@ -2673,7 +2699,9 @@ export class ChatClient {
 
 	/**
 	 * Loads a room's history (§4.3). Threads and rooms opened without joining
-	 * never recover automatically: call this when one is opened. It loads the
+	 * never recover automatically: call this when one is opened (a joined
+	 * thread loaded before does catch up by itself when a listing says it moved
+	 * on, `catchUpThread`, and this then waits for that). It loads the
 	 * newest page the first time, and afterwards pages from the previous load's
 	 * checkpoint up to the head known at the call, resolving after the last
 	 * page. For a joined top-level room, which recovers automatically, it waits
@@ -2684,6 +2712,14 @@ export class ChatClient {
 		const room = this.rooms.get(roomId);
 		if (!room || room.kind === 'pending') return Promise.reject(new Error('Unknown room'));
 		if (!this.hasCap('history')) return Promise.resolve();
+		// Catching up with the other joined rooms: once that's over, this has only what it left, if anything.
+		const together = this.joinedCatchUp;
+		if (together?.rooms.has(roomId)) {
+			// The page asks again on every snapshot while the room isn't loaded: one load after, not one per ask.
+			let wait = together.waits.get(roomId);
+			if (!wait) together.waits.set(roomId, (wait = together.done.then(() => this.loadRoom(roomId))));
+			return wait;
+		}
 		if (!this.loadsOnOpen(room)) {
 			const head = room.latestLogId;
 			const needed = Boolean(room.recovery) || Boolean(head && (room.recoveryError || room.checkpoint === undefined || compareLogIds(head, room.checkpoint) > 0));
@@ -2695,10 +2731,33 @@ export class ChatClient {
 			}
 			return settled;
 		}
+		if (room.catchUp) {
+			// Catching up by itself already: the reader waits for that load now, which goes as one asked for.
+			const run = room.catchUp;
+			run.background = false;
+			if (run.requestId !== undefined) this.historyQueue.hasten(run.requestId);
+			return run.promise;
+		}
 		return this.loadThread(room);
 	}
 
-	private async loadThread(room: RoomState): Promise<void> {
+	/**
+	 * Loads a thread's history: its newest page the first time, then forward from its last load's checkpoint.
+	 * In the `background` (a joined thread catching up by itself, `catchUpThread`) it waits behind what the reader
+	 * waits for, and a failure is no error to show: the thread loads again when opened.
+	 */
+	private loadThread(room: RoomState, background = false): Promise<void> {
+		if (!background) return this.runThreadLoad(room);
+		const run: NonNullable<RoomState['catchUp']> = { promise: Promise.resolve(), background: true };
+		room.catchUp = run;
+		run.promise = this.runThreadLoad(room, run).finally(() => {
+			if (room.catchUp === run) room.catchUp = undefined;
+		});
+		return run.promise;
+	}
+
+	private async runThreadLoad(room: RoomState, run?: NonNullable<RoomState['catchUp']>): Promise<void> {
+		const background = () => run?.background === true;
 		const head = room.latestLogId;
 		if (!head) {
 			room.resumed = false;
@@ -2728,7 +2787,9 @@ export class ChatClient {
 			let checkpoint: string | undefined = room.loadCheckpoint;
 			let after: string | undefined = maxDefined(checkpoint === undefined ? undefined : increment(checkpoint), room.floor) ?? FIRST_LOG_ID;
 			while (after === undefined || compareLogIds(after, head) <= 0) {
-				const result = await this.historyQueue.request(room.id, historyParams(room.id, after, head), { retry: true }).promise;
+				const request = this.historyQueue.request(room.id, historyParams(room.id, after, head), { retry: !background() });
+				if (run) run.requestId = request.id;
+				const result = await request.promise;
 				if (stale()) return;
 				if (!validHistoryMetadata(result)) throw new Error('Invalid history response');
 				this.observeHistoryResponse(room, result);
@@ -2757,7 +2818,10 @@ export class ChatClient {
 			room.loadCheckpoint = maxDefined(checkpoint, head);
 			room.resumed = false;
 		} catch (cause) {
-			if (!stale()) room.recoveryError = cause instanceof Error ? cause.message : 'History failed';
+			if (!stale()) {
+				if (background()) room.catchUpFailed = true;
+				else room.recoveryError = cause instanceof Error ? cause.message : 'History failed';
+			}
 			throw cause;
 		} finally {
 			if (!stale()) room.loading = false;
@@ -3320,14 +3384,206 @@ export class ChatClient {
 		if (!this.hasCap('rooms')) return;
 		const since = sameIdentity ? this.keptPosition() : undefined;
 		this.listJoinedRooms(since);
+		// When some kept room is complete up to recently, the changed ones may catch up together: they wait for the
+		// listing to say which; otherwise each resumes right behind `auth`.
+		const together = since !== undefined && this.hasCap('history') && this.joinedHistoryUnsupportedOn !== this.serverUrl && this.someRecent()
+			? new Set<string>() : undefined;
 		for (const [roomId, kept] of [...this.retainedRooms]) {
 			if (this.rooms.has(roomId)) continue;
 			const room = this.adoptRetainedRoom(roomId)!;
 			this.rooms.set(roomId, room);
 			if (kept.kind === 'viewed') continue;
 			room.kind = 'pending';
-			if (this.recoversAutomatically(room) && room.checkpoint !== undefined && !room.recovery) this.startRecovery(room, undefined, false);
+			if (together) together.add(roomId);
+			else if (this.recoversAutomatically(room) && room.checkpoint !== undefined && !room.recovery) this.startRecovery(room, undefined, false);
 		}
+		this.joinedPlanned = together?.size ? together : undefined;
+	}
+
+	/**
+	 * The listing of changes since arrived (`result`, not yet applied): the kept rooms it lists catch up together
+	 * from the oldest of their checkpoints, if that is recent enough (`catchesUpTogether`); the others have nothing
+	 * new. Otherwise, as when the listing fails, each room catches up by itself.
+	 */
+	private startPlannedCatchUp(result: JsonObject | undefined): void {
+		const planned = this.joinedPlanned;
+		this.joinedPlanned = undefined;
+		if (!planned) return;
+		const listed = new Set<string>();
+		for (const value of Array.isArray(result?.joined) ? result.joined : []) {
+			if (isJsonObject(value) && typeof value.room_id === 'string' && planned.has(value.room_id)) listed.add(value.room_id);
+		}
+		// Where each is complete up to, as for the listing's `latest_log_id` (`keptPosition`).
+		const positions = new Map<string, string>();
+		for (const roomId of listed) {
+			const room = this.rooms.get(roomId);
+			const synced = room ? this.syncedPosition(room) : undefined;
+			if (synced !== undefined) positions.set(roomId, synced);
+		}
+		// Together: the ones complete up to within JOINED_SPREAD_MS of the newest; the others, and any without a
+		// position, each by itself (`showRoom`, as the listing applies).
+		let newest: string | undefined;
+		for (const synced of positions.values()) if (newest === undefined || compareLogIds(synced, newest) > 0) newest = synced;
+		const newestAt = newest === undefined ? NaN : Number(newest);
+		const together = new Set<string>();
+		let position: string | undefined;
+		for (const [roomId, synced] of positions) {
+			const at = Number(synced);
+			if (Number.isSafeInteger(newestAt) && Number.isSafeInteger(at) && newestAt - at > JOINED_SPREAD_MS) continue;
+			together.add(roomId);
+			if (position === undefined || compareLogIds(synced, position) < 0) position = synced;
+		}
+		if (result && position !== undefined && this.catchesUpTogether(position)) {
+			this.catchUpJoined(position, together);
+			return;
+		}
+		// Each by itself: a listed room as the listing shows it (`showRoom`), one not listed as it would have behind `auth`.
+		if (!result) this.resumeEach(planned);
+	}
+
+	/** Whether some joined room kept from the last connection is complete up to recently enough to catch up together. */
+	private someRecent(): boolean {
+		for (const room of this.retainedRooms.values()) {
+			const synced = room.kind === 'viewed' ? undefined : this.syncedPosition(room);
+			if (synced !== undefined && this.catchesUpTogether(synced)) return true;
+		}
+		return false;
+	}
+
+	/**
+	 * Whether the changed joined rooms kept from the last connection, all complete up to `position`, catch up
+	 * together, with one `history` without `room_id` (§4.3): when `position` is recent enough (JOINED_CATCH_UP_MS) on
+	 * a server whose `log_id`s are times. Older, the other joined rooms' records since would be mostly ones this has.
+	 */
+	private catchesUpTogether(position: string): boolean {
+		const at = Number(position);
+		return !Number.isSafeInteger(at) || Date.now() - at <= JOINED_CATCH_UP_MS;
+	}
+
+	/** Kept rooms that didn't catch up together resume on their own, as they would have right behind `auth`. */
+	private resumeEach(roomIds: Iterable<string>): void {
+		for (const roomId of roomIds) {
+			const room = this.rooms.get(roomId);
+			if (!room || room.kind === 'viewed') continue;
+			if (room.kind === 'pending') {
+				// Not listed yet: resumes as it would have behind `auth`, its listing then fixing its head.
+				if (this.recoversAutomatically(room) && room.checkpoint !== undefined && !room.recovery) this.startRecovery(room, undefined, false);
+				continue;
+			}
+			this.recoverIfBehind(room, false);
+			this.catchUpThread(room);
+		}
+	}
+
+	/**
+	 * Catches up every joined room kept from the last connection, each complete up to `position`, with one log:
+	 * `history` without `room_id` (§4.3), which pages the logs of every room the connection receives as one, from
+	 * `position + 1`. The first page fixes the head H; each page moves every room's checkpoint (a thread's last
+	 * load, where it reached `position`) to its last record, so whatever ends it early (`unsupported`, an error, a
+	 * wait, a bound past `position`, the page limit), each room goes on by itself from there (`resumeEach`).
+	 */
+	private catchUpJoined(position: string, rooms: Set<string>): void {
+		let settle!: () => void;
+		const done = new Promise<void>((resolve) => (settle = resolve));
+		const run = { rooms, position, pages: 0, done, settle, waits: new Map<string, Promise<void>>() };
+		this.joinedCatchUp = run;
+		this.requestJoinedPage(run, increment(position));
+	}
+
+	private requestJoinedPage(run: NonNullable<ChatClient['joinedCatchUp']>, after: string): void {
+		// Right behind `auth`, as the resumes it stands for would have gone (§3.2).
+		const pipelined = !this.authenticated && this.authRequested;
+		const params: JsonObject = { after, ...(run.head !== undefined ? { before: run.head } : {}), limit: HISTORY_PAGE_SIZE };
+		this.historyQueue.request(JOINED_LOG, params, { allowBeforeAuth: pipelined }).promise.then((result) => {
+			if (this.joinedCatchUp !== run) return;
+			this.applyJoinedPage(run, after, result);
+		}, (cause: Error & { code?: number }) => {
+			if (this.joinedCatchUp !== run) return;
+			if (cause.code === UNSUPPORTED) this.joinedHistoryUnsupportedOn = this.serverUrl;
+			this.endJoinedCatchUp(run, false);
+		});
+	}
+
+	private applyJoinedPage(run: NonNullable<ChatClient['joinedCatchUp']>, after: string, result: JsonObject): void {
+		if (!validHistoryMetadata(result)) {
+			this.endJoinedCatchUp(run, false);
+			return;
+		}
+		// The server's log starts past where this goes on from: what was between is gone, and each room finds its own bound.
+		if (result.history_log_id !== null && compareLogIds(result.history_log_id, after) > 0) {
+			this.endJoinedCatchUp(run, false);
+			return;
+		}
+		const head = (run.head ??= result.latest_log_id);
+		this.installPage(result);
+		run.pages += 1;
+		if (!result.more) {
+			this.advanceJoined(run, head);
+			this.endJoinedCatchUp(run, true);
+			return;
+		}
+		const last = isLogId(result.last_log_id) ? result.last_log_id : undefined;
+		if (!last || compareLogIds(last, after) < 0 || compareLogIds(last, head) >= 0) {
+			this.endJoinedCatchUp(run, false);
+			return;
+		}
+		this.advanceJoined(run, last);
+		if (run.pages >= JOINED_CATCH_UP_PAGES) {
+			this.endJoinedCatchUp(run, false);
+			return;
+		}
+		this.requestJoinedPage(run, increment(last));
+		this.emit();
+	}
+
+	/**
+	 * The joined rooms' log is in up to `through`: each room complete up to the catch-up's position is now complete
+	 * up to there. A thread whose last load is older than that position may have missed what came between, and
+	 * keeps its last load, to go on from by itself.
+	 */
+	private advanceJoined(run: NonNullable<ChatClient['joinedCatchUp']>, through: string): void {
+		for (const roomId of run.rooms) {
+			const room = this.rooms.get(roomId);
+			if (!room || room.kind === 'viewed') continue;
+			if (this.isThread(roomId)) {
+				if (room.loadCheckpoint !== undefined && compareLogIds(room.loadCheckpoint, run.position) >= 0) room.loadCheckpoint = maxDefined(room.loadCheckpoint, through);
+			} else if (room.checkpoint !== undefined && compareLogIds(room.checkpoint, run.position) >= 0) {
+				room.checkpoint = maxDefined(room.checkpoint, through);
+			}
+			room.dirty = true;
+		}
+	}
+
+	/**
+	 * The joined rooms' catch-up is over. `complete`: every room is current up to its head, live delivery covering
+	 * what came after, and only a thread it couldn't vouch for (its last load older than where this began) goes on
+	 * by itself. Otherwise each room goes on by itself from where this got to. A room still waiting for its listing
+	 * goes on once listed.
+	 */
+	private endJoinedCatchUp(run: NonNullable<ChatClient['joinedCatchUp']>, complete: boolean): void {
+		this.joinedCatchUp = undefined;
+		for (const roomId of run.rooms) {
+			const room = this.rooms.get(roomId);
+			if (!room) continue;
+			room.dirty = true;
+			if (!complete || run.head === undefined) continue;
+			if (this.isThread(roomId)) {
+				if (room.loadCheckpoint !== undefined && compareLogIds(room.loadCheckpoint, run.head) >= 0) room.resumed = false;
+			} else if (!room.recovery && room.checkpoint !== undefined && compareLogIds(room.checkpoint, run.head) >= 0) {
+				// Complete up to H, and live from there: what arrives now moves its checkpoint (`noteLive`).
+				room.synced = true;
+			}
+		}
+		if (complete) {
+			for (const roomId of run.rooms) {
+				const room = this.rooms.get(roomId);
+				if (room && room.kind !== 'pending' && this.isThread(roomId)) this.catchUpThread(room);
+			}
+		} else {
+			this.resumeEach(run.rooms);
+		}
+		run.settle();
+		this.emit();
 	}
 
 	/**
@@ -3342,11 +3598,16 @@ export class ChatClient {
 		let position: string | undefined;
 		for (const room of this.retainedRooms.values()) {
 			if (room.kind === 'viewed') continue;
-			const synced = this.isThread(room.id) ? room.latestLogId : room.recoveryError ? undefined : room.checkpoint;
+			const synced = this.syncedPosition(room);
 			if (synced === undefined) return undefined;
 			if (position === undefined || compareLogIds(synced, position) < 0) position = synced;
 		}
 		return position;
+	}
+
+	/** Where a joined room is complete up to: its checkpoint (a room that recovers, unless that failed) or its head (a thread). */
+	private syncedPosition(room: RoomState): string | undefined {
+		return this.isThread(room.id) ? room.latestLogId : room.recoveryError ? undefined : room.checkpoint;
 	}
 
 	/**
@@ -3460,7 +3721,10 @@ export class ChatClient {
 		const { log_id: logId, room_id: roomId } = entries[0];
 		this.observeLogId(logId);
 		const room = this.rooms.get(roomId);
-		if (room) this.observeHead(room, logId);
+		if (room) {
+			this.observeHead(room, logId);
+			this.noteLive(room, logId);
+		}
 		for (const entry of entries) {
 			this.noteRecorded(entry.user, logId);
 			this.store.putMembership(entry);
@@ -3715,7 +3979,10 @@ export class ChatClient {
 			const decoded = decodeRoom(value);
 			if (!decoded) continue;
 			this.observeLogId(decoded.delivery.latest_log_id);
-			if (this.rooms.has(decoded.record.room_id)) {
+			const shown = this.rooms.get(decoded.record.room_id);
+			if (shown) {
+				// Its record came live too: only a head past it then says live delivery missed something.
+				if (decoded.record.log_id !== undefined) this.noteLive(shown, decoded.record.log_id);
 				this.showRoom(decoded);
 			} else {
 				this.installRoom(decoded.record);
@@ -3753,7 +4020,29 @@ export class ChatClient {
 			this.observeBoundary(room, decoded.delivery.history_log_id, listedHead ?? room.latestLogId);
 		}
 		this.recoverIfBehind(room, !existing);
+		// A joined thread current on this connection whose head is past what it has missed records live delivery didn't
+		// bring: it catches up on them.
+		if (room.kind === 'joined' && !room.resumed && !room.loading && room.loadCheckpoint !== undefined && listedHead !== undefined &&
+			compareLogIds(listedHead, room.loadCheckpoint) > 0 && this.isThread(roomId)) room.resumed = true;
+		this.catchUpThread(room);
 		if (listedHead !== undefined) this.settleQueuedResume(room, room.latestLogId);
+	}
+
+	/**
+	 * A joined thread loaded before (on this connection or kept on this device) whose head moved past that load
+	 * while the connection was away, a reconnect or a reload: it loads what it missed now, in the background,
+	 * rather than when it is next opened, so its row's latest reply and unread count are current meanwhile.
+	 * Live delivery covers it from the listing on. A thread never loaded here still waits to be opened.
+	 */
+	private catchUpThread(room: RoomState): void {
+		const head = room.latestLogId;
+		if (room.kind !== 'joined' || !room.resumed || room.loading || room.loadCheckpoint === undefined || head === undefined) return;
+		if (!this.isThread(room.id) || !this.authenticated || !this.hasCap('history')) return;
+		if (this.joinedCatchUp?.rooms.has(room.id)) return;
+		if (compareLogIds(head, room.loadCheckpoint) <= 0) return;
+		// One that failed on this connection waits to be opened, or the next connection: no retry on every listing of it.
+		if (room.catchUpFailed) return;
+		this.loadThread(room, true).catch(() => undefined);
 	}
 
 	/**
@@ -3795,6 +4084,8 @@ export class ChatClient {
 	private recoverIfBehind(room: RoomState, fresh: boolean): void {
 		const head = room.latestLogId;
 		if (!this.recoversAutomatically(room) || room.recovery || head === undefined) return;
+		// Catching up with the other joined rooms: that goes on from where it gets to, if it ends early.
+		if (this.joinedCatchUp?.rooms.has(room.id)) return;
 		const rebuild = fresh || Boolean(room.recoveryError) || room.checkpoint === undefined;
 		if (rebuild || compareLogIds(head, room.checkpoint!) > 0) this.startRecovery(room, head, rebuild);
 	}
@@ -3984,6 +4275,7 @@ export class ChatClient {
 			this.observeHead(room, sets[0].log_id);
 		}
 		this.observeLogId(sets[0].log_id);
+		if (room) this.noteLive(room, sets[0].log_id);
 		for (const set of sets) {
 			this.noteRecorded(set.from, set.log_id);
 			if (room?.recovery && !this.bufferLive(room, { kind: 'reaction', record: set })) return;
@@ -4010,6 +4302,7 @@ export class ChatClient {
 			if (delivered && room.floor !== undefined && compareLogIds(record.log_id, room.floor) < 0) return;
 			if (delivered) this.observeHead(room, record.log_id);
 			if (room.recovery && !this.bufferLive(room, { kind: 'message', record, embedded: !delivered })) return;
+			if (delivered) this.noteLive(room, record.log_id);
 		}
 		this.installMessage(record);
 	}
@@ -4028,6 +4321,7 @@ export class ChatClient {
 
 	private startRecovery(room: RoomState, head: string | undefined, rebuild: boolean, preserveBuffer = false): void {
 		room.limited = false;
+		room.synced = false;
 		const retained = preserveBuffer
 			? (room.recovery?.buffer ?? []).filter((live) => isEmbedded(live) || room.floor === undefined || compareLogIds(live.record.log_id, room.floor) >= 0)
 			: [];
@@ -4155,6 +4449,15 @@ export class ChatClient {
 	 * listing's members already cover the ones at or below its head.
 	 */
 	private applyPage(room: RoomState, result: JsonObject): void {
+		this.installPage(result, room);
+	}
+
+	/**
+	 * Installs a page's records, message and reaction records only at or above their room's bound: `room`'s for a
+	 * page of its log, else (a page of every joined room's log, `history` without `room_id`) each record's own
+	 * room's, whose head the record moves as a live one does.
+	 */
+	private installPage(result: JsonObject, room?: RoomState): void {
 		// `~private` messages are never installed (Appendix A.1), from history either.
 		const page = Array.isArray(result.messages)
 			? { ...result, messages: result.messages.filter((message) => !(isJsonObject(message) && isIdentity(message.from) && message.from.user_id === '~private')) }
@@ -4163,10 +4466,17 @@ export class ChatClient {
 		for (const record of [...records.rooms, ...records.messages, ...records.embedded, ...records.reactions, ...records.memberships]) this.observeLogId(record.log_id);
 		for (const record of [...records.messages, ...records.embedded, ...records.reactions]) this.noteRecorded(record.from, record.log_id);
 		for (const record of records.memberships) this.noteRecorded(record.user, record.log_id);
-		const retained = (logId: string) => room.floor === undefined || compareLogIds(logId, room.floor) >= 0;
+		const retained = room
+			? (record: { log_id: string }) => room.floor === undefined || compareLogIds(record.log_id, room.floor) >= 0
+			: (record: { room_id?: string; log_id: string }) => {
+				const own = record.room_id === undefined ? undefined : this.rooms.get(record.room_id);
+				if (own?.floor !== undefined && compareLogIds(record.log_id, own.floor) < 0) return false;
+				if (own) this.observeHead(own, record.log_id);
+				return true;
+			};
 		for (const record of records.rooms) this.installRoom(record);
-		for (const record of records.messages) if (retained(record.log_id)) this.installMessage(record);
-		for (const record of records.reactions) if (retained(record.log_id)) this.store.putReaction(record);
+		for (const record of records.messages) if (retained(record)) this.installMessage(record);
+		for (const record of records.reactions) if (retained(record)) this.store.putReaction(record);
 		for (const record of records.memberships) this.store.putMembership(record);
 		// Embedded reference snapshots install regardless of any room's bound.
 		for (const record of records.embedded) this.installMessage(record);
@@ -4183,9 +4493,31 @@ export class ChatClient {
 		// A response may report a newer head than this recovery's fixed H. That
 		// metadata must not turn H+1 and later live records into a checkpoint.
 		room.checkpoint = maxDefined(room.checkpoint, recovery.head);
+		// What arrived live meanwhile did arrive, in order, after live delivery started (before H was fixed): the room
+		// is complete up to the newest of them.
+		for (const live of recovery.buffer) if (!isEmbedded(live)) room.checkpoint = maxDefined(room.checkpoint, live.record.log_id);
+		room.synced = true;
 		room.recovery = undefined;
 		room.dirty = true;
 		for (const waiter of room.waiters.splice(0)) waiter.resolve();
+	}
+
+	/**
+	 * A record delivered live for `room` (a snapshot, a reaction set, a membership, its room record): once the room is
+	 * complete up to its checkpoint on this connection, live delivery keeps it complete (a connection's live records
+	 * come in log order, §3.5.3), so the checkpoint moves with it and a reconnect asks only for what came after. A
+	 * thread loaded on this connection moves the point its last load reached the same way. Not while anything is still
+	 * to fill in: a recovery or load under way, one that failed or waits, a thread not loaded since the last connection,
+	 * the joined rooms' catch-up. A room record frame whose head is past it still reveals what live delivery missed
+	 * (`recoverIfBehind`, `showRoom`); a record a server dropped below a later live one is not recovered.
+	 */
+	private noteLive(room: RoomState, logId: string): void {
+		if (room.kind !== 'joined' || this.joinedCatchUp?.rooms.has(room.id)) return;
+		if (room.synced) {
+			if (!room.recovery && room.checkpoint !== undefined && compareLogIds(logId, room.checkpoint) > 0) room.checkpoint = logId;
+		} else if (room.loadCheckpoint !== undefined && !room.resumed && !room.loading && compareLogIds(logId, room.loadCheckpoint) > 0 && this.isThread(room.id)) {
+			room.loadCheckpoint = logId;
+		}
 	}
 
 	private observeHead(room: RoomState, advertised: unknown): void {
@@ -4257,6 +4589,7 @@ export class ChatClient {
 		}
 		this.retireRecoveryRequest(room);
 		room.recoveryError = message;
+		room.synced = false;
 		// Live delivery remains authoritative even when history is incomplete:
 		// publish it without advancing the checkpoint past an unrecovered gap.
 		room.recovery = undefined;
@@ -4279,6 +4612,8 @@ export class ChatClient {
 		room.limited = false;
 		room.recovery = undefined;
 		room.loadGeneration += 1;
+		room.catchUp = undefined;
+		room.synced = false;
 		for (const waiter of room.waiters.splice(0)) waiter.reject(new Error(reason));
 	}
 
@@ -4315,6 +4650,7 @@ export class ChatClient {
 		room.loadingOlder = false;
 		room.recoveryError = undefined;
 		room.limited = false;
+		room.catchUpFailed = false;
 		// A thread's checkpoint predates the gap; the next load catches up from it.
 		if (room.loadCheckpoint !== undefined) room.resumed = true;
 		// Reaction summaries depend on the viewer, who may be a new guest.
@@ -4369,6 +4705,9 @@ export class ChatClient {
 		this.heldStatuses = undefined;
 		this.pushError = undefined;
 		this.memberChangesUnsupported = false;
+		this.joinedCatchUp?.settle();
+		this.joinedCatchUp = undefined;
+		this.joinedPlanned = undefined;
 	}
 
 	/** The room to show when none is chosen: the first joined top-level room, else the first joined one. */
@@ -4844,6 +5183,9 @@ function isSignInMethod(method: string | null): method is SignInMethod {
 }
 
 /** The proposals a sign-in link can approve, either of which a server's approval takes (§4.11.3). */
+/** The history queue's key for the joined rooms' log (`history` without `room_id`, §4.3), which no room's id is. */
+const JOINED_LOG = '';
+
 const PROPOSAL_SCHEMES: ProposalScheme[] = ['email', 'external'];
 
 /**
