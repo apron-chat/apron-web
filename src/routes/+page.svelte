@@ -2700,6 +2700,13 @@
 		if (!node) return;
 		stickToBottom = false;
 		node.scrollIntoView({ block: 'center' });
+		// Settled here, as landing at the divider is: a jump to the latest, the pane already there, scrolls nothing,
+		// so no scroll event would pin it again to follow what comes next.
+		const scroller = messageScroll;
+		if (scroller) {
+			lastScrollTop = scroller.scrollTop;
+			stickToBottom = atLatest(scroller);
+		}
 		node.focus({ preventScroll: true });
 		highlightedId = id;
 		if (highlightTimer) clearTimeout(highlightTimer);

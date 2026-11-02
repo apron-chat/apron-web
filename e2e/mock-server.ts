@@ -16,6 +16,8 @@ export type MockOptions = {
 	sent?: Record<string, any>[];
 	/** General's history, oldest first, each message's `log_id` its `message_id` (§3.5); none by default. */
 	history?: Record<string, unknown>[];
+	/** Set by `mockServer` once the page connects: sends the page a frame, such as a live `message`. */
+	deliver?: (frame: Record<string, unknown>) => void;
 };
 
 /**
@@ -38,6 +40,7 @@ export async function mockServer(page: Page, options: MockOptions = {}): Promise
 		const history = options.history ?? [];
 		const latest = String(history.at(-1)?.log_id ?? '1');
 		const oldest = history.length ? String(history[0].log_id) : null;
+		options.deliver = (frame) => ws.send(JSON.stringify(frame));
 		const general = { room_id: 'general', title: 'General', log_id: '1', latest_log_id: latest, history_log_id: oldest, members: [{ user_id: you.user_id }, { user_id: ada.user_id }, { user_id: bob.user_id }] };
 		ws.onMessage((data) => {
 			const frame = JSON.parse(String(data));
