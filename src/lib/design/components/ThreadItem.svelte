@@ -30,7 +30,7 @@
 		 * bold name, no tint for a mention, and a grey count, mentions too.
 		 */
 		muted?: boolean;
-		/** Unread replies from others: a bold name and a grey count. */
+		/** Unread replies from others: a bold name and an ink count. */
 		unread?: number;
 		/** Unread replies whose `body.mentions` lists the viewer: the count turns orange with an @. */
 		mentions?: number;

@@ -22,7 +22,7 @@
 	let label = $derived(`${count} unread ${count === 1 ? noun : noun === 'reply' ? 'replies' : 'messages'}${mentions ? `, ${mentions === 1 ? 'a mention' : `${mentions} mentions`} of you` : ''}`);
 </script>
 
-<!-- What's new, in one bubble: grey for unread messages, orange with an @ when they include a mention of you. Its label is its hover title too. -->
+<!-- What's new, in one bubble: ink for unread messages (grey in a muted room), orange with an @ when they include a mention of you. Its label is its hover title too. -->
 {#if count > 0}
 	<span aria-label={label} title={label} data-testid={testid} class={['ap-count', mentions && !quiet ? 'ap-count-at' : 'ap-count-quiet', className]}>{#if mentions}@&#8239;{/if}{count99(count)}</span>
 {/if}

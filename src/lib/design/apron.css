@@ -549,13 +549,13 @@ a.ap-embed-card:hover { background: var(--hover); }
 /* The ‹ back to the rooms list, and typing in the subtitle, are for phones: wider, the rooms list is beside the pane and typing shows above the composer. */
 .ap-roomhead-back, .ap-roomhead-typing { display: none; }
 .ap-roomhead-members, .ap-roomhead-description { flex: none; }
-/* With something new elsewhere, the ‹ becomes the point of a tag holding the count: grey for unread, orange with an @ for a mention, as in the rooms list. */
+/* With something new elsewhere, the ‹ becomes the point of a tag holding the count: ink for unread, orange with an @ for a mention, as in the rooms list. */
 .ap-roomhead-tag { position: relative; display: inline-flex; align-items: center; height: var(--control-xs); padding: 0 var(--space-2); padding-inline-start: 3px; border-radius: 0; border-start-end-radius: var(--radius-sm); border-end-end-radius: var(--radius-sm); isolation: isolate; font-size: var(--text-sm); font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; white-space: nowrap; }
 /* The point: a square turned on its corner, rounded at the tip, behind the count (its side the tag's 22px over √2). */
 .ap-roomhead-tag::before { content: ''; position: absolute; z-index: -1; inset-inline-start: -7.78px; top: 3.22px; width: 15.56px; height: 15.56px; border-bottom-left-radius: 3px; background: inherit; transform: rotate(45deg); }
 /* Mirrored, the tag points the other way: the turned square's tip is its top right corner. */
 :where([dir='rtl']) .ap-roomhead-tag::before { border-bottom-left-radius: 0; border-top-right-radius: 3px; }
-.ap-roomhead-tag-quiet { background: var(--bg-300); color: var(--ink); }
+.ap-roomhead-tag-quiet { background: color-mix(in srgb, color-mix(in srgb, var(--ink) 85%, var(--bg-100)) 82%, var(--denim)); color: var(--bg-100); }
 .ap-roomhead-tag-at { background: var(--accent); color: var(--on-accent); }
 @media (max-width: 719px) {
 	.ap-roomhead-back { display: inline-grid; }
@@ -1524,6 +1524,8 @@ button.ap-mention, a.ap-linkchip { max-width: 100%; white-space: normal; overflo
 /* Mention counts: an @ badge in accent beside the room, and in the jump bar */
 .ap-count-at { font-weight: 600; }
 .ap-count-quiet { background: var(--bg-300); color: var(--ink); }
+/* Unread in a room or thread that isn't muted: ink softened with a little of the rooms list's ground and a touch of denim, so it reads cool, not grey; plain to see where the grey was not. Muted rows keep the grey. */
+.ap-room-unread .ap-count-quiet { background: color-mix(in srgb, color-mix(in srgb, var(--ink) 85%, var(--bg-000)) 82%, var(--denim)); color: var(--bg-000); }
 .ap-jumpbar-at { border-color: var(--accent); }
 
 /* System messages — from ~-prefixed user_ids (Appendix A.1): a quiet centered line, no avatar */

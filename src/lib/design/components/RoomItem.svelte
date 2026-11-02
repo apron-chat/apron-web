@@ -27,7 +27,7 @@
 		 * a grey count, mentions too.
 		 */
 		muted?: boolean;
-		/** Unread messages from others: a bold name and a grey count. */
+		/** Unread messages from others: a bold name and an ink count. */
 		unread?: number;
 		/** Unread messages whose `body.mentions` lists the viewer: the count turns orange with an @. */
 		mentions?: number;
