@@ -15,6 +15,7 @@ import { extractInteropContract, interopDir } from './lib/interop-contract.js';
 import { formatPerf, formatProfile, runPerf, runProfile, selectProbes } from './lib/perf.js';
 import { writeReport } from './lib/report.js';
 import { serveDir } from './lib/serve.js';
+import { runStartup } from './lib/startup.js';
 import { renderSheet } from './lib/sheet.js';
 import { cleanShots, shoot } from './lib/shoot.js';
 import { qaDir, repoRoot, stamp } from './lib/snapshot.js';
@@ -44,6 +45,13 @@ const HELP = `npm run qa -- <command> [options]
   budget-diff <a.json> <b.json>
                          Two files written by budget --out, side by side: which counts match in every run.
   prof --url A --url B   CPU-profile page load; biggest per-function changes. [--runs 6] [--cpu 4]
+  startup --build A --build B
+                         Time to the first messages, in wall time, strictly interleaved: a repeat visit (the
+                         service worker's cached app) or a first one, on a phone or a laptop, with the CPU and
+                         network throttled and a server round trip played; startup marks (apron:*) per step.
+                         [--url A --url B in place of --build] [--label a --label b] [--runs 7] [--cpu 4]
+                         [--visit repeat|first] [--device phone|desktop] [--net none|4g|3g] [--rtt ms] [--busy]
+                         [--out file.json]
   sheet <spec.json>      Render hand-picked before/after panels (title, note, crop box, scale) to a PNG.
                          [--out <spec>.png]
   serve <build dir>      Serve a build on a port (default: a free one). [--port n]
@@ -57,7 +65,7 @@ Filters match any part of a shot id, <scene>--<viewport>--<theme>; commas give s
 Chromium: QA_CHROMIUM, else playwright-core's build under PLAYWRIGHT_BROWSERS_PATH. budget checks only in the
 Chromium its baseline was recorded with.`;
 
-const BOOLEAN = ['perf', 'recheck', 'rebuild', 'install', 'keep', 'clean', 'all', 'help', 'check', 'update', 'calls'];
+const BOOLEAN = ['perf', 'recheck', 'rebuild', 'install', 'keep', 'clean', 'all', 'help', 'check', 'update', 'calls', 'busy'];
 const MULTI = ['url', 'label', 'build', 'suite', 'filter', 'only'];
 
 async function main() {
@@ -228,6 +236,30 @@ async function main() {
 			} finally {
 				await browser.close();
 			}
+			return 0;
+		}
+		case 'startup': {
+			const servers = await Promise.all((o.build ?? []).map((dir) => {
+				if (!existsSync(join(dir, '__preview.html'))) throw new Error(`startup needs preview builds: no ${join(dir, '__preview.html')} (APRON_PREVIEW=1 npm run build)`);
+				return serveDir(dir, { compress: true });
+			}));
+			const urls = [...servers.map((s) => s.url), ...(o.url ?? [])];
+			if (!urls.length) throw new Error('startup needs --build or --url (twice or more to compare)');
+			const labels = o.label?.length === urls.length ? o.label : [...(o.build ?? []), ...(o.url ?? [])];
+			const browser = await launch();
+			let result;
+			try {
+				result = await runStartup({ browser, urls, labels, runs: int(o.runs, 7), cpu: int(o.cpu, 4), net: o.net ?? 'none', visit: o.visit ?? 'repeat', device: o.device ?? 'phone', rttMs: int(o.rtt, 0), busy: !!o.busy });
+			} finally {
+				await browser.close();
+				await Promise.all(servers.map((s) => s.close()));
+			}
+			const out = resolve(o.out ?? join(qaDir(repo), 'startup', `${stamp()}.json`));
+			mkdirSync(dirname(out), { recursive: true });
+			writeFileSync(out, JSON.stringify(result, null, 1));
+			console.log(`${result.visit} visit, ${result.device}, network ${result.net}${result.rttMs ? `, server round trip ${result.rttMs} ms` : ''}${result.busy ? ', busy account' : ''}; times in ms from navigation`);
+			console.log(formatPerf(result));
+			console.log(`json: ${relative(process.cwd(), out)}`);
 			return 0;
 		}
 		case 'sheet': {

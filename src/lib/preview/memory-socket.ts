@@ -24,13 +24,20 @@ export interface MemoryHost {
  * page: it opens on the next microtask, and each frame either way arrives on a
  * microtask of its own, as a network's would arrive later than it was sent.
  */
-export function memorySocket(url: string, host: MemoryHost): WebSocket {
+export function memorySocket(url: string, host: MemoryHost, rttMs = 0): WebSocket {
+	// With a round trip to play (`rttMs`), each way takes half of it, in order, and opening takes all of it.
+	const later = (run: () => void, ms: number) => (ms > 0 ? setTimeout(run, ms) : queueMicrotask(run));
 	const end: MemorySocket = {
 		get open() {
 			return socket.readyState === 1;
 		},
 		deliver: (frame) => {
-			if (socket.readyState === 1) socket.onmessage?.({ data: JSON.stringify(frame) } as MessageEvent);
+			if (socket.readyState !== 1) return;
+			if (rttMs <= 0) return void socket.onmessage?.({ data: JSON.stringify(frame) } as MessageEvent);
+			const data = JSON.stringify(frame);
+			later(() => {
+				if (socket.readyState === 1) socket.onmessage?.({ data } as MessageEvent);
+			}, rttMs / 2);
 		},
 		close: () => socket.close()
 	};
@@ -51,17 +58,17 @@ export function memorySocket(url: string, host: MemoryHost): WebSocket {
 			if (socket.readyState !== 1) return;
 			let frame: WireFrame;
 			try { frame = JSON.parse(data) as WireFrame; } catch { return; }
-			queueMicrotask(() => {
+			later(() => {
 				if (socket.readyState === 1) host.received(end, frame);
-			});
+			}, rttMs / 2);
 		}
 	};
-	queueMicrotask(() => {
+	later(() => {
 		if (socket.readyState !== 0) return;
 		socket.readyState = 1;
 		socket.onopen?.({} as Event);
 		// Closed from `onopen`: the host never hears of it, as `closed` already ran.
 		if (socket.readyState === 1) host.opened(end);
-	});
+	}, rttMs);
 	return socket as unknown as WebSocket;
 }

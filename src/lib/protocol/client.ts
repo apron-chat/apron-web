@@ -1,4 +1,5 @@
 import { describeError, isCancelled, type PasskeyStage } from './passkey-notes';
+import { startupMark } from '../startup-marks';
 import { requestPasskey, signalPasskeyLabel } from './webauthn';
 import { writeEmbed } from './embeds';
 import { SignInConnection, type RpcFailure } from './signin-connection';
@@ -2487,6 +2488,7 @@ export class ChatClient {
 			if (listing.since !== undefined) this.startPlannedCatchUp(result);
 			this.applyRoomList(result, true);
 			this.joinedComplete = true;
+			startupMark('rooms');
 			this.settleHeldStatuses();
 			this.emit();
 		}, (cause: Error) => {
@@ -2960,6 +2962,7 @@ export class ChatClient {
 		socket.onopen = () => {
 			if (!this.isCurrentSocket(id, socket)) return;
 			opened = true;
+			startupMark('socket-open');
 			this.status = 'connected';
 			this.error = undefined;
 			this.authRequested = false;
@@ -3334,6 +3337,7 @@ export class ChatClient {
 		this.reconnectHeld = false;
 		this.signInNeeded = undefined;
 		this.authenticated = true;
+		startupMark('signed-in');
 		this.authRequested = false;
 		// The backoff starts over only once this connection has stayed up.
 		this.clearStableTimer();

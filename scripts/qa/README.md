@@ -59,6 +59,14 @@ npm run qa -- sheet .qa/sheet.json                        # curated before/after
   more rooms, 1500 messages in general), where costs that grow with rooms or history show. A probe
   without an `action` measures the load, which also counts `startupJsKB`: the JS the page parses to start.
 - `prof` CPU-profiles page load and lists the functions whose self time changed most.
+- `startup` times how long the first messages take to show, in wall time, strictly interleaved between builds:
+  `npm run qa -- startup --build .qa/base --build build`. By default a **repeat visit on a phone** (the service
+  worker's cached app, 390×844, 4× CPU), as most visits to an installed app are; `--visit first` starts from an
+  empty cache, `--device desktop` loads a laptop's screen, `--net 4g|3g` throttles the network (the builds are served
+  brotli-compressed, though over HTTP/1.1, so first visits read slow), `--rtt 150` makes the in-memory server answer
+  a round trip late (`PreviewKnobs.rttMs`) so waits on the server count, and `--busy` loads the busy account. Each
+  `apron:*` startup mark (`src/lib/startup-marks.ts`: app, socket-open, signed-in, rooms, first-messages) is listed, so
+  a change shows where it moved the time. Timings are noisy: use 7+ runs and compare builds, not numbers.
 - `sheet` takes `{ "panels": [{ "title", "note", "before", "after", "box": [l, t, r, b], "scale" }] }`
   (paths relative to the spec; `before` optional) and renders it with real text, for a PR description.
 

@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { appearanceSettings } from '$lib/ui/appearance.svelte';
 	import { prefetchLazy } from '$lib/ui/lazy.svelte';
+	import { startupMark } from '$lib/startup-marks';
 	import '$lib/design/tokens.css';
 	import '$lib/design/apron.css';
 	import '$lib/design/fonts.css';
@@ -13,6 +14,9 @@
 	import UpdateNotice from '$lib/components/UpdateNotice.svelte';
 
 	let { children } = $props();
+
+	// The app's code has loaded and started (`$lib/startup-marks`).
+	startupMark('app');
 
 	onMount(() => {
 		appearanceSettings.load();

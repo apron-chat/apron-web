@@ -98,7 +98,13 @@ export interface PreviewKnobs {
 	 * makes it a registered session, as starting private conversations needs.
 	 */
 	account?: boolean;
+	/**
+	 * A network round trip to play, in ms: the socket opens after one, and each frame either way takes half of one, so a
+	 * load's waits on the server show as they would over a network (`npm run qa -- startup --rtt`).
+	 */
+	rttMs?: number;
 	/** Answers each `history` request after this long, as a slow server does, so what shows while history loads can be seen. */
+
 	historyDelayMs?: number;
 	/** That many more messages at the end of a room's history, by `room_id`, e.g. enough for older pages to load reading back. */
 	filler?: Record<string, number>;
@@ -679,7 +685,7 @@ export class MemoryProtocolServer {
 	};
 
 	private createSocket(url: string): WebSocket {
-		return memorySocket(url, this.host);
+		return memorySocket(url, this.host, this.knobs.rttMs ?? 0);
 	}
 
 	private receive(socket: MemorySocket, frame: WireFrame): void {
