@@ -6,7 +6,7 @@
 	"probes": {
 		"load": {
 			"requests": 21,
-			"startupJsKB": 987.9,
+			"startupJsKB": 1001,
 			"domNodes": 542,
 			"layouts": 10,
 			"styleRecalcs": 18,
@@ -15,7 +15,7 @@
 		},
 		"load-busy": {
 			"requests": 19,
-			"startupJsKB": 960.5,
+			"startupJsKB": 973.6,
 			"domNodes": 1198,
 			"layouts": 13,
 			"styleRecalcs": 20,

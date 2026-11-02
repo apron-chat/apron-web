@@ -818,7 +818,7 @@ export class ChatClient {
 					...(room.latestLogId !== undefined ? { latestLogId: room.latestLogId } : {}),
 					...(room.historyLogId !== undefined ? { historyLogId: room.historyLogId } : {}),
 					timeline: room.timeline,
-					recovering: Boolean(room.recovery) || (!this.loadsOnOpen(room) && Boolean(this.joinedCatchUp?.rooms.has(room.id))),
+					recovering: Boolean(room.recovery) || (this.joinedCatchUp !== undefined && this.joinedCatchUp.rooms.has(room.id) && !this.loadsOnOpen(room)),
 					...(room.recoveryError ? { recoveryError: room.recoveryError } : {}),
 					...(this.historyLimited(room) ? { limited: true as const } : {}),
 					loaded: !history || (this.loadsOnOpen(room) ? this.threadLoaded(room) : room.checkpoint !== undefined),
@@ -3441,7 +3441,7 @@ export class ChatClient {
 			return;
 		}
 		const head = (run.head ??= result.latest_log_id);
-		this.installPage(result, (roomId) => (roomId === undefined ? undefined : this.rooms.get(roomId)?.floor), true);
+		this.installPage(result);
 		run.pages += 1;
 		if (!result.more) {
 			this.advanceJoined(run, head);
@@ -4351,15 +4351,15 @@ export class ChatClient {
 	 * listing's members already cover the ones at or below its head.
 	 */
 	private applyPage(room: RoomState, result: JsonObject): void {
-		this.installPage(result, () => room.floor);
+		this.installPage(result, room);
 	}
 
 	/**
-	 * Installs a page's records, each room's message and reaction records only at or above its bound (`floorOf`).
-	 * `heads`: a page of several rooms' log (`history` without `room_id`), whose records move each room's head as
-	 * live ones do.
+	 * Installs a page's records, message and reaction records only at or above their room's bound: `room`'s for a
+	 * page of its log, else (a page of every joined room's log, `history` without `room_id`) each record's own
+	 * room's, whose head the record moves as a live one does.
 	 */
-	private installPage(result: JsonObject, floorOf: (roomId: string | undefined) => string | undefined, heads = false): void {
+	private installPage(result: JsonObject, room?: RoomState): void {
 		// `~private` messages are never installed (Appendix A.1), from history either.
 		const page = Array.isArray(result.messages)
 			? { ...result, messages: result.messages.filter((message) => !(isJsonObject(message) && isIdentity(message.from) && message.from.user_id === '~private')) }
@@ -4368,13 +4368,14 @@ export class ChatClient {
 		for (const record of [...records.rooms, ...records.messages, ...records.embedded, ...records.reactions, ...records.memberships]) this.observeLogId(record.log_id);
 		for (const record of [...records.messages, ...records.embedded, ...records.reactions]) this.noteRecorded(record.from, record.log_id);
 		for (const record of records.memberships) this.noteRecorded(record.user, record.log_id);
-		const retained = (record: { room_id?: string; log_id: string }) => {
-			const floor = floorOf(record.room_id);
-			if (floor !== undefined && compareLogIds(record.log_id, floor) < 0) return false;
-			const room = heads && record.room_id !== undefined ? this.rooms.get(record.room_id) : undefined;
-			if (room) this.observeHead(room, record.log_id);
-			return true;
-		};
+		const retained = room
+			? (record: { log_id: string }) => room.floor === undefined || compareLogIds(record.log_id, room.floor) >= 0
+			: (record: { room_id?: string; log_id: string }) => {
+				const own = record.room_id === undefined ? undefined : this.rooms.get(record.room_id);
+				if (own?.floor !== undefined && compareLogIds(record.log_id, own.floor) < 0) return false;
+				if (own) this.observeHead(own, record.log_id);
+				return true;
+			};
 		for (const record of records.rooms) this.installRoom(record);
 		for (const record of records.messages) if (retained(record)) this.installMessage(record);
 		for (const record of records.reactions) if (retained(record)) this.store.putReaction(record);
