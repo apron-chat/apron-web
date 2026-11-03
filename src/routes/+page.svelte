@@ -381,6 +381,26 @@
 	let membersTrack = $derived(memberListWide && memberListOpen ? memberList.width : 0);
 	/** Side panels slide only once the page is up, so the layout kept from the last visit doesn't animate in. */
 	let slidesReady = $state(false);
+	/** `narrow` and the panels' kept layout are read (on mount): until then nothing says which panels show. */
+	let layoutKnown = $state(false);
+	/**
+	 * The open pane has drawn what it opened with (its messages, or that there are none) and that has painted: the
+	 * panels out of sight wait for it to draw their rows (`sideDrawn`, `memberRowsDrawn`), so the first screen comes first.
+	 */
+	let firstScreenDrawn = $state(false);
+	/** The rooms list shows: on a phone, as the pane in view; wider, unless shut. */
+	let sideShown = $derived(layoutKnown && (narrow ? mobilePane === 'rooms' : !sidebar.collapsed));
+	/**
+	 * The rooms list draws its rooms once it shows, or once the first screen has drawn if it's hidden (behind a phone's
+	 * conversation, or shut), and keeps them, hidden again (and where they were scrolled to): hidden, nobody can see,
+	 * find or reach them meanwhile. Kept in a memo, not state. `firstScreenDrawn` is read first, so the derived always
+	 * reads something: one that reads nothing is worked out again at every read.
+	 */
+	let sideKept = false;
+	let sideDrawn = $derived(firstScreenDrawn || (sideKept ||= sideShown));
+	/** The member list's rows, the same: from when it opens, or the first screen has drawn while it's shut. */
+	let memberRowsKept = false;
+	let memberRowsDrawn = $derived(firstScreenDrawn || (memberRowsKept ||= memberListOpen));
 	let composer = $state<Composer | undefined>();
 	let memberListToggle = $state<PanelToggle | undefined>();
 	let messageScroll = $state<HTMLDivElement | undefined>();
@@ -1183,6 +1203,8 @@
 		const narrowMedia = window.matchMedia(`(max-width: ${NARROW_MAX - 1}px)`);
 		const narrowMediaChange = ({ matches }: { matches: boolean }) => (narrow = matches);
 		narrowMediaChange(narrowMedia);
+		layoutKnown = true;
+		const stopFirstScreen = watchFirstScreen();
 		narrowMedia.addEventListener('change', narrowMediaChange);
 		// Taken, and scrubbed from the address bar, before anything else can read or keep the URL.
 		const signInLink = previewMode ? undefined : takeSignInLink(window.location, scrubUrl);
@@ -1316,6 +1338,7 @@
 			openConnect();
 		}
 		return () => {
+			stopFirstScreen();
 			memberListMedia.removeEventListener('change', memberListMediaChange);
 			narrowMedia.removeEventListener('change', narrowMediaChange);
 			window.removeEventListener('hashchange', hashChanged);
@@ -2860,6 +2883,32 @@
 	 * list's scroll top and height from before, unless the pane follows the
 	 * latest. Where the browser anchored the view itself this is already the position.
 	 */
+	/**
+	 * Sets `firstScreenDrawn` once the rooms are listed and the open pane (if any) has caught up, and a frame has painted
+	 * that: the hidden panels draw their rows in a task of their own after it. A root of its own, gone once that's done,
+	 * so the page's updates don't visit it after. Returns what stops it early.
+	 */
+	function watchFirstScreen(): () => void {
+		const stop = $effect.root(() => {
+			$effect(() => {
+				if (session.starting || paneCatchingUp) return;
+				let timer: ReturnType<typeof setTimeout> | undefined;
+				let frame = requestAnimationFrame(() => {
+					frame = 0;
+					timer = setTimeout(() => {
+						firstScreenDrawn = true;
+						stop();
+					});
+				});
+				return () => {
+					if (frame) cancelAnimationFrame(frame);
+					clearTimeout(timer);
+				};
+			});
+		});
+		return stop;
+	}
+
 	function keepPlace(scroller: HTMLElement | undefined, top: number, height: number): void {
 		if (!scroller || messageScroll !== scroller || stickToBottom) return;
 		scroller.scrollTop = top + (scroller.scrollHeight - height);
@@ -3243,7 +3292,7 @@
 	{#snippet sideToggle()}<PanelToggle side="left" panel="rooms" open={!sidebar.collapsed} ontoggle={() => sidebar.toggle()} />{/snippet}
 	{#snippet side()}
 		<Sidebar
-			client={client!} {session} {backendLabel} serverLook={currentLook} serverAddress={client?.url} account={addedAccount} order={roomOrder} threads={listedThreads} {activeThread} mentions={mentions.byRoom} unread={unread.byRoom} bind:displayName {passkeyUnavailable}
+			drawRooms={sideDrawn} client={client!} {session} {backendLabel} serverLook={currentLook} serverAddress={client?.url} account={addedAccount} order={roomOrder} threads={listedThreads} {activeThread} mentions={mentions.byRoom} unread={unread.byRoom} bind:displayName {passkeyUnavailable}
 			notificationsEnabled={notificationsActive} notificationsSupported={notificationState !== 'unsupported'} notificationPermission={notificationState} notifyScopes={notifyScopes} onnotifications={toggleNotifications} onnotifyscopes={setNotifyScopes} ontestnotifications={testNotifications}
 			webPush={webPushKey(session.server) ? { supported: webPushAvailable, homeScreen: !webPushAvailable && needsHomeScreen(), enabled: webPushActive && !webPushHeldBy, ...(webPushHeldBy ? { heldBy: webPushHeldBy } : {}), ...(webPushServerKey ? {} : { signIn: true }), offered: webPushOffered, installable: canOfferInstall(installPrompt), ...(webPushError && webPushServerKey ? { error: webPushError } : {}) } : undefined} onwebpush={pushHere} oninstallapp={installApp}
 			pause={canPause ? { ...(pausedUntil !== undefined && isPaused(pausedUntil) ? { until: pausedUntil } : {}) } : undefined} onpause={pauseNotifications} onresume={() => client?.setMute(false) ?? Promise.resolve()}
@@ -3437,7 +3486,7 @@
 		{/if}
 	{/snippet}
 	{#snippet members()}
-		<MemberListSidebar {client} {session} room={paneRoom} open={memberListOpen} canChange={canChangeMembers} canAdd={canAddMembers} canMessage={canStartPrivate} onnamed={(roomId) => arrivals.mine(roomId)} onopenroom={openPrivateRoom} />
+		<MemberListSidebar {client} {session} room={paneRoom} open={memberListOpen} drawRows={memberRowsDrawn} canChange={canChangeMembers} canAdd={canAddMembers} canMessage={canStartPrivate} onnamed={(roomId) => arrivals.mine(roomId)} onopenroom={openPrivateRoom} />
 	{/snippet}
 	<!--
 		Outside the conversation pane, which a phone hides while the room list shows: a modal there doesn't render,
