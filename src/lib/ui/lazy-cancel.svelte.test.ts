@@ -54,4 +54,23 @@ describe('cancelWhileWaiting', () => {
 		document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
 		expect(cancel).toHaveBeenCalledTimes(1);
 	});
+
+	it('lets a press on what asked for it through, as the popover once shown does: its click toggles the ask', () => {
+		const cancel = vi.fn();
+		const row = document.createElement('li');
+		row.dataset.pressesAnchor = '';
+		const name = document.createElement('button');
+		const badge = document.createElement('span');
+		row.append(name, badge);
+		document.body.append(row);
+		const stop = cancelWhileWaiting(true, cancel, name)!;
+		name.dispatchEvent(new Event('pointerdown', { bubbles: true, composed: true }));
+		// The row presses its name (`data-presses-anchor`): a press anywhere on it is one on the anchor.
+		badge.dispatchEvent(new Event('pointerdown', { bubbles: true, composed: true }));
+		expect(cancel).not.toHaveBeenCalled();
+		document.body.dispatchEvent(new Event('pointerdown', { bubbles: true, composed: true }));
+		expect(cancel).toHaveBeenCalledOnce();
+		stop();
+		row.remove();
+	});
 });

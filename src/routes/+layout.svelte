@@ -33,7 +33,7 @@
 {@render children()}
 <!-- The one full emoji picker, outside the shell so nothing in it clips the popover. This and the image viewer load on
      demand (`overlays.ts`) and mount once first opened: the state that opens them is here from the start. -->
-{#if emojiPopover.once(Boolean(emojiPicker.current), () => emojiPicker.close())}{@const EmojiPopover = emojiPopover.component!}<EmojiPopover />{/if}
+{#if emojiPopover.once(Boolean(emojiPicker.current), () => emojiPicker.close(), emojiPicker.current?.anchor)}{@const EmojiPopover = emojiPopover.component!}<EmojiPopover />{/if}
 <!-- The one image viewer, full screen over everything. -->
 {#if mediaViewerHost.once(mediaViewer.open, () => mediaViewer.closed())}{@const MediaViewerHost = mediaViewerHost.component!}<MediaViewerHost />{/if}
 <!-- The one terminal viewer, a terminal embed full screen. -->

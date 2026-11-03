@@ -77,6 +77,19 @@ test.describe('startup, with the code that loads on demand held back', { tag: '@
 		await expect(page.getByTestId('profile-card')).toBeVisible();
 	});
 
+	test('a second press on the member’s row while the card’s code is on its way takes the ask back, as it closes the card once shown', async ({ preview, page }) => {
+		const chunks = await holdOnDemand(page);
+		await preview.open();
+		const list = await preview.showMembers();
+		await preview.memberProfile(list, 'ada');
+		await expect.poll(chunks.held).toBeGreaterThan(0);
+		await preview.memberProfile(list, 'ada');
+		await chunks.release();
+		await expect(page.locator('.ap-roomlist[data-reorderable]').first()).toBeAttached();
+		await page.waitForTimeout(300);
+		await expect(page.getByTestId('profile-card')).toHaveCount(0);
+	});
+
 	test('a profile card asked for before its code comes, and left alone, opens once it lands', async ({ preview, page }) => {
 		const chunks = await holdOnDemand(page);
 		await preview.open();

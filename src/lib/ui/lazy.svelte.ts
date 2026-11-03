@@ -34,13 +34,14 @@ export class Lazy<T> {
 	 * (`component`) from then on, so it stays mounted once it has been. Its state stays eager, so an ask before the code
 	 * arrives is drawn as it lands, unless the viewer moves on first: while it waits, a press anywhere or Escape calls
 	 * `cancel` (`cancelWhileWaiting`), as they would once it shows. Render it as
-	 * `{#if lazy.once(Boolean(state.current), () => state.close())}`: it is read only as the ask or the code changes,
-	 * so the page's other updates don't visit it.
+	 * `{#if lazy.once(Boolean(state.current), () => state.close(), state.current?.anchor)}`: it is read only as the ask
+	 * or the code changes, so the page's other updates don't visit it. A press on `anchor` doesn't cancel it, as one
+	 * doesn't close it once shown: the anchor's own click toggles it.
 	 */
-	once(asked: boolean, cancel?: () => void): T | undefined {
+	once(asked: boolean, cancel?: () => void, anchor?: HTMLElement): T | undefined {
 		if (asked) this.#asked = true;
 		const component = this.#asked ? this.component : undefined;
-		if (asked && cancel && component === undefined) this.#waiting ??= cancelWhileWaiting(true, cancel);
+		if (asked && cancel && component === undefined) this.#waiting ??= cancelWhileWaiting(true, cancel, anchor);
 		else {
 			this.#waiting?.();
 			this.#waiting = undefined;
@@ -113,11 +114,18 @@ export function prefetchLazy(): void {
 /**
  * While `waiting` (a popover asked for before its code has come, so nothing of it shows yet), Escape or a press anywhere
  * calls `cancel`, as they would once it shows: an ask the viewer has moved on from doesn't open late, on an anchor that
- * may be gone by then. One left alone opens as its code lands. For an effect beside the host:
- * `$effect(() => cancelWhileWaiting(Boolean(state.current) && !host.component, () => state.close()))`.
+ * may be gone by then. One left alone opens as its code lands. A press on `anchor` (what asked for it) doesn't
+ * cancel it, as one doesn't close it once shown: the anchor's own click toggles it. `Lazy.once` uses it.
  */
-export function cancelWhileWaiting(waiting: boolean, cancel: () => void): (() => void) | undefined {
+export function cancelWhileWaiting(waiting: boolean, cancel: () => void, anchor?: HTMLElement): (() => void) | undefined {
 	if (!waiting || typeof document === 'undefined') return;
+	// What asked for it, as the popovers count it once shown: a press there is the anchor's to toggle with its click,
+	// and a row that presses its anchor (`data-presses-anchor`, a member's) counts as the anchor.
+	const trigger = anchor?.closest<HTMLElement>('[data-presses-anchor]') ?? anchor;
+	const press = (event: Event) => {
+		if (trigger && event.composedPath().includes(trigger)) return;
+		cancel();
+	};
 	const key = (event: KeyboardEvent) => {
 		if (event.key !== 'Escape') return;
 		// The popover's Escape, as it would be shown: what lies under it (a dialog, an overlay) stays open.
@@ -125,9 +133,9 @@ export function cancelWhileWaiting(waiting: boolean, cancel: () => void): (() =>
 		cancel();
 	};
 	document.addEventListener('keydown', key, true);
-	document.addEventListener('pointerdown', cancel, true);
+	document.addEventListener('pointerdown', press, true);
 	return () => {
 		document.removeEventListener('keydown', key, true);
-		document.removeEventListener('pointerdown', cancel, true);
+		document.removeEventListener('pointerdown', press, true);
 	};
 }

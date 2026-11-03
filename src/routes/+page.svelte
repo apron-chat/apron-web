@@ -3579,15 +3579,15 @@
 		Each loaded on demand and mounted once first opened; the state that opens it is here from the start, and one
 		opened before its code has come lets go on a press elsewhere or Escape rather than opening late (`Lazy.once`).
 	-->
-	{#if serverPaneHost.once(Boolean(serverPane.anchor), () => serverPane.close())}
+	{#if serverPaneHost.once(Boolean(serverPane.anchor), () => serverPane.close(), serverPane.anchor)}
 		{@const ServerPane = serverPaneHost.component!}
 		<ServerPane {client} {session} onnewserver={previewMode ? undefined : () => openConnect()} ondisconnect={previewMode ? undefined : disconnect} />
 	{/if}
-	{#if profileCardHost.once(Boolean(profileCard.current), () => profileCard.close())}
+	{#if profileCardHost.once(Boolean(profileCard.current), () => profileCard.close(), profileCard.current?.anchor)}
 		{@const ProfileCard = profileCardHost.component!}
 		<ProfileCard {client} {session} room={paneRoom} canChange={canAddMembers} canMention={Boolean(composer) && canCompose && !selection.active} canMessage={canStartPrivate} onmention={(userId) => composer?.mention(userId)} onnamed={(roomId) => arrivals.mine(roomId)} onopenroom={openPrivateRoom} />
 	{/if}
-	{#if reactorsPopover.once(Boolean(reactorsList.current), () => reactorsList.close())}{@const ReactorsPopover = reactorsPopover.component!}<ReactorsPopover />{/if}
+	{#if reactorsPopover.once(Boolean(reactorsList.current), () => reactorsList.close(), reactorsList.current?.anchor)}{@const ReactorsPopover = reactorsPopover.component!}<ReactorsPopover />{/if}
 	<!-- While reconnecting, the banner at the top already says what went wrong (statusLabel). -->
 	<Toasts {feedback} error={snapshot.error && snapshot.error !== dismissedError && session.connection !== 'reconnecting' ? snapshot.error : undefined} ondismisserror={() => (dismissedError = snapshot.error)} />
 </AppShell>
