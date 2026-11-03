@@ -122,6 +122,43 @@ describe('EmbedTerminal', () => {
 		expect(onexpand).toHaveBeenCalledExactlyOnceWith(expand);
 	});
 
+	it('links to its stream on a page of its own, in a new tab, only with `page`', () => {
+		render(EmbedTerminal, { kind: 'terminal', url: '#', onexpand: vi.fn() });
+		expect(queryByRole('link', 'Open terminal in a new tab')).toBeNull();
+		unmount();
+		render(EmbedTerminal, { kind: 'terminal', url: '#', page: 'https://terminal.apron.chat/#stream=https://chat.example/t/1', onexpand: vi.fn() });
+		const open = queryByRole<HTMLAnchorElement>('link', 'Open terminal in a new tab')!;
+		expect(open.closest('.ap-embed-termhead')).not.toBeNull();
+		expect([open.getAttribute('href'), open.target, open.rel, open.title]).toEqual(['https://terminal.apron.chat/#stream=https://chat.example/t/1', '_blank', 'noopener noreferrer', 'Open in a new tab']);
+		// Ahead of Expand.
+		expect(open.nextElementSibling).toBe(button('Expand terminal'));
+	});
+
+	it('offers Copy, only with `oncopy`, which says Copied for a moment once it copied', async () => {
+		vi.useFakeTimers();
+		try {
+			render(EmbedTerminal, { kind: 'terminal', url: '#' });
+			expect(queryByRole('button', 'Copy terminal text')).toBeNull();
+			unmount();
+			const oncopy = vi.fn(async () => false);
+			render(EmbedTerminal, { kind: 'terminal', url: '#', oncopy, page: 'https://terminal.apron.chat/' });
+			const copy = button('Copy terminal text');
+			expect(copy.nextElementSibling).toBe(queryByRole('link', 'Open terminal in a new tab'));
+			copy.click();
+			await vi.advanceTimersByTimeAsync(0);
+			expect(oncopy).toHaveBeenCalledOnce();
+			expect(copy.getAttribute('aria-label')).toBe('Copy terminal text');
+			oncopy.mockResolvedValue(true);
+			copy.click();
+			await vi.advanceTimersByTimeAsync(0);
+			expect([copy.getAttribute('aria-label'), copy.title]).toEqual(['Copied', 'Copied']);
+			await vi.advanceTimersByTimeAsync(1500);
+			expect(copy.getAttribute('aria-label')).toBe('Copy terminal text');
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
 	it('expands on a tap on its screen, on a touch screen, and leaves a mouse’s click to select', () => {
 		const onexpand = vi.fn();
 		render(EmbedTerminal, { kind: 'terminal', url: '#', attach: vi.fn(), onexpand });

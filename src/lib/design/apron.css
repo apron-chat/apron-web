@@ -1623,10 +1623,11 @@ button.ap-mention, a.ap-linkchip { max-width: 100%; white-space: normal; overflo
 .ap-embed.ap-embed-terminal { width: var(--embed-terminal-w); max-width: 100%; overflow: hidden; border: 1px solid var(--line); background: var(--bg-rail); }
 .ap-embed-termhead { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-1_5) var(--space-3); border-bottom: 1px solid var(--line); background: var(--bg-200); font-size: var(--text-sm); line-height: var(--leading-sm); }
 .ap-embed-termtitle { min-width: 0; margin-inline-end: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: var(--ink-muted); }
-/* Expand: the screen full screen (TerminalViewer). Pulled into the header's padding so the header keeps its height; its
-   ring inside it, which the card's edge would cut outside. */
-.ap-embed-termexpand { flex: none; width: var(--control-sm); height: var(--control-sm); margin: calc(-1 * var(--space-1)) calc(-1 * var(--space-1_5)) calc(-1 * var(--space-1)) calc(-1 * var(--space-1)); }
-.ap-embed-termexpand:focus-visible { outline-offset: var(--focus-offset-inset); }
+/* Open (the stream on a page of its own, in a new tab) and Expand (the screen full screen, TerminalViewer). Pulled into the
+   header's padding so the header keeps its height; their rings inside them, which the card's edge would cut outside. */
+.ap-embed-termbtn { flex: none; width: var(--control-sm); height: var(--control-sm); margin: calc(-1 * var(--space-1)); }
+.ap-embed-termbtn:last-child { margin-inline-end: calc(-1 * var(--space-1_5)); }
+.ap-embed-termbtn:focus-visible { outline-offset: var(--focus-offset-inset); }
 .ap-embed-livebadge { display: inline-flex; flex: none; align-items: center; gap: var(--space-1_5); font-weight: 600; color: var(--accent); }
 .ap-embed-livebadge i { width: 7px; height: 7px; border-radius: var(--radius-full); background: var(--accent); animation: ap-blink 1.2s steps(1) infinite; }
 .ap-embed-termscreen { display: block; margin: var(--space-2) var(--space-3); overflow: hidden; color: var(--ink); }

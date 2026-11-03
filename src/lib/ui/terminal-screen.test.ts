@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { press } from '$lib/test/dom';
 import { deferredXterm, fakeBuffer, fakeLine, FakeTerminal, fakeXterm, HeadlessTerminal, headlessXterm } from '$lib/test/fake-xterm';
 import { keepLast, TERMINAL_FEED_KEEP, TerminalFeed, type TerminalSink } from './terminal-feed';
-import { shownRows, TERMINAL_COLS, TERMINAL_FONT_MAX, TERMINAL_FONT_MIN, TERMINAL_ROWS, TERMINAL_VIEWER_FONT_MAX, TERMINAL_VIEWER_FONT_MIN, terminalFontSize, terminalOptions, TerminalScreen, VIEWER_FIT, VIEWER_SCROLLBACK } from './terminal-screen';
+import { bufferText, shownRows, TERMINAL_COLS, TERMINAL_FONT_MAX, TERMINAL_FONT_MIN, TERMINAL_ROWS, TERMINAL_VIEWER_FONT_MAX, TERMINAL_VIEWER_FONT_MIN, terminalFontSize, terminalOptions, TerminalScreen, VIEWER_FIT, VIEWER_SCROLLBACK } from './terminal-screen';
 
 const ESC_C = '\u001bc';
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -425,5 +425,23 @@ describe('shownRows', () => {
 	it('shows the whole screen on the alternate screen, and once output has scrolled', () => {
 		expect(shownRows(fakeBuffer([fakeLine('top')], 'alternate') as never)).toBe(40);
 		expect(shownRows(fakeBuffer([fakeLine('top')], 'normal', 3) as never)).toBe(40);
+	});
+});
+
+describe('a screen’s text', () => {
+	it('is what it shows, as plain text: colors gone, a carriage return’s overwrite done, a wrapped line joined, no blanks at the end', async () => {
+		const screen = new TerminalScreen(host(), { load: headlessXterm });
+		expect(screen.text()).toBe('');
+		const long = 'x'.repeat(TERMINAL_COLS) + 'yz';
+		screen.write(`\u001b[1;32m$ make\u001b[0m   \r\nprogress 10%\rprogress 100%\r\n\u001b[38;2;255;0;0m${long}\u001b[0m\r\n\r\n`);
+		await vi.waitFor(() => expect(FakeTerminal.made).toHaveLength(1));
+		await (FakeTerminal.made[0] as HeadlessTerminal).parsed();
+		expect(screen.text()).toBe(`$ make\nprogress 100%\n${long}`);
+	});
+
+	it('keeps the blanks a wrapped line ends its first part with', () => {
+		const line = (text: string, isWrapped = false) => ({ isWrapped, translateToString: (trim?: boolean) => (trim ? text.trimEnd() : text) });
+		const rows = [line('a   '), line('b', true), line('c  '), line('  ')];
+		expect(bufferText({ length: rows.length, getLine: (y: number) => rows[y] } as never)).toBe('a   b\nc');
 	});
 });

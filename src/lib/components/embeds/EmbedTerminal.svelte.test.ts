@@ -4,8 +4,8 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { setLiveFetch } from '$lib/protocol/live-text';
 import type { Embed as EmbedRecord } from '$lib/protocol/types';
 import { page, pushes } from '$lib/test/app-page.svelte';
-import { button, press, render, stubDialog, unmount } from '$lib/test/dom';
-import { FakeTerminal } from '$lib/test/fake-xterm';
+import { button, byRole, press, queryByRole, render, stubDialog, unmount } from '$lib/test/dom';
+import { fakeBuffer, fakeLine, FakeTerminal } from '$lib/test/fake-xterm';
 import { directory } from '$lib/ui/directory.svelte';
 import { blankSnapshot } from '$lib/ui/session.svelte';
 import { VIEWER_FIT, VIEWER_SCROLLBACK } from '$lib/ui/terminal-screen';
@@ -121,7 +121,37 @@ describe('a terminal embed (§4.8.6)', () => {
 		await new Promise((resolve) => setTimeout(resolve, 10));
 		expect(server.urls).toEqual([]);
 		expect(box.querySelector('.ap-embed-detail')?.textContent).toBe('Unavailable');
+		expect(queryByRole('link', 'Open terminal in a new tab', box)).toBeNull();
 		unmount();
+	});
+
+	it('copies what its screen shows, as plain text', async () => {
+		const writeText = vi.fn(async (_text: string) => {});
+		Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+		try {
+			const box = show({ kind: 'terminal', title: 'make', output: '\u001b[32mok\u001b[0m  3 tests\r\n' });
+			await vi.waitFor(() => expect(FakeTerminal.made).toHaveLength(1));
+			const terminal = FakeTerminal.made[0];
+			terminal.buffer = { active: fakeBuffer([fakeLine('ok  3 tests')]) as never, onBufferChange: terminal.buffer.onBufferChange };
+			byRole('button', 'Copy terminal text', box).click();
+			await vi.waitFor(() => expect(writeText).toHaveBeenCalledExactlyOnceWith('ok  3 tests'));
+			await vi.waitFor(() => expect(queryByRole('button', 'Copied', box)).not.toBeNull());
+		} finally {
+			Reflect.deleteProperty(navigator, 'clipboard');
+		}
+	});
+
+	it('links its stream to terminal.apron.chat, in a new tab, while it has one', async () => {
+		serve();
+		const live = show({ kind: 'terminal', title: 'make test', url: 'https://chat.example/t/4' });
+		const open = byRole<HTMLAnchorElement>('link', 'Open terminal in a new tab', live);
+		expect(open.closest('.ap-embed-termhead')).not.toBeNull();
+		expect([open.href, open.target, open.rel]).toEqual(['https://terminal.apron.chat/#stream=https://chat.example/t/4&title=make%20test', '_blank', 'noopener noreferrer']);
+		unmount();
+		for (const embed of [{ kind: 'terminal', title: 'make' }, { kind: 'terminal', output: 'ok\r\n' }] satisfies EmbedRecord[]) {
+			expect(queryByRole('link', 'Open terminal in a new tab', show(embed))).toBeNull();
+			unmount();
+		}
 	});
 });
 

@@ -14,7 +14,7 @@ export function fakeLine(text = '', colored: number[] = []) {
 
 /** A screen's buffer: `rows` lines (the rest blank), normal or alternate, scrolled by `baseY`, in view at the foot. */
 export function fakeBuffer(rows: ReturnType<typeof fakeLine>[] = [], type: 'normal' | 'alternate' = 'normal', baseY = 0) {
-	return { type, baseY, viewportY: baseY, getLine: (y: number) => rows[y] ?? fakeLine() };
+	return { type, baseY, viewportY: baseY, length: baseY + 40, getLine: (y: number) => rows[y] ?? fakeLine() };
 }
 
 /**
@@ -32,7 +32,7 @@ export class FakeTerminal {
 	disposed = false;
 	/** What `attachCustomKeyEventHandler` was given: whether xterm may handle a key. */
 	keyHandler: ((event: KeyboardEvent) => boolean) | undefined;
-	buffer: { readonly active: Pick<Terminal['buffer']['active'], 'type' | 'baseY' | 'viewportY' | 'getLine'>; onBufferChange: unknown } = { active: fakeBuffer() as never, onBufferChange: this.listen('onBufferChange') };
+	buffer: { readonly active: Pick<Terminal['buffer']['active'], 'type' | 'baseY' | 'viewportY' | 'length' | 'getLine'>; onBufferChange: unknown } = { active: fakeBuffer() as never, onBufferChange: this.listen('onBufferChange') };
 	parser = {
 		registerOscHandler: (ident: number, callback: (data: string) => boolean | Promise<boolean>) => {
 			this.oscs.set(ident, callback);
