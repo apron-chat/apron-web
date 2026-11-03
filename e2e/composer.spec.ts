@@ -137,6 +137,24 @@ test.describe('mentions in the composer and the message editor', () => {
 	});
 });
 
+test.describe('line breaks in the composer', () => {
+	test.use(DEVICES.desktop);
+
+	test('a blank line typed between two goes out, so the message has two paragraphs', async ({ preview, page }) => {
+		await preview.open();
+		await preview.composer().click();
+		await page.keyboard.type('one');
+		await page.keyboard.press('Shift+Enter');
+		await page.keyboard.type('two');
+		await page.keyboard.press('Shift+Enter');
+		await page.keyboard.press('Shift+Enter');
+		await page.keyboard.type('three');
+		await page.keyboard.press('Enter');
+		expect((await preview.waitForSent('message', (p) => p.body?.text?.endsWith('three'))).body.text).toBe('one\ntwo\n\nthree');
+		await expect(page.locator('.ap-msg-text').last().locator('p')).toHaveCount(2);
+	});
+});
+
 test.describe('role mentions in the composer', () => {
 	test.use({ ...DEVICES.desktop, knobs: { people: { grace: { roles: ['moderator'] } } } });
 
