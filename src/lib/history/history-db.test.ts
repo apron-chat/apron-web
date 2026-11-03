@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import type { StoreChange } from '$lib/protocol/reducer';
 import type { MessageRecord } from '$lib/protocol/types';
 import { readKept } from '$lib/test/kept-history';
-import { deleteHistory, HistoryGone, historyName, listHistories, openHistory, pruneHistory, scanMessages, writeHistory, type HistoryWrite } from './history-db';
+import { deleteHistory, HistoryGone, HistoryMissing, historyName, listHistories, openHistory, pageHistory, pruneHistory, readHistory, scanMessages, writeHistory, type HistoryWrite } from './history-db';
 
 const SERVER = 'wss://chat.example/';
 const day = 24 * 60 * 60 * 1000;
@@ -151,6 +151,18 @@ describe('scanMessages', () => {
 });
 
 describe('history databases', () => {
+	it('open only if there is one when asked to (`existing`), making none where there isn’t', async () => {
+		const databases = new IDBFactory();
+		const name = historyName(SERVER, 'nobody');
+		await expect(openHistory(databases, name, undefined, { existing: true })).rejects.toBeInstanceOf(HistoryMissing);
+		expect((await listHistories(databases)).map((entry) => entry.name)).not.toContain(name);
+
+		(await openHistory(databases, name)).close();
+		const db = await openHistory(databases, name, undefined, { existing: true });
+		expect(db.objectStoreNames.contains('records')).toBe(true);
+		db.close();
+	});
+
 	it('are one per account on each server, named for both, and listed by them', async () => {
 		const databases = new IDBFactory();
 		const names = [historyName(SERVER, 'ada'), historyName(SERVER, 'bo:b%20'), historyName('wss://other.example/', 'ada')];
@@ -173,3 +185,55 @@ describe('history databases', () => {
 		expect(await listHistories(databases)).toEqual([]);
 	});
 });
+
+describe('pages of a room’s kept log', () => {
+	/** A seeded room: logs 1–`size`, some with two or three rows (a message, its reaction set, a membership) at one `log_id`. */
+	async function seeded(seed: number, size: number) {
+		const db = await openHistory(new IDBFactory(), historyName(SERVER, `pages-${seed}-${size}`));
+		let state = seed;
+		const random = () => ((state = (state * 1103515245 + 12345) % 2147483648) / 2147483648);
+		const tx = db.transaction(['meta', 'rooms', 'records'], 'readwrite');
+		tx.objectStore('meta').put({ ...meta, version: 1, savedAt: now }, 'meta');
+		tx.objectStore('rooms').put({ room: 'general', sync: {} });
+		for (let log = 1; log <= size; log++) {
+			const kinds = random() < 0.25 ? ['m', 'r', 'j'].slice(0, 2 + Math.floor(random() * 2)) : ['m'];
+			for (const kind of kinds) tx.objectStore('records').put({ room: 'general', log, kind, id: `${kind}${log}`, value: kind === 'm' ? message(`m${log}`, String(log)) : { log_id: String(log) } });
+		}
+		tx.objectStore('records').put({ room: 'other', log: 3, kind: 'm', id: 'x', value: message('x', '3', 'other') });
+		await new Promise((done) => (tx.oncomplete = done));
+		return db;
+	}
+
+	/** Runs `read` with `getAllRecords` as the browser has it, and again as one without it reads. */
+	async function bothWays<T>(read: () => Promise<T>): Promise<{ records: T; cursor: T }> {
+		const proto = IDBObjectStore.prototype as { getAllRecords?: unknown };
+		const records = await read();
+		const kept = proto.getAllRecords;
+		expect(typeof kept).toBe('function');
+		proto.getAllRecords = undefined;
+		try {
+			return { records, cursor: await read() };
+		} finally {
+			proto.getAllRecords = kept;
+		}
+	}
+
+	it('are the same read in one request (`getAllRecords`) as with a cursor, never splitting the rows at one log_id', async () => {
+		for (const [seed, size] of [[1, 0], [2, 1], [3, 7], [4, 40], [5, 90], [6, 120]]) {
+			const db = await seeded(seed, size);
+			for (const limit of [1, 2, 3, 5, 20, 50, 200])
+				for (const query of [{ limit }, { limit, before: '30' }, { limit, after: '10' }, { limit, after: '10', before: '25' }, { limit, before: '1' }, { limit, after: String(size) }])
+					for (const from of [undefined, 5, 60]) {
+						// A range whose bottom is above its top is one no caller asks for (IndexedDB can't make it).
+						if (query.before !== undefined && Math.max(from ?? 0, Number(query.after ?? 0)) > Number(query.before)) continue;
+						const { records, cursor } = await bothWays(() => pageHistory(db, 'general', query, from));
+						expect(records, `seed ${seed}, ${JSON.stringify(query)}, from ${from}`).toEqual(cursor);
+					}
+			const plan = () => ({});
+			const { records, cursor } = await bothWays(() => readHistory(db, 50, plan));
+			expect(records).toEqual(cursor);
+			db.close();
+		}
+	});
+});
+

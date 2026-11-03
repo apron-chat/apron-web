@@ -108,14 +108,29 @@ export async function listHistories(databases: Databases, server?: string): Prom
 	return found;
 }
 
+/** `openHistory` with `existing`, of a database there is none of: none is made. */
+export class HistoryMissing extends Error {
+	constructor() {
+		super('No history is kept here');
+	}
+}
+
 /**
  * Opens (or makes) the history database named `name` (`historyName`). Another tab deleting it (signing out, or no
- * longer keeping) closes it here, and `onclose` hears so.
+ * longer keeping) closes it here, and `onclose` hears so. With `existing`, one there is none of is not made: it
+ * rejects with `HistoryMissing`, as asking `databases()` first would tell, in one request rather than two.
  */
-export function openHistory(databases: Databases, name: string, onclose?: () => void): Promise<IDBDatabase> {
+export function openHistory(databases: Databases, name: string, onclose?: () => void, { existing = false } = {}): Promise<IDBDatabase> {
 	return new Promise((resolve, reject) => {
 		const request = databases.open(name, DB_VERSION);
-		request.onupgradeneeded = () => {
+		let missing = false;
+		request.onupgradeneeded = (event) => {
+			if (existing && event.oldVersion === 0) {
+				// Aborting the upgrade that would make it leaves no database behind.
+				missing = true;
+				request.transaction?.abort();
+				return;
+			}
 			const db = request.result;
 			db.createObjectStore('meta');
 			db.createObjectStore('rooms', { keyPath: 'room' });
@@ -130,7 +145,10 @@ export function openHistory(databases: Databases, name: string, onclose?: () => 
 			};
 			resolve(db);
 		};
-		request.onerror = () => reject(request.error);
+		request.onerror = (event) => {
+			if (missing) event.preventDefault();
+			reject(missing ? new HistoryMissing() : request.error);
+		};
 		request.onblocked = () => reject(new Error('History is open in an older tab'));
 	});
 }
@@ -198,17 +216,34 @@ function entryOf(row: RecordRow): LogEntry {
 	return { log, kind: 'membership', record: row.value as MembershipEntry };
 }
 
+/** IndexedDB 3.0's `getAllRecords` (keys and values, in either direction, up to a count), where the browser has it. */
+type RecordsStore = IDBObjectStore & {
+	getAllRecords?(options: { query?: IDBKeyRange; count?: number; direction?: IDBCursorDirection }): IDBRequest<Array<{ value: unknown }>>;
+};
+
 /**
  * A page of one room's kept log, as `sliceLog` pages one in memory: within the query's bounds and not below
- * `from`, the oldest `limit` rows with `after`, else the newest, never splitting the rows at one `log_id`. In a
- * few requests whatever the page's size: a key cursor jumps to the `limit`-th row, whose `log_id` bounds the
- * page, which one `getAll` reads, and one `count` says whether more lie past it.
+ * `from`, the oldest `limit` rows with `after`, else the newest, never splitting the rows at one `log_id`.
+ *
+ * Where the browser has `getAllRecords`, in one request: it reads `limit` rows from the page's end, and one more,
+ * which says whether more lie past the page and, by its `log_id`, that the page splits no `log_id` (when it would,
+ * it reads as below). That matters most as the app starts, when each request waits on a busy page to hear back.
+ * Otherwise in a few requests whatever the page's size: a key cursor jumps to the `limit`-th row, whose `log_id`
+ * bounds the page, which one `getAll` reads, and one `count` says whether more lie past it.
  */
 async function pageRows(records: IDBObjectStore, room: string, query: PageQuery, from?: number): Promise<{ page: LogEntry[]; more: boolean }> {
 	const forward = query.after !== undefined;
 	const lower = Math.max(from ?? 0, query.after !== undefined ? Number(query.after) : 0);
 	const upper: IDBValidKey = query.before !== undefined ? [room, Number(query.before), []] : [room, []];
 	const range = IDBKeyRange.bound([room, lower], upper);
+	const store = records as RecordsStore;
+	if (typeof store.getAllRecords === 'function' && query.limit >= 1) {
+		const got = (await done(store.getAllRecords({ query: range, count: query.limit + 1, direction: forward ? 'next' : 'prev' }))).map((record) => record.value as RecordRow);
+		const page = got.slice(0, query.limit);
+		const past = got[query.limit];
+		// One more past the page, at another `log_id`: the page is whole. At the same one, the page would split it.
+		if (!past || past.log !== page[page.length - 1].log) return { page: (forward ? page : page.reverse()).map(entryOf), more: past !== undefined };
+	}
 	const edge = await new Promise<number | undefined>((resolve, reject) => {
 		const request = records.openKeyCursor(range, forward ? 'next' : 'prev');
 		let advanced = query.limit <= 1;
