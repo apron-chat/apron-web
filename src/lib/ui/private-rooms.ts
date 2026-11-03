@@ -1,4 +1,6 @@
-import { UNSUPPORTED, type ChatClient, type ClientSnapshot, type RoomSnapshot } from '$lib/protocol/client';
+import type { ChatClient } from '$lib/protocol/client';
+import type { ClientSnapshot, RoomSnapshot } from '$lib/protocol/client-types';
+import { UNSUPPORTED } from '$lib/protocol/client-internals';
 import { compareLogIds } from '$lib/protocol/reducer';
 import type { Identity } from '$lib/protocol/types';
 import { notPrivate } from './created';

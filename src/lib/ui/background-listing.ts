@@ -1,4 +1,4 @@
-import { RateLimitError } from '$lib/protocol/client';
+import { RateLimitError } from '$lib/protocol/client-types';
 
 /**
  * Lists in the background with `list`, and again once a wait it was refused

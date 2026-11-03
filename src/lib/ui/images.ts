@@ -13,7 +13,7 @@
  * Without stated limits nothing is refused here: the server's 413 or 415 decides.
  */
 
-import { mediaLimit, type MediaTypes } from '$lib/protocol/client';
+import { mediaLimit, type MediaTypes } from '$lib/protocol/client-views';
 
 /** What the client aims for: uploads under 5 MB, avatars under 256 KB. */
 export const UPLOAD_MAX_BYTES = 5 * 1024 * 1024;

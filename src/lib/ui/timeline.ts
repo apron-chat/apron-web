@@ -1,5 +1,6 @@
-import { childRooms, timelineMessages, type Notice, type RoomListing, type RoomRename, type RoomSnapshot } from '$lib/protocol/client';
-import { compareLogIds, type MembershipRecord } from '$lib/protocol/reducer';
+import type { Notice, RoomListing, RoomSnapshot } from '$lib/protocol/client-types';
+import { childRooms, timelineMessages } from '$lib/protocol/client-views';
+import { compareLogIds, type MembershipRecord, type RoomRename } from '$lib/protocol/reducer';
 import { isLogId, type Identity, type MessageRecord } from '$lib/protocol/types';
 import { embedsLabel } from '$lib/protocol/embeds';
 import { markdownText } from '$lib/protocol/markdown';

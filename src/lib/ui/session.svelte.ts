@@ -1,5 +1,6 @@
-import { canEdit, canManageRooms, canReact, capabilitiesOf, type ChatClient, type ClientSnapshot, type RoomSnapshot } from '$lib/protocol/client';
-import type { ConnectionStatus } from '$lib/protocol/client-types';
+import type { ChatClient } from '$lib/protocol/client';
+import type { ClientSnapshot, ConnectionStatus, RoomSnapshot } from '$lib/protocol/client-types';
+import { canEdit, canManageRooms, canReact, capabilitiesOf } from '$lib/protocol/client-views';
 import type { Identity, ServerParams } from '$lib/protocol/types';
 import { connectionStateOf, isSessionReady, reconnectErrorOf } from './connection';
 

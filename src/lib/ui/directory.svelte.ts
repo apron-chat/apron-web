@@ -1,4 +1,5 @@
-import { bioOf, serverMedia, userIn, type ClientSnapshot } from '$lib/protocol/client';
+import type { ClientSnapshot } from '$lib/protocol/client-types';
+import { bioOf, serverMedia, userIn } from '$lib/protocol/client-views';
 import { safeLink, serverOrigin } from '$lib/protocol/embeds';
 import { mediaGate as gateFor, type MediaGate, type MediaSrc } from './media-gate';
 import { shownPerson, withoutBidiOverrides } from '$lib/protocol/plain-text';
