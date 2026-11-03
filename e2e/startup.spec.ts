@@ -108,8 +108,8 @@ test.describe('startup, with the code that loads on demand held back', { tag: '@
 
 /**
  * The first painted frame's messages: which show in the message list, where, and how far from its latest the list
- * is scrolled. Read in the animation frame that first draws a message, before it paints, by an observer set before
- * the page loads.
+ * is scrolled. Read in the frame that first draws a message, after its animation-frame callbacks and layout and
+ * before its paint, by an observer set before the page loads.
  */
 async function watchFirstFrame(page: Page): Promise<void> {
 	await page.addInitScript(() => {
@@ -126,9 +126,16 @@ async function watchFirstFrame(page: Page): Promise<void> {
 			const seen = () => {
 				const list = document.querySelector('[data-testid="message-list"]');
 				if (!list?.querySelector('article[data-message-id]')) return false;
-				// In the frame's own callbacks, after everything up to it (the pane's fill) and before its paint: what it
-				// draws. A task after the paint would see the first of the rest already revealed.
-				requestAnimationFrame(() => resolve(snapshot(list)));
+				// In the frame that draws it, after its animation-frame callbacks (the page's own keep it at the latest,
+				// scheduled after this one) and its layout, before its paint: a resize observer made then hears of it
+				// there. A task after the paint would see the first of the rest already revealed.
+				requestAnimationFrame(() => {
+					const painted = new ResizeObserver(() => {
+						painted.disconnect();
+						resolve(snapshot(list));
+					});
+					painted.observe(list);
+				});
 				return true;
 			};
 			const observer = new MutationObserver(() => {
