@@ -785,6 +785,12 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-shell-sidebody .ap-room, .ap-timeline .ap-msg:not(.ap-msg-system) { margin-inline-start: calc(var(--edge-margin, 0px) - var(--edge)); border-inline-start: var(--edge) solid transparent; border-start-start-radius: 0; border-end-start-radius: 0; }
 .ap-member { margin-inline-end: calc(var(--edge-margin, 0px) - var(--edge)); border-inline-end: var(--edge) solid transparent; border-start-end-radius: 0; border-end-end-radius: 0; }
 .ap-shell-sidebody .ap-room-active:not(.ap-room-nested)::before, .ap-timeline .ap-msg-mention::before { inset-inline-start: calc(-1 * var(--edge)); border-start-start-radius: 0; border-end-start-radius: 0; }
+/* A run of one sender's messages that mention you (grouped, so touching) is one highlight: where two meet, their corners
+   and their bar run straight through. `:has()` looks only at the next row. */
+.ap-timeline .ap-msg-mention:has(+ .ap-msg-mention.ap-msg-grouped) { border-end-end-radius: 0; }
+.ap-timeline .ap-msg-mention:has(+ .ap-msg-mention.ap-msg-grouped)::before { bottom: 0; border-end-end-radius: 0; }
+.ap-timeline .ap-msg-mention + .ap-msg-mention.ap-msg-grouped { border-start-end-radius: 0; }
+.ap-timeline .ap-msg-mention + .ap-msg-mention.ap-msg-grouped::before { top: 0; border-start-end-radius: 0; }
 /* Role badges follow the name, as beside a message's sender. */
 .ap-member-who { display: flex; align-items: center; gap: var(--space-2); flex: 0 1e12 auto; min-width: 0; margin: 0; padding: 0; border: 0; border-radius: var(--radius-sm); background: none; color: inherit; font: inherit; text-align: start; cursor: pointer; }
 /* Offline members (§4.5) recede, badges and all; their ring and name still read. */
@@ -1500,9 +1506,12 @@ label.ap-pref-setting-title { color: var(--ink); font-weight: 600; cursor: point
 .ap-font-status { margin: 0; padding: var(--space-2); color: var(--ap-tone, var(--ink-muted)); font-size: var(--text-sm); line-height: var(--leading-sm); }
 
 /* Mention — the @name chip inside message text */
-.ap-mention { display: inline; padding: 1px 5px; border-radius: var(--radius-sm); background: var(--denim-soft); color: var(--denim); font-weight: 600; white-space: nowrap; }
+.ap-mention { display: inline; padding: 1px 6px; border-radius: var(--radius-sm); background: var(--denim-soft); color: var(--denim); font-weight: 600; white-space: nowrap; }
 .ap-mention-me { background: var(--accent); color: var(--on-accent); }
-button.ap-mention { font-family: inherit; font-size: inherit; line-height: inherit; border: 0; cursor: pointer; }
+/* A button is laid out as a box, the line's full height: a line height of its own keeps the highlight inside the line, a little wider than tall around the name, as a span's would be. */
+button.ap-mention { font-family: inherit; font-size: inherit; line-height: var(--leading-ui); border: 0; cursor: pointer; }
+/* In a heading, set larger than running text, the heading's own line height fits the name. */
+:is(h1, h2, h3, h4, h5, h6) button.ap-mention { line-height: inherit; }
 .ap-msg-mention .ap-mention-me { box-shadow: 0 0 0 1px var(--bg-100); }
 /* Inline chips (inline code, mentions, room links): one that wraps is drawn on each line as a chip of its own, padding
    and corners on every piece, rather than one box cut open at the line ends. A chip that is a button (a mention or room
