@@ -14,6 +14,11 @@ describe('terminalPageUrl', () => {
 		expect([keys.get('stream'), keys.get('title')]).toEqual(['https://chat.example/live?id=1&key=a+b%2F', 'a & b #1']);
 	});
 
+	it('leaves out a title that is not a string, as an embed may send', () => {
+		expect(terminalPageUrl('https://chat.example/live/1', 5)).toBe('https://terminal.apron.chat/#stream=https://chat.example/live/1');
+		expect(terminalPageUrl('https://chat.example/live/1', { x: 1 })).toBe('https://terminal.apron.chat/#stream=https://chat.example/live/1');
+	});
+
 	it('has none for a stream the page would not read', () => {
 		for (const stream of [undefined, '', 'not a url', 'http://chat.example/live/1', 'http://localhost:8080/live/1', 'https://ada:pw@chat.example/live/1', 'data:text/plain,hi']) {
 			expect(terminalPageUrl(stream)).toBeUndefined();

@@ -1623,7 +1623,7 @@ button.ap-mention, a.ap-linkchip { max-width: 100%; white-space: normal; overflo
 .ap-embed.ap-embed-terminal { width: var(--embed-terminal-w); max-width: 100%; overflow: hidden; border: 1px solid var(--line); background: var(--bg-rail); }
 .ap-embed-termhead { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-1_5) var(--space-3); border-bottom: 1px solid var(--line); background: var(--bg-200); font-size: var(--text-sm); line-height: var(--leading-sm); }
 .ap-embed-termtitle { min-width: 0; margin-inline-end: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: var(--ink-muted); }
-/* Open (the stream on a page of its own, in a new tab) and Expand (the screen full screen, TerminalViewer). Pulled into the
+/* Copy (its text), Open (the stream on a page of its own, in a new tab) and Expand (the screen full screen, TerminalViewer). Pulled into the
    header's padding so the header keeps its height; their rings inside them, which the card's edge would cut outside. */
 .ap-embed-termbtn { flex: none; width: var(--control-sm); height: var(--control-sm); margin: calc(-1 * var(--space-1)); }
 .ap-embed-termbtn:last-child { margin-inline-end: calc(-1 * var(--space-1_5)); }

@@ -28,12 +28,20 @@
 
 	let copied = $state(false);
 	let timer: ReturnType<typeof setTimeout> | undefined;
-	$effect(() => () => clearTimeout(timer));
+	/** Gone: a copy that resolves later sets nothing. */
+	let gone = false;
+	$effect(() => () => {
+		gone = true;
+		clearTimeout(timer);
+	});
 
 	async function copy(): Promise<void> {
-		if (!(await oncopy())) return;
-		copied = true;
+		const done = await oncopy();
+		if (gone) return;
 		clearTimeout(timer);
+		// One that failed doesn't keep saying an earlier one copied.
+		copied = done;
+		if (!done) return;
 		timer = setTimeout(() => (copied = false), COPIED_MS);
 	}
 </script>

@@ -148,6 +148,10 @@ describe('a terminal embed (§4.8.6)', () => {
 		expect(open.closest('.ap-embed-termhead')).not.toBeNull();
 		expect([open.href, open.target, open.rel]).toEqual(['https://terminal.apron.chat/#stream=https://chat.example/t/4&title=make%20test', '_blank', 'noopener noreferrer']);
 		unmount();
+		// A title that isn't a string, as a sender may send: left out, and nothing breaks.
+		const odd = show({ kind: 'terminal', title: 5 as unknown as string, url: 'https://chat.example/t/5' });
+		expect(byRole<HTMLAnchorElement>('link', 'Open terminal in a new tab', odd).href).toBe('https://terminal.apron.chat/#stream=https://chat.example/t/5');
+		unmount();
 		for (const embed of [{ kind: 'terminal', title: 'make' }, { kind: 'terminal', output: 'ok\r\n' }] satisfies EmbedRecord[]) {
 			expect(queryByRole('link', 'Open terminal in a new tab', show(embed))).toBeNull();
 			unmount();

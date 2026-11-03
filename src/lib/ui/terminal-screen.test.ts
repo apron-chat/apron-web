@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { press } from '$lib/test/dom';
 import { deferredXterm, fakeBuffer, fakeLine, FakeTerminal, fakeXterm, HeadlessTerminal, headlessXterm } from '$lib/test/fake-xterm';
 import { keepLast, TERMINAL_FEED_KEEP, TerminalFeed, type TerminalSink } from './terminal-feed';
-import { bufferText, shownRows, TERMINAL_COLS, TERMINAL_FONT_MAX, TERMINAL_FONT_MIN, TERMINAL_ROWS, TERMINAL_VIEWER_FONT_MAX, TERMINAL_VIEWER_FONT_MIN, terminalFontSize, terminalOptions, TerminalScreen, VIEWER_FIT, VIEWER_SCROLLBACK } from './terminal-screen';
+import { shownRows, TERMINAL_COLS, TERMINAL_FONT_MAX, TERMINAL_FONT_MIN, TERMINAL_ROWS, TERMINAL_VIEWER_FONT_MAX, TERMINAL_VIEWER_FONT_MIN, terminalFontSize, terminalOptions, TerminalScreen, VIEWER_FIT, VIEWER_SCROLLBACK } from './terminal-screen';
 
 const ESC_C = '\u001bc';
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -439,9 +439,22 @@ describe('a screen’s text', () => {
 		expect(screen.text()).toBe(`$ make\nprogress 100%\n${long}`);
 	});
 
-	it('keeps the blanks a wrapped line ends its first part with', () => {
-		const line = (text: string, isWrapped = false) => ({ isWrapped, translateToString: (trim?: boolean) => (trim ? text.trimEnd() : text) });
-		const rows = [line('a   '), line('b', true), line('c  '), line('  ')];
-		expect(bufferText({ length: rows.length, getLine: (y: number) => rows[y] } as never)).toBe('a   b\nc');
+	it('joins a wide character that wrapped without the empty cell it left', async () => {
+		const screen = new TerminalScreen(host(), { load: headlessXterm });
+		const line = `${'x'.repeat(TERMINAL_COLS - 1)}字字`;
+		screen.write(`${line}\r\n`);
+		await vi.waitFor(() => expect(FakeTerminal.made).toHaveLength(1));
+		await (FakeTerminal.made[0] as HeadlessTerminal).parsed();
+		expect(screen.text()).toBe(line);
+	});
+
+	it('keeps the spaces written at the end of a line that wraps', async () => {
+		const screen = new TerminalScreen(host(), { load: headlessXterm });
+		const line = `${'x'.repeat(TERMINAL_COLS - 2)}  b`;
+		screen.write(`${line}
+`);
+		await vi.waitFor(() => expect(FakeTerminal.made).toHaveLength(1));
+		await (FakeTerminal.made[0] as HeadlessTerminal).parsed();
+		expect(screen.text()).toBe(line);
 	});
 });

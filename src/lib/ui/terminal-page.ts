@@ -11,7 +11,8 @@
  */
 export const TERMINAL_PAGE_ORIGIN = 'https://terminal.apron.chat';
 
-export function terminalPageUrl(stream: string | undefined, title?: string): string | undefined {
+/** `title` is the embed's, as sent: anything but a string is left out. */
+export function terminalPageUrl(stream: string | undefined, title?: unknown): string | undefined {
 	if (!stream) return undefined;
 	let url: URL;
 	try {
@@ -24,6 +25,6 @@ export function terminalPageUrl(stream: string | undefined, title?: string): str
 	// As the page writes its own links: encoded as a component, with `:` and `/` left readable.
 	const encode = (value: string) => encodeURIComponent(value).replace(/%3A/gi, ':').replace(/%2F/gi, '/');
 	const keys = [`stream=${encode(url.href)}`];
-	if (title?.trim()) keys.push(`title=${encode(title.trim())}`);
+	if (typeof title === 'string' && title.trim()) keys.push(`title=${encode(title.trim())}`);
 	return `${TERMINAL_PAGE_ORIGIN}/#${keys.join('&')}`;
 }

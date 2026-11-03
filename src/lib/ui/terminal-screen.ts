@@ -174,8 +174,9 @@ export function bufferText(buffer: Pick<IBuffer, 'length' | 'getLine'>): string 
 	for (let y = 0; y < buffer.length; y++) {
 		const line = buffer.getLine(y);
 		if (!line) continue;
-		// A line that goes on into the next keeps its blanks at the end: they are the text's.
-		const text = buffer.getLine(y + 1)?.isWrapped ? line.translateToString() : line.translateToString(true).trimEnd();
+		// A line that goes on into the next keeps the spaces written at its end, which are the text's, but not an empty
+		// cell, such as the one a wide character that didn't fit leaves before it wraps.
+		const text = buffer.getLine(y + 1)?.isWrapped ? line.translateToString(true) : line.translateToString(true).trimEnd();
 		if (line.isWrapped && lines.length) lines[lines.length - 1] += text;
 		else lines.push(text);
 	}

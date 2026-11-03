@@ -37,6 +37,28 @@ describe('CopyButton', () => {
 		expect([copy.getAttribute('aria-label'), copy.innerHTML]).toEqual(['Copy the address', glyph]);
 	});
 
+	it('stops saying Copied when a later copy fails', async () => {
+		const oncopy = vi.fn(async () => true);
+		render(CopyButton, { label: 'Copy the address', oncopy });
+		button('Copy the address').click();
+		await vi.advanceTimersByTimeAsync(0);
+		expect(queryByRole('button', 'Copied')).not.toBeNull();
+		oncopy.mockResolvedValue(false);
+		button('Copied').click();
+		await vi.advanceTimersByTimeAsync(0);
+		expect(queryByRole('button', 'Copy the address')).not.toBeNull();
+	});
+
+	it('sets nothing, and leaves no timer, when a copy resolves after it is gone', async () => {
+		let resolve!: (copied: boolean) => void;
+		render(CopyButton, { label: 'Copy the address', oncopy: () => new Promise<boolean>((done) => (resolve = done)) });
+		button('Copy the address').click();
+		unmount();
+		resolve(true);
+		await vi.advanceTimersByTimeAsync(0);
+		expect(vi.getTimerCount()).toBe(0);
+	});
+
 	it('says nothing when it could not copy, and Copied unless told otherwise', async () => {
 		const oncopy = vi.fn(() => false);
 		render(CopyButton, { label: 'Copy terminal text', oncopy });
