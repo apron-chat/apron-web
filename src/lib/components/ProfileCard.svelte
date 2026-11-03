@@ -110,9 +110,12 @@
 	$effect(() => {
 		const current = request;
 		if (!current) return;
+		// A row that presses its name (`data-presses-anchor`, a member's) counts as the name: its click toggles the card
+		// closed, so a press on it mustn't close it first, for that click to open it again.
+		const trigger = current.anchor.closest<HTMLElement>('[data-presses-anchor]') ?? current.anchor;
 		const outside = (event: PointerEvent) => {
 			const path = event.composedPath();
-			if ((box && path.includes(box)) || path.includes(current.anchor)) return;
+			if ((box && path.includes(box)) || path.includes(trigger)) return;
 			// The sheet's dimmed page closes it on its own click, so the press reaches nothing under it.
 			if (path.some((target) => target instanceof Element && target.classList.contains('ap-popover-scrim'))) return;
 			profileCard.close();

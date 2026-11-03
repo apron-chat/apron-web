@@ -179,7 +179,7 @@
 									{@const opened = menuOpen && menu?.person.user_id === person.user_id}
 									<!-- The whole row is its name's: a press anywhere else on it presses the name (which keyboards reach), opening their profile. Held or right-clicked, the menu opens there. -->
 									<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
-									<li class={['ap-member', (shown === 'offline' || shown === 'invisible') && 'ap-member-offline', opened && 'ap-member-menu']} data-user={person.user_id} data-status={shown}
+									<li class={['ap-member', (shown === 'offline' || shown === 'invisible') && 'ap-member-offline', opened && 'ap-member-menu']} data-user={person.user_id} data-status={shown} data-presses-anchor
 										{@attach rowMenu}
 										onpointerdown={() => pressing(person.user_id)}
 										onclick={(event) => { const who = event.currentTarget.querySelector<HTMLElement>('.ap-member-who'); if (who && !(event.target as Element).closest('button')) press(who, person); }}>

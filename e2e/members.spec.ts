@@ -28,6 +28,24 @@ test('Add member adds everyone picked, and keeps who the server refused picked, 
 	await expect(page.getByTestId('room-member-list').getByRole('status')).toHaveCount(0);
 });
 
+test('a second click on a member closes their profile, on their name or anywhere else on their row', async ({ preview, page }) => {
+	await preview.open();
+	const list = await preview.showMembers();
+	const card = page.getByTestId('profile-card');
+	const name = list.locator('button[data-user-id="linus"]');
+	await name.click();
+	await expect(card).toBeVisible();
+	await name.click();
+	await expect(card).toBeHidden();
+
+	// The row's end, past the name: a press there mustn't close the card for its click to open it again.
+	await name.click();
+	await expect(card).toBeVisible();
+	const row = (await list.locator('li[data-user="linus"]').boundingBox())!;
+	await page.mouse.click(row.x + row.width - 3, row.y + row.height / 2);
+	await expect(card).toBeHidden();
+});
+
 test.describe('on a phone, signed in to an account', () => {
 	test.use({ ...DEVICES.phone, knobs: { account: true } });
 
