@@ -463,7 +463,9 @@
 	let awaitingThreads = $derived(Boolean(session.ready && session.canManageRooms && session.activeRoomId && !threadsListed.includes(session.activeRoomId)));
 	/** Who the rooms in `threadsListed` were listed for. */
 	let threadsListedFor: string | undefined;
-	$effect(() => {
+	// These two run before the page renders (`$effect.pre`), in this order: the listing goes out as soon as the room
+	// is known, a round trip sooner than once the page has drawn the rooms that came with it.
+	$effect.pre(() => {
 		// The client keeps its thread listings through a dropped connection (`disconnectedAt`) and refreshes them
 		// behind it, so a reconnect doesn't hold the room back again. A new session (a restart, signing out, another
 		// account) starts over.
@@ -474,7 +476,7 @@
 			threadsListedFor = userId;
 		}
 	});
-	$effect(() => {
+	$effect.pre(() => {
 		const roomId = session.ready && session.canManageRooms ? session.activeRoomId : undefined;
 		if (!roomId || !client || untrack(() => threadsListed.includes(roomId))) return;
 		let current = true;
