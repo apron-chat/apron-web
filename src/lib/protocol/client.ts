@@ -365,9 +365,10 @@ export class ChatClient {
 	/**
 	 * The latest `room_list` per listing (`''` for rooms to browse, a parent's
 	 * `room_id` for its threads, `#` and a `room_id` for its members), shared
-	 * while in flight and reused while recent.
+	 * while in flight and reused while recent. `behind`: the listing of joined
+	 * rooms already asked for on this connection when this one was asked for.
 	 */
-	private readonly listings = new Map<string, { at: number; promise: Promise<RoomListing[]>; rooms?: Set<string>; until?: number }>();
+	private readonly listings = new Map<string, { at: number; promise: Promise<RoomListing[]>; rooms?: Set<string>; until?: number; behind?: string }>();
 	/**
 	 * The `room_list` of joined rooms on this connection (capability `rooms`), until
 	 * its result arrives; `since` and `userId` when it lists only changes since
@@ -2439,7 +2440,9 @@ export class ChatClient {
 			this.emit();
 			return listings;
 		});
-		const entry: { at: number; promise: Promise<RoomListing[]>; rooms?: Set<string>; until?: number } = { at: Date.now(), promise };
+		const entry: { at: number; promise: Promise<RoomListing[]>; rooms?: Set<string>; until?: number; behind?: string } = {
+			at: Date.now(), promise, ...(this.joinedListing ? { behind: this.joinedListing.id } : {})
+		};
 		this.listings.set(key, entry);
 		promise.then((listings) => {
 			entry.rooms = new Set(listings.map((listing) => listing.id));
@@ -2486,7 +2489,7 @@ export class ChatClient {
 			}
 			// Before the listing applies, so its rooms wait for the catch-up rather than each resuming.
 			if (listing.since !== undefined) this.startPlannedCatchUp(result);
-			this.applyRoomList(result, true);
+			this.applyRoomList(result, true, listing.id);
 			this.joinedComplete = true;
 			startupMark('rooms');
 			this.settleHeldStatuses();
@@ -2521,7 +2524,7 @@ export class ChatClient {
 	 * a listing of changes, the rooms in it go and every other kept room stays;
 	 * without, a full listing, every other joined room goes.
 	 */
-	private applyRoomList(result: JsonObject, joinedSet: boolean): { joined: RoomListing[]; not_joined: RoomListing[] } {
+	private applyRoomList(result: JsonObject, joinedSet: boolean, joinedId?: string): { joined: RoomListing[]; not_joined: RoomListing[] } {
 		const listed = { joined: [] as RoomListing[], not_joined: [] as RoomListing[] };
 		const joinedIds = new Set<string>();
 		for (const [key, joined] of [['joined', true], ['not_joined', false]] as const) {
@@ -2534,7 +2537,7 @@ export class ChatClient {
 				this.noteMembers(record.room_id, decoded.delivery);
 				if (joined && joinedSet) {
 					joinedIds.add(record.room_id);
-					this.showRoom(decoded, 'joined');
+					this.showRoom(decoded, 'joined', joinedId);
 				} else if (this.rooms.has(record.room_id)) {
 					// Its record and delivery fields are the latest (§4.2); for a room
 					// opened without joining, the head is what the next load reaches.
@@ -2600,9 +2603,15 @@ export class ChatClient {
 		for (const user of Array.isArray(users) ? users : []) if (isIdentity(user)) this.noteUser(cloneJson(user), { complete: true });
 	}
 
-	/** Membership changed: listings of rooms and threads to join are stale. */
-	private forgetListings(parentRoomId: string | undefined): void {
-		this.listings.delete(parentRoomId ?? '');
+	/**
+	 * Membership changed: listings of rooms and threads to join are stale. A room shown by the listing of joined
+	 * rooms (`joinedId`) is no change, only news to this client: a listing asked for behind that one, on the same
+	 * connection, lists as of then or later, and any change since comes as a `room_update` of its own (§4.2.1).
+	 */
+	private forgetListings(parentRoomId: string | undefined, joinedId?: string): void {
+		const key = parentRoomId ?? '';
+		if (joinedId !== undefined && this.listings.get(key)?.behind === joinedId) return;
+		this.listings.delete(key);
 	}
 
 	/** Drops the listings of rooms and threads to join, and any reused: they were made for another session. */
@@ -4015,11 +4024,11 @@ export class ChatClient {
 	 * the record, takes its delivery fields, and starts or resumes its
 	 * automatic recovery (§4.3).
 	 */
-	private showRoom(decoded: { record: RoomRecord; delivery: RoomDelivery }, kind?: 'joined'): void {
+	private showRoom(decoded: { record: RoomRecord; delivery: RoomDelivery }, kind?: 'joined', joinedId?: string): void {
 		const roomId = decoded.record.room_id;
 		this.installRoom(decoded.record);
 		const existing = this.rooms.get(roomId) ?? this.adoptRetainedRoom(roomId);
-		if (!existing) this.forgetListings(decoded.record.parent_room_id);
+		if (!existing) this.forgetListings(decoded.record.parent_room_id, joinedId);
 		const room = existing ?? newRoomState(roomId, kind ?? 'joined');
 		this.rooms.set(roomId, room);
 		if (kind === 'joined') this.markJoined(room);

@@ -441,6 +441,46 @@ describe('listing rooms to join', () => {
 	});
 });
 
+describe('listing rooms to join as the session starts', () => {
+	const listings = () => socket.sent.filter((frame) => frame.method === 'room_list' && (frame.params as { filter?: string }).filter === 'not_joined').length;
+
+	it('keeps a listing asked for behind the joined rooms’ when they arrive, and lists again once membership changes', async () => {
+		await authenticate(['rooms']);
+		const joined = socket.request('room_list');
+		// The rooms list asks for rooms to join as soon as it's signed in, before its joined rooms are listed.
+		const early = client.listRooms();
+		expect(listings()).toBe(1);
+		await socket.reply('room_list', { not_joined: [{ room_id: 'ops', log_id: '11', title: 'Ops' }] });
+		socket.receive({ id: joined.id, result: { joined: [{ room_id: 'general', log_id: '10', title: 'General' }] } });
+		await settle();
+		expect(ids()).toEqual(['general']);
+		expect((await early).map((listing) => listing.id)).toEqual(['ops']);
+		// Learning the joined rooms is no change in them: the listing made behind theirs stands.
+		quiet(client.listRooms());
+		expect(listings()).toBe(1);
+		// Joining one is.
+		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'ops', log_id: '12', title: 'Ops' }] } });
+		quiet(client.listRooms());
+		expect(listings()).toBe(2);
+	});
+
+	it('lists again once the joined rooms arrive when the listing went out before theirs', async () => {
+		await authenticate(['rooms']);
+		await socket.reply('room_list', { joined: [{ room_id: 'general', log_id: '10', title: 'General' }] });
+		quiet(client.listRooms());
+		await socket.reply('room_list', { not_joined: [] });
+		expect(listings()).toBe(1);
+		reconnect();
+		socket.open();
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['rooms'] } });
+		await socket.reply('auth', { you: { user_id: 'guest_1', name: 'Guest' } });
+		await socket.reply('room_list', { joined: [{ room_id: 'general', log_id: '10', title: 'General' }, { room_id: 'ops', log_id: '12', title: 'Ops' }] });
+		// On the new connection: joined since the last listing, so it is listed again.
+		quiet(client.listRooms());
+		expect(listings()).toBe(1);
+	});
+});
+
 describe('room records and membership', () => {
 	beforeEach(async () => {
 		await socket.greet(['rooms'], { room: { room_id: 'general', log_id: '10', title: 'General', description: 'Ops *chatter*', members: [{ user_id: 'guest_1' }] } });
