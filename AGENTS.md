@@ -23,7 +23,7 @@ npm test && npm run check && npm run e2e && npm run qa -- budget --build build
 
 - **Run the perf budget** (`npm run qa -- budget --build build`) when a change touches rendering, reactivity, CSS or startup code. It compares exact counts (layouts, style recalcs, JS calls, DOM nodes, requests, startup JS, heap) against `scripts/qa/perf-budget.json`, and CI runs it too. It runs only in the Chromium the baseline was recorded with: `npx playwright-core install chromium` installs it.
   - If it fails, find the cause before anything else.
-  - Run `--update` only when the cost is intended or a saving is real. Say which in the commit message.
+  - Run `--update --changed` only when the cost is intended or a saving is real (it records only counts that moved past their slack, and new ones). Say which in the commit message.
 - **Measure in counts, not timings.** Timings on a shared machine swing by tens of percent. `qa perf` and `qa prof` are for digging further (see `scripts/qa/README.md`).
 - **Reactivity:** each client snapshot is a new object.
   - Read the session's parts (`session.rooms`, `session.activeRoom`, `session.room(id)`), not `session.snapshot`. Anything that reads the whole snapshot re-runs on every message.
@@ -31,6 +31,9 @@ npm test && npm run check && npm run e2e && npm run qa -- budget --build build
   - Effects that read layout (`scrollHeight`, `getComputedStyle`, `getBoundingClientRect`) force a layout each time they run. Run them only when what they measure can have changed.
 - **CSS:** avoid `:has()` on large subtrees; a class set from state is cheaper. Keep `prefers-reduced-motion` rules specific enough to win.
 - **Startup:** new code loads with the app unless it is imported on demand (`src/lib/components/lazy.ts`). Watch `startupJsKB` in the budget.
+  - CI also checks the JS a production build loads to start (`npm run build && npm run qa -- startup-budget --build build`); `--update` it only for an intended cost or a real saving.
+  - When you change what loads on demand or what the first screen draws, run `npx playwright test -c e2e/playwright.config.ts e2e/startup.spec.ts` (code held back until it arrives, and the first painted frame).
+  - To time startup, compare builds with `npm run qa -- startup --build <before> --build build --rtt 150` (a phone's repeat visit by default; see `scripts/qa/README.md`).
 - **Proposing optimizations and tradeoffs:** a speed-up must not change what users see or do.
   - When one would (a screen that loads late, a feature unavailable until something arrives), or when it costs much more code or storage than it saves, don't commit it.
   - Propose it instead, with the measured before/after counts, what users would notice, and a recommendation.

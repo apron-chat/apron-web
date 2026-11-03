@@ -6,10 +6,15 @@ import type { Identity } from '$lib/protocol/types';
 import { directory } from '$lib/ui/directory.svelte';
 import { blankSnapshot, type SessionView } from '$lib/ui/session.svelte';
 import MemberListSidebar from './MemberListSidebar.svelte';
+import { addMembersDialog } from './lazy';
 import * as dom from '$lib/test/dom';
 import { byLabel, queryByText } from '$lib/test/queries';
 
 beforeAll(dom.stubDialog);
+// Adding members loads on demand: here before the first click, as the page's prefetch has it. The whole
+// on-demand chunk is transformed for it, which can take a while on a busy machine. Nothing is returned: `beforeAll`
+// would call the function `load` gives back (the component) as a teardown.
+beforeAll(async () => void (await addMembersDialog.load()), 30_000);
 
 afterEach(() => {
 	localStorage.clear();

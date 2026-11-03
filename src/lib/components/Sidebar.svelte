@@ -14,7 +14,9 @@
 	import { loadSidebarFolds, loadThreadFolds, saveSidebarFolds, saveThreadFolds } from '$lib/ui/storage';
 	import { NARROW_MAX } from '$lib/ui/breakpoints';
 	import { flip } from 'svelte/animate';
-	import { dndzone, DRAGGED_ELEMENT_ID, SHADOW_PLACEHOLDER_ITEM_ID, TRIGGERS, type DndEvent } from 'svelte-dnd-action';
+	import type { DndEvent, DndZoneAttributes, Options as DndOptions } from 'svelte-dnd-action';
+	import type { ActionReturn } from 'svelte/action';
+	import { roomDrag } from './lazy';
 	import { RoomOrder } from '$lib/ui/room-order.svelte';
 	import type { SignOutHandler } from '$lib/ui/sign-in';
 	import type { KeptHistoryControls } from '$lib/history/history-keeper';
@@ -86,8 +88,13 @@
 		/** Opens the connect screen to sign in with a passkey, carrying a handle typed in the profile. */
 		/** Opens the connect screen to sign in; none where the page has no connect screen (an export read, the preview). */
 		onsignin?: (name?: string, scheme?: 'webauthn' | 'email' | 'external') => void;
+		/**
+		 * Draw the rooms (default): until then the list holds none, for one out of sight (behind a phone's conversation,
+		 * or shut) while the first screen draws. Its header, profile bar and background listings are there regardless.
+		 */
+		drawRooms?: boolean;
 	}
-	let { client, session, backendLabel, serverLook, serverAddress, account, order = new RoomOrder(), threads, activeThread, mentions, unread, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, returnTo, onreturn, onroom, onthread, onopenthread, onjoin, onleavethread, oncreateroom, onnewthread, onnewprivate, onsignout, keptHistory, onsignin }: Props = $props();
+	let { drawRooms = true, client, session, backendLabel, serverLook, serverAddress, account, order = new RoomOrder(), threads, activeThread, mentions, unread, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, returnTo, onreturn, onroom, onthread, onopenthread, onjoin, onleavethread, oncreateroom, onnewthread, onnewprivate, onsignout, keptHistory, onsignin }: Props = $props();
 	/** The head's server button: the server pane sits beside it. */
 	let serverHead = $state<HTMLButtonElement | undefined>();
 	/** Threads are listed under their parent, not as rooms of their own; private rooms in a list of their own. */
@@ -109,6 +116,49 @@
 	 * its section's column (`contain`), so it lands where it's seen: there's nowhere else to take it.
 	 */
 	const HOLD_MS = 350;
+	/** svelte-dnd-action, once it has come (`reorderable`): every drag event below is its, so they all find it here. */
+	let dnd: Awaited<ReturnType<typeof roomDrag.load>> | undefined;
+	/**
+	 * Makes a section's list one rooms are dragged in, once svelte-dnd-action has come: it's in the on-demand chunk,
+	 * fetched shortly after the page settles, or as soon as a pointer comes over the list, so it adds nothing to what
+	 * the page loads to start. Until then a room can't be dragged (Alt+↑/↓ still move it, and a click still opens it).
+	 * The list is marked `data-reorderable` once it can.
+	 */
+	/** When a pointer over the room lists last asked for the drag code; it asks again only after `DRAG_ASK_EVERY_MS`. */
+	let dragAskedAt = -Infinity;
+	const DRAG_ASK_EVERY_MS = 30_000;
+	function reorderable(node: HTMLElement, options: DndOptions<RoomSnapshot>): ActionReturn<DndOptions<RoomSnapshot>, DndZoneAttributes<RoomSnapshot>> {
+		let latest = options;
+		let zone: ActionReturn<DndOptions<RoomSnapshot>, DndZoneAttributes<RoomSnapshot>> | undefined;
+		let gone = false;
+		// Asked by either list, at most every 30 s: a load that failed (offline, say) is tried again by a later pointer, or
+		// by anything else that loads the chunk (a dialog opening), not by every pointer that crosses a row, each of which
+		// would fetch again (and say Apron was updated).
+		const ask = () => {
+			if (performance.now() - dragAskedAt < DRAG_ASK_EVERY_MS) return;
+			dragAskedAt = performance.now();
+			roomDrag.load().catch(() => undefined);
+		};
+		node.addEventListener('pointerover', ask);
+		void roomDrag.whenLoaded().then((loaded) => {
+			if (gone) return;
+			dnd = loaded;
+			node.removeEventListener('pointerover', ask);
+			zone = loaded.dndzone(node, latest);
+			node.dataset.reorderable = '';
+		});
+		return {
+			update(next) {
+				latest = next;
+				zone?.update?.(next);
+			},
+			destroy() {
+				gone = true;
+				node.removeEventListener('pointerover', ask);
+				zone?.destroy?.();
+			}
+		};
+	}
 	/** How long the other rooms take to make way, none for reduced motion. */
 	const FLIP_MS = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 150;
 	type Section = 'rooms' | 'private';
@@ -133,6 +183,8 @@
 	/** The room button that had the keyboard as a drag began: the drag takes its row out of the page, and with it the keyboard. */
 	let refocus: string | undefined;
 	function consider(section: Section, event: CustomEvent<DndEvent<RoomSnapshot>>): void {
+		if (!dnd) return;
+		const { TRIGGERS, DRAGGED_ELEMENT_ID } = dnd;
 		const { items, info } = event.detail;
 		// Only a pointer carries a room: the library's keyboard drag is kept off (`guard`), but should one start, its end (with no drop) ends it here too.
 		if (info.trigger === TRIGGERS.DRAG_STOPPED) {
@@ -154,6 +206,8 @@
 	}
 	/** Dropped: next to the room shown before it in its section (or after it, at the top), so the ones a folded section hides keep their places. */
 	function finalize(section: Section, event: CustomEvent<DndEvent<RoomSnapshot>>): void {
+		if (!dnd) return;
+		const { TRIGGERS } = dnd;
 		const { items, info } = event.detail;
 		const { [section]: _done, ...rest } = carried;
 		carried = rest;
@@ -188,7 +242,7 @@
 	/** A room's block in its section's list, as `id` (the carried room's slot goes by the library's placeholder id at first). */
 	const roomOf = (block: Element, id: string) => {
 		const room = block.querySelector<HTMLElement>('button[data-room]')?.dataset.room;
-		return room === SHADOW_PLACEHOLDER_ITEM_ID ? id : room;
+		return room === dnd?.SHADOW_PLACEHOLDER_ITEM_ID ? id : room;
 	};
 	function seenLanding(copy: HTMLElement, zone: HTMLElement, id: string): string[] | undefined {
 		const box = copy.getBoundingClientRect();
@@ -577,7 +631,7 @@
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		class="ap-roomlist"
-		use:dndzone={{ items, type: section, flipDurationMs: FLIP_MS, delayTouchStart: HOLD_MS, zoneTabIndex: -1, zoneItemTabIndex: -1, autoAriaDisabled: true, dropTargetStyle: {}, transformDraggedElement: lift }}
+		use:reorderable={{ items, type: section, flipDurationMs: FLIP_MS, delayTouchStart: HOLD_MS, zoneTabIndex: -1, zoneItemTabIndex: -1, autoAriaDisabled: true, dropTargetStyle: {}, transformDraggedElement: lift }}
 		onconsider={(event) => consider(section, event)} onfinalize={(event) => finalize(section, event)} onkeydown={(event) => reorderKey(event, list)} {@attach guard}
 	>
 		{#each items as listedRoom (listedRoom.id)}
@@ -595,44 +649,46 @@
 <aside class="ap-shell-side" aria-label="Rooms">
 	<SidebarHead name={serverLook?.title ?? backendLabel} address={serverAddress} avatar={directory.avatarGate.src(serverLook?.avatar)} onopen={() => serverHead && serverPane.toggle(serverHead)} expanded={serverHead !== undefined && serverPane.anchor === serverHead} bind:button={serverHead} {returnTo} {onreturn} />
 	<div class="ap-shell-sidebody">
-		<SidebarSection title="Rooms" folded={folds.has('rooms')} onfold={(shut) => fold('rooms', shut)} onadd={canCreateRoom ? () => (createOpen = true) : undefined} addLabel="Create room" loading={rooms.length === 0 && privateRooms.length === 0 && session.starting} bodyTestid="room-list">
-			{#if rooms.length === 0}
-				<p class="ap-sect-note">{session.snapshot.status === 'connected' ? 'No rooms yet.' : 'Waiting for rooms…'}</p>
-			{:else}
-				{@render roomList('rooms', shown(rooms, 'rooms'), false)}
+		{#if drawRooms}
+			<SidebarSection title="Rooms" folded={folds.has('rooms')} onfold={(shut) => fold('rooms', shut)} onadd={canCreateRoom ? () => (createOpen = true) : undefined} addLabel="Create room" loading={rooms.length === 0 && privateRooms.length === 0 && session.starting} bodyTestid="room-list">
+				{#if rooms.length === 0}
+					<p class="ap-sect-note">{session.snapshot.status === 'connected' ? 'No rooms yet.' : 'Waiting for rooms…'}</p>
+				{:else}
+					{@render roomList('rooms', shown(rooms, 'rooms'), false)}
+				{/if}
+			</SidebarSection>
+			<!-- Shown with private rooms in it, or empty, for its +, where you could start one. -->
+			{#if privateRooms.length > 0 || onnewprivate}
+				<SidebarSection title="Private" folded={folds.has('private')} onfold={(shut) => fold('private', shut)} onadd={onnewprivate} addLabel="New private conversation" bodyTestid="private-list">
+					{@render roomList('private', shown(privateRooms, 'private'), true)}
+				</SidebarSection>
 			{/if}
-		</SidebarSection>
-		<!-- Shown with private rooms in it, or empty, for its +, where you could start one. -->
-		{#if privateRooms.length > 0 || onnewprivate}
-			<SidebarSection title="Private" folded={folds.has('private')} onfold={(shut) => fold('private', shut)} onadd={onnewprivate} addLabel="New private conversation" bodyTestid="private-list">
-				{@render roomList('private', shown(privateRooms, 'private'), true)}
-			</SidebarSection>
-		{/if}
-		{#if canBrowse && unjoined.length > 0}
-			<!-- Servers may list only the most active rooms (§4.2.1), so this never claims to be all of them. -->
-			<SidebarSection title="Other Rooms" folded={folds.has('otherRooms')} onfold={(shut) => { fold('otherRooms', shut); if (!shut) list(); }} toggleTestid="browse-rooms" bodyTestid="room-directory">
-				{#each shown(unjoined, 'otherRooms') as listing (listing.id)}
-					<!-- A server may list only the most active members of a large room, with the total (§4.2.1). -->
-					{@const members = listing.memberCount ?? listing.members.length}
-					{@const count = members > 0 ? `${members} ${members === 1 ? 'member' : 'members'}` : ''}
-					<!-- Picking one joins it; one that can't join (reading as a guest) opens it to read, which needs no word, and it shows as open as a joined room does. -->
-					<RoomItem room={listing.id} name={listing.title} topic={session.readOnly ? count || undefined : [count, 'Join'].filter(Boolean).join(' · ')} listed active={listing.id === session.activeRoomId && !activeThread} onselect={() => onjoin(listing.id)} />
-					<!-- The one open to read without joining lists its threads under it, to explore them without joining either. -->
-					{#if listing.id === session.activeRoomId}
-						<ThreadList
-							roomId={listing.id} roomTitle={listing.title} {threads} others={otherThreads} foldInactive roomUnjoined {activeThread}
-							{mentions} {unread} muted={session.snapshot.roomMutes} canJoin={canJoinThreads} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread}
-						/>
-					{:else}
-						<!-- Another lists its threads you've joined with news, as a joined room's row does: once opened it holds them, so they're no longer listed on their own. -->
-						{@const news = threadsWithNews(threadsOf.get(listing.id) ?? [], listing.id, unread, mentions)}
-						{#if news.length > 0}
-							<ThreadList roomId={listing.id} roomTitle={listing.title} threads={news} others={[]} {mentions} {unread} muted={session.snapshot.roomMutes} canJoin={canJoinThreads} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
+			{#if canBrowse && unjoined.length > 0}
+				<!-- Servers may list only the most active rooms (§4.2.1), so this never claims to be all of them. -->
+				<SidebarSection title="Other Rooms" folded={folds.has('otherRooms')} onfold={(shut) => { fold('otherRooms', shut); if (!shut) list(); }} toggleTestid="browse-rooms" bodyTestid="room-directory">
+					{#each shown(unjoined, 'otherRooms') as listing (listing.id)}
+						<!-- A server may list only the most active members of a large room, with the total (§4.2.1). -->
+						{@const members = listing.memberCount ?? listing.members.length}
+						{@const count = members > 0 ? `${members} ${members === 1 ? 'member' : 'members'}` : ''}
+						<!-- Picking one joins it; one that can't join (reading as a guest) opens it to read, which needs no word, and it shows as open as a joined room does. -->
+						<RoomItem room={listing.id} name={listing.title} topic={session.readOnly ? count || undefined : [count, 'Join'].filter(Boolean).join(' · ')} listed active={listing.id === session.activeRoomId && !activeThread} onselect={() => onjoin(listing.id)} />
+						<!-- The one open to read without joining lists its threads under it, to explore them without joining either. -->
+						{#if listing.id === session.activeRoomId}
+							<ThreadList
+								roomId={listing.id} roomTitle={listing.title} {threads} others={otherThreads} foldInactive roomUnjoined {activeThread}
+								{mentions} {unread} muted={session.snapshot.roomMutes} canJoin={canJoinThreads} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread}
+							/>
+						{:else}
+							<!-- Another lists its threads you've joined with news, as a joined room's row does: once opened it holds them, so they're no longer listed on their own. -->
+							{@const news = threadsWithNews(threadsOf.get(listing.id) ?? [], listing.id, unread, mentions)}
+							{#if news.length > 0}
+								<ThreadList roomId={listing.id} roomTitle={listing.title} threads={news} others={[]} {mentions} {unread} muted={session.snapshot.roomMutes} canJoin={canJoinThreads} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
+							{/if}
 						{/if}
-					{/if}
-				{/each}
-				{#if listError && !folds.has('otherRooms')}<p class="ap-sect-note ap-tone-danger" role="alert">{listError}</p>{/if}
-			</SidebarSection>
+					{/each}
+					{#if listError && !folds.has('otherRooms')}<p class="ap-sect-note ap-tone-danger" role="alert">{listError}</p>{/if}
+				</SidebarSection>
+			{/if}
 		{/if}
 	</div>
 	<p class="ap-sr" role="status" aria-atomic="true">{moved}</p>

@@ -4,7 +4,7 @@
 	import type { MentionPerson } from '$lib/protocol/markdown';
 	import { DraftField } from '$lib/ui/draft-field.svelte';
 	import type { RoomSuggestion } from '$lib/ui/room-autocomplete';
-	import AutocompletePicker from './AutocompletePicker.svelte';
+	import { autocompletePicker } from './lazy';
 
 	/**
 	 * Where a message is written, in the composer and in the message editor
@@ -48,7 +48,9 @@
 		get disabled() { return disabled; },
 		submit: () => onsubmit(),
 		oninput: () => oninput?.(),
-		onmention: () => onmention?.()
+		onmention: () => onmention?.(),
+		// Read once a picker would open, which is what asks for its code (`autocompletePicker`): until it has come, none shows.
+		get pickerShown() { return autocompletePicker.component !== undefined; }
 	}, `${uid}-suggestions`);
 
 	/** Focuses the field, the caret at the end unless it is in there already (or, with `end`, wherever it is). */
@@ -77,12 +79,16 @@
 	}
 </script>
 
+<!-- Loaded on demand: the first picker opened before the on-demand chunk's prefetch waits on its request. -->
+{#if (draft.pickerOpen || draft.roomPickerOpen || draft.emojiPickerOpen) && autocompletePicker.component}
+{@const AutocompletePicker = autocompletePicker.component}
 {#if draft.pickerOpen}
 	<AutocompletePicker id={draft.pickerId} query={draft.query ?? ''} people={draft.matches} active={draft.activeIndex} testid={pickerTestid} onpick={(index) => draft.pick(draft.matches[index])} onhover={(index) => draft.hover(index)} />
 {:else if draft.roomPickerOpen}
 	<AutocompletePicker id={draft.pickerId} query={draft.roomFound?.query ?? ''} rooms={draft.roomMatches} active={draft.activeIndex} onpick={(index) => draft.pickRoom(draft.roomMatches[index])} onhover={(index) => draft.hover(index)} />
 {:else if draft.emojiPickerOpen}
 	<AutocompletePicker id={draft.pickerId} query={draft.emojiFound?.query ?? ''} emoji={draft.emojiMatches} active={draft.activeIndex} onpick={(index) => draft.pickEmoji(draft.emojiMatches[index])} onhover={(index) => draft.hover(index)} />
+{/if}
 {/if}
 <!-- spread: the field's own attributes (an `id`, a `data-testid`, its label and class, `onpaste`), which the caller decides -->
 <ComposerEditable

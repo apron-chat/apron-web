@@ -1,13 +1,29 @@
-import { Lazy } from '$lib/ui/lazy.svelte';
+import { lazyChunk } from '$lib/ui/lazy.svelte';
 
-/** The on-demand chunk (`on-demand.ts`): the first component asked for loads them all, in one request. */
-const onDemand = () => import('./on-demand');
+/** The on-demand chunk (`on-demand.ts`): the first component asked for loads them all, in one request (`lazyChunk`). */
+const part = lazyChunk(() => import('./on-demand'));
 
-export const messageEditor = new Lazy(() => onDemand().then((m) => m.MessageEditor));
-export const newPrivateDialog = new Lazy(() => onDemand().then((m) => m.NewPrivateDialog));
-export const newRoomDialog = new Lazy(() => onDemand().then((m) => m.NewRoomDialog));
-export const newThreadDialog = new Lazy(() => onDemand().then((m) => m.NewThreadDialog));
-export const preferencesDialog = new Lazy(() => onDemand().then((m) => m.PreferencesDialog));
-export const roomEditor = new Lazy(() => onDemand().then((m) => m.RoomEditor));
-export const searchDialog = new Lazy(() => onDemand().then((m) => m.SearchDialog));
-export const signInLinkDialog = new Lazy(() => onDemand().then((m) => m.SignInLinkDialog));
+export const messageEditor = part((m) => m.MessageEditor);
+export const newPrivateDialog = part((m) => m.NewPrivateDialog);
+export const newRoomDialog = part((m) => m.NewRoomDialog);
+export const newThreadDialog = part((m) => m.NewThreadDialog);
+export const preferencesDialog = part((m) => m.PreferencesDialog);
+export const roomEditor = part((m) => m.RoomEditor);
+export const searchDialog = part((m) => m.SearchDialog);
+export const signInLinkDialog = part((m) => m.SignInLinkDialog);
+export const profileEditor = part((m) => m.ProfileEditor);
+export const addMembersDialog = part((m) => m.AddMembersDialog);
+export const autocompletePicker = part((m) => m.AutocompletePicker);
+export const installNudge = part((m) => m.InstallPrompt);
+export const selectionBar = part((m) => m.SelectionBar);
+/**
+ * Hosts that stay unmounted until their state first asks: render as `{#if host.once(Boolean(state.current))}`. The
+ * layout's are in `overlays.ts`.
+ */
+export const profileCardHost = part((m) => m.ProfileCard);
+export const reactorsPopover = part((m) => m.ReactorsPopover);
+export const serverPaneHost = part((m) => m.ServerPane);
+/** Not a component: `archiveExport.load()` gives `exportArchive`. */
+export const archiveExport = part((m) => m.exportArchive);
+/** svelte-dnd-action, for dragging rooms: `roomDrag.whenLoaded()` waits for it without fetching it (Sidebar's `reorderable`). */
+export const roomDrag = part(({ dndzone, DRAGGED_ELEMENT_ID, SHADOW_PLACEHOLDER_ITEM_ID, TRIGGERS }) => ({ dndzone, DRAGGED_ELEMENT_ID, SHADOW_PLACEHOLDER_ITEM_ID, TRIGGERS }));

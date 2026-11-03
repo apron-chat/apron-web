@@ -15,6 +15,16 @@ const deployThread = (page: Page) => threadLists(page).getByText('Deploy checkli
 const nextFrame = (page: Page) => page.evaluate(() => new Promise((done) => requestAnimationFrame(() => done(null))));
 
 /**
+ * Waits until rooms can be dragged: svelte-dnd-action comes with the on-demand chunk, which the page fetches 2 s after it
+ * settles and once it's idle (up to 5 s more), past the default expect timeout (Sidebar's `reorderable`).
+ */
+async function draggable(page: Page): Promise<void> {
+	const rooms = page.getByRole('complementary', { name: 'Rooms' });
+	await expect(rooms.locator('.ap-roomlist[data-reorderable]').first()).toBeAttached({ timeout: 10_000 });
+	await expect(rooms.locator('.ap-roomlist:not([data-reorderable])')).toHaveCount(0);
+}
+
+/**
  * Opens general and waits for its sidebar to settle: its threads you haven't joined are listed after the page shows,
  * moving the rooms below them, so where a row is is read only once they're there.
  */
@@ -23,6 +33,7 @@ async function openGeneral(preview: Preview): Promise<void> {
 	await expect(preview.page.getByTestId('other-threads')).toBeAttached();
 	// And the rows they bring have grown into place: the rooms hold still from one look to the next.
 	const rooms = preview.page.getByRole('complementary', { name: 'Rooms' });
+	await draggable(preview.page);
 	let last = '';
 	await expect.poll(async () => {
 		const now = JSON.stringify(await rooms.evaluate((side) => [...side.querySelectorAll('button[data-room]')].map((row) => Math.round(row.getBoundingClientRect().top))));
@@ -480,6 +491,8 @@ test.describe('folding a room on a phone', () => {
 	test('tapping the open room folds its threads in the rooms list, which stays, its › going back to the room', async ({ preview, page }) => {
 		await preview.open('#room=general');
 		await preview.roomsPane();
+		// The library that would add the second click is there, so this checks the guard against it.
+		await draggable(page);
 		await expect(threadLists(page)).toHaveCount(1);
 		await preview.press(row(page, 'general'));
 		await expect(page.getByTestId('room-list')).toBeVisible();

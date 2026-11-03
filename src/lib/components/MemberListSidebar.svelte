@@ -15,7 +15,7 @@
 	import { minuteNow } from '$lib/ui/clock.svelte';
 	import Avatar from '$lib/design/components/Avatar.svelte';
 	import { hueOf } from '$lib/ui/messages';
-	import AddMembersDialog from './AddMembersDialog.svelte';
+	import { addMembersDialog } from './lazy';
 	import RoleBadges from './RoleBadges.svelte';
 
 	interface Props {
@@ -38,8 +38,13 @@
 		/** A private room was started here, for the page to open as yours rather than as one someone added you to. */
 		onnamed?: (roomId: string) => void;
 		onopenroom?: (roomId: string) => void;
+		/**
+		 * List the members (default): until then a shut list holds none of its rows (its `empty` note in their place), while
+		 * the first screen draws. Nobody can see, find or reach them while it's shut.
+		 */
+		drawRows?: boolean;
 	}
-	let { client, session, room, open, canChange, canAdd, canMessage = false, onnamed, onopenroom }: Props = $props();
+	let { drawRows = true, client, session, room, open, canChange, canAdd, canMessage = false, onnamed, onopenroom }: Props = $props();
 
 	/**
 	 * Each member's `status` (§4.5) as kept: yours is the one you chose, as the profile bar shows it. Resuming after a
@@ -78,6 +83,8 @@
 	let note = $state<{ text: string; error: boolean } | undefined>();
 	/** Each member as the list shows them, with their status in words: yours as you chose it, an offline one's with when they were last seen. */
 	let shown = $derived(sections.map((section): MemberListSection => ({ key: section.key, label: section.label, people: section.people.map(person) })));
+	/** What the list shows: none before the room's listing has come, nor before it draws its rows (`drawRows`). */
+	let listing = $derived(roomMembers === undefined || !drawRows ? undefined : shown);
 	/** The members by `user_id`, for their role badges. */
 	let byId = $derived(new Map(members.map((member) => [member.user_id, member])));
 
@@ -156,7 +163,7 @@
 	{open}
 	room={room?.title}
 	count={total}
-	sections={room?.members === undefined ? undefined : shown}
+	sections={listing}
 	placeholder={!room && session.starting}
 	empty={!room ? 'Select a room to see its members.' : session.canManageRooms ? 'Loading members…' : 'Members are unavailable on this server.'}
 	shut={[...shut]}
@@ -173,6 +180,7 @@
 	{#snippet roles(member)}<RoleBadges user={byId.get(member.user_id)} />{/snippet}
 </MemberList>
 <!-- Gone as soon as adding is: the room left, or the server refusing member changes. -->
-{#if addOpen && changing && client && room}
+{#if addOpen && changing && client && room && addMembersDialog.component}
+	{@const AddMembersDialog = addMembersDialog.component}
 	<AddMembersDialog {client} {session} {room} onclose={() => (addOpen = false)} />
 {/if}

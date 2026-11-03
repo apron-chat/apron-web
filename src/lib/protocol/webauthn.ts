@@ -1,4 +1,4 @@
-import { noteCredentialSource, type CredentialSource } from './passkey-diagnostics';
+import { noteCredentialSource, type CredentialSource } from './passkey-notes';
 import { isJsonObject, type JsonObject } from './types';
 
 export function passkeySupportError(): string | undefined {

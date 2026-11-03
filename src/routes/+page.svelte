@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { messageEditor, newPrivateDialog, newThreadDialog, roomEditor, searchDialog, signInLinkDialog } from '$lib/components/lazy';
+	import { installNudge, messageEditor, newPrivateDialog, newThreadDialog, profileCardHost, reactorsPopover, roomEditor, searchDialog, selectionBar, serverPaneHost, signInLinkDialog } from '$lib/components/lazy';
 	import { onMount, tick, untrack } from 'svelte';
 	import { fromAction } from 'svelte/attachments';
 	import { pushState, replaceState } from '$app/navigation';
@@ -26,18 +26,15 @@
 	import { decorateCode } from '$lib/ui/copy-code';
 	import { emojiAnchor, emojiPicker, type EmojiPickerRequest } from '$lib/ui/emoji-picker.svelte';
 	import { openProfileFrom, profileCard } from '$lib/ui/profile-card.svelte';
-	import { showReactors } from '$lib/ui/reactors.svelte';
+	import { reactorsList, showReactors } from '$lib/ui/reactors.svelte';
+	import { serverPane } from '$lib/ui/server-pane.svelte';
 	import RoomHeader from '$lib/components/RoomHeader.svelte';
-	import SelectionBar from '$lib/components/SelectionBar.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import SidebarHandle from '$lib/components/SidebarHandle.svelte';
 	import MemberListSidebar from '$lib/components/MemberListSidebar.svelte';
 	import NotifyPrompt from '$lib/components/NotifyPrompt.svelte';
-	import InstallPrompt from '$lib/components/InstallPrompt.svelte';
+	import { markFirstMessages } from '$lib/startup-marks';
 	import { INSTALL_OFFER_AFTER_MS, installWay, installedAlready } from '$lib/ui/install';
-	import ProfileCard from '$lib/components/ProfileCard.svelte';
-	import ServerPane from '$lib/components/ServerPane.svelte';
-	import ReactorsPopover from '$lib/components/ReactorsPopover.svelte';
 	import StatusBanner from '$lib/design/components/StatusBanner.svelte';
 	import ConnectionNotice from '$lib/components/ConnectionNotice.svelte';
 	import NoRoom from '$lib/components/NoRoom.svelte';
@@ -85,6 +82,9 @@
 	import { ViewKeeper } from '$lib/ui/view-keeper';
 	import type { HistoryKeeper } from '$lib/history/history-keeper';
 	import { takeKeeper } from '$lib/history/startup';
+	import { takeEarlyConnection } from '$lib/protocol/early-connection';
+	import { startServer } from '$lib/ui/start-server';
+	import { PREVIEW_SERVER } from '$lib/preview/preview-server';
 	import { historySettings } from '$lib/history/settings.svelte';
 	import { mediaAskClick } from '$lib/ui/media-ask';
 	import { mediaSettings } from '$lib/ui/media-settings.svelte';
@@ -144,6 +144,13 @@
 	 */
 	const FIRST_PAINT_ITEMS = 40;
 	const REVEAL_CHUNK_ITEMS = 60;
+	/**
+	 * A pane opened before its messages came (the page's first, or a room not loaded yet) renders this many of its newest
+	 * items when they do, then as many more as fill it (`fillPane`), before the frame paints; the rest follow it.
+	 */
+	const ARRIVAL_ITEMS = 6;
+	/** How far the first item rendered must sit above the pane's top at its latest: past any shadow from a row above. */
+	const FILL_SLACK_PX = 16;
 	/**
 	 * How long a members listing stays current when the mention picker opens, in a pane read without joining it: a
 	 * joined room's members came with its listing and stay current by memberships (§4.2.2), so it lists nothing.
@@ -384,6 +391,26 @@
 	let membersTrack = $derived(memberListWide && memberListOpen ? memberList.width : 0);
 	/** Side panels slide only once the page is up, so the layout kept from the last visit doesn't animate in. */
 	let slidesReady = $state(false);
+	/** `narrow` and the panels' kept layout are read (on mount): until then nothing says which panels show. */
+	let layoutKnown = $state(false);
+	/**
+	 * The open pane has drawn what it opened with (its messages, or that there are none) and that has painted: the
+	 * panels out of sight wait for it to draw their rows (`sideDrawn`, `memberRowsDrawn`), so the first screen comes first.
+	 */
+	let firstScreenDrawn = $state(false);
+	/** The rooms list shows: on a phone, as the pane in view; wider, unless shut. */
+	let sideShown = $derived(layoutKnown && (narrow ? mobilePane === 'rooms' : !sidebar.collapsed));
+	/**
+	 * The rooms list draws its rooms once it shows, or once the first screen has drawn if it's hidden (behind a phone's
+	 * conversation, or shut), and keeps them, hidden again (and where they were scrolled to): hidden, nobody can see,
+	 * find or reach them meanwhile. Kept in a memo, not state. `firstScreenDrawn` is read first, so the derived always
+	 * reads something: one that reads nothing is worked out again at every read.
+	 */
+	let sideKept = false;
+	let sideDrawn = $derived(firstScreenDrawn || (sideKept ||= sideShown));
+	/** The member list's rows, the same: from when it opens, or the first screen has drawn while it's shut. */
+	let memberRowsKept = false;
+	let memberRowsDrawn = $derived(firstScreenDrawn || (memberRowsKept ||= memberListOpen));
 	let composer = $state<Composer | undefined>();
 	let memberListToggle = $state<PanelToggle | undefined>();
 	let messageScroll = $state<HTMLDivElement | undefined>();
@@ -441,7 +468,9 @@
 	let awaitingThreads = $derived(Boolean(session.ready && session.canManageRooms && session.activeRoomId && !threadsListed.includes(session.activeRoomId)));
 	/** Who the rooms in `threadsListed` were listed for. */
 	let threadsListedFor: string | undefined;
-	$effect(() => {
+	// These two run before the page renders (`$effect.pre`), in this order: the listing goes out as soon as the room
+	// is known, a round trip sooner than once the page has drawn the rooms that came with it.
+	$effect.pre(() => {
 		// The client keeps its thread listings through a dropped connection (`disconnectedAt`) and refreshes them
 		// behind it, so a reconnect doesn't hold the room back again. A new session (a restart, signing out, another
 		// account) starts over.
@@ -452,7 +481,7 @@
 			threadsListedFor = userId;
 		}
 	});
-	$effect(() => {
+	$effect.pre(() => {
 		const roomId = session.ready && session.canManageRooms ? session.activeRoomId : undefined;
 		if (!roomId || !client || untrack(() => threadsListed.includes(roomId))) return;
 		let current = true;
@@ -561,6 +590,19 @@
 	// The receipts last shown, which `steadyReceipts` keeps what is unchanged from; not state, only a memo.
 	let lastReceipts: ReadonlyMap<string, Face[]> = NO_RECEIPTS;
 	let shownTimeline = $derived(reveal.hidden > 0 ? timeline.slice(Math.min(reveal.hidden, timeline.length)) : timeline);
+	/** The open pane has no messages yet: its first items with them render newest first (`ARRIVAL_ITEMS`). */
+	let arriving = $state(false);
+	// Before they render (once the pane shows items, not its placeholders, as the timeline below decides): only the
+	// newest of them, then as many more as fill the pane (`fillPane`). A pane that has caught up with none is left as it is.
+	$effect.pre(() => {
+		if (!arriving || ((messages.length === 0 || paneHeldBack) && paneCatchingUp)) return;
+		arriving = false;
+		if (messages.length === 0) return;
+		untrack(() => {
+			reveal.from(timeline.length - ARRIVAL_ITEMS);
+			void fillPane(paneRoom?.id);
+		});
+	});
 	/**
 	 * Read receipts (`ext.settings.read_receipts`, private rooms only): the other members' faces under the newest message
 	 * shown that each has read through, by `message_id`. Empty, and the same map, wherever there are none.
@@ -1023,11 +1065,12 @@
 	});
 
 	// A thread's or a room's first page may not fill the pane, leaving nothing to
-	// scroll back with: load older pages until it does or there are none.
+	// scroll back with: load older pages until it does or there are none. Not while
+	// some of what it has are still to render (`reveal`): they may fill it.
 	$effect(() => {
 		const room = olderSource;
 		void timeline.length;
-		if (!room?.loaded || !room.olderAvailable || room.loadingOlder || !messageScroll) return;
+		if (!room?.loaded || !room.olderAvailable || room.loadingOlder || !messageScroll || reveal.hidden > 0) return;
 		untrack(() => {
 			tick().then(() => {
 				// Not while the pane isn't laid out (a phone showing the rooms list): it would never fill, and load every page.
@@ -1186,6 +1229,8 @@
 		const narrowMedia = window.matchMedia(`(max-width: ${NARROW_MAX - 1}px)`);
 		const narrowMediaChange = ({ matches }: { matches: boolean }) => (narrow = matches);
 		narrowMediaChange(narrowMedia);
+		layoutKnown = true;
+		const stopFirstScreen = watchFirstScreen();
 		narrowMedia.addEventListener('change', narrowMediaChange);
 		// Taken, and scrubbed from the address bar, before anything else can read or keep the URL.
 		const signInLink = previewMode ? undefined : takeSignInLink(window.location, scrubUrl);
@@ -1214,7 +1259,7 @@
 		};
 		window.addEventListener('hashchange', hashChanged);
 		document.addEventListener('click', apronLinkClicked);
-		serverInput = previewMode ? 'ws://apron-preview.invalid' : loadServerUrl() ?? defaultWebSocketUrl(window.location);
+		serverInput = previewMode ? PREVIEW_SERVER : loadServerUrl() ?? defaultWebSocketUrl(window.location);
 		displayName = previewMode ? 'Preview User' : loadDisplayName();
 		recentServers = previewMode ? [] : loadRecentServers();
 		notificationsEnabled = loadNotificationsEnabled();
@@ -1274,20 +1319,19 @@
 		// connect screen first, since connecting is up to the viewer. A notification's own room comes first.
 		const link = pushed ? {} : readDestination(window.location);
 		// A link without a server is for the page's own, wherever this browser was last; that one needs no asking.
-		const linkServer = previewMode ? undefined : link.server ?? (link.room ? homeServer() : undefined);
-		let offeredServer: string | undefined;
-		if (linkServer && linkServer !== normalizeWebSocketUrl(serverInput, window.location)) {
-			if (linkServer === homeServer() || recentServers.some((recent) => recent.url === linkServer)) {
-				serverInput = linkServer;
-				saveServerUrl(linkServer);
-			} else {
-				offeredServer = linkServer;
-			}
+		const start = previewMode ? undefined : startServer(serverInput, link, recentServers, window.location);
+		const offeredServer = start?.offered;
+		if (start && start.server !== normalizeWebSocketUrl(serverInput, window.location)) {
+			serverInput = start.server;
+			saveServerUrl(start.server);
 		}
 		const chat = new ChatClient(
 			normalizeWebSocketUrl(serverInput, window.location),
 			displayName,
-			webSocketFactory
+			webSocketFactory,
+			undefined,
+			// The connection opened as the app started, to this server (`hooks.client.ts`), if it's still there.
+			{ earlyConnection: takeEarlyConnection }
 		);
 		if (!previewMode) {
 			// Made as the app started, and reading what it restores since (`$lib/history/startup`).
@@ -1319,6 +1363,7 @@
 			openConnect();
 		}
 		return () => {
+			stopFirstScreen();
 			memberListMedia.removeEventListener('change', memberListMediaChange);
 			narrowMedia.removeEventListener('change', narrowMediaChange);
 			window.removeEventListener('hashchange', hashChanged);
@@ -1968,6 +2013,7 @@
 		if (thread) mentions.clearRoom(thread);
 		stickToBottom = true;
 		reveal.from(timeline.length - FIRST_PAINT_ITEMS);
+		arriving = messages.length === 0;
 		// A thread's failed load is about that thread: leaving it takes the toast too.
 		feedback.dismiss(threadError);
 	}
@@ -2859,6 +2905,70 @@
 	}
 
 	/**
+	 * Renders more of the open pane's first items, newest first, until the first of them sits above the pane's top
+	 * (`FILL_SLACK_PX` above) at its latest, where the pane opens: from there down it shows what it would with all of
+	 * them, and nothing more is drawn before the frame paints. Each step comes before that paint (a microtask after the
+	 * last update) and lays the page out once to measure; it renders as many more as the rows so far say fill the rest,
+	 * up to `ARRIVAL_ITEMS` (more at once costs the rows' first updates more, in Svelte's bookkeeping, than the extra
+	 * step's layout). The rest follow after the paint (`reveal`).
+	 */
+	async function fillPane(pane: string | undefined): Promise<void> {
+		for (;;) {
+			await tick();
+			const scroller = messageScroll;
+			if (!scroller || paneRoom?.id !== pane || reveal.hidden === 0) return;
+			// A pane out of sight has no size to fill: its rows follow after the paint, as the rest do.
+			if (!scroller.clientHeight) return;
+			// The first row (past the floating day, which takes no room), where the content above it would begin.
+			let first = scroller.firstElementChild;
+			while (first?.classList.contains('ap-dayfloat')) first = first.nextElementSibling;
+			if (!first) return;
+			const box = scroller.getBoundingClientRect();
+			const top = scroller.scrollTop + first.getBoundingClientRect().top - box.top;
+			const short = top + FILL_SLACK_PX - (scroller.scrollHeight - scroller.clientHeight);
+			if (short <= 0) return;
+			// What's missing, by where the rows end (the scroll height is the pane's own while they don't fill it), in rows
+			// as tall as the tallest so far: rows differ (a line, a photo), and the taller ones take longest to render, so
+			// it errs toward another step rather than rows that wouldn't show.
+			let bottom = top;
+			let tallest = 1;
+			for (let row: Element | null = first; row; row = row.nextElementSibling) {
+				const rect = row.getBoundingClientRect();
+				tallest = Math.max(tallest, rect.height);
+				bottom = Math.max(bottom, scroller.scrollTop + rect.bottom - box.top);
+			}
+			const missing = top + FILL_SLACK_PX + scroller.clientHeight - bottom;
+			reveal.more(Math.min(ARRIVAL_ITEMS, Math.ceil(Math.max(short, missing) / tallest)));
+		}
+	}
+
+	/**
+	 * Sets `firstScreenDrawn` once the rooms are listed and the open pane (if any) has caught up, and a frame has painted
+	 * that: the hidden panels draw their rows in a task of their own after it. A root of its own, gone once that's done,
+	 * so the page's updates don't visit it after. Returns what stops it early.
+	 */
+	function watchFirstScreen(): () => void {
+		const stop = $effect.root(() => {
+			$effect(() => {
+				if (session.starting || paneCatchingUp) return;
+				let timer: ReturnType<typeof setTimeout> | undefined;
+				let frame = requestAnimationFrame(() => {
+					frame = 0;
+					timer = setTimeout(() => {
+						firstScreenDrawn = true;
+						stop();
+					});
+				});
+				return () => {
+					if (frame) cancelAnimationFrame(frame);
+					clearTimeout(timer);
+				};
+			});
+		});
+		return stop;
+	}
+
+	/**
 	 * Older items landed above: keeps what was on screen in place, given the
 	 * list's scroll top and height from before, unless the pane follows the
 	 * latest. Where the browser anchored the view itself this is already the position.
@@ -3246,7 +3356,7 @@
 	{#snippet sideToggle()}<PanelToggle side="left" panel="rooms" open={!sidebar.collapsed} ontoggle={() => sidebar.toggle()} />{/snippet}
 	{#snippet side()}
 		<Sidebar
-			client={client!} {session} {backendLabel} serverLook={currentLook} serverAddress={client?.url} account={addedAccount} order={roomOrder} threads={listedThreads} {activeThread} mentions={mentions.byRoom} unread={unread.byRoom} bind:displayName {passkeyUnavailable}
+			drawRooms={sideDrawn} client={client!} {session} {backendLabel} serverLook={currentLook} serverAddress={client?.url} account={addedAccount} order={roomOrder} threads={listedThreads} {activeThread} mentions={mentions.byRoom} unread={unread.byRoom} bind:displayName {passkeyUnavailable}
 			notificationsEnabled={notificationsActive} notificationsSupported={notificationState !== 'unsupported'} notificationPermission={notificationState} notifyScopes={notifyScopes} onnotifications={toggleNotifications} onnotifyscopes={setNotifyScopes} ontestnotifications={testNotifications}
 			webPush={webPushKey(session.server) ? { supported: webPushAvailable, homeScreen: !webPushAvailable && needsHomeScreen(), enabled: webPushActive && !webPushHeldBy, ...(webPushHeldBy ? { heldBy: webPushHeldBy } : {}), ...(webPushServerKey ? {} : { signIn: true }), offered: webPushOffered, installable: canOfferInstall(installPrompt), ...(webPushError && webPushServerKey ? { error: webPushError } : {}) } : undefined} onwebpush={pushHere} oninstallapp={installApp}
 			pause={canPause ? { ...(pausedUntil !== undefined && isPaused(pausedUntil) ? { until: pausedUntil } : {}) } : undefined} onpause={pauseNotifications} onresume={() => client?.setMute(false) ?? Promise.resolve()}
@@ -3260,7 +3370,7 @@
 	<!-- The first-mention offer, pointing at Preferences while the rooms list (and its gear) shows; above the composer otherwise. -->
 	{#snippet nudge()}
 		{#if notifyOffer}<NotifyPrompt {...notifyOffer} whenClosed={webPushAvailable && Boolean(webPushServerKey)} pointer onaccept={acceptNotifyOffer} ondecline={declineNotifyOffer} />
-		{:else if installOffer}<InstallPrompt way={installOffer} alerts={installAlerts} oninstall={installApp} ondecline={declineInstallOffer} />{/if}
+		{:else if installOffer && installNudge.component}{@const InstallPrompt = installNudge.component}<InstallPrompt way={installOffer} alerts={installAlerts} oninstall={installApp} ondecline={declineInstallOffer} />{/if}
 	{/snippet}
 
 	{#snippet main()}
@@ -3324,7 +3434,7 @@
 
 			<!-- Outside the log, so it's announced once as a status rather than as an entry each time older messages load. -->
 			{#if olderLoading}<TimelineLoading top label={activeThread ? 'Loading earlier replies…' : 'Loading earlier messages…'} />{/if}
-			<div class={['ap-timeline', pickingRow && 'ap-timeline-picking']} bind:this={messageScroll} onscroll={trackScroll} data-testid="message-list" role="log" aria-live="polite" aria-label={`${activeThread ? threadTitle(activeThread) : activeRoom.title} messages`}>
+			<div class={['ap-timeline', pickingRow && 'ap-timeline-picking']} bind:this={messageScroll} onscroll={trackScroll} {@attach markFirstMessages} data-testid="message-list" role="log" aria-live="polite" aria-label={`${activeThread ? threadTitle(activeThread) : activeRoom.title} messages`}>
 				<FloatingDayPill label={floatingDay.label} shown={floatingDay.shown && !olderLoading} testid="floating-day" />
 				{#if snapshot.showReconnectDivider}
 					<TimelineDivider kind="gap" testid="reconnect-divider" />
@@ -3384,7 +3494,7 @@
 
 			<div class="ap-shell-nudge-inline" aria-live="polite">
 				{#if notifyOffer}<NotifyPrompt {...notifyOffer} whenClosed={webPushAvailable && Boolean(webPushServerKey)} onaccept={acceptNotifyOffer} ondecline={declineNotifyOffer} />
-				{:else if installOffer}<InstallPrompt way={installOffer} alerts={installAlerts} oninstall={installApp} ondecline={declineInstallOffer} />{/if}
+				{:else if installOffer && installNudge.component}{@const InstallPrompt = installNudge.component}<InstallPrompt way={installOffer} alerts={installAlerts} oninstall={installApp} ondecline={declineInstallOffer} />{/if}
 			</div>
 			<TypingIndicator names={typingNames} class="ap-shell-typing" />
 			<!-- Floats just above the composer, in the gap under the last message, rather than taking a line: nothing moves. -->
@@ -3404,11 +3514,14 @@
 			{/if}
 
 			{#if selection.active}
-				<SelectionBar
-					{selection} threads={canMoveSelection ? selectThreads : []} parentRoom={canMoveSelection && activeThread ? activeRoom.id : undefined} canCreateThread={canMoveSelection && canStartThreads}
-					onmove={(room) => moveSelection(room)} onnewthread={newThreadFromSelection} onfill={() => selection.fillBetween(selectableOrder)} oncopy={copySelectionLog}
-					oncancel={() => { selection.cancel(); composer?.focus(); }}
-				/>
+				{#if selectionBar.component}
+					{@const SelectionBar = selectionBar.component}
+					<SelectionBar
+						{selection} threads={canMoveSelection ? selectThreads : []} parentRoom={canMoveSelection && activeThread ? activeRoom.id : undefined} canCreateThread={canMoveSelection && canStartThreads}
+						onmove={(room) => moveSelection(room)} onnewthread={newThreadFromSelection} onfill={() => selection.fillBetween(selectableOrder)} oncopy={copySelectionLog}
+						oncancel={() => { selection.cancel(); composer?.focus(); }}
+					/>
+				{/if}
 			{:else if session.readOnly}
 				<ReadOnlyBar guest={!session.passkeySession} {passkeyUnavailable} archive={archiveNote} onsignin={() => openConnect({ signIn: true })} />
 			{:else}
@@ -3437,7 +3550,7 @@
 		{/if}
 	{/snippet}
 	{#snippet members()}
-		<MemberListSidebar {client} {session} room={paneRoom} open={memberListOpen} canChange={canChangeMembers} canAdd={canAddMembers} canMessage={canStartPrivate} onnamed={(roomId) => arrivals.mine(roomId)} onopenroom={openPrivateRoom} />
+		<MemberListSidebar {client} {session} room={paneRoom} open={memberListOpen} drawRows={memberRowsDrawn} canChange={canChangeMembers} canAdd={canAddMembers} canMessage={canStartPrivate} onnamed={(roomId) => arrivals.mine(roomId)} onopenroom={openPrivateRoom} />
 	{/snippet}
 	<!--
 		Outside the conversation pane, which a phone hides while the room list shows: a modal there doesn't render,
@@ -3461,10 +3574,20 @@
 		{@const NewPrivateDialog = newPrivateDialog.component}
 		<NewPrivateDialog client={client!} {session} enabled={canStartPrivate} onnamed={(roomId) => arrivals.mine(roomId)} onopen={openPrivateRoom} onclose={() => (newPrivateOpen = false)} />
 	{/if}
-	<!-- Popovers over the whole page, outside the member list: they open from messages too, and must show while it's shut. -->
-	<ServerPane {client} {session} onnewserver={previewMode ? undefined : () => openConnect()} ondisconnect={previewMode ? undefined : disconnect} />
-	<ProfileCard {client} {session} room={paneRoom} canChange={canAddMembers} canMention={Boolean(composer) && canCompose && !selection.active} canMessage={canStartPrivate} onmention={(userId) => composer?.mention(userId)} onnamed={(roomId) => arrivals.mine(roomId)} onopenroom={openPrivateRoom} />
-	<ReactorsPopover />
+	<!--
+		Popovers over the whole page, outside the member list: they open from messages too, and must show while it's shut.
+		Each loaded on demand and mounted once first opened; the state that opens it is here from the start, and one
+		opened before its code has come lets go on a press elsewhere or Escape rather than opening late (`Lazy.once`).
+	-->
+	{#if serverPaneHost.once(Boolean(serverPane.anchor), () => serverPane.close(), serverPane.anchor)}
+		{@const ServerPane = serverPaneHost.component!}
+		<ServerPane {client} {session} onnewserver={previewMode ? undefined : () => openConnect()} ondisconnect={previewMode ? undefined : disconnect} />
+	{/if}
+	{#if profileCardHost.once(Boolean(profileCard.current), () => profileCard.close(), profileCard.current?.anchor)}
+		{@const ProfileCard = profileCardHost.component!}
+		<ProfileCard {client} {session} room={paneRoom} canChange={canAddMembers} canMention={Boolean(composer) && canCompose && !selection.active} canMessage={canStartPrivate} onmention={(userId) => composer?.mention(userId)} onnamed={(roomId) => arrivals.mine(roomId)} onopenroom={openPrivateRoom} />
+	{/if}
+	{#if reactorsPopover.once(Boolean(reactorsList.current), () => reactorsList.close(), reactorsList.current?.anchor)}{@const ReactorsPopover = reactorsPopover.component!}<ReactorsPopover />{/if}
 	<!-- While reconnecting, the banner at the top already says what went wrong (statusLabel). -->
 	<Toasts {feedback} error={snapshot.error && snapshot.error !== dismissedError && session.connection !== 'reconnecting' ? snapshot.error : undefined} ondismisserror={() => (dismissedError = snapshot.error)} />
 </AppShell>

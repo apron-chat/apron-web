@@ -1,4 +1,4 @@
-import { RateLimitError, type OperationHandle } from '$lib/protocol/client';
+import { RateLimitError, type OperationHandle } from '$lib/protocol/client-types';
 
 export type Feedback = { kind: 'pending' | 'error'; text: string };
 

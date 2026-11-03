@@ -6,6 +6,8 @@ import { defineConfig } from 'vitest/config';
 const fsModule = 'node:fs';
 const fs = (await import(/* @vite-ignore */ fsModule)) as { readdirSync(path: URL, options: { recursive: true }): string[]; readFileSync(path: URL, encoding: 'utf8'): string };
 const src = new URL('./src/', import.meta.url);
+const urlModule = 'node:url';
+const { fileURLToPath } = (await import(/* @vite-ignore */ urlModule)) as { fileURLToPath(url: URL): string };
 
 /**
  * The tests that mock a module (`vi.mock`). A mock takes only where the module is imported afresh, so these
@@ -30,6 +32,8 @@ export default defineConfig(({ command }) => {
 	const preview = command === 'serve' || env.APRON_PREVIEW === '1';
 	return {
 		define: { __APRON_PREVIEW__: JSON.stringify(preview) },
+		// markdown-it always constructs linkify-it, which Apron never uses (`linkify: false`): see the stub.
+		resolve: { alias: { 'linkify-it': fileURLToPath(new URL('lib/protocol/linkify-off.ts', src)) } },
 		plugins: [
 			sveltekit({
 				compilerOptions: {
@@ -43,6 +47,8 @@ export default defineConfig(({ command }) => {
 			})
 		],
 		test: {
+			// Bundled for the tests too, so they meet the linkify-it stub as the app does (rather than Node's linkify-it).
+			server: { deps: { inline: ['markdown-it'] } },
 			projects: [
 				{ extends: true, test: { name: 'unit', include: ['src/**/*.test.ts'], exclude: ['src/**/*.svelte.test.ts', ...MOCKING], isolate: false } },
 				{ extends: true, test: { name: 'mocking', include: MOCKING_NODE.length ? MOCKING_NODE : ['no-such-file'] } },

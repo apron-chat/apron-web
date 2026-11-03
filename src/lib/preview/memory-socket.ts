@@ -23,17 +23,65 @@ export interface MemoryHost {
  * A WebSocket, as far as `ChatClient` can tell, connected to `host` in this
  * page: it opens on the next microtask, and each frame either way arrives on a
  * microtask of its own, as a network's would arrive later than it was sent.
+ *
+ * With a round trip to play (`rttMs`), opening takes all of it and each frame either way half of it, in order. The
+ * times run from when the client sent: a reply is due one round trip after its request went even when the page was
+ * too busy to run the in-page server as the request reached it, as a real server answers while the page is busy.
+ * `now` is the clock those times are on.
+ *
+ * `host` may be on its way (a promise), for a connection opened before the server's code has loaded: the server hears
+ * of it, and of what it was sent, once it has, with the times as they would have been.
  */
-export function memorySocket(url: string, host: MemoryHost): WebSocket {
+export function memorySocket(url: string, host: MemoryHost | Promise<MemoryHost>, rttMs = 0, now: () => number = () => performance.now()): WebSocket {
+	const half = rttMs / 2;
+	let server = 'then' in host ? undefined : host;
+	/** Opened before the server was there to hear of it. */
+	let openUnheard = false;
+	/** Frames on their way, each due at `at`, in order. */
+	const toServer: { at: number; frame: WireFrame }[] = [];
+	const toClient: { at: number; data: string }[] = [];
+	/** While the server handles a frame: when the frame reached it, so what it sends back leaves from then. */
+	let handlingAt: number | undefined;
+	/** When the last frame to the client is due, so none overtakes another. */
+	let lastToClient = -Infinity;
 	const end: MemorySocket = {
 		get open() {
 			return socket.readyState === 1;
 		},
 		deliver: (frame) => {
-			if (socket.readyState === 1) socket.onmessage?.({ data: JSON.stringify(frame) } as MessageEvent);
+			if (socket.readyState !== 1) return;
+			if (rttMs <= 0) return void socket.onmessage?.({ data: JSON.stringify(frame) } as MessageEvent);
+			const at = Math.max((handlingAt ?? now()) + half, lastToClient);
+			lastToClient = at;
+			toClient.push({ at, data: JSON.stringify(frame) });
+			arm(drainToClient, at);
 		},
 		close: () => socket.close()
 	};
+	// Each timer hands on everything due by then, in order (a timer that fires late reorders nothing), and sets
+	// another for what is still on its way.
+	function drainToClient(): void {
+		while (toClient.length && toClient[0].at <= now()) {
+			const { data } = toClient.shift()!;
+			if (socket.readyState === 1) socket.onmessage?.({ data } as MessageEvent);
+		}
+		if (toClient.length) arm(drainToClient, toClient[0].at);
+	}
+	function drainToServer(): void {
+		if (!server) return;
+		while (toServer.length && toServer[0].at <= now()) {
+			const { at, frame } = toServer.shift()!;
+			if (socket.readyState !== 1) continue;
+			handlingAt = at;
+			try {
+				server.received(end, frame);
+			} finally {
+				handlingAt = undefined;
+			}
+		}
+		if (toServer.length) arm(drainToServer, toServer[0].at);
+	}
+	const arm = (drain: () => void, at: number) => setTimeout(drain, Math.max(0, Math.ceil(at - now())));
 	const socket = {
 		url,
 		readyState: 0,
@@ -44,24 +92,59 @@ export function memorySocket(url: string, host: MemoryHost): WebSocket {
 		close: () => {
 			if (socket.readyState === 3) return;
 			socket.readyState = 3;
-			host.closed(end);
+			toServer.length = 0;
+			toClient.length = 0;
+			if (server && !openUnheard) server.closed(end);
 			socket.onclose?.({} as CloseEvent);
 		},
 		send: (data: string) => {
 			if (socket.readyState !== 1) return;
 			let frame: WireFrame;
 			try { frame = JSON.parse(data) as WireFrame; } catch { return; }
-			queueMicrotask(() => {
-				if (socket.readyState === 1) host.received(end, frame);
-			});
+			if (rttMs <= 0 && server) {
+				const ready = server;
+				queueMicrotask(() => {
+					if (socket.readyState === 1) ready.received(end, frame);
+				});
+				return;
+			}
+			const at = now() + half;
+			toServer.push({ at, frame });
+			arm(drainToServer, at);
 		}
 	};
-	queueMicrotask(() => {
+	const openAt = now() + rttMs;
+	const opened = () => {
 		if (socket.readyState !== 0) return;
 		socket.readyState = 1;
 		socket.onopen?.({} as Event);
 		// Closed from `onopen`: the host never hears of it, as `closed` already ran.
-		if (socket.readyState === 1) host.opened(end);
-	});
+		if (socket.readyState !== 1) return;
+		if (server) tellOpened(server);
+		else openUnheard = true;
+	};
+	const tellOpened = (ready: MemoryHost) => {
+		openUnheard = false;
+		// What the server sends as the connection opens (the `server` frame) leaves then, however late this runs.
+		handlingAt = rttMs > 0 ? openAt : undefined;
+		try {
+			ready.opened(end);
+		} finally {
+			handlingAt = undefined;
+		}
+	};
+	if (!server) {
+		void (host as Promise<MemoryHost>).then((ready) => {
+			server = ready;
+			if (openUnheard && socket.readyState === 1) {
+				tellOpened(ready);
+				// What it sent as the connection opened is long due: it would have arrived by now, not a task later.
+				drainToClient();
+			}
+			drainToServer();
+		});
+	}
+	if (rttMs > 0) setTimeout(opened, rttMs);
+	else queueMicrotask(opened);
 	return socket as unknown as WebSocket;
 }

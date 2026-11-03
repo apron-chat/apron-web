@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { tick, untrack } from 'svelte';
-	import { preferencesDialog } from './lazy';
+	import { archiveExport, preferencesDialog, profileEditor } from './lazy';
 	import { pushState, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { preferencesOpener, preferencesUrl, readPreferences } from '$lib/ui/preferences.svelte';
@@ -19,13 +19,11 @@
 	import type { WebPushPreference } from '$lib/ui/web-push';
 	import type { PausedUntil } from '$lib/ui/pause';
 	import DesignProfileBar from '$lib/design/components/ProfileBar.svelte';
-	import ProfileEditor from '$lib/design/components/ProfileEditor.svelte';
 	import { ownStatusLabel } from '$lib/ui/user-status';
 	import { signOutThen, type SignOutHandler } from '$lib/ui/sign-in';
 	import Avatar from '$lib/design/components/Avatar.svelte';
 	import { hueOf } from '$lib/ui/messages';
 	import TypingDots from '$lib/design/components/TypingDots.svelte';
-	import { exportArchive } from '$lib/archive/archive';
 	import { historySettings } from '$lib/history/settings.svelte';
 	import type { KeptHistoryControls } from '$lib/history/history-keeper';
 
@@ -133,7 +131,7 @@
 			return false;
 		};
 		const unopened = [...rooms.values()].filter((room) => room.parentRoomId !== undefined && !room.loaded && !room.resumed && (options.privateRooms || !inPrivate(room.id)));
-		await Promise.allSettled(unopened.map((room) => client.loadRoom(room.id)));
+		const [exportArchive] = await Promise.all([archiveExport.load(), Promise.allSettled(unopened.map((room) => client.loadRoom(room.id)))]);
 		const file = exportArchive(client.url, client.snapshot(), client.storedRecords(), client.roomSyncs(), options);
 		if (file.rooms === 0) return undefined;
 		const url = URL.createObjectURL(new Blob([file.text], { type: 'application/jsonl' }));
@@ -577,6 +575,8 @@
 	</span>
 {/snippet}
 {#snippet profileForm()}
+	<!-- Only Preferences draws this, and it mounts once the form has come too (below). -->
+	{@const ProfileEditor = profileEditor.component!}
 	<ProfileEditor
 		dialog={false}
 		userId={you?.user_id ?? '—'}
@@ -618,7 +618,8 @@
 	{paused}
 	bind:button={preferencesTrigger}
 >
-	{#if preferencesMounted && preferencesDialog.component}
+	<!-- Waits for the profile form too (one chunk, one request), so Profile never opens without it. -->
+	{#if preferencesMounted && preferencesDialog.component && profileEditor.component}
 		{@const PreferencesDialog = preferencesDialog.component}
 		<PreferencesDialog
 			bind:open={preferencesOpen}

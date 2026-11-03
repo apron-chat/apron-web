@@ -225,6 +225,29 @@ export class HistoryKeeper {
 		return this.openNamed(historyName(server, userId));
 	}
 
+	/**
+	 * The database `name` opened, as `openNamed` keeps it, if there is one: none is made when there isn't. Kept only
+	 * once open, so a writer opening it meanwhile (`openNamed`) never meets a "none here" meant for this.
+	 */
+	private async openKept(name: string): Promise<boolean> {
+		const cached = this.dbs.get(name);
+		if (cached) return Boolean(await cached.catch(() => undefined));
+		let db: IDBDatabase;
+		try {
+			db = await openHistory(this.factory, name, () => this.dbs.delete(name), { existing: true });
+		} catch {
+			return false;
+		}
+		// A writer opened it meanwhile: one connection, theirs.
+		const opened = this.dbs.get(name);
+		if (opened) {
+			db.close();
+			return Boolean(await opened.catch(() => undefined));
+		}
+		this.dbs.set(name, Promise.resolve(db));
+		return true;
+	}
+
 	private openNamed(name: string): Promise<IDBDatabase> {
 		let db = this.dbs.get(name);
 		if (!db) {
@@ -316,9 +339,11 @@ export class HistoryKeeper {
 	 * saved before that was noted) the account written last, which signing in confirms or drops.
 	 */
 	private async keptAccount(server: string): Promise<string | undefined> {
-		const found = await listHistories(this.factory, server);
 		const saved = loadKeptSessionUser(server);
-		if (saved !== undefined) return found.some((entry) => entry.userId === saved) ? saved : undefined;
+		// The account is known: its database is opened as it is, if there is one, without listing them all first
+		// (`databases()` is a request of its own, which as the app starts waits on a busy page to hear back).
+		if (saved !== undefined) return (await this.openKept(historyName(server, saved))) ? saved : undefined;
+		const found = await listHistories(this.factory, server);
 		if (found.length <= 1) return found[0]?.userId;
 		const metas = await Promise.all(found.map(async (entry) => ({ entry, meta: await readMeta(await this.openNamed(entry.name)).catch(() => undefined) })));
 		return metas.filter((each) => each.meta).sort((a, b) => b.meta!.savedAt - a.meta!.savedAt)[0]?.entry.userId;

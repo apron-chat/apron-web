@@ -98,7 +98,13 @@ export interface PreviewKnobs {
 	 * makes it a registered session, as starting private conversations needs.
 	 */
 	account?: boolean;
+	/**
+	 * A network round trip to play, in ms: the socket opens after one, and each frame either way takes half of one, so a
+	 * load's waits on the server show as they would over a network (`npm run qa -- startup --rtt`).
+	 */
+	rttMs?: number;
 	/** Answers each `history` request after this long, as a slow server does, so what shows while history loads can be seen. */
+
 	historyDelayMs?: number;
 	/** That many more messages at the end of a room's history, by `room_id`, e.g. enough for older pages to load reading back. */
 	filler?: Record<string, number>;
@@ -678,8 +684,13 @@ export class MemoryProtocolServer {
 		closed: (socket) => this.sockets.delete(socket)
 	};
 
+	/** The server as its sockets see it, for one made elsewhere (`previewHost`). */
+	get socketHost(): MemoryHost {
+		return this.host;
+	}
+
 	private createSocket(url: string): WebSocket {
-		return memorySocket(url, this.host);
+		return memorySocket(url, this.host, this.knobs.rttMs ?? 0);
 	}
 
 	private receive(socket: MemorySocket, frame: WireFrame): void {
@@ -1017,15 +1028,21 @@ function concat(chunks: readonly Uint8Array[]): Uint8Array {
 }
 
 let previewServer: MemoryProtocolServer | undefined;
-export const previewWebSocketFactory: WebSocketFactory = (url) => {
+function thePreviewServer(): MemoryProtocolServer {
 	if (!previewServer) {
 		const scope = globalThis as { __APRON_PREVIEW__?: PreviewKnobs; __apronPreview?: MemoryProtocolServer };
 		previewServer = new MemoryProtocolServer(scope.__APRON_PREVIEW__);
 		// Only a test that set knobs reaches the server; the demo exposes nothing.
 		if (scope.__APRON_PREVIEW__) scope.__apronPreview = previewServer;
 	}
-	return previewServer.factory(url);
-};
+	return previewServer;
+}
+export const previewWebSocketFactory: WebSocketFactory = (url) => thePreviewServer().factory(url);
+
+/** The preview's server as its sockets see it: for the one opened as the app starts, before this code loaded (`hooks.client.ts`). */
+export function previewHost(): MemoryHost {
+	return thePreviewServer().socketHost;
+}
 
 /** The preview's live text, for `setLiveFetch`: its own origin's URLs from its server (`fetchLive`), any other from the network. */
 export const previewLiveFetch: LiveFetch = (url, init) => {

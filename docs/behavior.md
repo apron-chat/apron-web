@@ -1079,7 +1079,9 @@ view, so it lands where it's seen; carried past either end it goes to that end. 
 room is carried the sidebar scrolls only to bring more of its section into view,
 as the pointer nears the sidebar's top or bottom, never past the section, and
 nothing scrolls under a pointer that isn't near either. A
-drag starts only from the room's own row, not its threads, its **+** or its **…**, and never opens the room. From the
+drag starts only from the room's own row, not its threads, its **+** or its **…**, and never opens the room. Dragging
+is ready a few seconds after the page opens, or as soon as the pointer comes over the rooms (its code loads apart from
+the page's); before then a press on a row only picks it. From the
 keyboard, Alt+↑ or Alt+↓ on a room moves it a place (as in the WAI-ARIA
 rearrangeable listbox; its row names the keys as `aria-keyshortcuts`), the keyboard staying on it and the move announced. In a
 folded section a room moves among the ones shown, the hidden ones keeping their

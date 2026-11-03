@@ -1,4 +1,5 @@
-import { describeError, logPasskeyFailure, type PasskeyStage } from './passkey-diagnostics';
+import { describeError, isCancelled, type PasskeyStage } from './passkey-notes';
+import { startupMark } from '../startup-marks';
 import { requestPasskey, signalPasskeyLabel } from './webauthn';
 import { writeEmbed } from './embeds';
 import { SignInConnection, type RpcFailure } from './signin-connection';
@@ -364,9 +365,10 @@ export class ChatClient {
 	/**
 	 * The latest `room_list` per listing (`''` for rooms to browse, a parent's
 	 * `room_id` for its threads, `#` and a `room_id` for its members), shared
-	 * while in flight and reused while recent.
+	 * while in flight and reused while recent. `behind`: the listing of joined
+	 * rooms already asked for on this connection when this one was asked for.
 	 */
-	private readonly listings = new Map<string, { at: number; promise: Promise<RoomListing[]>; rooms?: Set<string>; until?: number }>();
+	private readonly listings = new Map<string, { at: number; promise: Promise<RoomListing[]>; rooms?: Set<string>; until?: number; behind?: string }>();
 	/**
 	 * The `room_list` of joined rooms on this connection (capability `rooms`), until
 	 * its result arrives; `since` and `userId` when it lists only changes since
@@ -375,6 +377,8 @@ export class ChatClient {
 	private joinedListing?: { id: string; since?: string; userId?: string };
 	private socket?: WebSocket;
 	private readonly webSocketFactory: WebSocketFactory;
+	/** Where the first connection may come from, opened before the client was made (`ChatClientOptions.earlyConnection`); asked once. */
+	private earlyConnection?: ChatClientOptions['earlyConnection'];
 	private reconnectTimer?: ReturnType<typeof setTimeout>;
 	private pingTimer?: ReturnType<typeof setInterval>;
 	/** Resets the reconnect backoff once the current connection has stayed up. */
@@ -515,7 +519,7 @@ export class ChatClient {
 		displayName = '',
 		webSocketFactory: WebSocketFactory = (url) => new WebSocket(url),
 		private readonly now: () => number = () => Date.now(),
-		{ historyStart = 'newest', historyConcurrency }: Pick<ChatClientOptions, 'historyStart' | 'historyConcurrency'> = {}
+		{ historyStart = 'newest', historyConcurrency, earlyConnection }: Pick<ChatClientOptions, 'historyStart' | 'historyConcurrency' | 'earlyConnection'> = {}
 	) {
 		// A server is known by its normalized address (§1): its kept session too.
 		this.serverUrl = addressOf(serverUrl);
@@ -527,6 +531,7 @@ export class ChatClient {
 			emit: () => this.emit()
 		}, historyConcurrency);
 		this.webSocketFactory = webSocketFactory;
+		this.earlyConnection = earlyConnection;
 		this.displayName = displayName.trim();
 		this.loadStoredSession();
 	}
@@ -1072,7 +1077,14 @@ export class ChatClient {
 			if (controller.signal.aborted || connection !== this.connectionId) throw new Error('Connection changed; try again');
 			return await this.passkeyFinish(action, begun, credential, controller, connection, requested);
 		} catch (cause) {
-			void logPasskeyFailure({ action, stage, cause, server: this.serverUrl, requestedName: requested, publicKey: begun?.publicKey, credential });
+			// The diagnostics load only now: they decode what the browser handed back, which no ceremony that works needs.
+			const report = { action, stage, cause, server: this.serverUrl, requestedName: requested, publicKey: begun?.publicKey, credential };
+			void import('./passkey-diagnostics').then(({ logPasskeyFailure }) => logPasskeyFailure(report)).catch(() => {
+				// They couldn't be fetched (offline, or a deploy since): say what failed, as they would, without the decoding.
+				const error = describeError(cause);
+				const line = `[apron] passkey ${action} failed during ${stage}: ${error.message}`;
+				(isCancelled(error, stage) ? console.info : console.warn)(line, { stage, error, server: report.server });
+			});
 			throw cause;
 		} finally {
 			if (this.passkeyStarting === controller) this.passkeyStarting = undefined;
@@ -2431,7 +2443,9 @@ export class ChatClient {
 			this.emit();
 			return listings;
 		});
-		const entry: { at: number; promise: Promise<RoomListing[]>; rooms?: Set<string>; until?: number } = { at: Date.now(), promise };
+		const entry: { at: number; promise: Promise<RoomListing[]>; rooms?: Set<string>; until?: number; behind?: string } = {
+			at: Date.now(), promise, ...(this.joinedListing ? { behind: this.joinedListing.id } : {})
+		};
 		this.listings.set(key, entry);
 		promise.then((listings) => {
 			entry.rooms = new Set(listings.map((listing) => listing.id));
@@ -2478,8 +2492,9 @@ export class ChatClient {
 			}
 			// Before the listing applies, so its rooms wait for the catch-up rather than each resuming.
 			if (listing.since !== undefined) this.startPlannedCatchUp(result);
-			this.applyRoomList(result, true);
+			this.applyRoomList(result, true, listing.id);
 			this.joinedComplete = true;
+			startupMark('rooms');
 			this.settleHeldStatuses();
 			this.emit();
 		}, (cause: Error) => {
@@ -2512,7 +2527,7 @@ export class ChatClient {
 	 * a listing of changes, the rooms in it go and every other kept room stays;
 	 * without, a full listing, every other joined room goes.
 	 */
-	private applyRoomList(result: JsonObject, joinedSet: boolean): { joined: RoomListing[]; not_joined: RoomListing[] } {
+	private applyRoomList(result: JsonObject, joinedSet: boolean, joinedId?: string): { joined: RoomListing[]; not_joined: RoomListing[] } {
 		const listed = { joined: [] as RoomListing[], not_joined: [] as RoomListing[] };
 		const joinedIds = new Set<string>();
 		for (const [key, joined] of [['joined', true], ['not_joined', false]] as const) {
@@ -2525,7 +2540,7 @@ export class ChatClient {
 				this.noteMembers(record.room_id, decoded.delivery);
 				if (joined && joinedSet) {
 					joinedIds.add(record.room_id);
-					this.showRoom(decoded, 'joined');
+					this.showRoom(decoded, 'joined', joinedId);
 				} else if (this.rooms.has(record.room_id)) {
 					// Its record and delivery fields are the latest (§4.2); for a room
 					// opened without joining, the head is what the next load reaches.
@@ -2591,9 +2606,18 @@ export class ChatClient {
 		for (const user of Array.isArray(users) ? users : []) if (isIdentity(user)) this.noteUser(cloneJson(user), { complete: true });
 	}
 
-	/** Membership changed: listings of rooms and threads to join are stale. */
-	private forgetListings(parentRoomId: string | undefined): void {
-		this.listings.delete(parentRoomId ?? '');
+	/**
+	 * Membership changed: listings of rooms and threads to join are stale. A room shown by the listing of joined
+	 * rooms (`joinedId`) is no change, only news to this client, so a listing asked for behind that one, on the same
+	 * connection, is kept. The server may answer the two in either order (§1), so it can predate a join the other
+	 * already shows; what keeps that harmless is that a result holds every change notified before it, a change after
+	 * it comes as a `room_update` of its own (§4.2.1), which forgets the listing, and joined rooms are taken out of a
+	 * listing to join wherever one is shown (`withJoined`, the Sidebar).
+	 */
+	private forgetListings(parentRoomId: string | undefined, joinedId?: string): void {
+		const key = parentRoomId ?? '';
+		if (joinedId !== undefined && this.listings.get(key)?.behind === joinedId) return;
+		this.listings.delete(key);
 	}
 
 	/** Drops the listings of rooms and threads to join, and any reused: they were made for another session. */
@@ -2937,6 +2961,17 @@ export class ChatClient {
 		this.error = undefined;
 		this.connectionErrored = false;
 		this.emit();
+		// The first connection may be open already, or opening, made as the app started: it goes on from there.
+		const takeEarly = this.earlyConnection;
+		this.earlyConnection = undefined;
+		const early = takeEarly?.(this.serverUrl);
+		if (early) {
+			this.attachSocket(early.socket, id, early.open);
+			if (early.open) this.socketOpened();
+			// What arrived while it waited (its `server` frame, a welcome), in order, as if it arrived now.
+			for (const data of early.frames) if (this.isCurrentSocket(id, early.socket)) early.socket.onmessage?.({ data } as MessageEvent);
+			return;
+		}
 		let socket: WebSocket;
 		try {
 			socket = this.webSocketFactory(this.serverUrl);
@@ -2947,16 +2982,22 @@ export class ChatClient {
 		this.attachSocket(socket, id, false);
 	}
 
+	/** The current socket has opened. */
+	private socketOpened(): void {
+		startupMark('socket-open');
+		this.status = 'connected';
+		this.error = undefined;
+		this.authRequested = false;
+		this.emit();
+	}
+
 	/** Makes `socket` this client's connection number `id`; `opened`: it is open already. */
 	private attachSocket(socket: WebSocket, id: number, opened: boolean): void {
 		this.socket = socket;
 		socket.onopen = () => {
 			if (!this.isCurrentSocket(id, socket)) return;
 			opened = true;
-			this.status = 'connected';
-			this.error = undefined;
-			this.authRequested = false;
-			this.emit();
+			this.socketOpened();
 		};
 		socket.onmessage = (event) => {
 			if (!this.isCurrentSocket(id, socket)) return;
@@ -3327,6 +3368,7 @@ export class ChatClient {
 		this.reconnectHeld = false;
 		this.signInNeeded = undefined;
 		this.authenticated = true;
+		startupMark('signed-in');
 		this.authRequested = false;
 		// The backoff starts over only once this connection has stayed up.
 		this.clearStableTimer();
@@ -4004,11 +4046,11 @@ export class ChatClient {
 	 * the record, takes its delivery fields, and starts or resumes its
 	 * automatic recovery (§4.3).
 	 */
-	private showRoom(decoded: { record: RoomRecord; delivery: RoomDelivery }, kind?: 'joined'): void {
+	private showRoom(decoded: { record: RoomRecord; delivery: RoomDelivery }, kind?: 'joined', joinedId?: string): void {
 		const roomId = decoded.record.room_id;
 		this.installRoom(decoded.record);
 		const existing = this.rooms.get(roomId) ?? this.adoptRetainedRoom(roomId);
-		if (!existing) this.forgetListings(decoded.record.parent_room_id);
+		if (!existing) this.forgetListings(decoded.record.parent_room_id, joinedId);
 		const room = existing ?? newRoomState(roomId, kind ?? 'joined');
 		this.rooms.set(roomId, room);
 		if (kind === 'joined') this.markJoined(room);

@@ -563,6 +563,11 @@ export interface ChatClientOptions {
 	 * which interleave them: production code leaves it.
 	 */
 	historyConcurrency?: number;
+	/**
+	 * A connection opened before the client was made, to take for its first one rather than open its own
+	 * (`$lib/protocol/early-connection`): asked once, with the client's server, as it first connects.
+	 */
+	earlyConnection?: (url: string) => { socket: WebSocket; open: boolean; frames: unknown[] } | undefined;
 }
 
 /**
