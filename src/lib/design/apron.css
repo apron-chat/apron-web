@@ -1500,9 +1500,10 @@ label.ap-pref-setting-title { color: var(--ink); font-weight: 600; cursor: point
 .ap-font-status { margin: 0; padding: var(--space-2); color: var(--ap-tone, var(--ink-muted)); font-size: var(--text-sm); line-height: var(--leading-sm); }
 
 /* Mention — the @name chip inside message text */
-.ap-mention { display: inline; padding: 1px 5px; border-radius: var(--radius-sm); background: var(--denim-soft); color: var(--denim); font-weight: 600; white-space: nowrap; }
+.ap-mention { display: inline; padding: 1px 6px; border-radius: var(--radius-sm); background: var(--denim-soft); color: var(--denim); font-weight: 600; white-space: nowrap; }
 .ap-mention-me { background: var(--accent); color: var(--on-accent); }
-button.ap-mention { font-family: inherit; font-size: inherit; line-height: inherit; border: 0; cursor: pointer; }
+/* A button is laid out as a box, the line's full height: a line height of its own keeps the highlight inside the line, a little wider than tall around the name, as a span's would be. */
+button.ap-mention { font-family: inherit; font-size: inherit; line-height: var(--leading-ui); border: 0; cursor: pointer; }
 .ap-msg-mention .ap-mention-me { box-shadow: 0 0 0 1px var(--bg-100); }
 /* Inline chips (inline code, mentions, room links): one that wraps is drawn on each line as a chip of its own, padding
    and corners on every piece, rather than one box cut open at the line ends. A chip that is a button (a mention or room
