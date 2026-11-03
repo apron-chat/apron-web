@@ -75,7 +75,14 @@ export function languageOf(fence: string): string | undefined {
 function load(language: string): Promise<HLJSApi> {
 	let ready = loading.get(language);
 	if (!ready) {
-		core ??= import('highlight.js/lib/core').then((module) => module.default);
+		if (!core) {
+			const loadingCore = import('highlight.js/lib/core').then((module) => module.default);
+			core = loadingCore;
+			// Failed (a deploy replaced the chunk, a dropped connection): the next language to load asks again.
+			loadingCore.catch(() => {
+				if (core === loadingCore) core = undefined;
+			});
+		}
 		ready = Promise.all([core, LANGUAGES[language]()]).then(([hljs, module]) => {
 			hljs.registerLanguage(language, module.default);
 			return hljs;

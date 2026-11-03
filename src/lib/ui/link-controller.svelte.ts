@@ -45,14 +45,34 @@ type Addition = Extract<LinkUse, { kind: 'addition' }>;
 export class SignInLinks {
 	/** A link of no proposal this browser made, until the viewer answers whether to use it. */
 	asked = $state<SignInLink | undefined>();
-	/** A link is being used: its token goes out as a fresh connection's first `auth`, or adds to this account. */
-	busy = $state(false);
+	/**
+	 * What a link is being used for, one at a time: signing in (its token goes out as a fresh connection's
+	 * first `auth`) or adding to this account. Another link meanwhile waits, or is dropped, rather than run
+	 * beside it (`#work`).
+	 */
+	working = $state<'signing-in' | 'adding' | undefined>();
 	/** A link for an addition this browser proposed (§4.11.3), waiting for the session of the account that proposed it. */
 	addition = $state<Addition | undefined>();
 	/** Why a link didn't sign in, for the connect screen. */
 	failure = $state<{ error: string } | undefined>();
 
 	constructor(private readonly host: LinkHost) {}
+
+	/** A link is being used (`working`). */
+	get busy(): boolean {
+		return this.working !== undefined;
+	}
+
+	/**
+	 * Runs `work` as `kind`, unless a link is already being used: then nothing runs, and it returns false. Only
+	 * this run ends what it started, so the one under way is never marked done by another.
+	 */
+	#work(kind: 'signing-in' | 'adding', work: () => Promise<unknown>): boolean {
+		if (this.working) return false;
+		this.working = kind;
+		void work().finally(() => (this.working = undefined));
+		return true;
+	}
 
 	/**
 	 * A link taken from the URL. One with the `state` of a sign-in this
@@ -88,11 +108,16 @@ export class SignInLinks {
 	 */
 	use(use: Exclude<LinkUse, { kind: 'addition' }>): void {
 		const chat = this.host.client();
+		// Without a client yet, or while another link signs in or adds, an asked link stays asked.
+		if (!chat || this.busy) return;
 		this.asked = undefined;
-		if (!chat) return;
-		this.busy = true;
+		this.failure = undefined;
+		this.#work('signing-in', () => this.#signIn(use, chat));
+	}
+
+	#signIn(use: Exclude<LinkUse, { kind: 'addition' }>, chat: LinkClient): Promise<unknown> {
 		this.host.feedback.pending('Signing in…');
-		void runSignInLink(use, chat, {
+		return runSignInLink(use, chat, {
 			beforeSwitch: (switched) => this.host.beforeSwitch(switched),
 			onSignedIn: (server, switched) => {
 				this.host.feedback.clear();
@@ -104,7 +129,7 @@ export class SignInLinks {
 				this.failure = { error: linkFailure(use, error) };
 				this.host.failed({ error: this.failure.error, server, ...(use.kind === 'own' ? { scheme: use.scheme } : {}) });
 			}
-		}).finally(() => (this.busy = false));
+		});
 	}
 
 	/**
@@ -116,13 +141,13 @@ export class SignInLinks {
 	addAsked(): void {
 		const link = this.asked;
 		const chat = this.host.client();
+		if (!link || !chat || this.busy) return;
 		this.asked = undefined;
-		if (!link || !chat) return;
-		this.busy = true;
-		this.host.feedback.pending('Adding the sign-in…');
-		chat.addWithConfirmedLink(link.token)
-			.then(() => this.host.feedback.clear(), (cause: unknown) => this.host.feedback.error(addError(cause, 'link')))
-			.finally(() => (this.busy = false));
+		this.#work('adding', () => {
+			this.host.feedback.pending('Adding the sign-in…');
+			return chat.addWithConfirmedLink(link.token)
+				.then(() => this.host.feedback.clear(), (cause: unknown) => this.host.feedback.error(addError(cause, 'link')));
+		});
 	}
 
 	/**
@@ -134,7 +159,8 @@ export class SignInLinks {
 	settle(snapshot: Pick<ClientSnapshot, 'status' | 'authBusy' | 'authenticated' | 'held' | 'error' | 'keptSession' | 'server' | 'you'>): void {
 		const addition = this.addition;
 		const chat = this.host.client();
-		if (!addition || !chat || !sessionSettled(snapshot)) return;
+		// Another link under way: this one waits for it, and the next snapshot after.
+		if (!addition || !chat || this.busy || !sessionSettled(snapshot)) return;
 		const signedInAs = snapshot.authenticated ? snapshot.you?.user_id : undefined;
 		untrack(() => {
 			this.addition = undefined;
@@ -142,11 +168,11 @@ export class SignInLinks {
 				this.host.feedback.error(`The link adds a sign-in to @${addition.account} on ${backendHost(addition.server) || addition.server}, which this page isn’t signed in as now. Sign in as @${addition.account} there, and add it again.`);
 				return;
 			}
-			this.busy = true;
-			this.host.feedback.pending('Adding the sign-in…');
-			chat.addWithLink(addition.token, addition.state)
-				.then(() => this.host.feedback.clear(), (cause: unknown) => this.host.feedback.error(addError(cause, this.host.findProposal(addition.state)?.scheme)))
-				.finally(() => (this.busy = false));
+			this.#work('adding', () => {
+				this.host.feedback.pending('Adding the sign-in…');
+				return chat.addWithLink(addition.token, addition.state)
+					.then(() => this.host.feedback.clear(), (cause: unknown) => this.host.feedback.error(addError(cause, this.host.findProposal(addition.state)?.scheme)));
+			});
 		});
 	}
 }

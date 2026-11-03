@@ -1450,6 +1450,7 @@
 		roomEditorOpen = false;
 		selection.leave();
 		mentions.reset();
+		unread.reset();
 		arrivals.reset();
 		incomingMessages.reset();
 		pushRoom = undefined;

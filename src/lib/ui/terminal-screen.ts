@@ -175,10 +175,11 @@ const SCROLL_KEYS: Record<string, number | 'page'> = { ArrowUp: -1, ArrowDown: 1
 
 export class TerminalScreen {
 	readonly #host: HTMLElement;
-	#terminal: Terminal | undefined;
-	#disposed = false;
-	/** What was asked before xterm loaded, played in order once it has. */
-	#queue: Array<(terminal: Terminal) => void> = [];
+	/**
+	 * Where the screen is: `loading` xterm, keeping what is asked meanwhile to play in order once it has; `open`;
+	 * `failed`, xterm couldn't load, so nothing asked is kept; or `disposed`.
+	 */
+	#state: { phase: 'loading'; queue: Array<(terminal: Terminal) => void> } | { phase: 'open'; terminal: Terminal } | { phase: 'failed' } | { phase: 'disposed' } = { phase: 'loading', queue: [] };
 	#frame: number | undefined;
 	#observer: ResizeObserver | undefined;
 	#themeWatch: (() => void) | undefined;
@@ -213,7 +214,9 @@ export class TerminalScreen {
 			keys?.addEventListener('keydown', this.#keydown);
 		} else for (const type of SCROLLS) host.addEventListener(type, this.#keep, { capture: true, passive: true });
 		load().then((xterm) => this.#open(xterm), () => {
-			if (!this.#disposed) host.dataset.failed = '';
+			if (this.#state.phase !== 'loading') return;
+			this.#state = { phase: 'failed' };
+			host.dataset.failed = '';
 		});
 	}
 
@@ -269,8 +272,8 @@ export class TerminalScreen {
 	}
 
 	dispose(): void {
-		this.#disposed = true;
-		this.#queue = [];
+		const terminal = this.#terminal;
+		this.#state = { phase: 'disposed' };
 		for (const type of SCROLLS) this.#host.removeEventListener(type, this.#keep, { capture: true });
 		this.#space.removeEventListener('wheel', this.#wheel, { capture: true });
 		this.#space.removeEventListener('touchstart', this.#touchstart, { capture: true });
@@ -281,18 +284,26 @@ export class TerminalScreen {
 		this.#observer?.disconnect();
 		this.#themeWatch?.();
 		if (this.#frame !== undefined) cancelAnimationFrame(this.#frame);
-		this.#terminal?.dispose();
-		this.#terminal = undefined;
+		terminal?.dispose();
+	}
+
+	get #terminal(): Terminal | undefined {
+		return this.#state.phase === 'open' ? this.#state.terminal : undefined;
+	}
+
+	get #disposed(): boolean {
+		return this.#state.phase === 'disposed';
 	}
 
 	#run(step: (terminal: Terminal) => void): void {
-		if (this.#disposed) return;
-		if (this.#terminal) step(this.#terminal);
-		else this.#queue.push(step);
+		const state = this.#state;
+		if (state.phase === 'open') step(state.terminal);
+		else if (state.phase === 'loading') state.queue.push(step);
 	}
 
 	#open(xterm: Xterm): void {
-		if (this.#disposed) return;
+		const loading = this.#state;
+		if (loading.phase !== 'loading') return;
 		const host = this.#host;
 		const fontFamily = monoFont(host);
 		({ advance: this.#ratio, line: this.#line } = faceRatios(host, fontFamily));
@@ -313,7 +324,7 @@ export class TerminalScreen {
 		}
 		terminal.onWriteParsed(() => this.#schedule());
 		terminal.buffer.onBufferChange(() => this.#schedule());
-		this.#terminal = terminal;
+		this.#state = { phase: 'open', terminal };
 		if (typeof ResizeObserver === 'function') {
 			this.#observer = new ResizeObserver(() => this.#fit());
 			this.#observer.observe(this.#space);
@@ -321,7 +332,7 @@ export class TerminalScreen {
 		this.#themeWatch = watchTheme(() => {
 			terminal.options.theme = terminalTheme(host);
 		});
-		for (const step of this.#queue.splice(0)) step(terminal);
+		for (const step of loading.queue) step(terminal);
 		this.#fit();
 	}
 

@@ -33,6 +33,20 @@ export class UnreadTracker {
 	/** Each room's count at or below its watermark, and what it was counted from (`unreadBefore`). */
 	private readonly before = new Map<string, { timeline: TimelineState; watermark: string; read: string; floor?: string; count: number }>();
 
+	/**
+	 * Another server or account: every room is new to this page again, counted from when it first sees it. Room
+	 * ids are only a server's own, so one named as before (`general`) is another room, not the same one.
+	 */
+	reset(): void {
+		this.byRoom = {};
+		this.shown.clear();
+		this.watermarks.clear();
+		this.arrivals.clear();
+		this.added.clear();
+		this.floors.clear();
+		this.before.clear();
+	}
+
 	/** Someone added you to this room: it counts from your join, not from when this page first saw it. */
 	addedTo(roomId: string): void {
 		this.added.add(roomId);
