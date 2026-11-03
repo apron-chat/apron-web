@@ -19,7 +19,9 @@ const INTERACTION = ['layouts', 'styleRecalcs', 'calls'];
  */
 const SLACK = {
 	requests: { abs: 0, rel: 0 },
+	startupFiles: { abs: 0, rel: 0 },
 	startupJsKB: { abs: 1, rel: 0.01 },
+	startupJsBrotliKB: { abs: 0.5, rel: 0.01 },
 	jsGzipKB: { abs: 1, rel: 0.01 },
 	cssGzipKB: { abs: 0.5, rel: 0.01 },
 	domNodes: { abs: 2, rel: 0.01 },
@@ -146,8 +148,28 @@ export function compareBudget(counts, budget) {
 	};
 	for (const [probe, metrics] of Object.entries(counts.probes))
 		for (const [metric, value] of Object.entries(metrics)) add(probe, metric, value, budget.probes?.[probe]?.[metric], Object.keys(metrics).every((m) => INTERACTION.includes(m)));
-	for (const [metric, value] of Object.entries(counts.bundle)) add('bundle', metric, value, budget.bundle?.[metric]);
+	for (const [metric, value] of Object.entries(counts.bundle ?? {})) add('bundle', metric, value, budget.bundle?.[metric]);
+	for (const [metric, value] of Object.entries(counts.production ?? {})) add('production', metric, value, budget.production?.[metric]);
 	return rows;
+}
+
+/**
+ * `counts` as a baseline that keeps `budget`'s value wherever the new one is within its slack (`--update
+ * --changed`): what moved, and what is new, takes the new count; the rest stays as recorded, so updating for one
+ * change doesn't also move every count by what this machine measures differently from the one that recorded it.
+ */
+export function changedOnly(counts, budget) {
+	const keep = (metrics, base, interaction) =>
+		Object.fromEntries(Object.entries(metrics).map(([metric, value]) => {
+			const was = base?.[metric];
+			if (was === undefined) return [metric, value];
+			const limit = limitOf(metric, was, interaction);
+			return [metric, value > limit || value < was - (limit - was) ? value : was];
+		}));
+	return {
+		probes: Object.fromEntries(Object.entries(counts.probes).map(([probe, metrics]) => [probe, keep(metrics, budget.probes?.[probe], Object.keys(metrics).every((m) => INTERACTION.includes(m)))])),
+		bundle: keep(counts.bundle ?? {}, budget.bundle, false)
+	};
 }
 
 /** The comparison as a plain-text table, worst first. */
@@ -165,13 +187,25 @@ export function readBudget(path) {
 	return existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : { probes: {}, bundle: {} };
 }
 
+/**
+ * Writes the preview's baseline (`counts`: probes and bundle), keeping the production build's (`production`, which
+ * `qa startup-budget --update` writes) as it is.
+ */
 export function writeBudget(path, counts, { runs, cpu, chromium }) {
+	const previous = readBudget(path);
 	const budget = {
 		$comment: 'Perf budget: medians of counts, not timings. `npm run qa -- budget` checks a build against it; `--update` rewrites it. See scripts/qa/README.md.',
 		runs,
 		cpu,
 		chromium,
-		...counts
+		...counts,
+		...(previous.production ? { production: previous.production } : {})
 	};
 	writeFileSync(path, `${JSON.stringify(budget, null, '\t')}\n`);
+}
+
+/** Writes the production build's startup counts (`production`), keeping the rest of the baseline as it is. */
+export function writeProduction(path, production) {
+	const budget = readBudget(path);
+	writeFileSync(path, `${JSON.stringify({ ...budget, production }, null, '\t')}\n`);
 }

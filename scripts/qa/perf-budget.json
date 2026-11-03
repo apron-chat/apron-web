@@ -94,5 +94,10 @@
 	"bundle": {
 		"jsGzipKB": 609.4,
 		"cssGzipKB": 25.8
+	},
+	"production": {
+		"startupFiles": 13,
+		"startupJsKB": 809.5,
+		"startupJsBrotliKB": 236.8
 	}
 }

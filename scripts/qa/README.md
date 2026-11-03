@@ -81,7 +81,8 @@ request (`perf-budget` in `.github/workflows/ci.yml`), split across three runner
 
 ```sh
 APRON_PREVIEW=1 npm run build && npm run qa -- budget         # check the build in build/
-npm run qa -- budget --update                                  # a cost that's meant, or a gain: rewrite the baseline
+npm run qa -- budget --update --changed                        # a cost that's meant, or a gain: record what moved
+npm run build && npm run qa -- startup-budget --build build    # the JS a production build loads to start (CI too)
 npm run qa -- budget --out .qa/counts.json                     # also write every run's counts
 npm run qa -- budget-diff .qa/counts.json ci-counts.json       # which counts match in every run on both
 ```

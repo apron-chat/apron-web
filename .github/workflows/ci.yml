@@ -34,6 +34,9 @@ jobs:
       - run: npm run check
       - run: npm test
       - run: npm run build
+      # The JS the production page loads to start (files, size raw and brotli) against perf-budget.json's
+      # production row: read from the build above, no browser, a few seconds.
+      - run: npm run qa -- startup-budget --build build
       # The design system bundle builds from src/lib/design.
       - run: npm run design:bundle
 

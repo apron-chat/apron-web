@@ -8,7 +8,7 @@ import { cpus } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { ab } from './lib/ab.js';
 import { int, list, parseArgs } from './lib/args.js';
-import { compareBudget, countsOf, diffSamples, formatBudget, formatSamples, readBudget, samplesOf, shardOf, writeBudget } from './lib/budget.js';
+import { changedOnly, compareBudget, countsOf, diffSamples, formatBudget, formatSamples, readBudget, samplesOf, shardOf, writeBudget, writeProduction } from './lib/budget.js';
 import { launch } from './lib/browser.js';
 import { compareDirs, diffDirs, formatDiff, summarize } from './lib/images.js';
 import { extractInteropContract, interopDir } from './lib/interop-contract.js';
@@ -16,6 +16,7 @@ import { formatPerf, formatProfile, runPerf, runProfile, selectProbes } from './
 import { writeReport } from './lib/report.js';
 import { serveDir } from './lib/serve.js';
 import { runStartup } from './lib/startup.js';
+import { productionStartup } from './lib/startup-bundle.js';
 import { renderSheet } from './lib/sheet.js';
 import { cleanShots, shoot } from './lib/shoot.js';
 import { qaDir, repoRoot, stamp } from './lib/snapshot.js';
@@ -39,9 +40,14 @@ const HELP = `npm run qa -- <command> [options]
                          [--build dirA --build dirB] [--out file.json] [--calls: JS function calls too]
   budget --build <dir>   Check a preview build's counts (layouts, style recalcs, DOM nodes, requests,
                          bytes) per perf probe against scripts/qa/perf-budget.json; exits 1 when one is
-                         over. --update rewrites the baseline. Counts JS function calls too, and times the
+                         over. --update rewrites the baseline (--changed: only counts that moved past their slack,
+                         and new ones). Counts JS function calls too, and times the
                          windows on Playwright's fake clock. [--runs 3] [--cpu 4] [--only p] [--shard i/n]
                          [--out file.json]: every run's counts, to diff between machines.
+  startup-budget --build <dir>
+                         Check a production build (npm run build) for the JS it loads to start: the files the
+                         page preloads, their count and size, raw and brotli, against perf-budget.json's
+                         production row. No browser: CI runs it after its build. --update rewrites that row.
   budget-diff <a.json> <b.json>
                          Two files written by budget --out, side by side: which counts match in every run.
   prof --url A --url B   CPU-profile page load; biggest per-function changes. [--runs 6] [--cpu 4]
@@ -65,7 +71,7 @@ Filters match any part of a shot id, <scene>--<viewport>--<theme>; commas give s
 Chromium: QA_CHROMIUM, else playwright-core's build under PLAYWRIGHT_BROWSERS_PATH. budget checks only in the
 Chromium its baseline was recorded with.`;
 
-const BOOLEAN = ['perf', 'recheck', 'rebuild', 'install', 'keep', 'clean', 'all', 'help', 'check', 'update', 'calls', 'busy'];
+const BOOLEAN = ['perf', 'recheck', 'rebuild', 'install', 'keep', 'clean', 'all', 'help', 'check', 'update', 'calls', 'busy', 'changed'];
 const MULTI = ['url', 'label', 'build', 'suite', 'filter', 'only'];
 
 async function main() {
@@ -202,8 +208,9 @@ async function main() {
 				console.log(`json: ${relative(process.cwd(), out)}`);
 			}
 			if (o.update) {
-				writeBudget(path, counts, { runs, cpu, chromium: browser.version() });
-				console.log(`wrote ${relative(process.cwd(), path)}`);
+				// --changed: only what moved past its slack, or is new, takes this run's count.
+				writeBudget(path, o.changed ? changedOnly(counts, budget) : counts, { runs, cpu, chromium: browser.version() });
+				console.log(`wrote ${relative(process.cwd(), path)}${o.changed ? ' (only the counts that moved past their slack, and new ones)' : ''}`);
 				return 0;
 			}
 			if (budget.chromium && budget.chromium !== browser.version()) {
@@ -213,11 +220,28 @@ async function main() {
 			const rows = compareBudget(counts, budget);
 			console.log(formatBudget(rows));
 			const over = rows.filter((r) => r.status === 'over');
-			if (over.length) console.log(`\n${over.length} over budget. If that cost is meant, run \`npm run qa -- budget --update\` and commit scripts/qa/perf-budget.json with the change.`);
-			else if (rows.some((r) => r.status === 'under')) console.log('\nSome counts are well under budget: `npm run qa -- budget --update` locks the gain in.');
+			if (over.length) console.log(`\n${over.length} over budget. If that cost is meant, run \`npm run qa -- budget --update --changed\` and commit scripts/qa/perf-budget.json with the change.`);
+			else if (rows.some((r) => r.status === 'under')) console.log('\nSome counts are well under budget: `npm run qa -- budget --update --changed` locks the gain in.');
 			return over.length ? 1 : 0;
 		}
-		case 'budget-diff': {
+		case 'startup-budget': {
+			const dir = o.build?.[0] ?? 'build';
+			const path = join(repo, 'scripts/qa/perf-budget.json');
+			const { files, counts } = productionStartup(dir);
+			console.log(`${files.length} files at startup:\n${files.map((f) => `  ${f}`).join('\n')}\n`);
+			if (o.update) {
+				writeProduction(path, counts);
+				console.log(`wrote the production row of ${relative(process.cwd(), path)}`);
+				return 0;
+			}
+			const rows = compareBudget({ probes: {}, production: counts }, readBudget(path));
+			console.log(formatBudget(rows));
+			const over = rows.filter((r) => r.status === 'over');
+			if (over.length) console.log(`\n${over.length} over budget. If that cost is meant, run \`npm run qa -- startup-budget --update\` and commit scripts/qa/perf-budget.json with the change.`);
+			else if (rows.some((r) => r.status === 'under' || r.status === 'new')) console.log('\nSome counts are new or well under budget: `npm run qa -- startup-budget --update` records them.');
+			return over.length || rows.some((r) => r.status === 'new') ? 1 : 0;
+		}
+				case 'budget-diff': {
 			const [a, b] = o._;
 			if (!a || !b) throw new Error('budget-diff needs two files written by `budget --out`');
 			const [ja, jb] = [a, b].map((f) => JSON.parse(readFileSync(f, 'utf8')));
