@@ -1510,6 +1510,8 @@ label.ap-pref-setting-title { color: var(--ink); font-weight: 600; cursor: point
 .ap-mention-me { background: var(--accent); color: var(--on-accent); }
 /* A button is laid out as a box, the line's full height: a line height of its own keeps the highlight inside the line, a little wider than tall around the name, as a span's would be. */
 button.ap-mention { font-family: inherit; font-size: inherit; line-height: var(--leading-ui); border: 0; cursor: pointer; }
+/* In a heading, set larger than running text, the heading's own line height fits the name. */
+:is(h1, h2, h3, h4, h5, h6) button.ap-mention { line-height: inherit; }
 .ap-msg-mention .ap-mention-me { box-shadow: 0 0 0 1px var(--bg-100); }
 /* Inline chips (inline code, mentions, room links): one that wraps is drawn on each line as a chip of its own, padding
    and corners on every piece, rather than one box cut open at the line ends. A chip that is a button (a mention or room
