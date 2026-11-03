@@ -408,7 +408,8 @@ describe('select gestures', () => {
 
 	it('puts its menu away when Select or Edit is chosen from it, so it isn\u2019t back when they end, nor opens from a press held into them', () => {
 		vi.useFakeTimers();
-		const props = $state({ view: view({ caps: ALL }), on: { beginSelect: () => (props.view = { ...props.view, selecting: true }), edit: () => (props.view = { ...props.view, editing: true }) } as MessageHandlers });
+		const props: { view: MessageView; on: MessageHandlers } = $state({ view: view({ caps: ALL }), on: {} });
+		props.on = { beginSelect: () => (props.view = { ...props.view, selecting: true }), edit: () => (props.view = { ...props.view, editing: true }) };
 		dom.render(Message, props);
 		const row = () => document.querySelector('article')!;
 		for (const [choice, mode] of [['Select message', 'selecting'], ['Edit message', 'editing']] as const) {
