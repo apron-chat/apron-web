@@ -136,7 +136,11 @@ export function memorySocket(url: string, host: MemoryHost | Promise<MemoryHost>
 	if (!server) {
 		void (host as Promise<MemoryHost>).then((ready) => {
 			server = ready;
-			if (openUnheard && socket.readyState === 1) tellOpened(ready);
+			if (openUnheard && socket.readyState === 1) {
+				tellOpened(ready);
+				// What it sent as the connection opened is long due: it would have arrived by now, not a task later.
+				drainToClient();
+			}
 			drainToServer();
 		});
 	}
