@@ -41,7 +41,7 @@
 	}
 	let { client, session, room, canChange, canMention, canMessage = false, onmention, onnamed, onopenroom }: Props = $props();
 
-	const WIDTH = 288;
+	const WIDTH = 320;
 
 	let box = $state<HTMLDivElement | undefined>();
 	let measured = $state(0);

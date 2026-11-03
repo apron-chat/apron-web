@@ -1064,8 +1064,11 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 /* On a phone, a sheet: its actions full width, one above the other, for a thumb. */
 .ap-servcard.ap-popover-sheet .ap-servcard-actions { flex-direction: column; align-items: stretch; }
 .ap-servcard.ap-popover-sheet .ap-servcard-actions .ap-btn { justify-content: center; height: var(--control-xl); }
-.ap-profcard { gap: var(--space-3); padding: var(--space-4); }
-.ap-profcard.ap-popover-sheet { padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom) + var(--corner-clear)); }
+/* The card is about one person: their face leads it, larger than --avatar-lg elsewhere, with room around it. */
+.ap-profcard { --profcard-pad: calc(var(--space-4) + var(--space-1)); gap: var(--space-3); padding: var(--profcard-pad); }
+.ap-profcard.ap-popover-sheet { padding-bottom: calc(var(--profcard-pad) + env(safe-area-inset-bottom) + var(--corner-clear)); }
+.ap-profcard .ap-avatar-lg { width: 80px; height: 80px; font-size: 26px; }
+.ap-profcard .ap-avatar-status-lg { --presence-d: 16px; --presence-gap: 4px; }
 .ap-profcard-who { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
 .ap-profcard-names { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .ap-profcard-nameline { display: flex; align-items: baseline; gap: var(--space-1); min-width: 0; }
