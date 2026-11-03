@@ -25,6 +25,25 @@
 	}
 
 	/**
+	 * Rows waiting for their first fit: fitted together in the next frame, before the browser lays the page out for it.
+	 * By then everything that mounted with them (a page of messages, the member list) has been written, so reading them
+	 * all lays the page out at most once, where reading each as it mounted laid it out again after every write in
+	 * between; and their fits are written together, before the page is laid out to be painted.
+	 */
+	const firsts = new Set<() => void>();
+	function nextFrame(first: () => void): () => void {
+		if (!firsts.size) {
+			requestAnimationFrame(() => {
+				const due = [...firsts];
+				firsts.clear();
+				for (const f of due) f();
+			});
+		}
+		firsts.add(first);
+		return () => firsts.delete(first);
+	}
+
+	/**
 	 * Computed styles as one fit reads them, each element's at most once: a fit asks an item of its row whether it's in
 	 * the flow, how far it gives way and how wide its margins are. (Live, so they're only kept for the one fit.) Each
 	 * read is written out, `css.get(el) ?? css.set(el, getComputedStyle(el)).get(el)!`, rather than through a helper, so
@@ -156,7 +175,7 @@
 
 	function measure(): void {
 		// Not laid out (in a pane that's hidden): there's no room to read, so the fit waits for it to show.
-		if (!row || (typeof row.checkVisibility === 'function' && !row.checkVisibility())) return;
+		if (!row || !stack || (typeof row.checkVisibility === 'function' && !row.checkVisibility())) return;
 		const style = getComputedStyle(row);
 		const css: Styles = new Map([[row, style]]);
 		const badges = [...row.querySelectorAll<HTMLElement>(':scope > .ap-role')];
@@ -190,18 +209,47 @@
 		if (next.shown !== fit.shown || next.room !== fit.room) fit = next;
 	}
 
+	/** Stacked or dropped: as the prop says, else as the `--ap-role-overflow` token does. Dropped, every badge is whole. */
+	function overflows(el: HTMLElement): void {
+		const token = overflow ?? getComputedStyle(el).getPropertyValue('--ap-role-overflow').trim();
+		if (overflow === undefined) tokenStacks = token === 'stack';
+		stack = token === 'stack';
+		if (!stack) fit = { shown: Infinity };
+	}
+
 	$effect(() => {
 		if (!row) return;
-		const token = getComputedStyle(row).getPropertyValue('--ap-role-overflow').trim();
-		tokenStacks = token === 'stack';
-		stack = (overflow ?? token) === 'stack';
-		if (!stack || typeof ResizeObserver === 'undefined') { fit = { shown: Infinity }; return; }
 		void shown.join('\n');
 		const el = row;
-		untrack(measure);
-		// The rows around it, and what shares its row, whose widths are its room.
-		const rows = flexRows(el, new Map());
-		return observe([el, ...rows, ...[...(rows[0]?.children ?? [])].filter((item) => item !== el)], measure);
+		if (overflow === 'drop' || typeof ResizeObserver === 'undefined') {
+			// Nothing to fit, or nothing to say when to fit it again: every badge whole.
+			untrack(() => overflows(el));
+			fit = { shown: Infinity };
+			return;
+		}
+		// Fitted in the next frame, with every row that mounted before it; and again whenever the row, the rows around it,
+		// or what shares its row (whose widths are its room) change size. The row is observed from the start, which also
+		// fits it as it's first laid out, should that come first (it mounted as the browser was drawing a frame).
+		let unwatch = observe([el], measure);
+		const cancel = nextFrame(() => {
+			overflows(el);
+			if (!stack) {
+				unwatch();
+				return;
+			}
+			const rows = flexRows(el, new Map());
+			const around = observe([...rows, ...[...(rows[0]?.children ?? [])].filter((item) => item !== el)], measure);
+			const own = unwatch;
+			unwatch = () => {
+				own();
+				around();
+			};
+			measure();
+		});
+		return () => {
+			cancel();
+			unwatch();
+		};
 	});
 
 	const last = $derived(Math.min(fit.shown, shown.length) - 1);

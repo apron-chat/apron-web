@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { flushSync } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import RoleBadges from './RoleBadges.svelte';
 import { fitRoles, roleMore, roleMoreChars } from './util';
@@ -7,7 +8,23 @@ import * as dom from '$lib/test/dom';
 /*
  * jsdom has no layout. These tests give the row of badges a width, and each badge 10px a letter, and check that the
  * component lays out what `fitRoles` (tested in util.test.ts) answers for that room. Real layout is checked in a browser.
+ * RoleBadges fits a row in the next frame, and again whenever its ResizeObserver sees it change size: here, `render`
+ * runs that frame (`layOut`).
  */
+
+/** The frame's callbacks, waiting for the next frame. */
+let frames: FrameRequestCallback[] = [];
+
+/** The ResizeObservers made, each with the elements it observes (RoleBadges makes one, and keeps it from test to test). */
+const observers: { callback: ResizeObserverCallback; targets: Set<Element> }[] = [];
+
+/** The next frame: its callbacks run, then, once the page is laid out, each observer looks at what it observes. */
+function layOut(): void {
+	for (const f of frames.splice(0)) f(0);
+	flushSync();
+	for (const o of observers) if (o.targets.size) o.callback([...o.targets].map((target) => ({ target }) as ResizeObserverEntry), {} as ResizeObserver);
+	flushSync();
+}
 
 /** The width the row of badges is laid out at. */
 let rowWidth = 0;
@@ -25,7 +42,17 @@ const widthOf = (el: HTMLElement) => (el.classList.contains('ap-roles') ? rowWid
 let measured: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
-	dom.stubResizeObserver();
+	frames = [];
+	vi.stubGlobal('requestAnimationFrame', (f: FrameRequestCallback) => frames.push(f));
+	vi.stubGlobal('ResizeObserver', class {
+		targets = new Set<Element>();
+		constructor(public callback: ResizeObserverCallback) {
+			observers.push(this);
+		}
+		observe(el: Element): void { this.targets.add(el); }
+		unobserve(el: Element): void { this.targets.delete(el); }
+		disconnect(): void { this.targets.clear(); }
+	});
 	measured = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
 		return { width: widthOf(this), left: 0, right: 0, top: 0, bottom: 0, height: 0, x: 0, y: 0, toJSON() {} } as DOMRect;
 	});
@@ -49,6 +76,7 @@ const MIN = 4 * EM;
 function render(props: { roles: string[]; overflow?: 'drop' | 'stack' }, width = 1000, target: HTMLElement = document.body): HTMLElement[] {
 	rowWidth = width;
 	dom.render(RoleBadges, props, { target });
+	layOut();
 	return [...document.querySelectorAll<HTMLElement>('.ap-role')];
 }
 
@@ -84,6 +112,24 @@ describe('RoleBadges', () => {
 			}
 			dom.cleanup();
 		}
+	});
+
+	it('reads no layout as it mounts, only in the next frame: so the rows that mount together lay the page out once', () => {
+		// Room for the first badge with the count of the rest (90 + 30px).
+		rowWidth = 122;
+		dom.render(RoleBadges, { roles: ROLES });
+		// As the token last read guesses, every badge whole, until the row has been laid out.
+		expect(state()).toEqual(['whole', 'whole', 'whole', 'whole']);
+		expect(measured).not.toHaveBeenCalled();
+		// jsdom has no --ap-role-overflow token, so once read it drops, and doesn't observe the row.
+		layOut();
+		expect(document.querySelector('.ap-roles')!.classList.contains('ap-roles-stack')).toBe(false);
+		expect(observers.some((o) => o.targets.size)).toBe(false);
+		dom.cleanup();
+		dom.render(RoleBadges, { roles: ROLES, overflow: 'stack' });
+		expect(measured).not.toHaveBeenCalled();
+		layOut();
+		expect(state()).toEqual(['stacked', 'behind', 'behind', 'behind']);
 	});
 
 	/** A flex row with a name (giving way before the badges, down to 60px) and a time (never giving way), the badges between. */
