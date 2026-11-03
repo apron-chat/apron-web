@@ -1198,6 +1198,14 @@
 				links.follow(link);
 				return;
 			}
+			// A push notification clicked while this app was already open, and too frozen to answer the service
+			// worker (a phone's, in the background): the address it opened, which an app with one window may take
+			// as this fragment change rather than a load.
+			const pushed = previewMode ? undefined : takePushRoom();
+			if (pushed) {
+				if (client) void followPush(client, pushed);
+				return;
+			}
 			// The page's place is all in the fragment, so a destination pasted into this tab doesn't reload it: go there.
 			// Back and Forward between the page's own places fire this too, after the router has restored them.
 			const destination = readDestination(window.location);

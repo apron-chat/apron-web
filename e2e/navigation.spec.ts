@@ -74,6 +74,16 @@ test.describe('a window opened for a push notification', () => {
 		await expect(page.getByTestId('jump-button')).toHaveCount(0);
 	});
 
+	test('a click for an app already open, taken as a change to its address, opens the pushed message', async ({ preview, page }) => {
+		// A frozen app (a phone's, in the background) can't answer the service worker in time, so it opens the
+		// address for the push; an app with one window, as an installed one on a phone, may only change its fragment.
+		await preview.openRoot({ history });
+		await expect(page.locator('article[data-message-id="1060"]')).toBeInViewport();
+		await page.evaluate(() => (location.hash = 'push_room=general&push_message=1003'));
+		await expect(page.locator('article[data-message-id="1003"]')).toBeInViewport();
+		await expect(page).not.toHaveURL(/push_/);
+	});
+
 	test('opens at the room’s latest, saying nothing, when the pushed message is gone', async ({ preview, page }) => {
 		await preview.openRoot({ history }, '#push_room=general&push_message=1099');
 		await expect(preview.heading()).toHaveText('General');
