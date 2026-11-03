@@ -202,16 +202,22 @@
 		declinedReason = '';
 	}
 
-	/** Profile's form starts from what the server keeps: your name and bio, and no note from last time. */
+	/**
+	 * Profile's form starts from what the server keeps: your name and bio, and no note from last time. A save
+	 * under way is the account's, not the last opening's: it goes on, Save waits for it, and the form then
+	 * shows what the server kept.
+	 */
 	function resetProfile(): void {
-		draft = you?.name || displayName;
-		openedWith = draft;
-		bioDraft = bioOf(you) ?? '';
-		bioOpenedWith = bioDraft;
+		if (status !== 'saving') {
+			draft = you?.name || displayName;
+			openedWith = draft;
+			bioDraft = bioOf(you) ?? '';
+			bioOpenedWith = bioDraft;
+			status = 'idle';
+			serverName = '';
+			declinedReason = '';
+		}
 		bioError = '';
-		status = 'idle';
-		serverName = '';
-		declinedReason = '';
 		passkeyError = '';
 		passkeyNotice = '';
 		avatarError = '';
@@ -356,6 +362,8 @@
 	/**
 	 * The Add email form's next step: propose adding the address on this
 	 * signed-in connection, then approve it with the code on the same one (§4.11).
+	 * Each step's reply is for the form that asked: one cancelled, or replaced by
+	 * another opening of Preferences, takes nothing from it.
 	 */
 	async function continueAddEmail(): Promise<void> {
 		const form = addEmail;
@@ -368,6 +376,7 @@
 				form.step = 'code';
 			} else {
 				await client.addWithCode(form.code);
+				if (addEmail !== form) return;
 				addEmail = undefined;
 				passkeyNotice = form.scheme === 'email' ? `Added ${form.email} · sign in with it anywhere` : 'Added · sign in with it anywhere';
 				return;
@@ -387,16 +396,19 @@
 	async function addExternal(): Promise<void> {
 		passkeyError = '';
 		passkeyNotice = '';
-		const form: NonNullable<typeof addEmail> = { scheme: 'external', step: 'code', email: '', code: '', busy: true, error: '' };
-		addEmail = form;
+		addEmail = { scheme: 'external', step: 'code', email: '', code: '', busy: true, error: '' };
+		// The form as kept (`$state` holds its own copy): what the reply is for, unless cancelled or replaced meanwhile.
+		const form = addEmail;
 		try {
 			const { page, returns } = await client.proposeExternalToAdd(returnUrl(window.location));
+			if (addEmail !== form) return;
 			if (returns) {
 				window.location.assign(page);
 				return;
 			}
 			addEmail = { ...form, page, busy: false };
 		} catch (cause) {
+			if (addEmail !== form) return;
 			addEmail = undefined;
 			passkeyError = addError(cause, 'external');
 		}

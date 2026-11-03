@@ -13,6 +13,7 @@
 	import Avatar from '$lib/design/components/Avatar.svelte';
 	import { hueOf } from '$lib/ui/messages';
 	import { keptWithout, messageUser } from '$lib/ui/private-rooms';
+	import { failure, Task } from '$lib/ui/task.svelte';
 
 	/**
 	 * Who a mention, a sender or a member is: the design system's ProfileCard,
@@ -47,10 +48,8 @@
 	let measured = $state(0);
 	/** Bumped on scroll and resize, so the popover follows what opened it. */
 	let reflowed = $state(0);
-	let busy = $state(false);
-	/** Message is opening a conversation. */
-	let messaging = $state(false);
-	let note = $state<{ text: string; error: boolean } | undefined>();
+	/** Adding them to the room, or opening a conversation with them, and what came of it: this card's, until another opens. */
+	const task = new Task<'add' | 'message' | 'copy'>();
 
 	let request = $derived(profileCard.current);
 	let placement = $derived.by(() => {
@@ -93,12 +92,10 @@
 	/** Message: for someone else, not a system identity, on a session that may start private rooms. */
 	let canMessageThem = $derived(canMessage && Boolean(client) && Boolean(onopenroom) && !me && !system);
 
-	// A new card starts without the last one's note.
+	// A new card starts without the last one's note, and free: what the last one started notes nothing here.
 	$effect(() => {
 		void request;
-		note = undefined;
-		busy = false;
-		messaging = false;
+		task.reset();
 	});
 
 	// Focus moves in when it opens, so Escape and Tab work from the keyboard.
@@ -159,12 +156,11 @@
 	}
 
 	async function copy(): Promise<void> {
-		try {
-			await navigator.clipboard.writeText(`@${userId}`);
-			note = { text: `Copied @${userId}`, error: false };
-		} catch {
-			note = { text: 'Unable to copy', error: true };
-		}
+		const id = userId;
+		await task.run('copy', () => navigator.clipboard.writeText(`@${id}`), {
+			done: () => ({ text: `Copied @${id}`, error: false }),
+			failed: () => ({ text: 'Unable to copy', error: true })
+		});
 	}
 
 	/**
@@ -172,40 +168,32 @@
 	 * and errors show in the card's note; one that started but couldn't add them is kept, and the note says so.
 	 */
 	async function message(): Promise<void> {
-		if (!client || !onopenroom || messaging) return;
-		const asked = request;
+		if (!client || !onopenroom) return;
+		const chat = client;
+		const open = onopenroom;
 		const id = userId;
-		messaging = true;
-		note = undefined;
-		const still = () => profileCard.current === asked;
-		try {
-			const started = await messageUser(client, session.rooms, session.you?.user_id, id, onnamed);
-			if (started.failed.length) {
-				if (still()) note = { text: keptWithout(started.failed, (failed) => directory.name({ user_id: failed })), error: true };
-				return;
-			}
+		await task.run('message', async (still) => {
+			const started = await messageUser(chat, session.rooms, session.you?.user_id, id, onnamed);
+			if (started.failed.length) return keptWithout(started.failed, (failed) => directory.name({ user_id: failed }));
 			if (still()) profileCard.close();
-			onopenroom(started.roomId);
-		} catch (cause) {
-			if (still()) note = { text: cause instanceof Error ? cause.message : 'Unable to start a private room', error: true };
-		} finally {
-			if (still()) messaging = false;
-		}
+			// Started at the reader's asking: it opens, wherever they are now.
+			open(started.roomId);
+			return undefined;
+		}, {
+			done: (kept) => (kept ? { text: kept, error: true } : undefined),
+			failed: failure('Unable to start a private room')
+		});
 	}
 
 	async function add(): Promise<void> {
-		if (!client || !room || busy) return;
+		if (!client || !room) return;
+		const chat = client;
 		const target = room;
-		busy = true;
-		note = undefined;
-		try {
-			await client.joinRoom(target.id, userId).promise;
-			note = { text: `Added to ${target.title}`, error: false };
-		} catch (cause) {
-			note = { text: cause instanceof Error ? cause.message : 'Unable to add them', error: true };
-		} finally {
-			busy = false;
-		}
+		const id = userId;
+		await task.run('add', () => chat.joinRoom(target.id, id).promise, {
+			done: () => ({ text: `Added to ${target.title}`, error: false }),
+			failed: failure('Unable to add them')
+		});
 	}
 </script>
 
@@ -226,12 +214,12 @@
 		sharesName={shares}
 		{membership}
 		onmessage={canMessageThem ? message : undefined}
-		{messaging}
+		messaging={task.running === 'message'}
 		onmention={canMention && !system ? mention : undefined}
 		oncopyid={copy}
 		onaddtoroom={canAdd ? add : undefined}
-		adding={busy}
-		{note}
+		adding={task.running === 'add'}
+		note={task.note}
 		testid="profile-card"
 		statusTestid="profile-status"
 		seenTestid="profile-seen"

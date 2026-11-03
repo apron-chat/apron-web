@@ -5,6 +5,7 @@
 	import { directory } from '$lib/ui/directory.svelte';
 	import { memberSections } from '$lib/ui/members';
 	import { keptWithout, messageUser } from '$lib/ui/private-rooms';
+	import { failure, Task } from '$lib/ui/task.svelte';
 	import { byName } from '$lib/ui/people';
 	import { openProfileFrom } from '$lib/ui/profile-card.svelte';
 	import { loadShutMemberSections, saveShutMemberSections } from '$lib/ui/storage';
@@ -79,8 +80,8 @@
 	let changing = $derived(canChange && !session.snapshot.memberChangesUnsupported && Boolean(client) && Boolean(room?.joined));
 	/** The add form is open: it opens from the header's plus, since most visits are to see who is here. */
 	let addOpen = $state(false);
-	let busy = $state(false);
-	let note = $state<{ text: string; error: boolean } | undefined>();
+	/** Messaging or removing someone, and what came of it: this room's, until the panel shows another. */
+	const task = new Task();
 	/** Each member as the list shows them, with their status in words: yours as you chose it, an offline one's with when they were last seen. */
 	let shown = $derived(sections.map((section): MemberListSection => ({ key: section.key, label: section.label, people: section.people.map(person) })));
 	/** What the list shows: none before the room's listing has come, nor before it draws its rows (`drawRows`). */
@@ -112,12 +113,12 @@
 
 	$effect(() => {
 		void roomId;
-		note = undefined;
+		task.reset();
 		addOpen = false;
 	});
 
 	function openAdd(): void {
-		note = undefined;
+		task.note = undefined;
 		addOpen = true;
 	}
 
@@ -126,33 +127,28 @@
 	 * or one started that couldn't add them (kept under Private), says so in the panel.
 	 */
 	async function message(userId: string): Promise<void> {
-		if (!client || !onopenroom || busy) return;
-		busy = true;
-		note = undefined;
-		try {
-			const started = await messageUser(client, session.rooms, session.you?.user_id, userId, onnamed);
-			if (started.failed.length) note = { text: keptWithout(started.failed, (failed) => directory.name({ user_id: failed })), error: true };
-			else onopenroom(started.roomId);
-		} catch (cause) {
-			note = { text: cause instanceof Error ? cause.message : 'Unable to start a private room', error: true };
-		} finally {
-			busy = false;
-		}
+		if (!client || !onopenroom) return;
+		const chat = client;
+		const open = onopenroom;
+		await task.run('busy', async () => {
+			const started = await messageUser(chat, session.rooms, session.you?.user_id, userId, onnamed);
+			if (started.failed.length) return keptWithout(started.failed, (failed) => directory.name({ user_id: failed }));
+			// Started at the reader's asking: it opens, wherever they are now.
+			open(started.roomId);
+			return undefined;
+		}, {
+			done: (kept) => (kept ? { text: kept, error: true } : undefined),
+			failed: failure('Unable to start a private room')
+		});
 	}
 
 	async function remove(userId: string): Promise<void> {
-		if (!client || !room || busy) return;
+		if (!client || !room || task.busy) return;
+		const chat = client;
+		const target = room;
 		const name = directory.name({ user_id: userId });
-		if (!confirm(`Remove ${name} from ${room.title}?`)) return;
-		busy = true;
-		note = undefined;
-		try {
-			await client.leaveRoom(room.id, userId).promise;
-		} catch (cause) {
-			note = { text: cause instanceof Error ? cause.message : `Unable to remove ${name}`, error: true };
-		} finally {
-			busy = false;
-		}
+		if (!confirm(`Remove ${name} from ${target.title}?`)) return;
+		await task.run('busy', () => chat.leaveRoom(target.id, userId).promise, { failed: failure(`Unable to remove ${name}`) });
 	}
 </script>
 
@@ -172,8 +168,8 @@
 	onmessage={canMessage && client && onopenroom ? message : undefined}
 	onremove={changing ? remove : undefined}
 	onadd={changing && canAdd ? openAdd : undefined}
-	{busy}
-	{note}
+	busy={task.busy}
+	note={task.note}
 	remark={session.snapshot.memberChangesUnsupported && canChange ? 'This server doesn’t let members add or remove others.' : undefined}
 >
 	{#snippet avatar(member)}<Avatar name={member.name ?? member.user_id} hue={hueOf(member.user_id)} src={member.avatar} size="sm" status={member.status} statusLabel={member.statusLabel} />{/snippet}

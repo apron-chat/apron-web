@@ -63,7 +63,7 @@ export const NOT_MOVABLE = 'You can only move your own messages, so none were mo
  * limit) stay picked for a retry.
  */
 export class MessageSelection {
-	current = $state<Selection | undefined>();
+	current = $state.raw<Selection | undefined>();
 	menuOpen = $state(false);
 	readonly ids = $derived(this.current?.ids ?? []);
 	readonly active = $derived(this.current !== undefined);
@@ -100,10 +100,28 @@ export class MessageSelection {
 		this.current = { ...current, ids: spanOf(order, current.ids), denied: undefined };
 	}
 
+	/** Cancel: ends select mode, unless a move is under way, which ends it itself. */
 	cancel(): void {
 		if (this.current?.saving) return;
+		this.leave();
+	}
+
+	/**
+	 * Ends select mode whatever it is doing, for when what it picked from goes: another pane, another server,
+	 * a role that no longer moves messages. A move under way goes on at the server, and changes nothing here
+	 * when it settles (`settle`).
+	 */
+	leave(): void {
 		this.current = undefined;
 		this.menuOpen = false;
+	}
+
+	/**
+	 * Saving `saving` is over: select mode becomes `next`, if it is still the selection that was saving. Anything
+	 * since (`leave`, a new `begin`) stands, so a move's late reply never brings back a selection that went.
+	 */
+	private settle(saving: Selection, next: Selection | undefined): void {
+		if (this.current === saving) this.current = next;
 	}
 
 	/**
@@ -120,14 +138,15 @@ export class MessageSelection {
 		const current = this.current;
 		if (!current || current.saving || current.ids.length === 0) return { moved: false, error: undefined };
 		const ids = current.ids;
-		this.current = { ...current, saving: true, denied: undefined };
+		const saving: Selection = { ...current, saving: true, denied: undefined };
+		this.current = saving;
 		this.menuOpen = false;
 		const probe = ids.find((id) => !own(id));
 		if (probe !== undefined) {
 			try {
 				await client.moveMessage(probe, room).promise;
 			} catch (error) {
-				this.current = { ...current, saving: false };
+				this.settle(saving, { ...current, saving: false });
 				const reason = error instanceof Error ? error.message : undefined;
 				return { moved: false, error: new Error(reason ? `No messages were moved: ${reason}` : 'No messages were moved') };
 			}
@@ -139,11 +158,11 @@ export class MessageSelection {
 		const added = authors ? await addAuthors(client, room, ids.filter((id) => !failed.includes(id)), authors) : undefined;
 		const unadded = added ? { unadded: added } : {};
 		if (failed.length === 0) {
-			this.current = undefined;
+			this.settle(saving, undefined);
 			return { moved: true, room, ...unadded };
 		}
 		const first = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
-		this.current = { ...current, ids: failed, last: failed[failed.length - 1], saving: false, denied: { failed: failed.length, total: ids.length } };
+		this.settle(saving, { ...current, ids: failed, last: failed[failed.length - 1], saving: false, denied: { failed: failed.length, total: ids.length } });
 		return { moved: false, error: first?.reason, ...unadded };
 	}
 
@@ -173,7 +192,8 @@ export class MessageSelection {
 		// Checked before the thread exists, so a refused move leaves no empty thread behind.
 		const unmovable = this.checkMovable(options.movable);
 		if (unmovable) return { moved: false, error: unmovable };
-		this.current = { ...current, saving: true, denied: undefined };
+		const saving: Selection = { ...current, saving: true, denied: undefined };
+		this.current = saving;
 		this.menuOpen = false;
 		let room: string | undefined;
 		try {
@@ -182,11 +202,13 @@ export class MessageSelection {
 			room = result.room_id;
 			const refused = options.check?.(room);
 			if (refused) throw refused;
+			// Gone meanwhile: nothing moves into the thread.
+			if (this.current !== saving) return { moved: false, error: undefined, room };
 			this.current = { ...current, saving: false };
 			const moved = await this.move(client, room, options.own, options.authors);
 			return moved.moved ? moved : { ...moved, room };
 		} catch (error) {
-			this.current = { ...current, saving: false };
+			this.settle(saving, { ...current, saving: false });
 			return { moved: false, error, ...(room !== undefined ? { room } : {}) };
 		}
 	}
