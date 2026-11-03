@@ -517,8 +517,14 @@ function readDraft(root: HTMLElement): { parts: DraftPart[]; caret: number | und
 					// A break that ends its block is the browser's placeholder for an empty line, not a line.
 					if (index < node.childNodes.length - 1) text('\n');
 				} else {
-					if (/^(DIV|P)$/.test(child.tagName) && length > 0 && !draftText(parts).endsWith('\n')) text('\n');
+					const block = /^(DIV|P)$/.test(child.tagName);
+					if (block && length > 0 && !draftText(parts).endsWith('\n')) text('\n');
+					const start = length;
 					walk(child);
+					// A block holding only its placeholder break is an empty line (Chrome draws a blank line typed between
+					// two as `<div><br></div>`): with more after it, it ends its own line, so the next block doesn't take its
+					// line break for its own. Ending the field, it is the line the caret sits on, which the break before it made.
+					if (block && length === start && index < node.childNodes.length - 1) text('\n');
 				}
 			}
 		});

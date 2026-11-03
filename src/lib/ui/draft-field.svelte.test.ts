@@ -44,7 +44,13 @@ function field(shown: { value: boolean }) {
 		draft.keydown(new KeyboardEvent('keydown', { key: 'Enter', cancelable: true }));
 		flushSync();
 	};
-	return { draft, submit, type, enter, mentions: () => mentions, done: () => { stop(); element.remove(); } };
+	/** The browser's own lines, as Chrome writes them into a `contenteditable` (one `<div>` per line after the first), read in. */
+	const lines = (html: string) => {
+		element.innerHTML = html;
+		draft.input(new InputEvent('input', { bubbles: true }));
+		flushSync();
+	};
+	return { draft, submit, type, enter, lines, value: () => value, mentions: () => mentions, done: () => { stop(); element.remove(); } };
 }
 
 describe('DraftField', () => {
@@ -57,6 +63,22 @@ describe('DraftField', () => {
 		f.enter();
 		expect(f.submit).toHaveBeenCalledOnce();
 		expect(f.mentions()).toEqual([]);
+		f.done();
+	});
+
+	it('keeps a blank line typed between lines, as Chrome draws it (`<div><br></div>`)', () => {
+		const f = field({ value: false });
+		f.lines('one<div>two</div><div><br></div><div>three</div>');
+		expect(f.value()).toBe('one\ntwo\n\nthree');
+		f.lines('one<div><br></div><div><br></div><div>two</div>');
+		expect(f.value()).toBe('one\n\n\ntwo');
+		f.lines('<div><br></div><div>one</div>');
+		expect(f.value()).toBe('\none');
+		// Ending the field, an empty line is where the caret sits: the line break before it, kept once.
+		f.lines('one<div><br></div>');
+		expect(f.value()).toBe('one\n');
+		f.lines('one<div>two</div>');
+		expect(f.value()).toBe('one\ntwo');
 		f.done();
 	});
 
