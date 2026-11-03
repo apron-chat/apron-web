@@ -5,22 +5,40 @@
 	"chromium": "156.0.8078.4",
 	"probes": {
 		"load": {
-			"requests": 21,
-			"startupJsKB": 941.4,
+			"requests": 22,
+			"startupJsKB": 897.3,
 			"domNodes": 537,
 			"layouts": 10,
 			"styleRecalcs": 18,
-			"calls": 237503,
+			"calls": 216027,
 			"heapMB": 8.4
 		},
 		"load-busy": {
-			"requests": 19,
-			"startupJsKB": 914,
+			"requests": 20,
+			"startupJsKB": 869.9,
 			"domNodes": 1193,
 			"layouts": 13,
-			"styleRecalcs": 20,
-			"calls": 1838890,
+			"styleRecalcs": 16,
+			"calls": 1608665,
 			"heapMB": 10.9
+		},
+		"load-phone": {
+			"requests": 22,
+			"startupJsKB": 897.3,
+			"domNodes": 538,
+			"layouts": 10,
+			"styleRecalcs": 16,
+			"calls": 186928,
+			"heapMB": 8.2
+		},
+		"load-phone-busy": {
+			"requests": 20,
+			"startupJsKB": 869.9,
+			"domNodes": 1194,
+			"layouts": 9,
+			"styleRecalcs": 15,
+			"calls": 1241227,
+			"heapMB": 10.6
 		},
 		"switch-room-busy": {
 			"layouts": 2,
@@ -35,12 +53,12 @@
 		"sidebar-collapse": {
 			"layouts": 3,
 			"styleRecalcs": 5,
-			"calls": 2597
+			"calls": 2513
 		},
 		"member-list-hide": {
 			"layouts": 1,
 			"styleRecalcs": 5,
-			"calls": 1229
+			"calls": 1152
 		},
 		"member-list-overlay-open": {
 			"layouts": 0,
@@ -60,7 +78,7 @@
 		"scroll-timeline": {
 			"layouts": 9,
 			"styleRecalcs": 9,
-			"calls": 8796
+			"calls": 8727
 		},
 		"type-composer": {
 			"layouts": 36,

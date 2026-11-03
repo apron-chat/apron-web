@@ -323,6 +323,10 @@ export default {
 	// ones load an account at scale (`BUSY`), where costs that grow with rooms or history show.
 	interactions: [
 		{ name: 'load-busy', knobs: BUSY },
+		// The load on a phone, where the rooms list and member list are out of sight as a room opens: what startup
+		// draws there, which the desktop loads can't see (panels drawn after the first screen, the pane filled newest first).
+		{ name: 'load-phone', viewport: { width: VIEWPORTS.phone.width, height: VIEWPORTS.phone.height } },
+		{ name: 'load-phone-busy', viewport: { width: VIEWPORTS.phone.width, height: VIEWPORTS.phone.height }, knobs: BUSY },
 		{ name: 'switch-room-busy', knobs: BUSY, settle: 1000, action: (p) => roomList(p).getByText('room 20', { exact: true }).first().click() },
 		{
 			name: 'send-message-busy',
