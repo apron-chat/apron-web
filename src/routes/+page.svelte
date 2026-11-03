@@ -146,9 +146,11 @@
 	const REVEAL_CHUNK_ITEMS = 60;
 	/**
 	 * A pane opened before its messages came (the page's first, or a room not loaded yet) renders this many of its newest
-	 * items when they do, then this many more at a time until they fill it, before the frame paints; the rest follow it.
+	 * items when they do, then as many more as fill it (`fillPane`), before the frame paints; the rest follow it.
 	 */
 	const ARRIVAL_ITEMS = 6;
+	/** How far the first item rendered must sit above the pane's top at its latest: past any shadow from a row above. */
+	const FILL_SLACK_PX = 16;
 	/**
 	 * How long a members listing stays current when the mention picker opens, in a pane read without joining it: a
 	 * joined room's members came with its listing and stay current by memberships (§4.2.2), so it lists nothing.
@@ -2908,17 +2910,38 @@
 	 * latest. Where the browser anchored the view itself this is already the position.
 	 */
 	/**
-	 * Renders more of the open pane's first items, newest first, until they overflow it by half its height, so its top,
-	 * where older ones would be, is well out of view at the latest: each step before the frame paints (a microtask
-	 * after the last update), and lays the page out to measure. The rest follow after the paint (`reveal`).
+	 * Renders more of the open pane's first items, newest first, until the first of them sits above the pane's top
+	 * (`FILL_SLACK_PX` above) at its latest, where the pane opens: from there down it shows what it would with all of
+	 * them, and nothing more is drawn before the frame paints. Each step comes before that paint (a microtask after the
+	 * last update) and lays the page out once to measure; it renders as many more as the rows so far say fill the rest,
+	 * up to `ARRIVAL_ITEMS` (more at once costs the rows' first updates more, in Svelte's bookkeeping, than the extra
+	 * step's layout). The rest follow after the paint (`reveal`).
 	 */
 	async function fillPane(pane: string | undefined): Promise<void> {
 		for (;;) {
 			await tick();
 			const scroller = messageScroll;
 			if (!scroller || paneRoom?.id !== pane || reveal.hidden === 0) return;
-			if (scroller.scrollHeight - scroller.clientHeight >= scroller.clientHeight / 2) return;
-			reveal.more(ARRIVAL_ITEMS);
+			// The first row (past the floating day, which takes no room), where the content above it would begin.
+			let first = scroller.firstElementChild;
+			while (first?.classList.contains('ap-dayfloat')) first = first.nextElementSibling;
+			if (!first) return;
+			const box = scroller.getBoundingClientRect();
+			const top = scroller.scrollTop + first.getBoundingClientRect().top - box.top;
+			const short = top + FILL_SLACK_PX - (scroller.scrollHeight - scroller.clientHeight);
+			if (short <= 0) return;
+			// What's missing, by where the rows end (the scroll height is the pane's own while they don't fill it), in rows
+			// as tall as the tallest so far: rows differ (a line, a photo), and the taller ones take longest to render, so
+			// it errs toward another step rather than rows that wouldn't show.
+			let bottom = top;
+			let tallest = 1;
+			for (let row: Element | null = first; row; row = row.nextElementSibling) {
+				const rect = row.getBoundingClientRect();
+				tallest = Math.max(tallest, rect.height);
+				bottom = Math.max(bottom, scroller.scrollTop + rect.bottom - box.top);
+			}
+			const missing = top + FILL_SLACK_PX + scroller.clientHeight - bottom;
+			reveal.more(Math.min(ARRIVAL_ITEMS, Math.ceil(Math.max(short, missing) / tallest)));
 		}
 	}
 
