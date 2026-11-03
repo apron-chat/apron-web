@@ -142,6 +142,11 @@
 	const FIRST_PAINT_ITEMS = 40;
 	const REVEAL_CHUNK_ITEMS = 60;
 	/**
+	 * A pane opened before its messages came (the page's first, or a room not loaded yet) renders this many of its newest
+	 * items when they do, then this many more at a time until they fill it, before the frame paints; the rest follow it.
+	 */
+	const ARRIVAL_ITEMS = 6;
+	/**
 	 * How long a members listing stays current when the mention picker opens, in a pane read without joining it: a
 	 * joined room's members came with its listing and stay current by memberships (§4.2.2), so it lists nothing.
 	 */
@@ -578,6 +583,19 @@
 	// The receipts last shown, which `steadyReceipts` keeps what is unchanged from; not state, only a memo.
 	let lastReceipts: ReadonlyMap<string, Face[]> = NO_RECEIPTS;
 	let shownTimeline = $derived(reveal.hidden > 0 ? timeline.slice(Math.min(reveal.hidden, timeline.length)) : timeline);
+	/** The open pane has no messages yet: its first items with them render newest first (`ARRIVAL_ITEMS`). */
+	let arriving = $state(false);
+	// Before they render (once the pane shows items, not its placeholders, as the timeline below decides): only the
+	// newest of them, then as many more as fill the pane (`fillPane`). A pane that has caught up with none is left as it is.
+	$effect.pre(() => {
+		if (!arriving || ((messages.length === 0 || paneHeldBack) && paneCatchingUp)) return;
+		arriving = false;
+		if (messages.length === 0) return;
+		untrack(() => {
+			reveal.from(timeline.length - ARRIVAL_ITEMS);
+			void fillPane(paneRoom?.id);
+		});
+	});
 	/**
 	 * Read receipts (`ext.settings.read_receipts`, private rooms only): the other members' faces under the newest message
 	 * shown that each has read through, by `message_id`. Empty, and the same map, wherever there are none.
@@ -1040,11 +1058,12 @@
 	});
 
 	// A thread's or a room's first page may not fill the pane, leaving nothing to
-	// scroll back with: load older pages until it does or there are none.
+	// scroll back with: load older pages until it does or there are none. Not while
+	// some of what it has are still to render (`reveal`): they may fill it.
 	$effect(() => {
 		const room = olderSource;
 		void timeline.length;
-		if (!room?.loaded || !room.olderAvailable || room.loadingOlder || !messageScroll) return;
+		if (!room?.loaded || !room.olderAvailable || room.loadingOlder || !messageScroll || reveal.hidden > 0) return;
 		untrack(() => {
 			tick().then(() => {
 				// Not while the pane isn't laid out (a phone showing the rooms list): it would never fill, and load every page.
@@ -1988,6 +2007,7 @@
 		if (thread) mentions.clearRoom(thread);
 		stickToBottom = true;
 		reveal.from(timeline.length - FIRST_PAINT_ITEMS);
+		arriving = messages.length === 0;
 		// A thread's failed load is about that thread: leaving it takes the toast too.
 		feedback.dismiss(threadError);
 	}
@@ -2883,6 +2903,21 @@
 	 * list's scroll top and height from before, unless the pane follows the
 	 * latest. Where the browser anchored the view itself this is already the position.
 	 */
+	/**
+	 * Renders more of the open pane's first items, newest first, until they overflow it by half its height, so its top,
+	 * where older ones would be, is well out of view at the latest: each step before the frame paints (a microtask
+	 * after the last update), and lays the page out to measure. The rest follow after the paint (`reveal`).
+	 */
+	async function fillPane(pane: string | undefined): Promise<void> {
+		for (;;) {
+			await tick();
+			const scroller = messageScroll;
+			if (!scroller || paneRoom?.id !== pane || reveal.hidden === 0) return;
+			if (scroller.scrollHeight - scroller.clientHeight >= scroller.clientHeight / 2) return;
+			reveal.more(ARRIVAL_ITEMS);
+		}
+	}
+
 	/**
 	 * Sets `firstScreenDrawn` once the rooms are listed and the open pane (if any) has caught up, and a frame has painted
 	 * that: the hidden panels draw their rows in a task of their own after it. A root of its own, gone once that's done,

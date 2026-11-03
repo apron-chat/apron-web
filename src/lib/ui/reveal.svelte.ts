@@ -29,6 +29,12 @@ export class ProgressiveReveal {
 		if (this.hidden > 0) this.schedule();
 	}
 
+	/** Renders `count` more of the oldest hidden items now, rather than after a paint: to fill the list before it paints. */
+	more(count: number): void {
+		this.hidden = Math.max(0, this.hidden - count);
+		if (this.hidden === 0) this.stop();
+	}
+
 	stop(): void {
 		if (this.frame) cancelAnimationFrame(this.frame);
 		if (this.timer) clearTimeout(this.timer);
