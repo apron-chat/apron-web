@@ -3,6 +3,7 @@ import type { ClientSnapshot } from '$lib/protocol/client';
 import type { Proposal, ProposalScheme } from '$lib/protocol/proposals';
 import { addError, backendHost } from './connection';
 import { askedLinkFailure, linkUse, runSignInLink, sessionSettled, type LinkUse, type SignInLink, type SignInLinkClient } from './sign-in-link';
+import { Task } from './task.svelte';
 
 /**
  * The page's sign-in links (§4.11.2), emailed or the return from an
@@ -46,11 +47,11 @@ export class SignInLinks {
 	/** A link of no proposal this browser made, until the viewer answers whether to use it. */
 	asked = $state<SignInLink | undefined>();
 	/**
-	 * What a link is being used for, one at a time: signing in (its token goes out as a fresh connection's
-	 * first `auth`) or adding to this account. Another link meanwhile waits, or is dropped, rather than run
-	 * beside it (`#work`).
+	 * What a link is being used for, one at a time (`working`): signing in (its token goes out as a fresh
+	 * connection's first `auth`) or adding to this account. Another link meanwhile waits, or is dropped, rather
+	 * than run beside it. What comes of each shows as the page's toasts, not as a note here.
 	 */
-	working = $state<'signing-in' | 'adding' | undefined>();
+	readonly #task = new Task<'signing-in' | 'adding', never>();
 	/** A link for an addition this browser proposed (§4.11.3), waiting for the session of the account that proposed it. */
 	addition = $state<Addition | undefined>();
 	/** Why a link didn't sign in, for the connect screen. */
@@ -58,20 +59,19 @@ export class SignInLinks {
 
 	constructor(private readonly host: LinkHost) {}
 
-	/** A link is being used (`working`). */
-	get busy(): boolean {
-		return this.working !== undefined;
+	/** What a link is being used for now, if anything. */
+	get working(): 'signing-in' | 'adding' | undefined {
+		return this.#task.running;
 	}
 
-	/**
-	 * Runs `work` as `kind`, unless a link is already being used: then nothing runs, and it returns false. Only
-	 * this run ends what it started, so the one under way is never marked done by another.
-	 */
-	#work(kind: 'signing-in' | 'adding', work: () => Promise<unknown>): boolean {
-		if (this.working) return false;
-		this.working = kind;
-		void work().finally(() => (this.working = undefined));
-		return true;
+	/** A link is being used (`working`). */
+	get busy(): boolean {
+		return this.#task.busy;
+	}
+
+	/** Runs `work` as `kind`, unless a link is already being used: then nothing runs. */
+	#work(kind: 'signing-in' | 'adding', work: () => Promise<unknown>): void {
+		void this.#task.run(kind, work, { failed: () => undefined });
 	}
 
 	/**

@@ -1,4 +1,5 @@
 import type { Identity } from '$lib/protocol/types';
+import { AnchoredPopover } from './popover.svelte';
 
 /**
  * The list of who reacted: one at a time, for whichever reaction chip was
@@ -14,29 +15,8 @@ export interface ReactorsRequest {
 	reactors: () => Identity[];
 }
 
-class ReactorsState {
-	/** The open list's request, if one is open. */
-	current = $state.raw<ReactorsRequest | undefined>();
-
-	isOpenFor(anchor: HTMLElement | undefined): boolean {
-		return anchor !== undefined && this.current?.anchor === anchor;
-	}
-
-	/** Opens the list for this chip, closing any other. Opening it again leaves it open. */
-	open(request: ReactorsRequest): void {
-		if (!this.isOpenFor(request.anchor)) this.current = request;
-	}
-
-	/** Closes the list; `restoreFocus` (Escape) puts focus back on the chip. */
-	close(restoreFocus = false): void {
-		const current = this.current;
-		if (!current) return;
-		this.current = undefined;
-		if (restoreFocus && current.anchor.isConnected) current.anchor.focus({ preventScroll: true });
-	}
-}
-
-export const reactorsList = new ReactorsState();
+/** Opening it again for the same chip leaves it open (`open`). */
+export const reactorsList = new AnchoredPopover<ReactorsRequest>();
 
 /**
  * Lists who reacted with `emoji` beside its chip, read from the message's

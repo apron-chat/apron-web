@@ -1,10 +1,8 @@
 <script lang="ts">
 	import type { ReactionChip } from './types';
+	import { longPress } from './hold';
 
 	const PALETTE = ['👍', '❤️', '😂', '🎉', '😮', '😢', '👀', '✅'];
-	const LONG_PRESS_MS = 500;
-	/** A touch that drifts further than this is a scroll, not a long press. */
-	const SLOP_PX = 10;
 
 	interface Props {
 		reactions: ReactionChip[];
@@ -32,9 +30,10 @@
 	const chips = $derived((reactions || []).filter((r) => r.count > 0));
 	const mine = $derived(new Set(chips.filter((c) => c.mine).map((c) => c.emoji)));
 
-	let press: { timer: ReturnType<typeof setTimeout>; x: number; y: number } | undefined;
 	/** A long press showed who reacted: the click that ends it doesn't toggle. */
 	let held = false;
+	/** The long press this bar started (`longPress`), which goes with it. */
+	let pressed: object | undefined;
 
 	function contextmenu(event: MouseEvent, emoji: string): void {
 		if (!onreactors) return;
@@ -48,25 +47,19 @@
 		held = false;
 		if (!onreactors || event.pointerType !== 'touch') return;
 		const anchor = event.currentTarget as HTMLElement;
-		press = {
-			timer: setTimeout(() => {
-				press = undefined;
-				held = true;
-				onreactors?.(emoji, anchor);
-			}, LONG_PRESS_MS),
-			x: event.clientX,
-			y: event.clientY
-		};
+		pressed = longPress.start(event, () => {
+			held = true;
+			onreactors?.(emoji, anchor);
+		});
 	}
 
 	function pointermove(event: PointerEvent): void {
-		if (press && Math.hypot(event.clientX - press.x, event.clientY - press.y) > SLOP_PX) cancelPress();
+		longPress.move(event);
 	}
 
 	function cancelPress(): void {
-		if (!press) return;
-		clearTimeout(press.timer);
-		press = undefined;
+		longPress.cancel(pressed);
+		pressed = undefined;
 	}
 
 	function click(event: MouseEvent, emoji: string): void {

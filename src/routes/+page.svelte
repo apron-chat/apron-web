@@ -112,6 +112,7 @@
 	import { arrivalAlerts } from '$lib/ui/alerts';
 	import { readAction, readElsewhere, readFurthest } from '$lib/ui/read-action';
 	import { createdRoom, createdThread, moveCheck, type PendingJoin, type PendingThread } from '$lib/ui/created';
+	import { messageOf, Task } from '$lib/ui/task.svelte';
 	import { accountServer, canOfferInstall, isStandalone, keepsPushOff, needsHomeScreen, offeredWake, webPushAccount, webPushSupported, type InstallPromptEvent } from '$lib/ui/web-push';
 
 	/**
@@ -741,11 +742,11 @@
 	let addedHere = $derived(Boolean(activeRoom && !activeThread && activeRoom.private && activeRoom.parentRoomId === undefined && addedRooms.includes(activeRoom.id)));
 	/** Muting one room (§4.5 `mute` with its `room_id`) takes capability `status` and an account. */
 	let canMuteRoom = $derived(Boolean(session.capabilities.status && session.passkeySession));
-	let addedBusy = $state(false);
-	let addedError = $state<string | undefined>();
+	/** Muting or unmuting from the banner, and why it didn't: the open room's, until another opens. */
+	const addedTask = new Task<'saving', string>();
 	$effect(() => {
 		void activeRoom?.id;
-		addedError = undefined;
+		addedTask.reset();
 	});
 	/**
 	 * The start of the open private room, once its history reaches back to it (`reachesStart`) and all of it is on
@@ -2474,16 +2475,9 @@
 
 	/** Mutes, or unmutes, the room someone added you to (§4.5 `mute` with its `room_id`), from its banner. */
 	async function muteAdded(roomId: string, mute: boolean): Promise<void> {
-		if (!client || addedBusy) return;
-		addedBusy = true;
-		addedError = undefined;
-		try {
-			await client.setMute(mute, roomId);
-		} catch (cause) {
-			addedError = cause instanceof Error ? cause.message : mute ? 'Unable to mute' : 'Unable to unmute';
-		} finally {
-			addedBusy = false;
-		}
+		if (!client) return;
+		const chat = client;
+		await addedTask.run('saving', () => chat.setMute(mute, roomId), { failed: (cause) => messageOf(cause, mute ? 'Unable to mute' : 'Unable to unmute') });
 	}
 
 	/** Mutes the open room or thread, or the room of an open thread (§4.5 `mute` with its `room_id`), for a while or until unmuted, or with `false` unmutes it. */
@@ -3432,7 +3426,7 @@
 			{#if addedHere && activeRoom}
 				{@const added = activeRoom}
 				<AddedBanner
-					testid="added-banner" busy={addedBusy || !paneReady} error={addedError} muted={added.mutedUntil !== undefined}
+					testid="added-banner" busy={addedTask.busy || !paneReady} error={addedTask.note} muted={added.mutedUntil !== undefined}
 					onmute={canMuteRoom ? () => muteAdded(added.id, true) : undefined} onunmute={canMuteRoom ? () => muteAdded(added.id, false) : undefined}
 					onleave={session.canManageRooms && !session.readOnly ? leavePane : undefined} ondismiss={() => keepAdded(addedRooms.filter((id) => id !== added.id))}
 				/>

@@ -12,7 +12,7 @@
 	import ProfileCard from '$lib/design/components/ProfileCard.svelte';
 	import Avatar from '$lib/design/components/Avatar.svelte';
 	import { hueOf } from '$lib/ui/messages';
-	import { keptWithout, messageUser } from '$lib/ui/private-rooms';
+	import { messageThem, START_FAILED } from '$lib/ui/private-rooms';
 	import { failure, Task } from '$lib/ui/task.svelte';
 
 	/**
@@ -172,16 +172,17 @@
 		const chat = client;
 		const open = onopenroom;
 		const id = userId;
-		await task.run('message', async (still) => {
-			const started = await messageUser(chat, session.rooms, session.you?.user_id, id, onnamed);
-			if (started.failed.length) return keptWithout(started.failed, (failed) => directory.name({ user_id: failed }));
-			if (still()) profileCard.close();
+		await task.run('message', (still) => messageThem(chat, session.rooms, session.you?.user_id, id, {
+			named: onnamed,
+			name: (failed) => directory.name({ user_id: failed }),
 			// Started at the reader's asking: it opens, wherever they are now.
-			open(started.roomId);
-			return undefined;
-		}, {
+			open: (roomId) => {
+				if (still()) profileCard.close();
+				open(roomId);
+			}
+		}), {
 			done: (kept) => (kept ? { text: kept, error: true } : undefined),
-			failed: failure('Unable to start a private room')
+			failed: failure(START_FAILED)
 		});
 	}
 

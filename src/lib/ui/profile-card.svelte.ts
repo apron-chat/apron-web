@@ -1,3 +1,5 @@
+import { AnchoredPopover } from './popover.svelte';
+
 /**
  * The profile card: one at a time, for whichever user mention, sender or
  * member opened it last. `ProfileCard` (mounted once, outside the timeline so
@@ -15,29 +17,7 @@ export interface ProfileCardRequest {
 	member?: boolean;
 }
 
-class ProfileCardState {
-	/** The open card's request, if one is open. */
-	current = $state.raw<ProfileCardRequest | undefined>();
-
-	isOpenFor(anchor: HTMLElement | undefined): boolean {
-		return anchor !== undefined && this.current?.anchor === anchor;
-	}
-
-	/** Opens the card for this trigger, closing any other; a second press closes it. */
-	toggle(request: ProfileCardRequest): void {
-		this.current = this.isOpenFor(request.anchor) ? undefined : request;
-	}
-
-	/** Closes the card; `restoreFocus` (Escape) puts focus back on what opened it. */
-	close(restoreFocus = false): void {
-		const current = this.current;
-		if (!current) return;
-		this.current = undefined;
-		if (restoreFocus && current.anchor.isConnected) current.anchor.focus({ preventScroll: true });
-	}
-}
-
-export const profileCard = new ProfileCardState();
+export const profileCard = new AnchoredPopover<ProfileCardRequest>();
 
 /**
  * Opens the card for the user a button names with `data-user-id` (a mention

@@ -28,10 +28,11 @@ export class Task<Kind extends string = 'busy', N = Note> {
 	}
 
 	/**
-	 * Runs `work` as `kind`, unless something is under way already (then nothing runs: it returns false). The
-	 * note clears as it starts. Once it settles, its note is what `done` makes of its result (none without
-	 * `done`), or `failed` of its error, unless `reset` came first. `work` is passed `still`, whether this run
-	 * still counts, for what it does besides noting (closing a card it was started from).
+	 * Runs `work` as `kind`, unless something is under way already (then nothing runs). The note clears as it
+	 * starts. Once it settles, its note is what `done` makes of its result (none without `done`), or `failed` of
+	 * its error, unless `reset` came first. `work` is passed `still`, whether this run still counts, for what it
+	 * does besides noting (closing a card it was started from). Resolves with whether it ran and worked, and
+	 * still counts: what to do once it is over and no longer busy, such as closing the form it saved.
 	 */
 	async run<T>(kind: Kind, work: (still: () => boolean) => Promise<T>, outcome: {
 		done?: (value: T) => N | undefined;
@@ -42,19 +43,26 @@ export class Task<Kind extends string = 'busy', N = Note> {
 		const still = (): boolean => turn === this.#turn;
 		this.running = kind;
 		this.note = undefined;
+		let worked = false;
 		try {
 			const value = await work(still);
 			if (still()) this.note = outcome.done?.(value);
+			worked = true;
 		} catch (cause) {
 			if (still()) this.note = outcome.failed(cause);
 		} finally {
 			if (still()) this.running = undefined;
 		}
-		return true;
+		return worked && still();
 	}
+}
+
+/** What a failure says: its message, else `fallback`. */
+export function messageOf(cause: unknown, fallback: string): string {
+	return cause instanceof Error && cause.message ? cause.message : fallback;
 }
 
 /** The note for a failure: its message, else `fallback`. */
 export function failure(fallback: string): (cause: unknown) => Note {
-	return (cause) => ({ text: cause instanceof Error && cause.message ? cause.message : fallback, error: true });
+	return (cause) => ({ text: messageOf(cause, fallback), error: true });
 }

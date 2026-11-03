@@ -4,7 +4,7 @@
 	import type { SessionView } from '$lib/ui/session.svelte';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { memberSections } from '$lib/ui/members';
-	import { keptWithout, messageUser } from '$lib/ui/private-rooms';
+	import { messageThem, START_FAILED } from '$lib/ui/private-rooms';
 	import { failure, Task } from '$lib/ui/task.svelte';
 	import { byName } from '$lib/ui/people';
 	import { openProfileFrom } from '$lib/ui/profile-card.svelte';
@@ -130,15 +130,10 @@
 		if (!client || !onopenroom) return;
 		const chat = client;
 		const open = onopenroom;
-		await task.run('busy', async () => {
-			const started = await messageUser(chat, session.rooms, session.you?.user_id, userId, onnamed);
-			if (started.failed.length) return keptWithout(started.failed, (failed) => directory.name({ user_id: failed }));
-			// Started at the reader's asking: it opens, wherever they are now.
-			open(started.roomId);
-			return undefined;
-		}, {
+		// Started at the reader's asking: it opens, wherever they are now.
+		await task.run('busy', () => messageThem(chat, session.rooms, session.you?.user_id, userId, { named: onnamed, name: (failed) => directory.name({ user_id: failed }), open }), {
 			done: (kept) => (kept ? { text: kept, error: true } : undefined),
-			failed: failure('Unable to start a private room')
+			failed: failure(START_FAILED)
 		});
 	}
 

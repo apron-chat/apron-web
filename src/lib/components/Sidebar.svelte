@@ -647,7 +647,7 @@
 {/snippet}
 
 <aside class="ap-shell-side" aria-label="Rooms">
-	<SidebarHead name={serverLook?.title ?? backendLabel} address={serverAddress} avatar={directory.avatarGate.src(serverLook?.avatar)} onopen={() => serverHead && serverPane.toggle(serverHead)} expanded={serverHead !== undefined && serverPane.anchor === serverHead} bind:button={serverHead} {returnTo} {onreturn} />
+	<SidebarHead name={serverLook?.title ?? backendLabel} address={serverAddress} avatar={directory.avatarGate.src(serverLook?.avatar)} onopen={() => serverHead && serverPane.toggle({ anchor: serverHead })} expanded={serverHead !== undefined && serverPane.anchor === serverHead} bind:button={serverHead} {returnTo} {onreturn} />
 	<div class="ap-shell-sidebody">
 		{#if drawRooms}
 			<SidebarSection title="Rooms" folded={folds.has('rooms')} onfold={(shut) => fold('rooms', shut)} onadd={canCreateRoom ? () => (createOpen = true) : undefined} addLabel="Create room" loading={rooms.length === 0 && privateRooms.length === 0 && session.starting} bodyTestid="room-list">

@@ -24,7 +24,8 @@ describe('Task', () => {
 		// The next run clears the note as it starts, and notes its failure.
 		const next = task.run('add', () => Promise.reject(new Error('Not allowed')), { failed: failure('Unable to add') });
 		expect(task.note).toBeUndefined();
-		await next;
+		// It didn't work: nothing to do once it's over.
+		expect(await next).toBe(false);
 		expect(task.note).toEqual({ text: 'Not allowed', error: true });
 	});
 

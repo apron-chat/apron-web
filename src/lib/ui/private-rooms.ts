@@ -111,6 +111,24 @@ export async function messageUser(
 	return startPrivateRoom(client, [userId], { named });
 }
 
+/** What Message says when no private room could be started. */
+export const START_FAILED = 'Unable to start a private room';
+
+/**
+ * Message, from a person's card or the member list: the private conversation you have with `userId`, else one started
+ * (`messageUser`), opened with `open`. Resolves with what to say instead when one started without them (who couldn't be
+ * added, and that it is kept under Private), which then isn't opened. Rejects as starting one does (`START_FAILED`).
+ */
+export async function messageThem(
+	client: Pick<ChatClient, 'createRoom' | 'joinRoom' | 'subscribe'>, rooms: readonly RoomSnapshot[], you: string | undefined, userId: string,
+	{ named, name, open }: { named?: (roomId: string) => void; name: (userId: string) => string; open: (roomId: string) => void }
+): Promise<string | undefined> {
+	const started = await messageUser(client, rooms, you, userId, named);
+	if (started.failed.length) return keptWithout(started.failed, name);
+	open(started.roomId);
+	return undefined;
+}
+
 /** What a started room that couldn't add some of its people says: who, why, and that the room is kept. */
 export function keptWithout(failed: readonly Refusal[], name: (userId: string) => string): string {
 	return `${couldNotAdd(failed, name)} The room is kept under Private.`;
@@ -140,7 +158,7 @@ export async function startPrivateRoom(
 		roomId = result.room_id;
 	} catch (cause) {
 		if ((cause as { code?: number } | undefined)?.code === UNSUPPORTED) throw new Error(NO_PRIVATE_ROOMS);
-		throw cause instanceof Error ? cause : new Error('Unable to start a private room');
+		throw cause instanceof Error ? cause : new Error(START_FAILED);
 	}
 	// Named before its record may arrive (a server can answer first): it's yours, not one someone added you to.
 	options.named?.(roomId);

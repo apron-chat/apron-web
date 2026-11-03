@@ -1,5 +1,6 @@
 import DOMPurify from 'dompurify';
 import type { HLJSApi, LanguageFn } from 'highlight.js';
+import { onDemandEach, onDemand } from './on-demand';
 
 type Loader = () => Promise<{ default: LanguageFn }>;
 
@@ -62,36 +63,19 @@ const MAX_LENGTH = 20_000;
 const CACHE_SIZE = 500;
 const highlighted = new Map<string, string>();
 
-let core: Promise<HLJSApi> | undefined;
-const loading = new Map<string, Promise<HLJSApi>>();
+/** highlight.js itself, then each language once registered with it: each fetched once, and again after a failure. */
+const loadCore = onDemand(() => import('highlight.js/lib/core').then((module) => module.default));
+const load = onDemandEach(async (language: string): Promise<HLJSApi> => {
+	const [hljs, module] = await Promise.all([loadCore(), LANGUAGES[language]()]);
+	hljs.registerLanguage(language, module.default);
+	return hljs;
+});
 
 /** The name a fence's language resolves to, if it is one we highlight. */
 export function languageOf(fence: string): string | undefined {
 	const name = fence.toLowerCase();
 	const resolved = ALIASES[name] ?? name;
 	return Object.hasOwn(LANGUAGES, resolved) ? resolved : undefined;
-}
-
-function load(language: string): Promise<HLJSApi> {
-	let ready = loading.get(language);
-	if (!ready) {
-		if (!core) {
-			const loadingCore = import('highlight.js/lib/core').then((module) => module.default);
-			core = loadingCore;
-			// Failed (a deploy replaced the chunk, a dropped connection): the next language to load asks again.
-			loadingCore.catch(() => {
-				if (core === loadingCore) core = undefined;
-			});
-		}
-		ready = Promise.all([core, LANGUAGES[language]()]).then(([hljs, module]) => {
-			hljs.registerLanguage(language, module.default);
-			return hljs;
-		});
-		// A failed fetch (a deploy replaced the chunk, a dropped connection) is tried again next time.
-		ready.catch(() => loading.delete(language));
-		loading.set(language, ready);
-	}
-	return ready;
 }
 
 /**

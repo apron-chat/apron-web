@@ -1,6 +1,7 @@
 <script lang="ts">
 	import RoomForm from '$lib/design/components/RoomForm.svelte';
 	import type { ChatClient } from '$lib/protocol/client';
+	import { messageOf, Task } from '$lib/ui/task.svelte';
 
 	interface Props {
 		client: ChatClient;
@@ -23,35 +24,35 @@
 	let title = $state('');
 	let description = $state('');
 	let isPrivate = $state(false);
-	let saving = $state(false);
-	let error = $state<string | undefined>();
+	/** Creating it, and why it wasn't created. */
+	const task = new Task<'saving', string>();
 
 	/** Creates the room with `room_set` and no `room_id` (§4.2.4), its description and `private` only when given. */
 	async function create(): Promise<void> {
-		if (saving || !enabled) return;
+		if (task.busy || !enabled) return;
 		const name = title.trim();
 		if (!name) {
-			error = 'Enter a room title.';
+			task.note = 'Enter a room title.';
 			return;
 		}
 		const about = description.trim();
 		const asPrivate = isPrivate;
-		saving = true;
-		error = undefined;
-		try {
+		let created: string | undefined;
+		const worked = await task.run('saving', async () => {
 			const result = await client.createRoom({ title: name, ...(about ? { description: about } : {}), ...(asPrivate ? { private: true } : {}) }).promise;
 			if (typeof result.room_id !== 'string' || !result.room_id) throw new Error('Invalid room response');
-			saving = false;
-			oncreated(result.room_id, { private: asPrivate });
-			open = false;
-		} catch (cause) {
-			saving = false;
-			// A server that keeps no private rooms says so (§4.2.4); nothing was created.
-			const unsupported = (cause as { code?: number } | undefined)?.code === -32601;
-			error = asPrivate && unsupported ? 'This server doesn’t keep private rooms. Uncheck Private to create an ordinary room.'
-				: cause instanceof Error ? cause.message : 'Unable to create room';
-		}
+			created = result.room_id;
+		}, {
+			failed: (cause) => {
+				// A server that keeps no private rooms says so (§4.2.4); nothing was created.
+				const unsupported = (cause as { code?: number } | undefined)?.code === -32601;
+				return asPrivate && unsupported ? 'This server doesn’t keep private rooms. Uncheck Private to create an ordinary room.' : messageOf(cause, 'Unable to create room');
+			}
+		});
+		if (!worked || created === undefined) return;
+		oncreated(created, { private: asPrivate });
+		open = false;
 	}
 </script>
 
-<RoomForm bind:open kind="room" mode="create" bind:name={title} bind:description bind:private={isPrivate} status={saving ? 'saving' : 'idle'} {error} disabled={!enabled} onsubmit={create} {onclose} />
+<RoomForm bind:open kind="room" mode="create" bind:name={title} bind:description bind:private={isPrivate} status={task.busy ? 'saving' : 'idle'} error={task.note} disabled={!enabled} onsubmit={create} {onclose} />

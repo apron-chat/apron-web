@@ -5,6 +5,41 @@ export const LONG_PRESS_MS = 500;
 /** How far a held finger may drift before the press counts as a scroll: a finger is never quite still. */
 export const SLOP_PX = 10;
 
+/** The long press under way, page-wide: one finger holds at a time. */
+let press: { timer: ReturnType<typeof setTimeout>; x: number; y: number } | undefined;
+
+/**
+ * A touch held still, the one way every long press here starts: it fires once a finger has rested LONG_PRESS_MS
+ * without drifting past SLOP_PX (a scroll, then). One at a time, page-wide: another press starts over. What a long
+ * press opens wires its own listeners to it (`hold` below, or delegated ones on rows drawn by the hundred).
+ */
+export const longPress = {
+	/** Starts a long press at `event`'s place, running `fire` if it is held. Returns it, for `cancel`. */
+	start(event: PointerEvent, fire: () => void): object {
+		longPress.cancel();
+		const pressed = {
+			timer: setTimeout(() => {
+				if (press === pressed) press = undefined;
+				fire();
+			}, LONG_PRESS_MS),
+			x: event.clientX,
+			y: event.clientY
+		};
+		press = pressed;
+		return pressed;
+	},
+	/** A finger that moved: past SLOP_PX it is scrolling, and no long press fires. */
+	move(event: PointerEvent): void {
+		if (press && Math.hypot(event.clientX - press.x, event.clientY - press.y) > SLOP_PX) longPress.cancel();
+	},
+	/** Ends the long press under way; with `pressed`, only if it is still that one (an element going ends only its own). */
+	cancel(pressed?: object): void {
+		if (!press || (pressed !== undefined && press !== pressed)) return;
+		clearTimeout(press.timer);
+		press = undefined;
+	}
+};
+
 /** Where a hold happened: the pointer's place, or the element's own corner for the context menu key (`keyboard`). */
 export interface HoldAt {
 	x: number;
@@ -21,31 +56,21 @@ export interface HoldAt {
  */
 export function hold(onhold: (at: HoldAt, node: HTMLElement) => boolean | void): Attachment<HTMLElement> {
 	return (node) => {
-		let press: { timer: ReturnType<typeof setTimeout>; x: number; y: number } | undefined;
 		let swallow = false;
+		/** The long press this element started, if any. */
+		let pressed: object | undefined;
 
-		const cancel = () => {
-			if (!press) return;
-			clearTimeout(press.timer);
-			press = undefined;
-		};
+		const cancel = () => longPress.cancel(pressed);
 		const pointerdown = (event: PointerEvent) => {
 			cancel();
 			swallow = false;
 			if (event.pointerType !== 'touch') return;
 			const { clientX: x, clientY: y } = event;
-			press = {
-				timer: setTimeout(() => {
-					press = undefined;
-					if (node.isConnected && onhold({ x, y }, node) !== false) swallow = true;
-				}, LONG_PRESS_MS),
-				x,
-				y
-			};
+			pressed = longPress.start(event, () => {
+				if (node.isConnected && onhold({ x, y }, node) !== false) swallow = true;
+			});
 		};
-		const pointermove = (event: PointerEvent) => {
-			if (press && Math.hypot(event.clientX - press.x, event.clientY - press.y) > SLOP_PX) cancel();
-		};
+		const pointermove = (event: PointerEvent) => longPress.move(event);
 		const contextmenu = (event: MouseEvent) => {
 			// A touch already held opened the menu; Android's own long press follows it.
 			if (swallow) return event.preventDefault();

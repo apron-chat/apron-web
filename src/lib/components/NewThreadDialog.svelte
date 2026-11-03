@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import RoomForm from '$lib/design/components/RoomForm.svelte';
+	import { messageOf, Task } from '$lib/ui/task.svelte';
 
 	interface Props {
 		/** The room the thread goes under (`parent_room_id`, §3.4); a thread of a private room is private too (§4.2.4). */
@@ -26,28 +27,19 @@
 	let open = $state(true);
 	let title = $state(untrack(() => suggestedTitle));
 	let description = $state(untrack(() => suggestedDescription));
-	let saving = $state(false);
-	let error = $state<string | undefined>();
+	/** Starting it, and why it didn't start. */
+	const task = new Task<'saving', string>();
 
 	async function start(): Promise<void> {
-		if (saving || !enabled) return;
+		if (task.busy || !enabled) return;
 		const name = title.trim();
 		if (!name) {
-			error = 'Enter a thread title.';
+			task.note = 'Enter a thread title.';
 			return;
 		}
 		const text = description.trim();
-		saving = true;
-		error = undefined;
-		try {
-			await oncreate({ title: name, ...(text ? { description: text } : {}) });
-			saving = false;
-			open = false;
-		} catch (cause) {
-			saving = false;
-			error = cause instanceof Error ? cause.message : 'Unable to start thread';
-		}
+		if (await task.run('saving', () => oncreate({ title: name, ...(text ? { description: text } : {}) }), { failed: (cause) => messageOf(cause, 'Unable to start thread') })) open = false;
 	}
 </script>
 
-<RoomForm bind:open kind="thread" mode="create" subtitle="In {room.title}" private={room.private === true} {moving} bind:name={title} bind:description status={saving ? 'saving' : 'idle'} {error} disabled={!enabled} onsubmit={start} {onclose} />
+<RoomForm bind:open kind="thread" mode="create" subtitle="In {room.title}" private={room.private === true} {moving} bind:name={title} bind:description status={task.busy ? 'saving' : 'idle'} error={task.note} disabled={!enabled} onsubmit={start} {onclose} />

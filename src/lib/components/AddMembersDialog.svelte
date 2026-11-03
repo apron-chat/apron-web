@@ -6,6 +6,7 @@
 	import { directory } from '$lib/ui/directory.svelte';
 	import { faceOf } from '$lib/ui/faces';
 	import { hueOf } from '$lib/ui/messages';
+	import { messageOf, Task } from '$lib/ui/task.svelte';
 	import { addMembers, couldNotAdd, userIdToAdd } from '$lib/ui/members';
 	import { matching, pickable } from '$lib/ui/people';
 	import type { SessionView } from '$lib/ui/session.svelte';
@@ -32,8 +33,8 @@
 	let open = $state(true);
 	let query = $state('');
 	let chosenIds = $state<string[]>([]);
-	let saving = $state(false);
-	let error = $state<string | undefined>();
+	/** Adding them, and who wasn't added. */
+	const task = new Task<'saving', string>();
 
 	let memberIds = $derived(new Set((room.members ?? []).map((member) => member.user_id)));
 	/** People the session knows who aren't members yet, but you and the system identities, by name. */
@@ -51,26 +52,31 @@
 	let chosen = $derived(chosenIds.map((id) => faceOf(directory.person({ user_id: id }) ?? { user_id: id })));
 
 	function pick(userId: string): void {
-		error = undefined;
+		task.note = undefined;
 		chosenIds = chosenIds.includes(userId) ? chosenIds.filter((id) => id !== userId) : [...chosenIds, userId];
 	}
 
 	async function add(): Promise<void> {
-		if (saving || !chosenIds.length) return;
+		if (task.busy || !chosenIds.length) return;
 		const ids = [...chosenIds];
 		const roomId = room.id;
-		saving = true;
-		error = undefined;
-		const refused = await addMembers(client, roomId, ids);
-		saving = false;
 		const name = (userId: string) => directory.name({ user_id: userId });
+		let refused: Awaited<ReturnType<typeof addMembers>> = [];
+		const worked = await task.run('saving', async () => {
+			refused = await addMembers(client, roomId, ids);
+			return refused;
+		}, {
+			done: (left) => (left.length ? couldNotAdd(left, name) : undefined),
+			failed: (cause) => messageOf(cause, 'Unable to add them')
+		});
+		if (!worked) return;
+		// Whoever wasn't added stays picked, to try again.
 		chosenIds = refused.map(({ userId }) => userId);
-		if (refused.length) error = couldNotAdd(refused, name);
-		else open = false;
+		if (!refused.length) open = false;
 	}
 </script>
 
 <AddMembersForm
-	bind:open bind:query room={room.title} {people} {chosen} status={saving ? 'saving' : 'idle'} {error} listTestid="add-people"
+	bind:open bind:query room={room.title} {people} {chosen} status={task.busy ? 'saving' : 'idle'} error={task.note} listTestid="add-people"
 	onpick={pick} onremove={pick} onsubmit={add} {onclose}
 />
