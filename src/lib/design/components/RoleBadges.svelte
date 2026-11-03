@@ -24,15 +24,23 @@
 		};
 	}
 
+	/**
+	 * Computed styles as one fit reads them, each element's at most once: a fit asks an item of its row whether it's in
+	 * the flow, how far it gives way and how wide its margins are. (Live, so they're only kept for the one fit.) Each
+	 * read is written out, `css.get(el) ?? css.set(el, getComputedStyle(el)).get(el)!`, rather than through a helper, so
+	 * that it calls no more of the app's functions than getComputedStyle alone did.
+	 */
+	type Styles = Map<Element, CSSStyleDeclaration>;
+
 	const flexRow = (s: CSSStyleDeclaration) => /flex/.test(s.display) && s.flexDirection === 'row' && s.flexWrap === 'nowrap';
 	const inFlow = (s: CSSStyleDeclaration) => s.display !== 'none' && s.position !== 'absolute' && s.position !== 'fixed';
 	const px = (value: string) => parseFloat(value) || 0;
 
 	/** The flex rows a row of badges sits in, innermost first: its parent, and on up while each is itself an item in a flex row. */
-	function flexRows(el: HTMLElement): HTMLElement[] {
+	function flexRows(el: HTMLElement, css: Styles): HTMLElement[] {
 		const rows: HTMLElement[] = [];
 		for (let at = el.parentElement; at && rows.length < 4; at = at.parentElement) {
-			if (!flexRow(getComputedStyle(at))) break;
+			if (!flexRow(css.get(at) ?? css.set(at, getComputedStyle(at)).get(at)!)) break;
 			rows.push(at);
 		}
 		return rows;
@@ -47,14 +55,14 @@
 	 * Where the browser left a name's least out (no calc-size), it's what that would have been: --ap-name-min, all of
 	 * a shorter name, or the row. A min-width that can't be read counts as its current width: it gives up nothing.
 	 */
-	function least(el: HTMLElement, s: CSSStyleDeclaration, width: number): number {
+	function least(el: HTMLElement, s: CSSStyleDeclaration, width: number, css: Styles): number {
+		if (s.minWidth === 'auto') return s.overflowX === 'visible' ? width : 0;
 		const parent = el.parentElement;
-		const ps = parent ? getComputedStyle(parent) : undefined;
+		const ps = parent ? (css.get(parent) ?? css.set(parent, getComputedStyle(parent)).get(parent)!) : undefined;
 		const percent = parent && ps ? parent.getBoundingClientRect().width - px(ps.borderLeftWidth) - px(ps.borderRightWidth) - px(ps.paddingLeft) - px(ps.paddingRight) : width;
 		// Its natural width: all of it where it shows whole (to the fraction), else what its text overflows to.
 		const size = el.scrollWidth > el.clientWidth ? el.scrollWidth + px(s.borderLeftWidth) + px(s.borderRightWidth) : width;
 		const em = px(s.fontSize) || 16;
-		if (s.minWidth === 'auto') return s.overflowX === 'visible' ? width : 0;
 		const min = cssPx(s.minWidth, { size, percent, em });
 		if (min === undefined) return width;
 		if (min === 0 && !calcSize && s.textOverflow === 'ellipsis') {
@@ -73,32 +81,37 @@
 	 * past where it should give way, which only the badges giving up room puts right: an item shrunk below its least,
 	 * or one that gives way after them (a handle, there to tell two people apart) cut short.
 	 */
-	function give(el: Element, below: number): number {
+	function give(el: Element, below: number, css: Styles): number {
 		if (!(el instanceof HTMLElement)) return 0;
-		const s = getComputedStyle(el);
+		const s = css.get(el) ?? css.set(el, getComputedStyle(el)).get(el)!;
 		if (!inFlow(s)) return 0;
 		if (!(px(s.flexShrink) > below)) return s.overflowX === 'visible' ? 0 : -Math.max(0, el.scrollWidth - el.clientWidth);
-		if (flexRow(s)) return [...el.children].reduce((sum, child) => sum + give(child, below), 0);
+		if (flexRow(s)) return [...el.children].reduce((sum, child) => sum + give(child, below, css), 0);
 		const width = el.getBoundingClientRect().width;
-		return width - least(el, s, width);
+		return width - least(el, s, width, css);
 	}
 
-	/** A margin, unless it's `auto`: that one only takes up the room left over (something pushed to a row's end), so it's free. */
-	function margin(el: HTMLElement, s: CSSStyleDeclaration, side: 'left' | 'right'): number {
+	/**
+	 * A margin that takes room (asked only of one that isn't 0, whose typed value is slower to read than the rest), unless
+	 * it's `auto`: that one only takes up the room left over (something pushed to a row's end), so it's free.
+	 */
+	function margin(el: Element, value: string, side: 'left' | 'right'): number {
 		const typed = typeof el.computedStyleMap === 'function' ? el.computedStyleMap().get(`margin-${side}`) : undefined;
-		if (typed && typed.toString() === 'auto') return 0;
-		return px(side === 'left' ? s.marginLeft : s.marginRight);
+		return typed && typed.toString() === 'auto' ? 0 : px(value);
 	}
 
 	/** The room a flex row has left over: its content width less its in-flow items (margins included) and the gaps between them. */
-	function free(container: HTMLElement): number {
-		const s = getComputedStyle(container);
-		const items = [...container.children].filter((c): c is HTMLElement => inFlow(getComputedStyle(c)));
-		const used = items.reduce((sum, c) => {
-			const cs = getComputedStyle(c);
-			return sum + c.getBoundingClientRect().width + margin(c, cs, 'left') + margin(c, cs, 'right');
-		}, 0);
-		const gaps = (parseFloat(s.columnGap) || 0) * Math.max(0, items.length - 1);
+	function free(container: HTMLElement, css: Styles): number {
+		const s = css.get(container) ?? css.set(container, getComputedStyle(container)).get(container)!;
+		let used = 0;
+		let items = 0;
+		for (const c of container.children) {
+			const cs = css.get(c) ?? css.set(c, getComputedStyle(c)).get(c)!;
+			if (!inFlow(cs)) continue;
+			items++;
+			used += c.getBoundingClientRect().width + (parseFloat(cs.marginLeft) ? margin(c, cs.marginLeft, 'left') : 0) + (parseFloat(cs.marginRight) ? margin(c, cs.marginRight, 'right') : 0);
+		}
+		const gaps = (parseFloat(s.columnGap) || 0) * Math.max(0, items - 1);
 		const content = container.clientWidth - (parseFloat(s.paddingLeft) || 0) - (parseFloat(s.paddingRight) || 0);
 		return Math.max(0, content - used - gaps);
 	}
@@ -144,9 +157,10 @@
 	function measure(): void {
 		// Not laid out (in a pane that's hidden): there's no room to read, so the fit waits for it to show.
 		if (!row || (typeof row.checkVisibility === 'function' && !row.checkVisibility())) return;
+		const style = getComputedStyle(row);
+		const css: Styles = new Map([[row, style]]);
 		const badges = [...row.querySelectorAll<HTMLElement>(':scope > .ap-role')];
 		if (!badges.length) return;
-		const style = getComputedStyle(row);
 		const gap = parseFloat(style.columnGap) || 0;
 		const size = parseFloat(getComputedStyle(badges[0]).fontSize) || 10;
 		if (size !== em) em = size;
@@ -168,10 +182,10 @@
 		// the badges come first, and the fit depends only on the room there is, not on what was shrunk before. Half a
 		// pixel to spare keeps layout rounding from cutting the name short by a fraction of a pixel, which its ellipsis
 		// would show.
-		const rows = flexRows(row);
+		const rows = flexRows(row, css);
 		const own = px(style.flexShrink);
-		const yielded = rows[0] ? [...rows[0].children].reduce((sum, item) => (item === row ? sum : sum + give(item, own)), 0) : 0;
-		const room = row.getBoundingClientRect().width + rows.reduce((sum, r) => sum + free(r), 0) + yielded - lead - 0.5;
+		const yielded = rows[0] ? [...rows[0].children].reduce((sum, item) => (item === row ? sum : sum + give(item, own, css)), 0) : 0;
+		const room = row.getBoundingClientRect().width + rows.reduce((sum, r) => sum + free(r, css), 0) + yielded - lead - 0.5;
 		const next = fitRoles(widths, room, gap, min, (hidden) => roleMore(hidden, size));
 		if (next.shown !== fit.shown || next.room !== fit.room) fit = next;
 	}
@@ -186,7 +200,7 @@
 		const el = row;
 		untrack(measure);
 		// The rows around it, and what shares its row, whose widths are its room.
-		const rows = flexRows(el);
+		const rows = flexRows(el, new Map());
 		return observe([el, ...rows, ...[...(rows[0]?.children ?? [])].filter((item) => item !== el)], measure);
 	});
 
