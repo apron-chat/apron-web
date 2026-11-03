@@ -12,6 +12,10 @@ export const roomEditor = part((m) => m.RoomEditor);
 export const searchDialog = part((m) => m.SearchDialog);
 export const signInLinkDialog = part((m) => m.SignInLinkDialog);
 export const profileEditor = part((m) => m.ProfileEditor);
+export const addMembersDialog = part((m) => m.AddMembersDialog);
+export const autocompletePicker = part((m) => m.AutocompletePicker);
+export const installNudge = part((m) => m.InstallPrompt);
+export const selectionBar = part((m) => m.SelectionBar);
 /**
  * Hosts that stay unmounted until their state first asks: render as `{#if host.once(Boolean(state.current))}`. The
  * layout's are in `overlays.ts`.

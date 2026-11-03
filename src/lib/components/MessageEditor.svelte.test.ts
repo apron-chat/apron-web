@@ -1,9 +1,15 @@
 // @vitest-environment jsdom
 import { flushSync } from 'svelte';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Embed } from '$lib/protocol/types';
 import MessageEditor from './MessageEditor.svelte';
+import { autocompletePicker } from './lazy';
 import * as dom from '$lib/test/dom';
+
+// The autocomplete loads on demand: here before the first `@`, as the page's prefetch has it. The whole
+// on-demand chunk is transformed for it, which can take a while on a busy machine. Nothing is returned: `beforeAll`
+// would call the function `load` gives back (the component) as a teardown.
+beforeAll(async () => void (await autocompletePicker.load()), 30_000);
 
 const photo: Embed = { kind: 'upload', embed_id: 'e1', title: 'image.png', url: 'https://chat.test/f/1' };
 const notes: Embed = { kind: 'upload', embed_id: 'e2', title: 'notes.txt', url: 'https://chat.test/f/2' };

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { messageEditor, newPrivateDialog, newThreadDialog, profileCardHost, reactorsPopover, roomEditor, searchDialog, serverPaneHost, signInLinkDialog } from '$lib/components/lazy';
+	import { installNudge, messageEditor, newPrivateDialog, newThreadDialog, profileCardHost, reactorsPopover, roomEditor, searchDialog, selectionBar, serverPaneHost, signInLinkDialog } from '$lib/components/lazy';
 	import { onMount, tick, untrack } from 'svelte';
 	import { fromAction } from 'svelte/attachments';
 	import { pushState, replaceState } from '$app/navigation';
@@ -29,12 +29,10 @@
 	import { reactorsList, showReactors } from '$lib/ui/reactors.svelte';
 	import { serverPane } from '$lib/ui/server-pane.svelte';
 	import RoomHeader from '$lib/components/RoomHeader.svelte';
-	import SelectionBar from '$lib/components/SelectionBar.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import SidebarHandle from '$lib/components/SidebarHandle.svelte';
 	import MemberListSidebar from '$lib/components/MemberListSidebar.svelte';
 	import NotifyPrompt from '$lib/components/NotifyPrompt.svelte';
-	import InstallPrompt from '$lib/components/InstallPrompt.svelte';
 	import { markFirstMessages } from '$lib/startup-marks';
 	import { INSTALL_OFFER_AFTER_MS, installWay, installedAlready } from '$lib/ui/install';
 	import StatusBanner from '$lib/design/components/StatusBanner.svelte';
@@ -3259,7 +3257,7 @@
 	<!-- The first-mention offer, pointing at Preferences while the rooms list (and its gear) shows; above the composer otherwise. -->
 	{#snippet nudge()}
 		{#if notifyOffer}<NotifyPrompt {...notifyOffer} whenClosed={webPushAvailable && Boolean(webPushServerKey)} pointer onaccept={acceptNotifyOffer} ondecline={declineNotifyOffer} />
-		{:else if installOffer}<InstallPrompt way={installOffer} alerts={installAlerts} oninstall={installApp} ondecline={declineInstallOffer} />{/if}
+		{:else if installOffer && installNudge.component}{@const InstallPrompt = installNudge.component}<InstallPrompt way={installOffer} alerts={installAlerts} oninstall={installApp} ondecline={declineInstallOffer} />{/if}
 	{/snippet}
 
 	{#snippet main()}
@@ -3383,7 +3381,7 @@
 
 			<div class="ap-shell-nudge-inline" aria-live="polite">
 				{#if notifyOffer}<NotifyPrompt {...notifyOffer} whenClosed={webPushAvailable && Boolean(webPushServerKey)} onaccept={acceptNotifyOffer} ondecline={declineNotifyOffer} />
-				{:else if installOffer}<InstallPrompt way={installOffer} alerts={installAlerts} oninstall={installApp} ondecline={declineInstallOffer} />{/if}
+				{:else if installOffer && installNudge.component}{@const InstallPrompt = installNudge.component}<InstallPrompt way={installOffer} alerts={installAlerts} oninstall={installApp} ondecline={declineInstallOffer} />{/if}
 			</div>
 			<TypingIndicator names={typingNames} class="ap-shell-typing" />
 			<!-- Floats just above the composer, in the gap under the last message, rather than taking a line: nothing moves. -->
@@ -3403,11 +3401,14 @@
 			{/if}
 
 			{#if selection.active}
-				<SelectionBar
-					{selection} threads={canMoveSelection ? selectThreads : []} parentRoom={canMoveSelection && activeThread ? activeRoom.id : undefined} canCreateThread={canMoveSelection && canStartThreads}
-					onmove={(room) => moveSelection(room)} onnewthread={newThreadFromSelection} onfill={() => selection.fillBetween(selectableOrder)} oncopy={copySelectionLog}
-					oncancel={() => { selection.cancel(); composer?.focus(); }}
-				/>
+				{#if selectionBar.component}
+					{@const SelectionBar = selectionBar.component}
+					<SelectionBar
+						{selection} threads={canMoveSelection ? selectThreads : []} parentRoom={canMoveSelection && activeThread ? activeRoom.id : undefined} canCreateThread={canMoveSelection && canStartThreads}
+						onmove={(room) => moveSelection(room)} onnewthread={newThreadFromSelection} onfill={() => selection.fillBetween(selectableOrder)} oncopy={copySelectionLog}
+						oncancel={() => { selection.cancel(); composer?.focus(); }}
+					/>
+				{/if}
 			{:else if session.readOnly}
 				<ReadOnlyBar guest={!session.passkeySession} {passkeyUnavailable} archive={archiveNote} onsignin={() => openConnect({ signIn: true })} />
 			{:else}

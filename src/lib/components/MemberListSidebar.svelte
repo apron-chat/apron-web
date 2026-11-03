@@ -15,7 +15,7 @@
 	import { minuteNow } from '$lib/ui/clock.svelte';
 	import Avatar from '$lib/design/components/Avatar.svelte';
 	import { hueOf } from '$lib/ui/messages';
-	import AddMembersDialog from './AddMembersDialog.svelte';
+	import { addMembersDialog } from './lazy';
 	import RoleBadges from './RoleBadges.svelte';
 
 	interface Props {
@@ -173,6 +173,7 @@
 	{#snippet roles(member)}<RoleBadges user={byId.get(member.user_id)} />{/snippet}
 </MemberList>
 <!-- Gone as soon as adding is: the room left, or the server refusing member changes. -->
-{#if addOpen && changing && client && room}
+{#if addOpen && changing && client && room && addMembersDialog.component}
+	{@const AddMembersDialog = addMembersDialog.component}
 	<AddMembersDialog {client} {session} {room} onclose={() => (addOpen = false)} />
 {/if}
