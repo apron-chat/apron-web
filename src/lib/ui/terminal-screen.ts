@@ -164,6 +164,26 @@ export function shownRows(buffer: IBuffer): number {
 	return 1;
 }
 
+/**
+ * What the buffer shows, as plain text: its lines as a terminal draws them, with the control functions already acted
+ * on (colors, cursor moves, a carriage return's overwrite), a line that wraps joined to the one before it, the blanks
+ * at the end of each line and the blank lines at the foot left out.
+ */
+export function bufferText(buffer: Pick<IBuffer, 'length' | 'getLine'>): string {
+	const lines: string[] = [];
+	for (let y = 0; y < buffer.length; y++) {
+		const line = buffer.getLine(y);
+		if (!line) continue;
+		// A line that goes on into the next keeps the spaces written at its end, which are the text's, but not an empty
+		// cell, such as the one a wide character that didn't fit leaves before it wraps.
+		const text = buffer.getLine(y + 1)?.isWrapped ? line.translateToString(true) : line.translateToString(true).trimEnd();
+		if (line.isWrapped && lines.length) lines[lines.length - 1] += text;
+		else lines.push(text);
+	}
+	while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
+	return lines.join('\n');
+}
+
 /** Full reset (RIS): the initial state of a terminal. */
 const RESET = '\u001bc';
 
@@ -232,6 +252,11 @@ export class TerminalScreen {
 	show(output: string): void {
 		this.reset();
 		this.write(output);
+	}
+
+	/** What it shows, and keeps above (`scrollback`), as plain text (`bufferText`); empty until xterm has loaded. */
+	text(): string {
+		return this.#terminal ? bufferText(this.#terminal.buffer.active) : '';
 	}
 
 	/**

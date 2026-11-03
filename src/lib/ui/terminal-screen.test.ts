@@ -427,3 +427,34 @@ describe('shownRows', () => {
 		expect(shownRows(fakeBuffer([fakeLine('top')], 'normal', 3) as never)).toBe(40);
 	});
 });
+
+describe('a screen’s text', () => {
+	it('is what it shows, as plain text: colors gone, a carriage return’s overwrite done, a wrapped line joined, no blanks at the end', async () => {
+		const screen = new TerminalScreen(host(), { load: headlessXterm });
+		expect(screen.text()).toBe('');
+		const long = 'x'.repeat(TERMINAL_COLS) + 'yz';
+		screen.write(`\u001b[1;32m$ make\u001b[0m   \r\nprogress 10%\rprogress 100%\r\n\u001b[38;2;255;0;0m${long}\u001b[0m\r\n\r\n`);
+		await vi.waitFor(() => expect(FakeTerminal.made).toHaveLength(1));
+		await (FakeTerminal.made[0] as HeadlessTerminal).parsed();
+		expect(screen.text()).toBe(`$ make\nprogress 100%\n${long}`);
+	});
+
+	it('joins a wide character that wrapped without the empty cell it left', async () => {
+		const screen = new TerminalScreen(host(), { load: headlessXterm });
+		const line = `${'x'.repeat(TERMINAL_COLS - 1)}字字`;
+		screen.write(`${line}\r\n`);
+		await vi.waitFor(() => expect(FakeTerminal.made).toHaveLength(1));
+		await (FakeTerminal.made[0] as HeadlessTerminal).parsed();
+		expect(screen.text()).toBe(line);
+	});
+
+	it('keeps the spaces written at the end of a line that wraps', async () => {
+		const screen = new TerminalScreen(host(), { load: headlessXterm });
+		const line = `${'x'.repeat(TERMINAL_COLS - 2)}  b`;
+		screen.write(`${line}
+`);
+		await vi.waitFor(() => expect(FakeTerminal.made).toHaveLength(1));
+		await (FakeTerminal.made[0] as HeadlessTerminal).parsed();
+		expect(screen.text()).toBe(line);
+	});
+});

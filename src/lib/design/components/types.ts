@@ -62,6 +62,10 @@ export interface EmbedProps {
 	 * terminal full screen in a TerminalViewer. On a touch screen, a tap on the screen calls it too.
 	 */
 	onexpand?: (expand: HTMLButtonElement) => void;
+	/** terminal: shows Copy in the header, which calls this to copy the screen's text; resolves whether it did, which Copy then says for a moment. */
+	oncopy?: () => boolean | Promise<boolean>;
+	/** terminal: the stream on a page of its own (such as terminal.apron.chat's), linked from the header, opening in a new tab. */
+	page?: string;
 	/** iframe: `height` is a suggestion, clamped to iframe-max-h; `live` false shows the paused placeholder. */
 	height?: number;
 	live?: boolean;

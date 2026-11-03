@@ -1389,6 +1389,17 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](ht
   longer, up to 15 s), and the new response replaces it, from a fresh
   terminal. Once `GET` ends it says Ended, and when a snapshot carries
   `output`, it shows that, from a fresh terminal, as Finished.
+  **Copy terminal text** (in its header, ahead of Open) copies what the
+  terminal in the message shows, as plain text: its rows as drawn, with
+  colors and other escape codes already acted on (a progress bar's carriage
+  returns leave only its last state), a line that wrapped joined back up, and
+  the blanks at line ends and the empty rows at the foot left out. It reads
+  Copied for a moment once it has; with nothing on screen it copies nothing.
+  **Open terminal in a new tab** (the ↗ in its header, ahead of Expand), there
+  while the embed has a `url` the client reads (https, from the chat server),
+  links to the stream on terminal.apron.chat's page of its own,
+  `https://terminal.apron.chat/#stream=<url>&title=<title>`, in a new tab: the
+  keys stay after the `#`, so the stream's address never reaches that site.
   **Expand terminal** (the ⤢ in its header, or on a touch screen a tap on
   the terminal; a mouse click there still selects text) opens it full screen
   in the terminal viewer, on the image viewer's dark ground: its title, Live

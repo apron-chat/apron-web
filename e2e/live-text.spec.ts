@@ -49,6 +49,24 @@ test.describe('a terminal embed', () => {
 		await expect.poll(async () => (await screenText(preview))[0]?.trimEnd()).toBe('$ make test');
 	});
 
+	test('copies what it shows as plain text, and links to terminal.apron.chat only for an https stream', async ({ preview, page }) => {
+		await page.addInitScript(() => {
+			const copied: string[] = [];
+			(window as unknown as { copied: string[] }).copied = copied;
+			Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (text: string) => void copied.push(text) }, configurable: true });
+		});
+		await preview.open();
+		const id = await preview.startLive('general', 'ada', 'terminal', { title: 'make test' });
+		const terminal = terminalOf(preview);
+		await preview.liveWrite(id, `${BUILD}coverage  10%\rcoverage 100%\r\n`);
+		await expect.poll(async () => (await screenText(preview))[3]?.trimEnd()).toBe('coverage 100%');
+		// The preview's stream is on this http://localhost page, which terminal.apron.chat would not read.
+		await expect(terminal.getByRole('link', { name: 'Open terminal in a new tab' })).toHaveCount(0);
+		await terminal.getByRole('button', { name: 'Copy terminal text' }).click();
+		await expect(terminal.getByRole('button', { name: 'Copied' })).toBeVisible();
+		expect(await page.evaluate(() => (window as unknown as { copied: string[] }).copied)).toEqual(['$ make test\nok  store     0.41s\n256 true\ncoverage 100%']);
+	});
+
 	test('the full-screen alternate screen shows all 40 rows', async ({ preview }) => {
 		await preview.open();
 		const id = await preview.startLive('general', 'ada', 'terminal');

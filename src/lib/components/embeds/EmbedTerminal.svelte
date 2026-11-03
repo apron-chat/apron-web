@@ -5,7 +5,9 @@
 	import type { Embed } from '$lib/protocol/types';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { TerminalFeed } from '$lib/ui/terminal-feed';
+	import { terminalPageUrl } from '$lib/ui/terminal-page';
 	import { terminalViewer, type TerminalView } from '$lib/ui/terminal-viewer.svelte';
+	import type { TerminalScreen } from '$lib/ui/terminal-screen';
 	import { loadTerminalScreen } from '$lib/ui/xterm';
 
 	/**
@@ -17,10 +19,13 @@
 	 * `output`, that is shown, from a fresh terminal. Live text loads only from
 	 * the chat server's origin. The feed keeps the text, so Expand can show it
 	 * full screen (`terminalViewer`) on a second screen, live too, from this
-	 * one read of `url`.
+	 * one read of `url`. Copy in its header copies what its screen shows, as
+	 * plain text, and while it has a `url`, Open shows the stream on
+	 * terminal.apron.chat, in a new tab.
 	 */
 	let { embed }: { embed: Embed } = $props();
 	let url = $derived(sameOriginMedia(embed.url, directory.origin));
+	let page = $derived(terminalPageUrl(url, embed.title));
 	let output = $derived(typeof embed.output === 'string' ? embed.output : undefined);
 	const feed = new TerminalFeed();
 	/** `GET url` ended, or was refused for good: the output did, and the snapshot with it is on its way. */
@@ -43,6 +48,21 @@
 		feed
 	};
 
+	/** The screen in the message, once it has loaded: what Copy copies. */
+	let shown: TerminalScreen | undefined;
+
+	/** Copies what the screen shows, as plain text: its rows as drawn, without the control functions that drew them. */
+	async function copy(): Promise<boolean> {
+		const text = shown?.text();
+		if (!text) return false;
+		try {
+			await navigator.clipboard.writeText(text);
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
 	function attach(node: HTMLElement): () => void {
 		let detach: (() => void) | undefined;
 		let gone = false;
@@ -50,7 +70,9 @@
 			if (gone) return;
 			const screen = new TerminalScreen(node);
 			const unfeed = feed.attach(screen);
+			shown = screen;
 			detach = () => {
+				if (shown === screen) shown = undefined;
 				unfeed();
 				screen.dispose();
 			};
@@ -90,4 +112,4 @@
 	$effect(() => () => terminalViewer.forget(view));
 </script>
 
-<DesignEmbedTerminal kind="terminal" {url} done={!live} title={embed.title} {status} {attach} onexpand={(button) => terminalViewer.show(view, button)} testid="terminal-embed" />
+<DesignEmbedTerminal kind="terminal" {url} done={!live} title={embed.title} {status} {page} {attach} oncopy={copy} onexpand={(button) => terminalViewer.show(view, button)} testid="terminal-embed" />

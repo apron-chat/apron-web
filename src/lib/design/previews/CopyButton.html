@@ -1,0 +1,14 @@
+<!-- @dsCard group="Actions" height=64 subtitle="Copy, which shows a check and says Copied for a moment once it copied" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>CopyButton</title></head>
+<body>
+<div class="ap-row" id="root"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  // `oncopy` does the copying, and returns (or resolves) whether it did: the button says Copied only then.
+  A.render(A.CopyButton, root, { label: 'Copy the address', copiedLabel: 'Copied the address', oncopy: function () { return true; } });
+  A.render(A.CopyButton, root, { label: 'Copy terminal text', oncopy: function () { return false; } });
+</script>
+</body>
+</html>
