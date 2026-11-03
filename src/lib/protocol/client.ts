@@ -4943,13 +4943,6 @@ export class ChatClient {
 			resolvePromise = resolve;
 			rejectPromise = reject;
 		});
-		const timer = setTimeout(() => {
-			const request = this.requests.get(id);
-			if (!request) return;
-			this.requests.delete(id);
-			request.reject(new RequestTimeout(method));
-			this.emit();
-		}, REQUEST_TIMEOUT_MS);
 		const request: PendingRequest = {
 			id,
 			method,
@@ -4957,7 +4950,7 @@ export class ChatClient {
 			visible: options.visible,
 			allowBeforeAuth: options.allowBeforeAuth,
 			createdAt: Date.now(),
-			timer,
+			timer: this.requestTimeout(id),
 			resolve: resolvePromise as (result: JsonObject) => void,
 			reject: rejectPromise
 		};
@@ -4981,9 +4974,38 @@ export class ChatClient {
 		);
 	}
 
-	/** A sign-in ceremony ended, however it did: what waited for it goes now (`canSend`). */
+	/**
+	 * Fails request `id` once REQUEST_TIMEOUT_MS pass without an answer. Time spent held back by a sign-in
+	 * ceremony (`canSend`) doesn't count: it hasn't gone, and a passkey sheet can stay up far longer. Its time
+	 * starts over once the ceremony ends (`ceremonyEnded`).
+	 */
+	private requestTimeout(id: string): ReturnType<typeof setTimeout> {
+		return setTimeout(() => {
+			const request = this.requests.get(id);
+			if (!request) return;
+			if (this.heldForCeremony(request)) {
+				request.timer = this.requestTimeout(id);
+				return;
+			}
+			this.requests.delete(id);
+			request.reject(new RequestTimeout(request.method));
+			this.emit();
+		}, REQUEST_TIMEOUT_MS);
+	}
+
+	/** `request` waits for a sign-in ceremony on this connection to end, unsent (`canSend`). */
+	private heldForCeremony(request: PendingRequest): boolean {
+		return Boolean(this.passkeyAbort) && request.method !== 'auth' && request.sentConnection !== this.connectionId;
+	}
+
+	/** A sign-in ceremony ended, however it did: what waited for it goes now (`canSend`), its time starting from now. */
 	private ceremonyEnded(): void {
-		for (const request of this.requests.values()) this.sendRequest(request);
+		for (const request of this.requests.values()) {
+			if (request.sentConnection === this.connectionId) continue;
+			clearTimeout(request.timer);
+			request.timer = this.requestTimeout(request.id);
+			this.sendRequest(request);
+		}
 	}
 
 	private sendRequest(request: PendingRequest): void {

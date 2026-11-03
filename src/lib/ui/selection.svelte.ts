@@ -137,10 +137,20 @@ export class MessageSelection {
 	async move(client: ChatClient, room: string, own: (id: string) => boolean, authors?: MoveAuthors): Promise<MoveResult> {
 		const current = this.current;
 		if (!current || current.saving || current.ids.length === 0) return { moved: false, error: undefined };
+		return this.#move(client, room, own, authors, current, true);
+	}
+
+	/**
+	 * The moves of `current`'s messages into `room`, as `move` says. Once asked for, they go on to the end at the
+	 * server whatever happens here; select mode follows them only while it shows `current` (`shown`, `settle`).
+	 */
+	async #move(client: ChatClient, room: string, own: (id: string) => boolean, authors: MoveAuthors | undefined, current: Selection, shown: boolean): Promise<MoveResult> {
 		const ids = current.ids;
 		const saving: Selection = { ...current, saving: true, denied: undefined };
-		this.current = saving;
-		this.menuOpen = false;
+		if (shown) {
+			this.current = saving;
+			this.menuOpen = false;
+		}
 		const probe = ids.find((id) => !own(id));
 		if (probe !== undefined) {
 			try {
@@ -202,10 +212,8 @@ export class MessageSelection {
 			room = result.room_id;
 			const refused = options.check?.(room);
 			if (refused) throw refused;
-			// Gone meanwhile: nothing moves into the thread.
-			if (this.current !== saving) return { moved: false, error: undefined, room };
-			this.current = { ...current, saving: false };
-			const moved = await this.move(client, room, options.own, options.authors);
+			// Asked for, the moves go on into the thread even if select mode has gone meanwhile, rather than leave it empty.
+			const moved = await this.#move(client, room, options.own, options.authors, current, this.current === saving);
 			return moved.moved ? moved : { ...moved, room };
 		} catch (error) {
 			this.settle(saving, { ...current, saving: false });

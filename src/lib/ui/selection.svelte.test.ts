@@ -100,6 +100,22 @@ describe('MessageSelection while a move is under way', () => {
 	});
 });
 
+describe('MessageSelection.moveToNewThread while select mode goes', () => {
+	it('moves the messages into the thread it created, rather than leave it empty, and brings back no select mode', async () => {
+		let named!: () => void;
+		const moveMessage = vi.fn((id: string) => ({ promise: Promise.resolve({ message_id: id }) }));
+		const createRoom = vi.fn(() => ({ promise: new Promise((resolve) => (named = () => resolve({ room_id: 'thread_new' }))) }));
+		const client = { moveMessage, createRoom, joinRoom: vi.fn() } as unknown as ChatClient;
+		const selection = picked(['1', '2']);
+		const moving = selection.moveToNewThread(client, { parentRoomId: 'general', title: 'Side', own, movable: () => true });
+		selection.leave();
+		named();
+		expect(await moving).toEqual({ moved: true, room: 'thread_new' });
+		expect(moveMessage.mock.calls.map(([id]) => id)).toEqual(['1', '2']);
+		expect(selection.active).toBe(false);
+	});
+});
+
 describe('MessageSelection.move with authors', () => {
 	it('adds each moved message\'s author to the thread once, but you and those in it', async () => {
 		const { client, joinRoom } = fakeClient();

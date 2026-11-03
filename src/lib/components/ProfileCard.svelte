@@ -48,8 +48,13 @@
 	let measured = $state(0);
 	/** Bumped on scroll and resize, so the popover follows what opened it. */
 	let reflowed = $state(0);
-	/** Adding them to the room, or opening a conversation with them, and what came of it: this card's, until another opens. */
-	const task = new Task<'add' | 'message' | 'copy'>();
+	/**
+	 * Adding them to the room, opening a conversation with them, copying their ID: each on its own, as one doesn't
+	 * wait for another, and what came of it, this card's until another opens. The note is the last one used's.
+	 */
+	const tasks = { add: new Task(), message: new Task(), copy: new Task() };
+	let used = $state<keyof typeof tasks>();
+	let note = $derived(used ? tasks[used].note : undefined);
 
 	let request = $derived(profileCard.current);
 	let placement = $derived.by(() => {
@@ -95,7 +100,8 @@
 	// A new card starts without the last one's note, and free: what the last one started notes nothing here.
 	$effect(() => {
 		void request;
-		task.reset();
+		for (const task of Object.values(tasks)) task.reset();
+		used = undefined;
 	});
 
 	// Focus moves in when it opens, so Escape and Tab work from the keyboard.
@@ -157,7 +163,8 @@
 
 	async function copy(): Promise<void> {
 		const id = userId;
-		await task.run('copy', () => navigator.clipboard.writeText(`@${id}`), {
+		used = 'copy';
+		await tasks.copy.run('busy', () => navigator.clipboard.writeText(`@${id}`), {
 			done: () => ({ text: `Copied @${id}`, error: false }),
 			failed: () => ({ text: 'Unable to copy', error: true })
 		});
@@ -172,7 +179,8 @@
 		const chat = client;
 		const open = onopenroom;
 		const id = userId;
-		await task.run('message', (still) => messageThem(chat, session.rooms, session.you?.user_id, id, {
+		used = 'message';
+		await tasks.message.run('busy', (still) => messageThem(chat, session.rooms, session.you?.user_id, id, {
 			named: onnamed,
 			name: (failed) => directory.name({ user_id: failed }),
 			// Started at the reader's asking: it opens, wherever they are now.
@@ -191,7 +199,8 @@
 		const chat = client;
 		const target = room;
 		const id = userId;
-		await task.run('add', () => chat.joinRoom(target.id, id).promise, {
+		used = 'add';
+		await tasks.add.run('busy', () => chat.joinRoom(target.id, id).promise, {
 			done: () => ({ text: `Added to ${target.title}`, error: false }),
 			failed: failure('Unable to add them')
 		});
@@ -215,12 +224,12 @@
 		sharesName={shares}
 		{membership}
 		onmessage={canMessageThem ? message : undefined}
-		messaging={task.running === 'message'}
+		messaging={tasks.message.busy}
 		onmention={canMention && !system ? mention : undefined}
 		oncopyid={copy}
 		onaddtoroom={canAdd ? add : undefined}
-		adding={task.running === 'add'}
-		note={task.note}
+		adding={tasks.add.busy}
+		{note}
 		testid="profile-card"
 		statusTestid="profile-status"
 		seenTestid="profile-seen"

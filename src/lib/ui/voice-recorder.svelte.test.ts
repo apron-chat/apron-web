@@ -111,6 +111,20 @@ describe('VoiceRecorder', () => {
 		expect(asks()).toBe(1);
 	});
 
+	it('lets go of the microphone and asks again next time when the browser won\u2019t record', async () => {
+		const { mic, grant, asks } = microphone();
+		mic.record = () => {
+			throw new DOMException('Unsupported type', 'NotSupportedError');
+		};
+		const recorder = new VoiceRecorder(mic);
+		void recorder.start({ type: 'audio/webm' }, () => undefined);
+		const stream = (await grant()) as ReturnType<typeof fakeStream>;
+		expect(stream.stopped()).toBe(true);
+		expect(recorder.phase).toBe('idle');
+		void recorder.start({}, () => undefined);
+		expect(asks()).toBe(1);
+	});
+
 	it('discards a recording stopped without sending, and one shorter than a second', async () => {
 		const { mic, grant } = microphone();
 		const recorder = new VoiceRecorder(mic);

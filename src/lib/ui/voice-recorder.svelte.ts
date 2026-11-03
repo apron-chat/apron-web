@@ -65,7 +65,15 @@ export class VoiceRecorder {
 			return;
 		}
 		const chunks: Blob[] = [];
-		const recorder = this.microphone.record(stream, { audioBitsPerSecond: VOICE_BITS_PER_SECOND, ...(format.type ? { mimeType: format.type } : {}) });
+		let recorder: MediaRecorder;
+		try {
+			recorder = this.microphone.record(stream, { audioBitsPerSecond: VOICE_BITS_PER_SECOND, ...(format.type ? { mimeType: format.type } : {}) });
+		} catch {
+			// The browser won't record it (a type it refuses): the microphone goes back, and the next tap asks again.
+			for (const track of stream.getTracks()) track.stop();
+			this.#end();
+			return;
+		}
 		take.recorder = recorder;
 		this.seconds = 0;
 		take.timer = setInterval(() => this.seconds++, 1000);
@@ -86,7 +94,12 @@ export class VoiceRecorder {
 			const type = recorder.mimeType || chunks[0].type || 'audio/webm';
 			onclip(new File(chunks, `voice-message.${voiceExtension(type)}`, { type }));
 		};
-		recorder.start(format.maxBytes === undefined ? undefined : 1000);
+		try {
+			recorder.start(format.maxBytes === undefined ? undefined : 1000);
+		} catch {
+			for (const track of stream.getTracks()) track.stop();
+			if (this.#take === take) this.#end();
+		}
 	}
 
 	/** Stops the take under way: with `send`, its clip goes to `onclip`; without, or before it records, nothing does. */

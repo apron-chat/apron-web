@@ -98,12 +98,12 @@ describe('a recovery runs only while its pages can go', () => {
 		expect(snap().rooms.find((room) => room.id === 'general')!.timeline.order).toEqual(['11', '12', '13', '14', '15', '20']);
 	});
 
-	it('refuses a load that nothing could carry out, rather than leaving it waiting', async () => {
+	it('refuses a load once disconnected, rather than leaving it waiting with no connection to carry it out', async () => {
 		const { client, socket } = await signedIn();
 		socket.receive({ method: 'room_update', params: { joined: [{ room_id: '30', log_id: '30', parent_room_id: 'general', title: 'Side', latest_log_id: '31', history_log_id: '30' }] } });
 		client.disconnect();
-		// Disconnected, no room is shown to load.
-		await expect(client.loadRoom('30')).rejects.toThrow();
+		// Its rooms are kept to resume, not shown: there is none to load.
+		await expect(client.loadRoom('30')).rejects.toThrow('Unknown room');
 	});
 });
 
@@ -170,6 +170,30 @@ describe('a sign-in ceremony holds other requests back', () => {
 		await login;
 		expect(socket.request('me').params).toEqual({ name: 'Renamed' });
 		expect(failed).toBe(false);
+	});
+
+	it('counts no time held back against a request: a sheet up longer than its timeout fails nothing', async () => {
+		const { client, socket } = await connect([], { auth: ['webauthn', 'guest'], storage });
+		let answer!: (credential: JsonObject) => void;
+		vi.mocked(requestPasskey).mockImplementation(() => new Promise((resolve) => (answer = resolve)));
+		const login = client.usePasskey('login');
+		await settle();
+		await socket.reply('auth', { challenge_id: 'challenge-1', public_key: { challenge: 'x' } });
+		let failed: unknown;
+		client.setDisplayName('Renamed')!.promise.catch((cause) => (failed = cause));
+		// A phone's QR flow, a Face ID retry: well past the 20 s a request may take.
+		await vi.advanceTimersByTimeAsync(45_000);
+		expect(failed).toBeUndefined();
+		answer({ id: 'credential' });
+		await settle();
+		await socket.reply('auth', { you: ada });
+		await login;
+		expect(socket.request('me').params).toEqual({ name: 'Renamed' });
+		// From when it went, it has its whole time again: unanswered, it fails as any request does.
+		await vi.advanceTimersByTimeAsync(19_000);
+		expect(failed).toBeUndefined();
+		await vi.advanceTimersByTimeAsync(2_000);
+		expect(String(failed)).toMatch(/timed out/);
 	});
 
 	it('sends what waited once a cancelled ceremony ends', async () => {
