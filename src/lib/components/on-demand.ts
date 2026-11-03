@@ -10,6 +10,10 @@ export { default as PreferencesDialog } from './PreferencesDialog.svelte';
 export { default as RoomEditor } from './RoomEditor.svelte';
 export { default as SearchDialog } from './SearchDialog.svelte';
 export { default as SignInLinkDialog } from './SignInLinkDialog.svelte';
+// Hosts that draw nothing until their state (eager) asks, rendered from then on (`Lazy.once`): the page's popovers.
+export { default as ProfileCard } from './ProfileCard.svelte';
+export { default as ReactorsPopover } from './ReactorsPopover.svelte';
+export { default as ServerPane } from './ServerPane.svelte';
 // Only Preferences' Profile section draws it (ProfileBar's `profileForm` snippet), and Preferences is in here too.
 export { default as ProfileEditor } from '$lib/design/components/ProfileEditor.svelte';
 // Preferences' Export.

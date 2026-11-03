@@ -24,6 +24,19 @@ export class Lazy<T> {
 		return this.#component;
 	}
 
+	#asked = false;
+
+	/**
+	 * For a host that draws nothing until its state asks it to (a popover, a viewer), which an eager page would keep
+	 * mounted throughout: undefined until `asked` has been true once, which asks for the code, then the component
+	 * (`component`) from then on, so it stays mounted once it has been. Its state stays eager, so an ask before the code
+	 * arrives is drawn as it lands. Render it as `{#if lazy.once(Boolean(state.current))}`.
+	 */
+	once(asked: boolean): T | undefined {
+		if (asked) this.#asked = true;
+		return this.#asked ? this.component : undefined;
+	}
+
 	/**
 	 * Settles once the code has loaded, whoever asked for it (`prefetchLazy`, say), without asking for it itself: for
 	 * what can wait to be asked for, and should hold nothing up meanwhile.
@@ -42,6 +55,32 @@ export class Lazy<T> {
 		);
 		return this.#loading;
 	}
+}
+
+/**
+ * Several lazy parts from one chunk, loaded in one request: the first part asked for loads them all, and every part is
+ * then here, so what waits on one without asking (`whenLoaded`) learns of it whichever part was asked for. A failed
+ * load is forgotten, so the next ask fetches again. Gives what makes a part: `part((m) => m.Dialog)`.
+ */
+export function lazyChunk<M>(load: () => Promise<M>): <T>(pick: (loaded: M) => T) => Lazy<T> {
+	const parts: Lazy<unknown>[] = [];
+	let chunk: Promise<M> | undefined;
+	const loadChunk = (): Promise<M> =>
+		(chunk ??= load().then(
+			(loaded) => {
+				for (const part of parts) part.load().catch(() => undefined);
+				return loaded;
+			},
+			(error: unknown) => {
+				chunk = undefined;
+				throw error;
+			}
+		));
+	return (pick) => {
+		const lazy = new Lazy(() => loadChunk().then(pick));
+		parts.push(lazy);
+		return lazy;
+	};
 }
 
 const registered: Lazy<unknown>[] = [];

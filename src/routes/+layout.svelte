@@ -8,8 +8,9 @@
 	import '$lib/design/fonts.css';
 	import '../app.css';
 	import favicon from '$lib/assets/favicon.svg';
-	import EmojiPopover from '$lib/components/EmojiPopover.svelte';
-	import MediaViewerHost from '$lib/components/MediaViewerHost.svelte';
+	import { emojiPopover, mediaViewerHost } from '$lib/components/overlays-lazy';
+	import { emojiPicker } from '$lib/ui/emoji-picker.svelte';
+	import { mediaViewer } from '$lib/ui/media-viewer.svelte';
 	import TerminalViewerHost from '$lib/components/TerminalViewerHost.svelte';
 	import UpdateNotice from '$lib/components/UpdateNotice.svelte';
 
@@ -30,10 +31,11 @@
 </svelte:head>
 
 {@render children()}
-<!-- The one full emoji picker, outside the shell so nothing in it clips the popover. -->
-<EmojiPopover />
+<!-- The one full emoji picker, outside the shell so nothing in it clips the popover. This and the image viewer load on
+     demand (`overlays.ts`) and mount once first opened: the state that opens them is here from the start. -->
+{#if emojiPopover.once(Boolean(emojiPicker.current))}{@const EmojiPopover = emojiPopover.component!}<EmojiPopover />{/if}
 <!-- The one image viewer, full screen over everything. -->
-<MediaViewerHost />
+{#if mediaViewerHost.once(mediaViewer.open)}{@const MediaViewerHost = mediaViewerHost.component!}<MediaViewerHost />{/if}
 <!-- The one terminal viewer, a terminal embed full screen. -->
 <TerminalViewerHost />
 <UpdateNotice />

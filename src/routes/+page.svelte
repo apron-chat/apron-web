@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { messageEditor, newPrivateDialog, newThreadDialog, roomEditor, searchDialog, signInLinkDialog } from '$lib/components/lazy';
+	import { messageEditor, newPrivateDialog, newThreadDialog, profileCardHost, reactorsPopover, roomEditor, searchDialog, serverPaneHost, signInLinkDialog } from '$lib/components/lazy';
 	import { onMount, tick, untrack } from 'svelte';
 	import { fromAction } from 'svelte/attachments';
 	import { pushState, replaceState } from '$app/navigation';
@@ -26,7 +26,8 @@
 	import { decorateCode } from '$lib/ui/copy-code';
 	import { emojiAnchor, emojiPicker, type EmojiPickerRequest } from '$lib/ui/emoji-picker.svelte';
 	import { openProfileFrom, profileCard } from '$lib/ui/profile-card.svelte';
-	import { showReactors } from '$lib/ui/reactors.svelte';
+	import { reactorsList, showReactors } from '$lib/ui/reactors.svelte';
+	import { serverPane } from '$lib/ui/server-pane.svelte';
 	import RoomHeader from '$lib/components/RoomHeader.svelte';
 	import SelectionBar from '$lib/components/SelectionBar.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
@@ -36,9 +37,6 @@
 	import InstallPrompt from '$lib/components/InstallPrompt.svelte';
 	import { markFirstMessages } from '$lib/startup-marks';
 	import { INSTALL_OFFER_AFTER_MS, installWay, installedAlready } from '$lib/ui/install';
-	import ProfileCard from '$lib/components/ProfileCard.svelte';
-	import ServerPane from '$lib/components/ServerPane.svelte';
-	import ReactorsPopover from '$lib/components/ReactorsPopover.svelte';
 	import StatusBanner from '$lib/design/components/StatusBanner.svelte';
 	import ConnectionNotice from '$lib/components/ConnectionNotice.svelte';
 	import NoRoom from '$lib/components/NoRoom.svelte';
@@ -3462,10 +3460,19 @@
 		{@const NewPrivateDialog = newPrivateDialog.component}
 		<NewPrivateDialog client={client!} {session} enabled={canStartPrivate} onnamed={(roomId) => arrivals.mine(roomId)} onopen={openPrivateRoom} onclose={() => (newPrivateOpen = false)} />
 	{/if}
-	<!-- Popovers over the whole page, outside the member list: they open from messages too, and must show while it's shut. -->
-	<ServerPane {client} {session} onnewserver={previewMode ? undefined : () => openConnect()} ondisconnect={previewMode ? undefined : disconnect} />
-	<ProfileCard {client} {session} room={paneRoom} canChange={canAddMembers} canMention={Boolean(composer) && canCompose && !selection.active} canMessage={canStartPrivate} onmention={(userId) => composer?.mention(userId)} onnamed={(roomId) => arrivals.mine(roomId)} onopenroom={openPrivateRoom} />
-	<ReactorsPopover />
+	<!--
+		Popovers over the whole page, outside the member list: they open from messages too, and must show while it's shut.
+		Each loaded on demand and mounted once first opened; the state that opens it is here from the start.
+	-->
+	{#if serverPaneHost.once(Boolean(serverPane.anchor))}
+		{@const ServerPane = serverPaneHost.component!}
+		<ServerPane {client} {session} onnewserver={previewMode ? undefined : () => openConnect()} ondisconnect={previewMode ? undefined : disconnect} />
+	{/if}
+	{#if profileCardHost.once(Boolean(profileCard.current))}
+		{@const ProfileCard = profileCardHost.component!}
+		<ProfileCard {client} {session} room={paneRoom} canChange={canAddMembers} canMention={Boolean(composer) && canCompose && !selection.active} canMessage={canStartPrivate} onmention={(userId) => composer?.mention(userId)} onnamed={(roomId) => arrivals.mine(roomId)} onopenroom={openPrivateRoom} />
+	{/if}
+	{#if reactorsPopover.once(Boolean(reactorsList.current))}{@const ReactorsPopover = reactorsPopover.component!}<ReactorsPopover />{/if}
 	<!-- While reconnecting, the banner at the top already says what went wrong (statusLabel). -->
 	<Toasts {feedback} error={snapshot.error && snapshot.error !== dismissedError && session.connection !== 'reconnecting' ? snapshot.error : undefined} ondismisserror={() => (dismissedError = snapshot.error)} />
 </AppShell>
