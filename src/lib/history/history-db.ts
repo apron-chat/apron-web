@@ -119,14 +119,28 @@ export class HistoryMissing extends Error {
  * Opens (or makes) the history database named `name` (`historyName`). Another tab deleting it (signing out, or no
  * longer keeping) closes it here, and `onclose` hears so. With `existing`, one there is none of is not made: it
  * rejects with `HistoryMissing`, as asking `databases()` first would tell, in one request rather than two.
+ *
+ * A database of that name without the history's stores is none of ours: what an upgrade aborted for `existing` can
+ * leave where a browser keeps the database anyway (WebKit bug 213116), at the version, with nothing in it, so no
+ * later open would upgrade it. It is deleted, then made anew, or with `existing`, there is none.
  */
-export function openHistory(databases: Databases, name: string, onclose?: () => void, { existing = false } = {}): Promise<IDBDatabase> {
+export async function openHistory(databases: Databases, name: string, onclose?: () => void, { existing = false } = {}): Promise<IDBDatabase> {
+	const db = await openOnce(databases, name, onclose, existing);
+	if (db.objectStoreNames.contains('records')) return db;
+	db.close();
+	await deleteHistory(databases, name);
+	if (existing) throw new HistoryMissing();
+	return openOnce(databases, name, onclose, false);
+}
+
+function openOnce(databases: Databases, name: string, onclose: (() => void) | undefined, existing: boolean): Promise<IDBDatabase> {
 	return new Promise((resolve, reject) => {
 		const request = databases.open(name, DB_VERSION);
 		let missing = false;
 		request.onupgradeneeded = (event) => {
 			if (existing && event.oldVersion === 0) {
-				// Aborting the upgrade that would make it leaves no database behind.
+				// Aborting the upgrade that would make it leaves no database behind (where a browser keeps one anyway,
+				// empty, `openHistory` deletes it the next time it meets it).
 				missing = true;
 				request.transaction?.abort();
 				return;

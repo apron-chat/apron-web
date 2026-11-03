@@ -151,6 +151,30 @@ describe('scanMessages', () => {
 });
 
 describe('history databases', () => {
+	it('take an empty database of a history’s name, as WebKit can leave after an aborted upgrade, for none: deleted, then made anew or none', async () => {
+		const databases = new IDBFactory();
+		/** At the version, without the stores: what WebKit bug 213116 leaves where `existing` aborted the upgrade. */
+		const leftover = (name: string) => new Promise<void>((done) => {
+			const request = databases.open(name, 1);
+			request.onsuccess = () => {
+				request.result.close();
+				done();
+			};
+		});
+		const read = historyName(SERVER, 'left-read');
+		await leftover(read);
+		await expect(openHistory(databases, read, undefined, { existing: true })).rejects.toBeInstanceOf(HistoryMissing);
+		expect((await listHistories(databases)).map((entry) => entry.name)).not.toContain(read);
+
+		const kept = historyName(SERVER, 'left-write');
+		await leftover(kept);
+		const db = await openHistory(databases, kept);
+		expect([...db.objectStoreNames].sort()).toEqual(['meta', 'records', 'rooms']);
+		await writeHistory(db, write({ whole: [{ room: 'general', messages: [message('1')], reactions: [], memberships: [] }] }), new Set(['general']));
+		expect((await readKept(db))?.messages.map((record) => record.message_id)).toEqual(['1']);
+		db.close();
+	});
+
 	it('open only if there is one when asked to (`existing`), making none where there isn’t', async () => {
 		const databases = new IDBFactory();
 		const name = historyName(SERVER, 'nobody');

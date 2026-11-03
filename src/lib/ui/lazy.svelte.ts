@@ -119,7 +119,10 @@ export function prefetchLazy(): void {
 export function cancelWhileWaiting(waiting: boolean, cancel: () => void): (() => void) | undefined {
 	if (!waiting || typeof document === 'undefined') return;
 	const key = (event: KeyboardEvent) => {
-		if (event.key === 'Escape') cancel();
+		if (event.key !== 'Escape') return;
+		// The popover's Escape, as it would be shown: what lies under it (a dialog, an overlay) stays open.
+		event.stopPropagation();
+		cancel();
 	};
 	document.addEventListener('keydown', key, true);
 	document.addEventListener('pointerdown', cancel, true);

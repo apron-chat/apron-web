@@ -10,6 +10,14 @@ describe('cancelWhileWaiting', () => {
 		expect(cancel).not.toHaveBeenCalled();
 
 		const stop = cancelWhileWaiting(true, cancel)!;
+		// Escape is the waiting popover's, as it would be shown: nothing under it hears it.
+		const under = vi.fn();
+		document.body.addEventListener('keydown', under);
+		document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+		expect(under).not.toHaveBeenCalled();
+		expect(cancel).toHaveBeenCalledTimes(1);
+		cancel.mockClear();
+		document.body.removeEventListener('keydown', under);
 		document.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }));
 		expect(cancel).not.toHaveBeenCalled();
 		document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));

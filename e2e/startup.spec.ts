@@ -108,8 +108,8 @@ test.describe('startup, with the code that loads on demand held back', { tag: '@
 
 /**
  * The first painted frame's messages: which show in the message list, where, and how far from its latest the list
- * is scrolled. Read a task after the frame that first draws a message (a frame's paint, then this), by an observer
- * set before the page loads.
+ * is scrolled. Read in the animation frame that first draws a message, before it paints, by an observer set before
+ * the page loads.
  */
 async function watchFirstFrame(page: Page): Promise<void> {
 	await page.addInitScript(() => {
@@ -126,7 +126,9 @@ async function watchFirstFrame(page: Page): Promise<void> {
 			const seen = () => {
 				const list = document.querySelector('[data-testid="message-list"]');
 				if (!list?.querySelector('article[data-message-id]')) return false;
-				requestAnimationFrame(() => setTimeout(() => resolve(snapshot(list))));
+				// In the frame's own callbacks, after everything up to it (the pane's fill) and before its paint: what it
+				// draws. A task after the paint would see the first of the rest already revealed.
+				requestAnimationFrame(() => resolve(snapshot(list)));
 				return true;
 			};
 			const observer = new MutationObserver(() => {
@@ -144,7 +146,9 @@ for (const [device, use] of [['desktop', DEVICES.desktop], ['phone', DEVICES.pho
 		test.describe(`the first frame, on a ${device}${busy ? ', a busy account' : ''}`, { tag: '@full' }, () => {
 			// A server a round trip away (`rttMs`), as a real one is: the room's history arrives after the room is shown,
 			// which is when the page fills it newest first. Answered at once, it's there as the room first renders.
-			test.use({ ...use, knobs: { rttMs: 150, ...(busy ? { manyRooms: 40, filler: { general: 1500 } } : {}) } });
+			// The newest messages are plain ones (`filler`): the demo's own newest, with its embeds, grows as they load
+			// after the first paint, which moves what's shown however the first frame was drawn.
+			test.use({ ...use, knobs: { rttMs: 150, ...(busy ? { manyRooms: 40, filler: { general: 1500 } } : { filler: { general: 30 } }) } });
 
 			test('shows the newest messages at the latest, as they stay once the rest of the room has come', async ({ preview, page }) => {
 				await watchFirstFrame(page);
@@ -160,7 +164,12 @@ for (const [device, use] of [['desktop', DEVICES.desktop], ['phone', DEVICES.pho
 					last = now;
 					return still;
 				}, { intervals: [300] }).toBe(true);
-				expect(last!.shown).toEqual(first.shown);
+				// The same messages, each where it was (to a pixel: layout rounds).
+				expect(last!.shown.map((row) => row.id)).toEqual(first.shown.map((row) => row.id));
+				for (const [index, row] of last!.shown.entries()) {
+					expect(Math.abs(row.top - first.shown[index].top), `${row.id}'s top`).toBeLessThanOrEqual(1);
+					expect(Math.abs(row.bottom - first.shown[index].bottom), `${row.id}'s bottom`).toBeLessThanOrEqual(1);
+				}
 				expect(Math.abs(last!.fromLatest)).toBeLessThanOrEqual(2);
 			});
 		});

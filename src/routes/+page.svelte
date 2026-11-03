@@ -2905,11 +2905,6 @@
 	}
 
 	/**
-	 * Older items landed above: keeps what was on screen in place, given the
-	 * list's scroll top and height from before, unless the pane follows the
-	 * latest. Where the browser anchored the view itself this is already the position.
-	 */
-	/**
 	 * Renders more of the open pane's first items, newest first, until the first of them sits above the pane's top
 	 * (`FILL_SLACK_PX` above) at its latest, where the pane opens: from there down it shows what it would with all of
 	 * them, and nothing more is drawn before the frame paints. Each step comes before that paint (a microtask after the
@@ -2973,6 +2968,11 @@
 		return stop;
 	}
 
+	/**
+	 * Older items landed above: keeps what was on screen in place, given the
+	 * list's scroll top and height from before, unless the pane follows the
+	 * latest. Where the browser anchored the view itself this is already the position.
+	 */
 	function keepPlace(scroller: HTMLElement | undefined, top: number, height: number): void {
 		if (!scroller || messageScroll !== scroller || stickToBottom) return;
 		scroller.scrollTop = top + (scroller.scrollHeight - height);

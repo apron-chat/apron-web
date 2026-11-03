@@ -225,21 +225,30 @@ export class HistoryKeeper {
 		return this.openNamed(historyName(server, userId));
 	}
 
-	/** The database `name` opened, as `openNamed` keeps it, if there is one: none is made when there isn't. */
+	/**
+	 * The database `name` opened, as `openNamed` keeps it, if there is one: none is made when there isn't. Kept only
+	 * once open, so a writer opening it meanwhile (`openNamed`) never meets a "none here" meant for this.
+	 */
 	private async openKept(name: string): Promise<boolean> {
-		if (this.dbs.has(name)) return Boolean(await this.dbs.get(name)!.catch(() => undefined));
-		const db = openHistory(this.factory, name, () => this.dbs.delete(name), { existing: true });
-		this.dbs.set(name, db);
+		const cached = this.dbs.get(name);
+		if (cached) return Boolean(await cached.catch(() => undefined));
+		let db: IDBDatabase;
 		try {
-			await db;
-			return true;
+			db = await openHistory(this.factory, name, () => this.dbs.delete(name), { existing: true });
 		} catch {
-			this.dbs.delete(name);
 			return false;
 		}
+		// A writer opened it meanwhile: one connection, theirs.
+		const opened = this.dbs.get(name);
+		if (opened) {
+			db.close();
+			return Boolean(await opened.catch(() => undefined));
+		}
+		this.dbs.set(name, Promise.resolve(db));
+		return true;
 	}
 
-		private openNamed(name: string): Promise<IDBDatabase> {
+	private openNamed(name: string): Promise<IDBDatabase> {
 		let db = this.dbs.get(name);
 		if (!db) {
 			db = openHistory(this.factory, name, () => this.dbs.delete(name));

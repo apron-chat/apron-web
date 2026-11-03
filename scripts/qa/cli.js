@@ -207,6 +207,8 @@ async function main() {
 				writeFileSync(out, `${JSON.stringify({ ...meta, probes: samplesOf(result, probes), bundle: counts.bundle }, null, 1)}\n`);
 				console.log(`json: ${relative(process.cwd(), out)}`);
 			}
+			if (o.update && o.changed && budget.chromium && budget.chromium !== browser.version())
+				throw new Error(`--changed keeps counts the baseline recorded on Chromium ${budget.chromium}, and this is ${browser.version()}: record the whole baseline with --update`);
 			if (o.update) {
 				// --changed: only what moved past its slack, or is new, takes this run's count.
 				writeBudget(path, o.changed ? changedOnly(counts, budget) : counts, { runs, cpu, chromium: browser.version() });
@@ -241,7 +243,7 @@ async function main() {
 			else if (rows.some((r) => r.status === 'under' || r.status === 'new')) console.log('\nSome counts are new or well under budget: `npm run qa -- startup-budget --update` records them.');
 			return over.length || rows.some((r) => r.status === 'new') ? 1 : 0;
 		}
-				case 'budget-diff': {
+		case 'budget-diff': {
 			const [a, b] = o._;
 			if (!a || !b) throw new Error('budget-diff needs two files written by `budget --out`');
 			const [ja, jb] = [a, b].map((f) => JSON.parse(readFileSync(f, 'utf8')));
