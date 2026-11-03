@@ -785,6 +785,12 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-shell-sidebody .ap-room, .ap-timeline .ap-msg:not(.ap-msg-system) { margin-inline-start: calc(var(--edge-margin, 0px) - var(--edge)); border-inline-start: var(--edge) solid transparent; border-start-start-radius: 0; border-end-start-radius: 0; }
 .ap-member { margin-inline-end: calc(var(--edge-margin, 0px) - var(--edge)); border-inline-end: var(--edge) solid transparent; border-start-end-radius: 0; border-end-end-radius: 0; }
 .ap-shell-sidebody .ap-room-active:not(.ap-room-nested)::before, .ap-timeline .ap-msg-mention::before { inset-inline-start: calc(-1 * var(--edge)); border-start-start-radius: 0; border-end-start-radius: 0; }
+/* A run of one sender's messages that mention you (grouped, so touching) is one highlight: where two meet, their corners
+   and their bar run straight through. `:has()` looks only at the next row. */
+.ap-timeline .ap-msg-mention:has(+ .ap-msg-mention.ap-msg-grouped) { border-end-end-radius: 0; }
+.ap-timeline .ap-msg-mention:has(+ .ap-msg-mention.ap-msg-grouped)::before { bottom: 0; border-end-end-radius: 0; }
+.ap-timeline .ap-msg-mention + .ap-msg-mention.ap-msg-grouped { border-start-end-radius: 0; }
+.ap-timeline .ap-msg-mention + .ap-msg-mention.ap-msg-grouped::before { top: 0; border-start-end-radius: 0; }
 /* Role badges follow the name, as beside a message's sender. */
 .ap-member-who { display: flex; align-items: center; gap: var(--space-2); flex: 0 1e12 auto; min-width: 0; margin: 0; padding: 0; border: 0; border-radius: var(--radius-sm); background: none; color: inherit; font: inherit; text-align: start; cursor: pointer; }
 /* Offline members (§4.5) recede, badges and all; their ring and name still read. */

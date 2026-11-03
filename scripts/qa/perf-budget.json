@@ -78,7 +78,7 @@
 		"scroll-timeline": {
 			"layouts": 9,
 			"styleRecalcs": 9,
-			"calls": 8727
+			"calls": 7591
 		},
 		"type-composer": {
 			"layouts": 36,
@@ -87,7 +87,7 @@
 		},
 		"hover-messages": {
 			"layouts": 7,
-			"styleRecalcs": 10,
+			"styleRecalcs": 7,
 			"calls": 7255
 		}
 	},
