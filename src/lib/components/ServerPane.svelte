@@ -61,18 +61,13 @@
 	});
 	let shownYou = $derived(you ? { name: you.name ? withoutBidiOverrides(you.name) : `@${you.user_id}`, guest: !session.passkeySession } : undefined);
 	let protocol = $derived(typeof session.server?.apron === 'number' ? `Apron ${session.server.apron}` : undefined);
-	/** The address was just copied: its button says so a moment. */
-	let copied = $state(false);
-	let copiedTimer: ReturnType<typeof setTimeout> | undefined;
-
-	async function copyAddress(): Promise<void> {
+	/** Copies the address; whether it did, which its button then says for a moment. */
+	async function copyAddress(): Promise<boolean> {
 		try {
 			await navigator.clipboard.writeText(client.url);
-			copied = true;
-			clearTimeout(copiedTimer);
-			copiedTimer = setTimeout(() => (copied = false), 1500);
+			return true;
 		} catch {
-			copied = false;
+			return false;
 		}
 	}
 
@@ -145,7 +140,6 @@
 		onprofile={shownYou ? editProfile : undefined}
 		{protocol}
 		oncopyaddress={copyAddress}
-		{copied}
 		onnewserver={onnewserver && (() => { serverPane.close(); onnewserver(); })}
 		ondisconnect={ondisconnect && (() => { serverPane.close(); ondisconnect(); })}
 		onclose={() => serverPane.close()}

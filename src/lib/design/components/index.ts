@@ -1,6 +1,7 @@
 /* Apron's presentational components: the design system's source of truth. They take plain props (no client, no stores),
    so the app, previews and design mockups all render the same code. Section numbers (§, Appendix) refer to PROTOCOL.md. */
 export { default as Button } from './Button.svelte';
+export { default as CopyButton } from './CopyButton.svelte';
 export { default as Avatar } from './Avatar.svelte';
 export { default as Message } from './Message.svelte';
 export { default as ServerCard } from './ServerCard.svelte';

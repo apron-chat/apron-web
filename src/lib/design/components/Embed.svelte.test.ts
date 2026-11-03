@@ -134,29 +134,18 @@ describe('EmbedTerminal', () => {
 		expect(open.nextElementSibling).toBe(button('Expand terminal'));
 	});
 
-	it('offers Copy, only with `oncopy`, which says Copied for a moment once it copied', async () => {
-		vi.useFakeTimers();
-		try {
-			render(EmbedTerminal, { kind: 'terminal', url: '#' });
-			expect(queryByRole('button', 'Copy terminal text')).toBeNull();
-			unmount();
-			const oncopy = vi.fn(async () => false);
-			render(EmbedTerminal, { kind: 'terminal', url: '#', oncopy, page: 'https://terminal.apron.chat/' });
-			const copy = button('Copy terminal text');
-			expect(copy.nextElementSibling).toBe(queryByRole('link', 'Open terminal in a new tab'));
-			copy.click();
-			await vi.advanceTimersByTimeAsync(0);
-			expect(oncopy).toHaveBeenCalledOnce();
-			expect(copy.getAttribute('aria-label')).toBe('Copy terminal text');
-			oncopy.mockResolvedValue(true);
-			copy.click();
-			await vi.advanceTimersByTimeAsync(0);
-			expect([copy.getAttribute('aria-label'), copy.title]).toEqual(['Copied', 'Copied']);
-			await vi.advanceTimersByTimeAsync(1500);
-			expect(copy.getAttribute('aria-label')).toBe('Copy terminal text');
-		} finally {
-			vi.useRealTimers();
-		}
+	it('offers Copy (a CopyButton), only with `oncopy`, ahead of Open', async () => {
+		render(EmbedTerminal, { kind: 'terminal', url: '#' });
+		expect(queryByRole('button', 'Copy terminal text')).toBeNull();
+		unmount();
+		const oncopy = vi.fn(() => true);
+		render(EmbedTerminal, { kind: 'terminal', url: '#', oncopy, page: 'https://terminal.apron.chat/' });
+		const copy = button('Copy terminal text');
+		expect(copy.closest('.ap-embed-termhead')).not.toBeNull();
+		expect(copy.nextElementSibling).toBe(queryByRole('link', 'Open terminal in a new tab'));
+		copy.click();
+		expect(oncopy).toHaveBeenCalledOnce();
+		await vi.waitFor(() => expect(queryByRole('button', 'Copied')).toBe(copy));
 	});
 
 	it('expands on a tap on its screen, on a touch screen, and leaves a mouse’s click to select', () => {

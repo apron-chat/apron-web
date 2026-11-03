@@ -60,7 +60,8 @@ test.describe('the rooms list’s head', () => {
 test.describe('the server pane', () => {
 	test.use(DEVICES.desktop);
 
-	test('says what is known of the server, and Connect to another server… opens the connect screen, closing it', async ({ preview, page }) => {
+	test('says what is known of the server, and Connect to another server… opens the connect screen, closing it', async ({ preview, page, context }) => {
+		await context.grantPermissions(['clipboard-read', 'clipboard-write']);
 		await preview.openRoot({ server: { title: 'Mock Chat', description: 'Where the **mock** team chats.' } });
 		const server = head(preview).getByRole('button', { name: /^Server: / });
 		await server.click();
@@ -74,6 +75,9 @@ test.describe('the server pane', () => {
 		await expect(pane.locator('.ap-servcard-dot-ok')).toBeVisible();
 		await expect(pane.locator('.ap-servcard-you')).toHaveText(/^Signed in as .+ \(guest\)\s*·\s*Edit profile$/);
 		// The address, and a button that copies it.
+		await pane.getByRole('button', { name: 'Copy the address' }).click();
+		await expect(pane.getByRole('button', { name: 'Copied the address' })).toBeVisible();
+		expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('wss://server.apron.chat/');
 		await expect(pane.getByRole('button', { name: 'Copy the address' })).toBeVisible();
 		await pane.getByRole('button', { name: 'Connect to another server…', exact: true }).click();
 		await expect(page.getByRole('form', { name: 'Sign in' })).toBeVisible();

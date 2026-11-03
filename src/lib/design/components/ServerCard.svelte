@@ -1,9 +1,8 @@
 <script lang="ts">
-	import Check from '@lucide/svelte/icons/check';
-	import Copy from '@lucide/svelte/icons/copy';
 	import type { Snippet } from 'svelte';
 	import type { ClassValue } from 'svelte/elements';
 	import Button from './Button.svelte';
+	import CopyButton from './CopyButton.svelte';
 	import Popover from './Popover.svelte';
 	import type { MediaSrc, PopoverPlacement } from './types';
 	import { initials } from './util';
@@ -31,9 +30,8 @@
 		onprofile?: () => void;
 		/** The protocol it speaks, such as "Apron 9": small, at the foot. */
 		protocol?: string;
-		/** A copy button beside the address; `copied` while it says it copied. */
-		oncopyaddress?: () => void;
-		copied?: boolean;
+		/** A copy button beside the address, which copies it; resolves whether it did, which the button then says for a moment. */
+		oncopyaddress?: () => boolean | Promise<boolean>;
 		/** Connect to another server…: the connect screen. */
 		onnewserver?: () => void;
 		/** Disconnect: closes the connection to this one. */
@@ -51,7 +49,7 @@
 		offsetHeight?: number;
 	}
 	let {
-		mode = 'popover', top, left, width, height, name, address, avatar, description, connection, you, onprofile, protocol, oncopyaddress, copied = false,
+		mode = 'popover', top, left, width, height, name, address, avatar, description, connection, you, onprofile, protocol, oncopyaddress,
 		onnewserver, ondisconnect, onclose, class: className, testid, onkeydown, onfocusout, element = $bindable(), offsetHeight = $bindable(0)
 	}: Props = $props();
 
@@ -82,7 +80,7 @@
 	<div class="ap-servcard-address-row">
 		<span class="ap-servcard-label">Address</span>
 		<code class="ap-servcard-address" title={protocol ? `${address} · ${protocol}` : address}>{address}</code>
-		{#if oncopyaddress}<button type="button" class="ap-iconbtn ap-servcard-copy" aria-label={copied ? 'Copied the address' : 'Copy the address'} title={copied ? 'Copied' : 'Copy the address'} onclick={oncopyaddress}>{#if copied}<Check size={14} aria-hidden="true" />{:else}<Copy size={14} aria-hidden="true" />{/if}</button>{/if}
+		{#if oncopyaddress}<CopyButton oncopy={oncopyaddress} label="Copy the address" copiedLabel="Copied the address" class="ap-servcard-copy" />{/if}
 	</div>
 	{#if protocol}<p class="ap-servcard-meta">{protocol}</p>{/if}
 	{#if onnewserver || ondisconnect}
