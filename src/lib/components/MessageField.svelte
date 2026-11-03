@@ -48,7 +48,9 @@
 		get disabled() { return disabled; },
 		submit: () => onsubmit(),
 		oninput: () => oninput?.(),
-		onmention: () => onmention?.()
+		onmention: () => onmention?.(),
+		// Read once a picker would open, which is what asks for its code (`autocompletePicker`): until it has come, none shows.
+		get pickerShown() { return autocompletePicker.component !== undefined; }
 	}, `${uid}-suggestions`);
 
 	/** Focuses the field, the caret at the end unless it is in there already (or, with `end`, wherever it is). */

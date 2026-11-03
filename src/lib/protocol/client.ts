@@ -2608,8 +2608,11 @@ export class ChatClient {
 
 	/**
 	 * Membership changed: listings of rooms and threads to join are stale. A room shown by the listing of joined
-	 * rooms (`joinedId`) is no change, only news to this client: a listing asked for behind that one, on the same
-	 * connection, lists as of then or later, and any change since comes as a `room_update` of its own (§4.2.1).
+	 * rooms (`joinedId`) is no change, only news to this client, so a listing asked for behind that one, on the same
+	 * connection, is kept. The server may answer the two in either order (§1), so it can predate a join the other
+	 * already shows; what keeps that harmless is that a result holds every change notified before it, a change after
+	 * it comes as a `room_update` of its own (§4.2.1), which forgets the listing, and joined rooms are taken out of a
+	 * listing to join wherever one is shown (`withJoined`, the Sidebar).
 	 */
 	private forgetListings(parentRoomId: string | undefined, joinedId?: string): void {
 		const key = parentRoomId ?? '';

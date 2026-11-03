@@ -25,16 +25,27 @@ export class Lazy<T> {
 	}
 
 	#asked = false;
+	/** Ends listening for a press elsewhere or Escape while an ask waits on the code (`once`'s `cancel`). */
+	#waiting?: () => void;
 
 	/**
 	 * For a host that draws nothing until its state asks it to (a popover, a viewer), which an eager page would keep
 	 * mounted throughout: undefined until `asked` has been true once, which asks for the code, then the component
 	 * (`component`) from then on, so it stays mounted once it has been. Its state stays eager, so an ask before the code
-	 * arrives is drawn as it lands. Render it as `{#if lazy.once(Boolean(state.current))}`.
+	 * arrives is drawn as it lands, unless the viewer moves on first: while it waits, a press anywhere or Escape calls
+	 * `cancel` (`cancelWhileWaiting`), as they would once it shows. Render it as
+	 * `{#if lazy.once(Boolean(state.current), () => state.close())}`: it is read only as the ask or the code changes,
+	 * so the page's other updates don't visit it.
 	 */
-	once(asked: boolean): T | undefined {
+	once(asked: boolean, cancel?: () => void): T | undefined {
 		if (asked) this.#asked = true;
-		return this.#asked ? this.component : undefined;
+		const component = this.#asked ? this.component : undefined;
+		if (asked && cancel && component === undefined) this.#waiting ??= cancelWhileWaiting(true, cancel);
+		else {
+			this.#waiting?.();
+			this.#waiting = undefined;
+		}
+		return component;
 	}
 
 	/**
@@ -97,4 +108,23 @@ export function prefetchLazy(): void {
 	setTimeout(() => idle(() => {
 		for (const lazy of registered) lazy.load().catch(() => undefined);
 	}), PREFETCH_AFTER_MS);
+}
+
+/**
+ * While `waiting` (a popover asked for before its code has come, so nothing of it shows yet), Escape or a press anywhere
+ * calls `cancel`, as they would once it shows: an ask the viewer has moved on from doesn't open late, on an anchor that
+ * may be gone by then. One left alone opens as its code lands. For an effect beside the host:
+ * `$effect(() => cancelWhileWaiting(Boolean(state.current) && !host.component, () => state.close()))`.
+ */
+export function cancelWhileWaiting(waiting: boolean, cancel: () => void): (() => void) | undefined {
+	if (!waiting || typeof document === 'undefined') return;
+	const key = (event: KeyboardEvent) => {
+		if (event.key === 'Escape') cancel();
+	};
+	document.addEventListener('keydown', key, true);
+	document.addEventListener('pointerdown', cancel, true);
+	return () => {
+		document.removeEventListener('keydown', key, true);
+		document.removeEventListener('pointerdown', cancel, true);
+	};
 }

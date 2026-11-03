@@ -35,8 +35,8 @@ function connectEarly(): void {
 		// The client waits to connect while the page is hidden or offline: so does this.
 		if (document.visibilityState === 'hidden' || navigator.onLine === false) return;
 		const location = window.location;
-		// A notification's link names its room only (`takePushRoom`).
-		const link = new URLSearchParams(location.hash.slice(1)).has(PUSH_ROOM_PARAM) ? {} : readDestination(location);
+		// A notification's link names its room only (`takePushRoom`, which counts one with a room, as this does).
+		const link = new URLSearchParams(location.hash.slice(1)).get(PUSH_ROOM_PARAM) ? {} : readDestination(location);
 		openEarlyConnection(startServer(loadServerUrl() ?? defaultWebSocketUrl(location), link, loadRecentServers(), location).server);
 	} catch {
 		// Never in the way of the app starting: the client connects itself.

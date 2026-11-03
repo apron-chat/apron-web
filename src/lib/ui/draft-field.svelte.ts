@@ -47,6 +47,11 @@ export interface DraftHost {
 	oninput?(): void;
 	/** The mention picker opened: a moment to refresh who can be named. */
 	onmention?(): void;
+	/**
+	 * Whether the picker can show, read only once one would open: false while its code is still on its way (it loads
+	 * on demand), when the keys stay the field's, as what shows says. Unset, it always can.
+	 */
+	readonly pickerShown?: boolean;
 }
 
 export class DraftField {
@@ -111,10 +116,12 @@ export class DraftField {
 		this.roomPickerOpen = $derived(this.roomFound !== undefined && !host.disabled);
 		this.emojiPickerOpen = $derived(this.emojiFound !== undefined && this.emojiData !== undefined && !host.disabled);
 		this.completion = $derived.by(() => {
+			if (!this.pickerOpen && !this.roomPickerOpen && !this.emojiPickerOpen) return undefined;
+			// A picker that isn't drawn yet takes no keys, and the field names none: Enter sends, as nothing on screen says otherwise.
+			if (host.pickerShown === false) return undefined;
 			if (this.pickerOpen) return { count: this.matches.length, take: (index: number) => this.pick(this.matches[index]), enter: true };
 			if (this.roomPickerOpen) return { count: this.roomMatches.length, take: (index: number) => this.pickRoom(this.roomMatches[index]), enter: this.roomFound?.query !== '' };
-			if (this.emojiPickerOpen) return { count: this.emojiMatches.length, take: (index: number) => this.pickEmoji(this.emojiMatches[index]), enter: true };
-			return undefined;
+			return { count: this.emojiMatches.length, take: (index: number) => this.pickEmoji(this.emojiMatches[index]), enter: true };
 		});
 		this.activeIndex = $derived(Math.min(this.active, Math.max(0, (this.completion?.count ?? 0) - 1)));
 		this.aria = $derived({

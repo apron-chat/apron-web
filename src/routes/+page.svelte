@@ -2922,6 +2922,8 @@
 			await tick();
 			const scroller = messageScroll;
 			if (!scroller || paneRoom?.id !== pane || reveal.hidden === 0) return;
+			// A pane out of sight has no size to fill: its rows follow after the paint, as the rest do.
+			if (!scroller.clientHeight) return;
 			// The first row (past the floating day, which takes no room), where the content above it would begin.
 			let first = scroller.firstElementChild;
 			while (first?.classList.contains('ap-dayfloat')) first = first.nextElementSibling;
@@ -3574,17 +3576,18 @@
 	{/if}
 	<!--
 		Popovers over the whole page, outside the member list: they open from messages too, and must show while it's shut.
-		Each loaded on demand and mounted once first opened; the state that opens it is here from the start.
+		Each loaded on demand and mounted once first opened; the state that opens it is here from the start, and one
+		opened before its code has come lets go on a press elsewhere or Escape rather than opening late (`Lazy.once`).
 	-->
-	{#if serverPaneHost.once(Boolean(serverPane.anchor))}
+	{#if serverPaneHost.once(Boolean(serverPane.anchor), () => serverPane.close())}
 		{@const ServerPane = serverPaneHost.component!}
 		<ServerPane {client} {session} onnewserver={previewMode ? undefined : () => openConnect()} ondisconnect={previewMode ? undefined : disconnect} />
 	{/if}
-	{#if profileCardHost.once(Boolean(profileCard.current))}
+	{#if profileCardHost.once(Boolean(profileCard.current), () => profileCard.close())}
 		{@const ProfileCard = profileCardHost.component!}
 		<ProfileCard {client} {session} room={paneRoom} canChange={canAddMembers} canMention={Boolean(composer) && canCompose && !selection.active} canMessage={canStartPrivate} onmention={(userId) => composer?.mention(userId)} onnamed={(roomId) => arrivals.mine(roomId)} onopenroom={openPrivateRoom} />
 	{/if}
-	{#if reactorsPopover.once(Boolean(reactorsList.current))}{@const ReactorsPopover = reactorsPopover.component!}<ReactorsPopover />{/if}
+	{#if reactorsPopover.once(Boolean(reactorsList.current), () => reactorsList.close())}{@const ReactorsPopover = reactorsPopover.component!}<ReactorsPopover />{/if}
 	<!-- While reconnecting, the banner at the top already says what went wrong (statusLabel). -->
 	<Toasts {feedback} error={snapshot.error && snapshot.error !== dismissedError && session.connection !== 'reconnecting' ? snapshot.error : undefined} ondismisserror={() => (dismissedError = snapshot.error)} />
 </AppShell>
