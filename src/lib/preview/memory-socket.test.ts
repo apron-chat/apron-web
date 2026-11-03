@@ -22,7 +22,7 @@ describe('memorySocket', () => {
 			const received: unknown[] = [];
 			let server: Parameters<MemoryHost['opened']>[0] | undefined;
 			const host: MemoryHost = { opened: (end) => (server = end), received: (_end, frame) => received.push(frame), closed: vi.fn() };
-			const socket = memorySocket('ws://memory.invalid', host, 100);
+			const socket = memorySocket('ws://memory.invalid', host, 100, () => Date.now());
 			const heard: string[] = [];
 			socket.onmessage = (event) => heard.push(event.data as string);
 			await vi.advanceTimersByTimeAsync(99);
@@ -48,6 +48,47 @@ describe('memorySocket', () => {
 			socket.close();
 			await vi.advanceTimersByTimeAsync(50);
 			expect(heard).toHaveLength(2);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it('times a reply from when its request was sent, even when the page was too busy to hand the request on in time', async () => {
+		vi.useFakeTimers();
+		try {
+			let clock = 0;
+			const now = () => clock;
+			const host: MemoryHost = {
+				opened: (end) => end.deliver({ method: 'server' } as never),
+				received: (end, frame) => end.deliver({ id: frame.id, result: {} } as never),
+				closed: vi.fn()
+			};
+			const socket = memorySocket('ws://memory.invalid', host, 100, now);
+			const heard: { id?: unknown; method?: unknown; at: number }[] = [];
+			socket.onmessage = (event) => heard.push({ ...JSON.parse(event.data as string), at: clock });
+			const step = async (ms: number) => {
+				clock += ms;
+				await vi.advanceTimersByTimeAsync(ms);
+			};
+			await step(100);
+			await step(50);
+			// The greeting leaves as the connection opens: half a round trip after.
+			expect(heard).toEqual([{ method: 'server', at: 150 }]);
+
+			socket.send(JSON.stringify({ id: 1 }));
+			// The page is busy for 200 ms: no timer runs, and the request reaches the in-page server only then.
+			clock += 200;
+			// (A timer set while fake timers run is due a millisecond later at least.)
+			await vi.advanceTimersByTimeAsync(51);
+			// Its reply was due 100 ms after it was sent, long since: it arrives as soon as the page is free.
+			expect(heard.at(-1)).toEqual({ id: 1, result: {}, at: 350 });
+
+			socket.send(JSON.stringify({ id: 2 }));
+			socket.send(JSON.stringify({ id: 3 }));
+			await step(99);
+			expect(heard).toHaveLength(2);
+			await step(1);
+			expect(heard.slice(2).map((frame) => [frame.id, frame.at])).toEqual([[2, 450], [3, 450]]);
 		} finally {
 			vi.useRealTimers();
 		}
