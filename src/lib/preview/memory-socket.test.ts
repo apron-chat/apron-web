@@ -93,4 +93,47 @@ describe('memorySocket', () => {
 			vi.useRealTimers();
 		}
 	});
+
+	it('opens before its server is there, which hears of it once it is, the times as they would have been', async () => {
+		vi.useFakeTimers();
+		try {
+			let clock = 0;
+			const now = () => clock;
+			let ready!: (host: MemoryHost) => void;
+			const host: MemoryHost = {
+				opened: (end) => end.deliver({ method: 'server' } as never),
+				received: (end, frame) => end.deliver({ id: frame.id, result: {} } as never),
+				closed: vi.fn()
+			};
+			const socket = memorySocket('ws://memory.invalid', new Promise<MemoryHost>((resolve) => (ready = resolve)), 100, now);
+			const heard: { at: number }[] = [];
+			socket.onmessage = (event) => heard.push({ ...JSON.parse(event.data as string), at: clock });
+			clock = 100;
+			await vi.advanceTimersByTimeAsync(100);
+			expect(socket.readyState).toBe(1);
+			clock = 300;
+			await vi.advanceTimersByTimeAsync(200);
+			expect(heard).toEqual([]);
+			// The server's code loads: its greeting was due half a round trip after the open, so it arrives at once.
+			ready(host);
+			await vi.advanceTimersByTimeAsync(1);
+			expect(heard).toEqual([{ method: 'server', at: 300 }]);
+			socket.send(JSON.stringify({ id: 1 }));
+			clock = 400;
+			await vi.advanceTimersByTimeAsync(100);
+			expect(heard.at(-1)).toEqual({ id: 1, result: {}, at: 400 });
+
+			// Closed before its server came: the server never hears of it.
+			let never!: (host: MemoryHost) => void;
+			const other = memorySocket('ws://memory.invalid', new Promise<MemoryHost>((resolve) => (never = resolve)), 100, now);
+			clock = 500;
+			await vi.advanceTimersByTimeAsync(100);
+			other.close();
+			never(host);
+			await vi.advanceTimersByTimeAsync(1);
+			expect(host.closed).not.toHaveBeenCalled();
+		} finally {
+			vi.useRealTimers();
+		}
+	});
 });

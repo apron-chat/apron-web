@@ -377,6 +377,8 @@ export class ChatClient {
 	private joinedListing?: { id: string; since?: string; userId?: string };
 	private socket?: WebSocket;
 	private readonly webSocketFactory: WebSocketFactory;
+	/** Where the first connection may come from, opened before the client was made (`ChatClientOptions.earlyConnection`); asked once. */
+	private earlyConnection?: ChatClientOptions['earlyConnection'];
 	private reconnectTimer?: ReturnType<typeof setTimeout>;
 	private pingTimer?: ReturnType<typeof setInterval>;
 	/** Resets the reconnect backoff once the current connection has stayed up. */
@@ -517,7 +519,7 @@ export class ChatClient {
 		displayName = '',
 		webSocketFactory: WebSocketFactory = (url) => new WebSocket(url),
 		private readonly now: () => number = () => Date.now(),
-		{ historyStart = 'newest', historyConcurrency }: Pick<ChatClientOptions, 'historyStart' | 'historyConcurrency'> = {}
+		{ historyStart = 'newest', historyConcurrency, earlyConnection }: Pick<ChatClientOptions, 'historyStart' | 'historyConcurrency' | 'earlyConnection'> = {}
 	) {
 		// A server is known by its normalized address (§1): its kept session too.
 		this.serverUrl = addressOf(serverUrl);
@@ -529,6 +531,7 @@ export class ChatClient {
 			emit: () => this.emit()
 		}, historyConcurrency);
 		this.webSocketFactory = webSocketFactory;
+		this.earlyConnection = earlyConnection;
 		this.displayName = displayName.trim();
 		this.loadStoredSession();
 	}
@@ -2955,6 +2958,17 @@ export class ChatClient {
 		this.error = undefined;
 		this.connectionErrored = false;
 		this.emit();
+		// The first connection may be open already, or opening, made as the app started: it goes on from there.
+		const takeEarly = this.earlyConnection;
+		this.earlyConnection = undefined;
+		const early = takeEarly?.(this.serverUrl);
+		if (early) {
+			this.attachSocket(early.socket, id, early.open);
+			if (early.open) this.socketOpened();
+			// What arrived while it waited (its `server` frame, a welcome), in order, as if it arrived now.
+			for (const data of early.frames) if (this.isCurrentSocket(id, early.socket)) early.socket.onmessage?.({ data } as MessageEvent);
+			return;
+		}
 		let socket: WebSocket;
 		try {
 			socket = this.webSocketFactory(this.serverUrl);
@@ -2965,17 +2979,22 @@ export class ChatClient {
 		this.attachSocket(socket, id, false);
 	}
 
+	/** The current socket has opened. */
+	private socketOpened(): void {
+		startupMark('socket-open');
+		this.status = 'connected';
+		this.error = undefined;
+		this.authRequested = false;
+		this.emit();
+	}
+
 	/** Makes `socket` this client's connection number `id`; `opened`: it is open already. */
 	private attachSocket(socket: WebSocket, id: number, opened: boolean): void {
 		this.socket = socket;
 		socket.onopen = () => {
 			if (!this.isCurrentSocket(id, socket)) return;
 			opened = true;
-			startupMark('socket-open');
-			this.status = 'connected';
-			this.error = undefined;
-			this.authRequested = false;
-			this.emit();
+			this.socketOpened();
 		};
 		socket.onmessage = (event) => {
 			if (!this.isCurrentSocket(id, socket)) return;

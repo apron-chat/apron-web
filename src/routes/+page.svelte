@@ -82,6 +82,9 @@
 	import { ViewKeeper } from '$lib/ui/view-keeper';
 	import type { HistoryKeeper } from '$lib/history/history-keeper';
 	import { takeKeeper } from '$lib/history/startup';
+	import { takeEarlyConnection } from '$lib/protocol/early-connection';
+	import { startServer } from '$lib/ui/start-server';
+	import { PREVIEW_SERVER } from '$lib/preview/preview-server';
 	import { historySettings } from '$lib/history/settings.svelte';
 	import { mediaAskClick } from '$lib/ui/media-ask';
 	import { mediaSettings } from '$lib/ui/media-settings.svelte';
@@ -1254,7 +1257,7 @@
 		};
 		window.addEventListener('hashchange', hashChanged);
 		document.addEventListener('click', apronLinkClicked);
-		serverInput = previewMode ? 'ws://apron-preview.invalid' : loadServerUrl() ?? defaultWebSocketUrl(window.location);
+		serverInput = previewMode ? PREVIEW_SERVER : loadServerUrl() ?? defaultWebSocketUrl(window.location);
 		displayName = previewMode ? 'Preview User' : loadDisplayName();
 		recentServers = previewMode ? [] : loadRecentServers();
 		notificationsEnabled = loadNotificationsEnabled();
@@ -1314,20 +1317,19 @@
 		// connect screen first, since connecting is up to the viewer. A notification's own room comes first.
 		const link = pushed ? {} : readDestination(window.location);
 		// A link without a server is for the page's own, wherever this browser was last; that one needs no asking.
-		const linkServer = previewMode ? undefined : link.server ?? (link.room ? homeServer() : undefined);
-		let offeredServer: string | undefined;
-		if (linkServer && linkServer !== normalizeWebSocketUrl(serverInput, window.location)) {
-			if (linkServer === homeServer() || recentServers.some((recent) => recent.url === linkServer)) {
-				serverInput = linkServer;
-				saveServerUrl(linkServer);
-			} else {
-				offeredServer = linkServer;
-			}
+		const start = previewMode ? undefined : startServer(serverInput, link, recentServers, window.location);
+		const offeredServer = start?.offered;
+		if (start && start.server !== normalizeWebSocketUrl(serverInput, window.location)) {
+			serverInput = start.server;
+			saveServerUrl(start.server);
 		}
 		const chat = new ChatClient(
 			normalizeWebSocketUrl(serverInput, window.location),
 			displayName,
-			webSocketFactory
+			webSocketFactory,
+			undefined,
+			// The connection opened as the app started, to this server (`hooks.client.ts`), if it's still there.
+			{ earlyConnection: takeEarlyConnection }
 		);
 		if (!previewMode) {
 			// Made as the app started, and reading what it restores since (`$lib/history/startup`).
