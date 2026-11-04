@@ -388,6 +388,24 @@ Shift+Enter; the Send button sends. Where an autocomplete below offers Enter
 to pick, it picks either way. Pressing Send leaves the focus in the
 field, so a phone's keyboard stays up between messages. However long the
 room or thread's name, the field's placeholder takes one line, cut short.
+With a keyboard, ↑ in the empty field (nothing typed or attached) edits your newest message in the room or
+thread that you may edit, as its **Edit** would, and once the edit is saved or cancelled (or its message goes)
+the keyboard is back in the composer; with an edit already open, ↑ goes back to it, its words kept; with text in
+the field, ↑ moves the caret as usual. An edit opened from the message itself (its **Edit**, or `e`) gives the
+keyboard back to the message's row once it ends. Escape while
+replying cancels the reply and keeps the draft (with an autocomplete open, Escape
+puts that away first).
+
+**Keyboard shortcuts**: `?` (outside a field, where it is a character), or
+Ctrl+/ (⌘/ on a Mac; with Shift too, where `/` is a shifted key) anywhere, lists the keyboard shortcuts worth learning (not the keys every app has, such as Enter to send, Esc to
+close, or the arrows in a list, though they work too) in a centered
+dialog, grouped (General, Composer, Messages, Rooms), each with where
+it works and its keys as this platform writes them (⌘ ⌥ ⇧ on a Mac, Ctrl, Alt,
+Shift elsewhere), and named in words for a screen reader. It opens while signed
+in, off the connect screen, and with no other dialog open; Escape (which leaves a selection as it was), its close button or a click beside it
+closes it. The room header's ⋯ menu offers it too (**Keyboard shortcuts**, its
+hint `?`), except on a touch screen. `lib/ui/shortcuts.ts` is the list: a new
+shortcut goes there too.
 
 The timeline is anchored at its bottom edge. When the area below it grows or
 shrinks (the composer taking another line, a reply bar, staged files, the
@@ -429,7 +447,8 @@ author typed, and IDs, tokens and URLs are never changed. Times and days, as
 the browser's locale writes them, keep their own direction too, so under a
 right-to-left layout an English time still reads "3:42 PM". A rendered body (plain or CommonMark, never inside
 code) shows a known user's `@user_id` as a chip with their current name, a known room's
-`#room_id` as a link showing its title that opens the room (or joins it), and unknown
+`#room_id` as a link showing its title that opens the room (one you haven't joined, to read without joining, as picking it under
+Other Rooms does; or, when the client knows nothing of it, joins it), and unknown
 IDs as written ([PROTOCOL.md Appendix A.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#a3-prefixes-in-text)): `@` names only users. The ID after
 `@` or `#` is the longest run of letters, digits and `_.+@:-` that starts and
 ends with a letter, a digit or `_`, so `@ada@example.com` and
@@ -1087,6 +1106,14 @@ rearrangeable listbox; its row names the keys as `aria-keyshortcuts`), the keybo
 folded section a room moves among the ones shown, the hidden ones keeping their
 places. Threads keep their own order, most recently active first.
 
+Alt+↑ or Alt+↓ anywhere else (⌥ on a Mac; from the composer too, but not another field or a dialog) opens the room or
+thread above or below the open one in the list, as drawn: the joined rooms and threads, threads under their room, a
+folded section's hidden rooms passed over. The rows listed to join are among them (Other Threads, Other Rooms), and
+open to read without joining, as clicking them does: a key that steps never joins every room it passes. It
+stops at either end, and opens each as picking its row does, the composer (where there is one) taking the keyboard. With Shift too it opens the next room that way, past any
+threads (from a thread, going up opens the room it's under), joined or listed to join. With nowhere to go (an end of the list) the
+keys do what they would anyway, such as a Mac's ⌥↑ moving the caret in the composer. Not over the connect screen.
+
 The sidebar's **Private** section, right below Rooms and above Other Rooms,
 lists every joined top-level private room (`private: true` and no
 `parent_room_id`, [PROTOCOL.md §4.2.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#424-creating-and-editing)):
@@ -1221,10 +1248,13 @@ server that keeps you in a room answers `denied`, and its message shows as
 the error.
 **Other Rooms** in the sidebar lists, via `room_list` with
 `filter: "not_joined"`, the most active visible rooms you haven't joined, each
-with its member count and **Join**. It starts open, so a newcomer sees what
+with its member count. It starts open, so a newcomer sees what
 else there is without looking for it, and folds as the other sections do;
 unfolding it lists afresh.
-Picking one joins it and opens it once its `room_update` arrives.
+Picking one opens it to read through its history (§4.3) without joining it, since joining shows in it for everyone:
+its row shows it open, its threads are listed under it to read too, and the header has **Join**, the primary
+button beside its ⋯ menu, which joins it (`room_join`), as posting there does first. Until then it doesn't
+deliver live (§3.4); Join makes it live and lists it with your rooms.
 
 With the `edit` capability, several messages move at a time: shift-click a
 message (or press `x` on it, or pick **Select** from its More menu) to enter select mode, shift-click another to fill the range, and the
@@ -1252,6 +1282,10 @@ with their `user_id`, §4.2.2), where you may add people: in a private room's
 thread, or where the server grants you `add_members` (or lacks `ext:permissions`). The server
 decides each (it adds no guests); the moves stand either way, and the toast says
 how many authors weren't added and why. Escape leaves select mode.
+
+On a message with the keyboard on it (its toolbar reached with Tab, or the row clicked), `r` replies to it and `e`
+edits it when it is yours, as their toolbar buttons do; neither does anything in select mode, while it is being
+edited, or in a field (where they are letters), nor with Ctrl, Alt or ⌘.
 
 A reply's quote is one line above the sender's name (the quoted sender's
 avatar and name, then the start of their message), with a line from the
@@ -1786,8 +1820,8 @@ button (it opens the sign-in panel on Passkey); signed in to an account, or as
 a guest on a server whose `auth` offers only `guest` (nothing would lift it,
 as on `/archive`), the bar only says so. Replying, reacting, editing, moving and deleting messages,
 starting threads, editing rooms and threads, adding or removing members, and
-Join and Leave are hidden; a room picked under Other Rooms (which says no
-Join) opens to read through its history without joining it, and Other Threads
+Join and Leave are hidden; a room picked under Other Rooms opens to read
+through its history without joining it, as it does for anyone, and Other Threads
 offers no Join, since picking one already reads it. Other
 servers' denials show as errors as usual.
 

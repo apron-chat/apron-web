@@ -74,6 +74,8 @@
 		onopenthread: (thread: string) => void;
 		/** Join a visible room or thread from `room_list` (capability `rooms`); it opens once its `room_update` arrives. */
 		onjoin: (roomId: string) => void;
+		/** Reads a room under Other Rooms without joining it: its header's Join, or posting there, joins it. */
+		onopenroom: (roomId: string) => void;
 		/** Leave a thread of the active room (capability `rooms`). */
 		onleavethread: (thread: string) => void;
 		/** A room created here, asked for as private or not; it opens once its `room_update` arrives. */
@@ -94,7 +96,7 @@
 		 */
 		drawRooms?: boolean;
 	}
-	let { drawRooms = true, client, session, backendLabel, serverLook, serverAddress, account, order = new RoomOrder(), threads, activeThread, mentions, unread, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, returnTo, onreturn, onroom, onthread, onopenthread, onjoin, onleavethread, oncreateroom, onnewthread, onnewprivate, onsignout, keptHistory, onsignin }: Props = $props();
+	let { drawRooms = true, client, session, backendLabel, serverLook, serverAddress, account, order = new RoomOrder(), threads, activeThread, mentions, unread, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, returnTo, onreturn, onroom, onthread, onopenthread, onjoin, onopenroom, onleavethread, oncreateroom, onnewthread, onnewprivate, onsignout, keptHistory, onsignin }: Props = $props();
 	/** The head's server button: the server pane sits beside it. */
 	let serverHead = $state<HTMLButtonElement | undefined>();
 	/** Threads are listed under their parent, not as rooms of their own; private rooms in a list of their own. */
@@ -670,8 +672,8 @@
 						<!-- A server may list only the most active members of a large room, with the total (§4.2.1). -->
 						{@const members = listing.memberCount ?? listing.members.length}
 						{@const count = members > 0 ? `${members} ${members === 1 ? 'member' : 'members'}` : ''}
-						<!-- Picking one joins it; one that can't join (reading as a guest) opens it to read, which needs no word, and it shows as open as a joined room does. -->
-						<RoomItem room={listing.id} name={listing.title} topic={session.readOnly ? count || undefined : [count, 'Join'].filter(Boolean).join(' · ')} listed active={listing.id === session.activeRoomId && !activeThread} onselect={() => onjoin(listing.id)} />
+						<!-- Picking one opens it to read without joining (joining shows everyone in it), and it shows as open as a joined room does; the header's Join, or posting there, joins it. -->
+						<RoomItem room={listing.id} name={listing.title} topic={count || undefined} listed active={listing.id === session.activeRoomId && !activeThread} onselect={() => onopenroom(listing.id)} />
 						<!-- The one open to read without joining lists its threads under it, to explore them without joining either. -->
 						{#if listing.id === session.activeRoomId}
 							<ThreadList

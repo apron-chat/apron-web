@@ -333,6 +333,39 @@ describe('a message row’s toolbar', () => {
 	});
 });
 
+describe('keys on a focused message', () => {
+	it('replies with `r` and edits with `e`, as their buttons do, where the message offers them', () => {
+		const reply = vi.fn();
+		const edit = vi.fn();
+		const row = render({ caps: { ...NONE, reply: true } }, { reply, edit });
+		expect(dom.press(row, 'r')).toBe(false);
+		expect(reply).toHaveBeenCalledOnce();
+		// Not someone else's to edit, and not with a modifier.
+		expect(dom.press(row, 'e')).toBe(true);
+		expect(dom.press(row, 'r', { metaKey: true })).toBe(true);
+		expect(edit).not.toHaveBeenCalled();
+		expect(reply).toHaveBeenCalledOnce();
+		dom.unmount();
+
+		const mine = render({ caps: ALL }, { reply, edit });
+		expect(dom.press(mine, 'e')).toBe(false);
+		expect(edit).toHaveBeenCalledOnce();
+	});
+
+	it('leaves `r` and `e` alone in select mode and while the message is edited', () => {
+		const reply = vi.fn();
+		const edit = vi.fn();
+		const selecting = render({ selecting: true, caps: ALL }, { reply, edit });
+		expect(dom.press(selecting, 'r')).toBe(true);
+		expect(dom.press(selecting, 'e')).toBe(true);
+		dom.unmount();
+		const editing = render({ editing: true, caps: ALL }, { reply, edit });
+		expect(dom.press(editing, 'r')).toBe(true);
+		expect(reply).not.toHaveBeenCalled();
+		expect(edit).not.toHaveBeenCalled();
+	});
+});
+
 describe('select gestures', () => {
 	it('starts select mode from a shift-click, or `x` on the focused row', () => {
 		const beginSelect = vi.fn();

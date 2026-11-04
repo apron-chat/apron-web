@@ -3,6 +3,7 @@
 	import BellOff from '@lucide/svelte/icons/bell-off';
 	import ChevronLeft from '@lucide/svelte/icons/chevron-left';
 	import Ellipsis from '@lucide/svelte/icons/ellipsis';
+	import Keyboard from '@lucide/svelte/icons/keyboard';
 	import Link from '@lucide/svelte/icons/link';
 	import Lock from '@lucide/svelte/icons/lock';
 	import LogOut from '@lucide/svelte/icons/log-out';
@@ -79,6 +80,8 @@
 		/** Search local history, first in the ⋯ actions menu: it opens a <SearchPanel>. `searchHint` names its shortcut, as the item's hint. */
 		onsearch?: () => void;
 		searchHint?: string;
+		/** Keyboard shortcuts, after Search in the ⋯ menu, with `?` as its hint: it opens their overlay (KeyboardShortcuts). */
+		onshortcuts?: () => void;
 		/** The room's or thread's pinned <ThreadDescription> was put away with its ×: a Description button brings it back. */
 		ondescription?: () => void;
 		/** `data-testid`s for its parts: the ‹'s tag of what's new elsewhere, the topic, Join, Description, the bell-off Unmute button, the ⋯ menu and its Search, Edit, Leave, Copy link, Mute and Unmute. */
@@ -99,7 +102,7 @@
 	}
 	let {
 		room, name, topic, topicTitle, private: isPrivate, faces, typing = [], replies, note, onback, unreadElsewhere = 0, mentionsElsewhere = 0,
-		thread, threadName, onroom, canJoin = false, onjoin, onmemberlist, memberListOpen = false, onedit, onleave, oncopylink, muteChoices, onmute, muted, onunmute, mutedWithRoom = false, busy = false, updating = false, onsearch, searchHint,
+		thread, threadName, onroom, canJoin = false, onjoin, onmemberlist, memberListOpen = false, onedit, onleave, oncopylink, muteChoices, onmute, muted, onunmute, mutedWithRoom = false, busy = false, updating = false, onsearch, searchHint, onshortcuts,
 		ondescription, tagTestid, topicTestid, joinTestid, descriptionTestid, actionsTestid, editTestid, leaveTestid, copyLinkTestid, searchTestid, muteTestid, unmuteTestid,
 		unmuteButtonTestid, class: className
 	}: Props = $props();
@@ -120,6 +123,7 @@
 	/** The occasional actions, in the ⋯ menu: Join stays a button, since it's what a pane read without joining is for. */
 	const actions = $derived<MenuChoice[]>([
 		...(onsearch ? [{ value: 'search', label: 'Search local history', ...(searchHint ? { hint: searchHint } : {}), testid: searchTestid }] : []),
+		...(onshortcuts ? [{ value: 'shortcuts', label: 'Keyboard shortcuts', hint: '?' }] : []),
 		...(oncopylink ? [{ value: 'link', label: `Copy link to ${noun}`, testid: copyLinkTestid }] : []),
 		...(muted !== undefined && onunmute ? [{ value: 'unmute', label: `Unmute ${unmuteNoun}`, hint: muted, testid: unmuteTestid }] : []),
 		...(muted === undefined && muteMenu && onmute ? [{ value: 'mute', label: `Mute ${noun}`, testid: muteTestid, choices: muteMenu }] : []),
@@ -130,6 +134,7 @@
 
 	function act(value: string): void {
 		if (value === 'search') onsearch?.();
+		else if (value === 'shortcuts') onshortcuts?.();
 		else if (value === 'link') oncopylink?.();
 		else if (value === 'edit') onedit?.();
 		else if (value === 'leave') onleave?.();
@@ -165,9 +170,6 @@
 		{/if}
 	</div>
 	{#if note}<span class="ap-roomhead-sub" role="status">{note}</span>{/if}
-	{#if canJoin}
-		<button type="button" class="ap-btn ap-btn-sm" data-testid={joinTestid} aria-label="Join {noun}" title={thread ? 'Get its replies live, and list it under the room' : 'Get its messages live, and list it with your rooms'} disabled={busy} onclick={onjoin}>Join</button>
-	{/if}
 	{#if onmemberlist}
 		<button type="button" class={['ap-iconbtn', 'ap-roomhead-members', memberListOpen && 'ap-iconbtn-on']} aria-label={memberLabel} aria-expanded={memberListOpen} title={memberLabel} onclick={onmemberlist}>
 			<Users size={18} strokeWidth={1.8} aria-hidden="true" />
@@ -183,10 +185,14 @@
 			<BellOff size={18} strokeWidth={1.8} aria-hidden="true" />
 		</button>
 	{/if}
+	<!-- Read without joining: Join, the primary action here, beside the ⋯ at the end. -->
+	{#if canJoin}
+		<button type="button" class="ap-btn ap-btn-sm ap-btn-primary ap-roomhead-join" data-testid={joinTestid} aria-label="Join {noun}" title={thread ? 'Get its replies live, and list it under the room' : 'Get its messages live, and list it with your rooms'} disabled={busy} onclick={onjoin}>Join</button>
+	{/if}
 	{#if actions.length > 0}
 		<MenuButton label={thread ? 'Thread actions' : 'Room actions'} buttonTestid={actionsTestid} choices={actions} disabled={busy} onselect={act} bind:open={actionsOpen}>
 			{#snippet icon()}<Ellipsis size={18} strokeWidth={1.8} aria-hidden="true" />{/snippet}
-			{#snippet lead(value)}{#if value === 'search'}<Search size={15} aria-hidden="true" />{:else if value === 'edit'}<Pencil size={15} aria-hidden="true" />{:else if value === 'mute'}<BellOff size={15} aria-hidden="true" />{:else if value === 'unmute'}<Bell size={15} aria-hidden="true" />{:else if value === 'link'}<Link size={15} aria-hidden="true" />{:else}<LogOut size={15} aria-hidden="true" />{/if}{/snippet}
+			{#snippet lead(value)}{#if value === 'search'}<Search size={15} aria-hidden="true" />{:else if value === 'edit'}<Pencil size={15} aria-hidden="true" />{:else if value === 'mute'}<BellOff size={15} aria-hidden="true" />{:else if value === 'unmute'}<Bell size={15} aria-hidden="true" />{:else if value === 'link'}<Link size={15} aria-hidden="true" />{:else if value === 'shortcuts'}<Keyboard size={15} aria-hidden="true" />{:else}<LogOut size={15} aria-hidden="true" />{/if}{/snippet}
 		</MenuButton>
 	{/if}
 	{#if updating}<span class="ap-roomhead-updating" data-testid="room-updating" aria-hidden="true"></span>{/if}

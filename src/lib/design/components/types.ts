@@ -575,3 +575,19 @@ export interface ConnectServer {
 	address: string;
 	avatar?: MediaSrc;
 }
+
+/** A keyboard shortcut, as KeyboardShortcuts lists it: what it does, where, and its keys. */
+export interface Shortcut {
+	/** What it does, such as "Search local history". */
+	label: string;
+	/** Where it works, when not everywhere, such as "In an empty composer". */
+	where?: string;
+	/** Its keys: each alternative a combination pressed together, each key as written on it (`['⌘', 'F']`, `['Esc']`). */
+	keys: string[][];
+}
+
+/** A titled group of KeyboardShortcuts' shortcuts, such as those of the composer. */
+export interface ShortcutGroup {
+	title: string;
+	shortcuts: Shortcut[];
+}

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { installNudge, messageEditor, newPrivateDialog, newThreadDialog, profileCardHost, reactorsPopover, roomEditor, searchDialog, selectionBar, serverPaneHost, signInLinkDialog } from '$lib/components/lazy';
+	import { installNudge, messageEditor, newPrivateDialog, newThreadDialog, profileCardHost, reactorsPopover, roomEditor, searchDialog, selectionBar, serverPaneHost, shortcutsDialog, signInLinkDialog } from '$lib/components/lazy';
 	import { onMount, tick, untrack } from 'svelte';
 	import { fromAction } from 'svelte/attachments';
 	import { pushState, replaceState } from '$app/navigation';
@@ -90,6 +90,7 @@
 	import { mediaSettings } from '$lib/ui/media-settings.svelte';
 	import { receiptSettings } from '$lib/ui/receipt-settings.svelte';
 	import { onlyPreferencesDiffer, preferencesOpener } from '$lib/ui/preferences.svelte';
+	import { nextRoomRow } from '$lib/ui/room-steps';
 	import { buildRoomTimeline, newDividerBefore, steady, threadEntries, threadStartedFrom, threadDescriptionFor, threadTitleFor, type ThreadEntry, type TimelineItem } from '$lib/ui/timeline';
 	import { takeSignInLink } from '$lib/ui/sign-in-link';
 	import { SignInLinks } from '$lib/ui/link-controller.svelte';
@@ -318,10 +319,14 @@
 	let passkeyUnavailable = $state<string | undefined>();
 	let highlightedId = $state<string | undefined>();
 	let editingId = $state<string | undefined>();
+	/** Where the edit was opened: the keyboard goes back there when it ends (↑ in the composer, or the message's row). */
+	let editFrom: 'composer' | 'row' | undefined;
 	/** The Edit form for the open room or thread (its title and description). */
 	let roomEditorOpen = $state(false);
 	/** Search local history is open (`SearchDialog`). */
 	let searchOpen = $state(false);
+	/** The keyboard shortcuts' overlay (`?`) is open. */
+	let shortcutsOpen = $state(false);
 	/**
 	 * Sign-in links (§4.11.2): one of no proposal this browser made waits for the viewer's answer (`asked`), one
 	 * for an addition proposed here for its account's session (`addition`), and why one didn't sign in (`failure`).
@@ -1089,7 +1094,7 @@
 
 	$effect(() => {
 		if (editingId && !timeline.some((item) => item.kind === 'message' && item.event.message_id === editingId && !item.event.deleted)) {
-			editingId = undefined;
+			untrack(endEdit);
 		}
 	});
 
@@ -2207,7 +2212,7 @@
 			const joining = joinFirst(chat, paneRoom);
 			if (joining) {
 				joining.then(post, (cause: unknown) => {
-					feedback.error(cause, 'Unable to join the thread');
+					feedback.error(cause, `Unable to join the ${paneRoom.parentRoomId === undefined ? 'room' : 'thread'}`);
 					restore();
 				});
 			} else {
@@ -2283,7 +2288,9 @@
 	function joinByName(name: string, failed: (cause: unknown) => void): void {
 		if (!client) return;
 		const wanted = name.toLowerCase();
-		const joined = session.rooms.find((room) => room.id === name) ?? session.rooms.find((room) => room.title.toLowerCase() === wanted);
+		// Only a room you've joined just opens: one open to read without joining (picked under Other Rooms) is joined.
+		const mine = session.rooms.filter((room) => room.joined);
+		const joined = mine.find((room) => room.id === name) ?? mine.find((room) => room.title.toLowerCase() === wanted);
 		if (joined) {
 			openMentionedRoom(joined.id);
 			return;
@@ -2516,7 +2523,9 @@
 
 	/**
 	 * Opens a listed room or thread without joining it, read through its
-	 * history (§4.3), for a guest on a server whose guests only read.
+	 * history (§4.3): a room picked under Other Rooms (or reached with Alt+↑/↓),
+	 * and anything a guest opens on a server whose guests only read. Join in its
+	 * header, or posting there (`joinFirst`), joins it.
 	 */
 	function openWithoutJoining(roomId: string): void {
 		if (!client || !client.viewRoom(roomId)) return;
@@ -2557,19 +2566,23 @@
 
 	/**
 	 * Posting needs no membership (§4.2.2), but a poster who hasn't joined
-	 * doesn't receive the broadcast: a reply in a thread read without joining
-	 * joins it first, so the reply and what follows arrive.
+	 * doesn't receive the broadcast: a post in a room or thread read without
+	 * joining joins it first, so the post and what follows arrive.
 	 */
 	function joinFirst(chat: ChatClient, room: RoomSnapshot): Promise<unknown> | undefined {
 		if (room.joined || !session.canManageRooms) return undefined;
 		return chat.joinRoom(room.id).promise;
 	}
 
-	/** A room mention in a message was clicked: open it, or join it when you haven't. */
+	/**
+	 * A room mention in a message was clicked: open it. One you haven't joined opens to read without joining, as
+	 * picking it under Other Rooms does, when the client can (it's listed, or was seen); else it's joined.
+	 */
 	function openMentionedRoom(roomId: string): void {
 		const room = session.rooms.find((candidate) => candidate.id === roomId);
 		if (!room) {
-			if (session.canManageRooms) joinRoom(roomId);
+			if (client?.viewRoom(roomId)) openWithoutJoining(roomId);
+			else if (session.canManageRooms) joinRoom(roomId);
 			return;
 		}
 		if (room.parentRoomId !== undefined && session.rooms.some((candidate) => candidate.id === room.parentRoomId)) openDestination(room.parentRoomId, room.id);
@@ -2692,7 +2705,10 @@
 			const event = rowEvent(view);
 			return event ? reactionsFor(event) : [];
 		}),
-		edit: onRow((event) => (editingId = event.message_id)),
+		edit: onRow((event) => {
+			editingId = event.message_id;
+			editFrom = 'row';
+		}),
 		delete: onRow(deleteMessage),
 		startThread: onRow(startThread),
 		copyLink: async (view) => {
@@ -3040,11 +3056,46 @@
 		};
 	}
 
+	/**
+	 * ↑ in the empty composer: edits your newest message in the pane that you can, as its Edit would; with an edit
+	 * already open, the keyboard goes back to it, its words kept. False when there's nothing to edit.
+	 */
+	function editLast(): boolean {
+		if (editingId !== undefined) {
+			const field = document.querySelector<HTMLElement>('[data-testid="message-editor"] [role="textbox"]');
+			field?.focus();
+			return field !== null;
+		}
+		const event = messages.findLast((candidate) => capsFor(candidate).edit);
+		if (!event) return false;
+		editingId = event.message_id;
+		editFrom = 'composer';
+		return true;
+	}
+
+	/**
+	 * The edit ends, saved, cancelled or its message gone: the keyboard goes back to the composer when ↑ there opened
+	 * it, else to the message's row, once the editor's going has left it nowhere.
+	 */
+	function endEdit(): void {
+		const id = editingId;
+		const from = editFrom;
+		editingId = undefined;
+		editFrom = undefined;
+		if (from === 'composer') composer?.focus();
+		else if (from === 'row' && id !== undefined) {
+			void tick().then(() => {
+				if (document.activeElement && document.activeElement !== document.body) return;
+				document.querySelector<HTMLElement>(`article[data-message-id="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
+			});
+		}
+	}
+
 	/** Saves an edit: the new text, and any embeds removed or renamed in the editor, together. */
 	function saveEdit(event: MessageRecord, text: string, edits: EmbedEdits | undefined, mentions: string[]): void {
 		if (!client || !session.canEdit) return;
 		feedback.track(client.editMessage(event.message_id, text, undefined, edits, mentions), 'Saving edit…');
-		editingId = undefined;
+		endEdit();
 	}
 
 	function deleteMessage(event: MessageRecord): void {
@@ -3243,8 +3294,7 @@
 	 */
 	function windowPaste(event: ClipboardEvent): void {
 		if (event.defaultPrevented || !canAttach) return;
-		const target = event.target;
-		if (target instanceof HTMLElement && (target.isContentEditable || target.closest('input, textarea, select'))) return;
+		if (inField(event.target)) return;
 		const files = pastedFiles(event.clipboardData);
 		if (!files.length) return;
 		event.preventDefault();
@@ -3268,7 +3318,39 @@
 		}
 	}
 
+	/** Where text is written, whose keys are its own: `?` there is a character. */
+	function inField(target: EventTarget | null): boolean {
+		return target instanceof HTMLElement && (target.isContentEditable || target.closest('input, textarea, select') !== null);
+	}
+
+	/** `?` outside a field, or Ctrl+/ (⌘/ on a Mac) anywhere: the key that shows the keyboard shortcuts. */
+	function shortcutsKey(event: KeyboardEvent): boolean {
+		if (event.altKey || event.isComposing) return false;
+		// With Shift too: on many layouts (German, Nordic, Spanish) `/` is Shift+7.
+		if (event.ctrlKey || event.metaKey) return event.key === '/';
+		return event.key === '?' && !inField(event.target);
+	}
+
 	function windowKeydown(event: KeyboardEvent): void {
+		// The keyboard shortcuts, signed in, from anywhere on the page but another dialog (lib/ui/shortcuts.ts lists them).
+		// The key is read first, so typing calls nothing more here.
+		if ((event.key === '?' || event.key === '/') && client && !connectOpen && !event.defaultPrevented && shortcutsKey(event) && !modalOpen()) {
+			event.preventDefault();
+			shortcutsOpen = true;
+			return;
+		}
+		// Alt+↑/↓ (⌥ on a Mac): the room or thread above or below the open one in the rooms list, and with Shift the
+		// room, past any threads, from anywhere but a dialog or a field other than the composer. On a room's row Alt+↑/↓
+		// moves it instead: the Sidebar's reorderKey takes it first. A room listed to join opens to read, as a click does.
+		// With nowhere to go (an end of the list), the key is the field's or the page's as usual.
+		if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown') && !event.ctrlKey && !event.metaKey && !event.defaultPrevented && client && !connectOpen && !modalOpen()) {
+			if (inField(event.target) && !(event.target as HTMLElement).closest('#message-input')) return;
+			const row = nextRoomRow(document.querySelector('.ap-shell-side') ?? document, event.key === 'ArrowDown' ? 1 : -1, event.shiftKey);
+			if (!row) return;
+			event.preventDefault();
+			row.click();
+			return;
+		}
 		// Ctrl+F (⌘F on a Mac) searches local history, from anywhere on the page but another dialog; there, and
 		// before signing in, the browser finds in the page as usual. (Ctrl+K is kept for a quick switcher.)
 		if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'f' && canSearch && !modalOpen()) {
@@ -3276,8 +3358,8 @@
 			searchOpen = true;
 			return;
 		}
-		// Escape in the NewThreadDialog closes it and keeps the selection it was asked for.
-		if (event.key !== 'Escape' || !selection.active || newThread) return;
+		// Escape in a dialog (the NewThreadDialog, the keyboard shortcuts) closes it and keeps the selection.
+		if (event.key !== 'Escape' || !selection.active || newThread || modalOpen()) return;
 		if (selection.menuOpen) {
 			selection.menuOpen = false;
 			return;
@@ -3335,7 +3417,7 @@
 {#snippet editMessage(view: MessageView)}
 	{@const MessageEditor = messageEditor.component}
 	{@const event = rowEvent(view)}
-	{#if MessageEditor && event}<MessageEditor text={textOf(event)} embeds={embedsOf(event)} uploads={snapshot.uploads} mentions={event.body?.mentions} {people} rooms={roomSuggestions} onsave={(text, edits, mentions) => saveEdit(event, text, edits, mentions)} oncancel={() => (editingId = undefined)} onmention={() => { if (!paneRoom?.joined) listMembers(MEMBERS_FRESH_MS); }} />{/if}
+	{#if MessageEditor && event}<MessageEditor text={textOf(event)} embeds={embedsOf(event)} uploads={snapshot.uploads} mentions={event.body?.mentions} {people} rooms={roomSuggestions} onsave={(text, edits, mentions) => saveEdit(event, text, edits, mentions)} oncancel={endEdit} onmention={() => { if (!paneRoom?.joined) listMembers(MEMBERS_FRESH_MS); }} />{/if}
 {/snippet}
 <!-- The pane's history waiting as the server asked, where its messages will appear: it loads by itself at zero. -->
 {#snippet historyNotice()}{#if historyWait}<RateLimitNotice scope="history" until={historyWait.until} />{/if}{/snippet}
@@ -3369,7 +3451,7 @@
 			pause={canPause ? { ...(pausedUntil !== undefined && isPaused(pausedUntil) ? { until: pausedUntil } : {}) } : undefined} onpause={pauseNotifications} onresume={() => client?.setMute(false) ?? Promise.resolve()}
 			onsignin={previewMode ? undefined : (name, scheme) => openConnect(scheme ? { scheme, name } : { signIn: true, name })}
 			returnTo={activeRoom ? (activeThread ? threadTitle(activeThread) : activeRoom.title) : undefined} onreturn={closeRooms}
-			onroom={chooseRoom} onthread={chooseThread} onopenthread={openThreadCard} onjoin={joinRoom} onleavethread={leaveThread} oncreateroom={(roomId, options) => (pendingJoin = { room: roomId, private: options.private })} onnewthread={newThreadInRoom} onsignout={signedOut} keptHistory={historyKeeper}
+			onroom={chooseRoom} onthread={chooseThread} onopenthread={openThreadCard} onjoin={joinRoom} onopenroom={openWithoutJoining} onleavethread={leaveThread} oncreateroom={(roomId, options) => (pendingJoin = { room: roomId, private: options.private })} onnewthread={newThreadInRoom} onsignout={signedOut} keptHistory={historyKeeper}
 			onnewprivate={canStartPrivate ? () => (newPrivateOpen = true) : undefined}
 		/>
 	{/snippet}
@@ -3402,7 +3484,7 @@
 				memberListToggle={!memberListWide}
 				{unreadElsewhere}
 				{mentionsElsewhere}
-				onsearch={canSearch ? () => (searchOpen = true) : undefined} {searchHint}
+				onsearch={canSearch ? () => (searchOpen = true) : undefined} {searchHint} onshortcuts={searchHint ? () => (shortcutsOpen = true) : undefined}
 				onback={openRooms} onroom={backToRoom} onedit={() => (roomEditorOpen = true)} onleave={leavePane} oncopylink={copyPaneLink} onjoin={joinPane} onmemberlist={toggleMemberList}
 				onmute={canMuteRoom ? mutePane : undefined}
 			/>
@@ -3547,7 +3629,7 @@
 					{people}
 					rooms={roomSuggestions}
 					reply={drafts.reply ? replyPreview(drafts.reply) : undefined}
-					oninput={composerInput} onsend={sendMessage} files={drafts.files} onfiles={stageFiles} onunstage={(id) => drafts.unstage(id)} onrename={(id, title) => drafts.rename(id, title)} oncancelreply={cancelReply}
+					oninput={composerInput} onsend={sendMessage} files={drafts.files} onfiles={stageFiles} onunstage={(id) => drafts.unstage(id)} onrename={(id, title) => drafts.rename(id, title)} oncancelreply={cancelReply} onedit={editLast}
 					onmention={() => { if (!paneRoom?.joined) listMembers(MEMBERS_FRESH_MS); }}
 					waitUntil={composerWait}
 				/>
@@ -3576,6 +3658,10 @@
 	{#if searchOpen && client && searchDialog.component}
 		{@const SearchDialog = searchDialog.component}
 		<SearchDialog {client} keeper={sessionKeeper()} rooms={session.rooms} {roomSuggestions} initial={paneRoom ? `room:#${paneRoom.id} ` : ''} note={searchNote()} onopen={openFound} kept={historySettings.title} onhistory={showHistoryPreferences} onclose={() => (searchOpen = false)} />
+	{/if}
+	{#if shortcutsOpen && shortcutsDialog.component}
+		{@const ShortcutsDialog = shortcutsDialog.component}
+		<ShortcutsDialog onclose={() => (shortcutsOpen = false)} />
 	{/if}
 	{#if newPrivateOpen && newPrivateDialog.component}
 		{@const NewPrivateDialog = newPrivateDialog.component}

@@ -1,0 +1,33 @@
+<!-- @dsCard group="Layout" height=640 subtitle="The keyboard shortcuts, opened with ?: titled groups in as many columns as fit, each shortcut what it does (and where) beside its keys" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>KeyboardShortcuts</title></head>
+<body>
+<div id="root"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  A.render(A.KeyboardShortcuts, root, {
+    open: true,
+    subtitle: 'Press ? to show these again.',
+    groups: [
+      { title: 'General', shortcuts: [
+        { label: 'Show keyboard shortcuts', keys: [['?'], ['⌘', '/']] },
+        { label: 'Search local history', keys: [['⌘', 'F']] }
+      ] },
+      { title: 'Composer', shortcuts: [
+        { label: 'New line', keys: [['⇧', 'Enter']] },
+        { label: 'Edit your last message', where: 'In an empty composer', keys: [['↑']] },
+        { label: 'Cancel the reply', where: 'While replying', keys: [['Esc']] }
+      ] },
+      { title: 'Messages', shortcuts: [
+        { label: 'Select a message', where: 'On a focused message', keys: [['x']] },
+        { label: 'Reply to a message', where: 'On a focused message', keys: [['r']] }
+      ] },
+      { title: 'Rooms', shortcuts: [
+        { label: 'Move a room up or down', where: 'On a room in the list', keys: [['⌥', '↑'], ['⌥', '↓']] }
+      ] }
+    ]
+  });
+</script>
+</body>
+</html>

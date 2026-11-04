@@ -55,22 +55,24 @@ describe('Sidebar', () => {
 		dom.render(Sidebar, { client, session, backendLabel: 'fake.test', threads: [], mentions: {}, unread: {}, displayName: 'Ada', onroom: vi.fn(), onthread: vi.fn(), onopenthread: vi.fn(), onjoin: vi.fn(), onleavethread: vi.fn(), oncreateroom: vi.fn(), onnewthread: vi.fn(), onsignout: vi.fn(), onconnect: vi.fn(), ...props } as never);
 	const names = (testid: string) => [...document.querySelectorAll(`[data-testid="${testid}"] .ap-room-name`)].map((name) => name.textContent);
 
-	it('shows Other Rooms open from the start, each with its member count and Join, and folds it to nothing, there being no news there', () => {
+	it('shows Other Rooms open from the start, each with its member count, picked to read without joining, and folds it to nothing, there being no news there', () => {
 		const listRooms = vi.fn((_parent?: string) => Promise.resolve());
 		const client = fake(listRooms);
 		const session = new SessionView();
 		const listing = (id: string, title: string, memberCount?: number) => ({ id, title, joined: false, record: { room_id: id }, members: [], memberCount });
 		session.apply(live({ directory: [listing('design', 'Design', 12), listing('quiet', 'Quiet')] as never }), client);
 		const onjoin = vi.fn();
-		sidebar(client, session, { onjoin });
+		const onopenroom = vi.fn();
+		sidebar(client, session, { onjoin, onopenroom });
 		flushSync();
 		const toggle = document.querySelector<HTMLButtonElement>('[data-testid="browse-rooms"]')!;
 		expect([toggle.textContent, toggle.getAttribute('aria-expanded')]).toEqual(['Other Rooms', 'true']);
 		const directory = document.querySelector('[data-testid="room-directory"]')!;
-		expect([...directory.querySelectorAll('.ap-room-topic')].map((topic) => topic.textContent)).toEqual(['12 members · Join', 'Join']);
+		expect([...directory.querySelectorAll('.ap-room-topic')].map((topic) => topic.textContent)).toEqual(['12 members']);
 		expect(directory.querySelector('.ap-sect-note')).toBeNull();
 		directory.querySelector<HTMLButtonElement>('[data-join="design"]')!.click();
-		expect(onjoin).toHaveBeenCalledWith('design');
+		expect(onopenroom).toHaveBeenCalledWith('design');
+		expect(onjoin).not.toHaveBeenCalled();
 		toggle.click();
 		flushSync();
 		expect([toggle.getAttribute('aria-expanded'), names('room-directory')]).toEqual(['false', []]);

@@ -138,18 +138,31 @@
 		});
 	}
 
-	/** Keyboard: `x` on a focused message picks it, the same as a shift-click; Escape puts touch's menu away. */
+	/**
+	 * Keyboard, on a focused message: `x` picks it, the same as a shift-click; `r` replies to it and `e` edits it, as
+	 * their buttons do, outside select mode; Escape puts touch's menu away.
+	 */
 	function keydown(event: KeyboardEvent): void {
 		if (event.key === 'Escape' && held) {
 			event.preventDefault();
 			release(event.currentTarget as HTMLElement);
 			return;
 		}
-		if (event.key !== 'x' || event.metaKey || event.ctrlKey || event.altKey || !view.caps?.select) return;
+		const key = event.key;
+		if (event.metaKey || event.ctrlKey || event.altKey || (key !== 'x' && key !== 'r' && key !== 'e')) return;
 		if ((event.target as HTMLElement | null)?.closest?.(FIELD)) return;
+		if (key === 'x') {
+			if (!view.caps?.select) return;
+			event.preventDefault();
+			if (view.selecting) on.select?.(view, false);
+			else on.beginSelect?.(view);
+			return;
+		}
+		if (view.selecting || view.editing) return;
+		const action = key === 'r' ? (view.caps?.reply ? on.reply : undefined) : view.caps?.edit ? on.edit : undefined;
+		if (!action) return;
 		event.preventDefault();
-		if (view.selecting) on.select?.(view, false);
-		else on.beginSelect?.(view);
+		action(view);
 	}
 
 	function checkKey(event: KeyboardEvent): void {

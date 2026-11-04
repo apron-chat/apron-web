@@ -87,4 +87,5 @@ export { default as RoomLoading } from './RoomLoading.svelte';
 export { default as FloatingDay } from './FloatingDay.svelte';
 export { default as DropZone } from './DropZone.svelte';
 export { default as SearchPanel } from './SearchPanel.svelte';
+export { default as KeyboardShortcuts } from './KeyboardShortcuts.svelte';
 export type * from './types';
