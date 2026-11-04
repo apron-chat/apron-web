@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatClient, ClientSnapshot } from './client';
-import { FakeSocket, startClient } from '$lib/test/client';
+import { FakeSocket, nextSocket, startClient } from '$lib/test/client';
 
 /**
  * Activity (§4.6): typing, which is bounded and refreshed before it expires,
@@ -190,12 +190,12 @@ describe('read cursors', () => {
 		// One waiting when the connection drops goes on the next one, once signed in.
 		started.client.markRead('general', '33');
 		first.drop();
+		const second = await nextSocket(first);
+		await second.greet(['history', 'rooms', 'activity'], { ...account, room: { room_id: 'general', log_id: '10', title: 'General', latest_log_id: '10', history_log_id: '10' } });
+		expect(reads(second)).toEqual(['33']);
+		// Its interval over, nothing more goes, on either.
 		vi.advanceTimersByTime(10_000);
 		expect(reads(first)).toEqual(['31', '32']);
-		vi.advanceTimersByTime(60_000);
-		const second = latest();
-		expect(second).not.toBe(first);
-		await second.greet(['history', 'rooms', 'activity'], { ...account, room: { room_id: 'general', log_id: '10', title: 'General', latest_log_id: '10', history_log_id: '10' } });
 		expect(reads(second)).toEqual(['33']);
 		started.client.stop();
 	});
@@ -208,9 +208,7 @@ describe('read cursors', () => {
 		client.markRead('general', '31');
 		client.markRead('general', '32');
 		first.drop();
-		vi.advanceTimersByTime(70_000);
-		const second = latest();
-		expect(second).not.toBe(first);
+		const second = await nextSocket(first);
 		await second.greet(['history', 'rooms', 'activity'], { room: { room_id: 'general', log_id: '10', title: 'General', latest_log_id: '10', history_log_id: '10' }, you: { user_id: 'bob' }, token: 'bob-token', auth: ['token', 'guest'] });
 		// Alice's waiting cursor is not sent as Bob's.
 		expect(reads(first)).toEqual(['31']);

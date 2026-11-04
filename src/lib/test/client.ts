@@ -90,6 +90,23 @@ export async function connect(caps: string[] = [], options: ClientOptions & Gree
 	return harness;
 }
 
+/**
+ * Runs the fake timers, one at a time, until the client opens a socket after `previous` (its backoff run out), and
+ * returns it, not yet greeted. Rather than a fixed long wait: a socket left opening runs out its own (`OPENING_MS`)
+ * and is replaced.
+ */
+export async function nextSocket(previous: FakeSocket, limitMs = 120_000): Promise<FakeSocket> {
+	const until = Date.now() + limitMs;
+	// A handshake that failed asks the server why (`fetch`) before the backoff starts: that settles first.
+	await settle();
+	while (FakeSocket.latest() === previous) {
+		if (Date.now() >= until || vi.getTimerCount() === 0) throw new Error('the client opened no new socket');
+		await vi.advanceTimersToNextTimerAsync();
+		await settle();
+	}
+	return FakeSocket.latest();
+}
+
 /** Lets an operation the test does not await fail quietly when the client stops. */
 export function quiet(value: { promise: Promise<unknown> } | Promise<unknown> | undefined): void {
 	(value && 'promise' in value ? value.promise : value)?.catch(() => undefined);

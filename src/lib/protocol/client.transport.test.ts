@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { capabilitiesOf, defaultWebSocketUrl, normalizeWebSocketUrl, sameServer, serverAddress, reconnectDelay, recoveryBufferFits, ChatClient, type ClientSnapshot } from './client';
 import type { MessageRecord } from './types';
-import { FakeSocket, quiet, settle, startClient } from '$lib/test/client';
+import { FakeSocket, nextSocket, quiet, settle, startClient } from '$lib/test/client';
 
 /**
  * The connection (§1, §3.1): reconnects with backoff and jitter, `retry_after`
@@ -481,11 +481,11 @@ describe('liveness pings', () => {
 		const listeners = new Map<string, () => void>();
 		vi.stubGlobal('addEventListener', (type: string, fn: () => void) => listeners.set(type, fn));
 		vi.stubGlobal('removeEventListener', (type: string) => listeners.delete(type));
-		const { client } = startClient();
+		const { client, socket } = startClient();
 		onTestFinished(() => client.stop());
-		await latest().greet([], { ping: 30 });
+		await socket.greet([], { ping: 30 });
 		listeners.get('online')?.();
-		expect(pings(latest())).toBe(1);
+		expect(pings(socket)).toBe(1);
 		client.stop();
 
 		// A server that doesn't ask for pings may not answer one: nothing is sent.
@@ -505,6 +505,183 @@ describe('liveness pings', () => {
 		latest().receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['rooms'] } });
 		vi.advanceTimersByTime(300_000);
 		expect(pings(latest())).toBe(1);
+	});
+});
+
+describe('a connection that doesn’t come up', () => {
+	const pings = (socket: FakeSocket) => socket.sent.filter((frame) => frame.method === 'ping').length;
+	const server = (ping?: number) => ({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: [], ...(ping ? { ping } : {}) } });
+
+	beforeEach(() => {
+		vi.useFakeTimers();
+		// A failed handshake asks the server why over HTTP: here nobody answers, at once.
+		vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch'); }));
+	});
+
+	function page() {
+		const listeners = new Map<string, Set<() => void>>();
+		const doc = {
+			visibilityState: 'visible',
+			addEventListener: (type: string, fn: () => void) => { if (!listeners.has(type)) listeners.set(type, new Set()); listeners.get(type)!.add(fn); },
+			removeEventListener: (type: string, fn: () => void) => listeners.get(type)?.delete(fn)
+		};
+		vi.stubGlobal('document', doc);
+		vi.stubGlobal('addEventListener', doc.addEventListener);
+		vi.stubGlobal('removeEventListener', doc.removeEventListener);
+		const fire = (type: string) => { for (const fn of [...(listeners.get(type) ?? [])]) fn(); };
+		return {
+			show(state: 'visible' | 'hidden') { doc.visibilityState = state; fire('visibilitychange'); },
+			/** Away for `ms`, as a phone's suspended app is: its clock moves on, but none of its timers run. */
+			away(ms: number) { doc.visibilityState = 'hidden'; fire('visibilitychange'); vi.setSystemTime(Date.now() + ms); doc.visibilityState = 'visible'; fire('visibilitychange'); },
+			online: () => fire('online')
+		};
+	}
+
+	it('replaces a reconnect’s socket that is still opening after 10 s, instead of waiting on it however long', async () => {
+		let snapshot: ClientSnapshot | undefined;
+		startClient({ onSnapshot: (next) => (snapshot = next) });
+		await latest().greet([]);
+		latest().drop();
+		const stuck = await nextSocket(latest());
+		vi.advanceTimersByTime(9_999);
+		expect(stuck.readyState).toBe(FakeSocket.CONNECTING);
+		vi.advanceTimersByTime(1);
+		expect(stuck.readyState).toBe(FakeSocket.CLOSED);
+		expect(snapshot?.status).toBe('reconnecting');
+		const next = await nextSocket(stuck);
+		await next.greet([]);
+		expect(snapshot?.authenticated).toBe(true);
+	});
+
+	it('replaces one that opened but never brought the server’s greeting, and keeps one that did, however long it took', async () => {
+		const { reconnect } = startClient();
+		await latest().greet([]);
+		const silent = reconnect();
+		silent.open();
+		vi.advanceTimersByTime(10_000);
+		expect(silent.readyState).toBe(FakeSocket.CLOSED);
+		const slow = await nextSocket(silent);
+		vi.advanceTimersByTime(9_000);
+		slow.open();
+		slow.receive(server());
+		vi.advanceTimersByTime(60_000);
+		expect(slow.readyState).toBe(FakeSocket.OPEN);
+		expect(FakeSocket.latest()).toBe(slow);
+	});
+
+	it('gives the first connection the same 10 s', async () => {
+		let snapshot: ClientSnapshot | undefined;
+		startClient({ onSnapshot: (next) => (snapshot = next) });
+		const first = latest();
+		vi.advanceTimersByTime(10_000);
+		expect(first.readyState).toBe(FakeSocket.CLOSED);
+		expect(snapshot?.status).toBe('reconnecting');
+		expect(await nextSocket(first)).not.toBe(first);
+	});
+
+	it('waits 30 s instead for a while after one ran out, so a slow network isn’t met with socket after socket', async () => {
+		startClient();
+		const first = latest();
+		vi.advanceTimersByTime(10_000);
+		const second = await nextSocket(first);
+		vi.advanceTimersByTime(29_999);
+		expect(second.readyState).toBe(FakeSocket.CONNECTING);
+		vi.advanceTimersByTime(1);
+		expect(second.readyState).toBe(FakeSocket.CLOSED);
+	});
+
+	it('replaces one still opening at once when the page comes back after its wait ran out while hidden pages’ timers were held back', () => {
+		const { show, away } = page();
+		startClient();
+		const first = latest();
+		// A glance away: the socket opening goes on.
+		away(5_000);
+		expect(first.readyState).toBe(FakeSocket.CONNECTING);
+		away(5_000);
+		expect(first.readyState).toBe(FakeSocket.CLOSED);
+		show('visible');
+	});
+
+	it('replaces one still opening at once when the network comes back: it was opened on the network that went', () => {
+		const { online } = page();
+		startClient();
+		const first = latest();
+		online();
+		expect(first.readyState).toBe(FakeSocket.CLOSED);
+	});
+
+	describe('back after a long absence', () => {
+		it('opens a standby beside the probed socket, and closes it, unused, once the probed one answers', async () => {
+			const { away } = page();
+			const { socket } = startClient();
+			await socket.greet([], { ping: 30 });
+			// Away under a minute: a probe alone.
+			away(59_000);
+			expect(pings(socket)).toBe(1);
+			expect(FakeSocket.instances).toHaveLength(1);
+			socket.receive({ method: 'pong' });
+
+			away(60_000);
+			expect(pings(socket)).toBe(2);
+			expect(FakeSocket.instances).toHaveLength(2);
+			const standby = latest();
+			standby.open();
+			socket.receive({ method: 'pong' });
+			expect(standby.readyState).toBe(FakeSocket.CLOSED);
+			expect(standby.sent).toEqual([]);
+			// Past the probe's wait: kept.
+			vi.advanceTimersByTime(5_000);
+			expect(socket.readyState).toBe(FakeSocket.OPEN);
+			expect(FakeSocket.instances).toHaveLength(2);
+		});
+
+		it('takes the standby at once when its greeting comes before the probed socket answers: that one is gone', async () => {
+			const { away } = page();
+			let snapshot: ClientSnapshot | undefined;
+			const { socket } = startClient({ onSnapshot: (next) => (snapshot = next) });
+			await socket.greet([], { ping: 30 });
+			away(5 * 60_000);
+			const standby = latest();
+			standby.open();
+			standby.receive(server(30));
+			expect(socket.readyState).toBe(FakeSocket.CLOSED);
+			expect(standby.sent.map((frame) => frame.method)).toEqual(['auth']);
+			await standby.reply('auth', { you: { user_id: 'guest_1' } });
+			expect(snapshot?.authenticated).toBe(true);
+			expect(FakeSocket.instances).toHaveLength(2);
+			// It is the connection now: pinged, and nothing else opens.
+			vi.advanceTimersByTime(30_000);
+			expect(pings(standby)).toBe(1);
+			expect(FakeSocket.instances).toHaveLength(2);
+		});
+
+		it('takes the standby, still opening, when the probe runs out first', async () => {
+			const { away } = page();
+			const { socket } = startClient();
+			await socket.greet([], { ping: 30 });
+			away(5 * 60_000);
+			const standby = latest();
+			vi.advanceTimersByTime(5_000);
+			expect(socket.readyState).toBe(FakeSocket.CLOSED);
+			expect(FakeSocket.instances).toHaveLength(2);
+			await standby.greet([]);
+			expect(FakeSocket.instances).toHaveLength(2);
+		});
+
+		it('opens one when the network comes back too, and none where the server doesn’t ping', async () => {
+			const { online } = page();
+			const { client, socket } = startClient();
+			await socket.greet([], { ping: 30 });
+			online();
+			expect(FakeSocket.instances).toHaveLength(2);
+			client.stop();
+			expect(latest().readyState).toBe(FakeSocket.CLOSED);
+
+			const { socket: quiet } = startClient();
+			await quiet.greet([]);
+			online();
+			expect(FakeSocket.instances).toHaveLength(1);
+		});
 	});
 });
 
