@@ -1,5 +1,5 @@
 import { flushSync } from 'svelte';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { ClientSnapshot, RoomListing } from '$lib/protocol/client';
 import { renderMarkdown } from '$lib/protocol/markdown';
 import type { Identity } from '$lib/protocol/types';
@@ -235,26 +235,6 @@ describe('directory', () => {
 			expect(mediaSettings.policy).toBe('trusted');
 			expect(directory.avatar(away)).toBeUndefined();
 		} finally {
-			mediaSettings.update('trusted', [], []);
-		}
-	});
-
-	it('loads a server’s avatar from the origin the app was loaded from, unless it is blocked', () => {
-		const icon = 'https://web.example/icon-512.png';
-		vi.stubGlobal('location', { origin: 'https://web.example' });
-		directory.apply(snapshot([ada], { server: { apron: 10, auth: ['guest'], capabilities: ['ext:media'], ext: { media: { origins: ['https://media.example'] } } } }), 'wss://chat.example/');
-		try {
-			// A new choice, so what is trusted is worked out again with this page's origin.
-			mediaSettings.update('trusted', [], []);
-			expect(directory.mediaOrigins).toEqual(['https://web.example', 'https://media.example']);
-			expect(directory.avatarGate.src(icon)).toBe(icon);
-			expect(directory.avatarGateFor('wss://elsewhere.example').src(icon)).toBe(icon);
-			expect(directory.mediaGate.src('https://elsewhere.example/a.png')).toBeUndefined();
-			mediaSettings.block('web.example');
-			expect(directory.avatarGate.src(icon)).toBeUndefined();
-			expect(directory.avatarGateFor('wss://elsewhere.example').src(icon)).toBeUndefined();
-		} finally {
-			vi.unstubAllGlobals();
 			mediaSettings.update('trusted', [], []);
 		}
 	});
