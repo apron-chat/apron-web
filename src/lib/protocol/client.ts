@@ -4103,7 +4103,8 @@ export class ChatClient {
 		if (!this.recoversAutomatically(room) || room.recovery || head === undefined) return;
 		// Catching up with the other joined rooms: that goes on from where it gets to, if it ends early.
 		if (this.joinedCatchUp?.rooms.has(room.id)) return;
-		const rebuild = fresh || Boolean(room.recoveryError) || room.checkpoint === undefined;
+		// One rule for whether it rebuilds (`rebuilds`): a room refused for a history wait keeps what it recovered.
+		const rebuild = fresh || this.rebuilds(room);
 		if (rebuild || compareLogIds(head, room.checkpoint!) > 0) this.startRecovery(room, head, rebuild);
 	}
 

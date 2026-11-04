@@ -302,21 +302,22 @@ describe('history per room', () => {
 		expect(room('general').timeline.order).toEqual(['11', '12', '13', '15', '18', '21']);
 	});
 
-	it('keeps showing what a room had while its rebuild waits out a history wait', async () => {
+	it('keeps what a room recovered while a history wait holds its next page, and resumes from there', async () => {
 		await socket.reply('history', { messages: [message('11'), message('12')], more: false, latest_log_id: '12', history_log_id: '10' });
 		socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'general', log_id: '10', title: 'General', latest_log_id: '14', history_log_id: '10' }] } });
 		socket.receive({ id: socket.request('history').id, error: { code: -32002, message: 'Too Many Requests', data: { retry_after: 3_600 } } });
 		await settle();
-		// The next room frame rebuilds the room (history-recovery-failure.json), but its page waits for hours.
+		// A wait isn't a failure (history-recovery-failure.json, rate-limited): the next room frame resumes, not rebuilds.
 		socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'general', log_id: '10', title: 'General', latest_log_id: '15', history_log_id: '10' }] } });
 		socket.receive({ method: 'message', params: message('16') });
 		expect(room('general')).toMatchObject({ recovering: true, limited: true });
 		expect(room('general').timeline.order).toEqual(['11', '12']);
 		await vi.advanceTimersByTimeAsync(3_600_000);
-		expect(bounds(socket.request('history').params)).toEqual({ room_id: 'general', before: '15' });
-		await socket.reply('history', { messages: [message('14'), message('15')], first_log_id: '14', last_log_id: '15', more: true, latest_log_id: '16', history_log_id: '10' });
-		// Then replaced by what the rebuild found, with what arrived live meanwhile.
-		expect(room('general').timeline.order).toEqual(['14', '15', '16']);
+		expect(bounds(socket.request('history').params)).toEqual({ room_id: 'general', after: '13', before: '15' });
+		await socket.reply('history', { messages: [message('14'), message('15')], first_log_id: '14', last_log_id: '15', more: false, latest_log_id: '16', history_log_id: '10' });
+		// What it had stays, with what the resume found and what arrived live meanwhile.
+		expect(room('general').timeline.order).toEqual(['11', '12', '14', '15', '16']);
+		expect(room('general').recovering).toBe(false);
 	});
 
 	it('leaves a recovery that failed for another reason to loadRoom', async () => {
