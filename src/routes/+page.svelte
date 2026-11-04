@@ -77,6 +77,7 @@
 	import AppShell from '$lib/design/components/AppShell.svelte';
 	import DropZone from '$lib/design/components/DropZone.svelte';
 	import EmptyState from '$lib/design/components/EmptyState.svelte';
+	import Button from '$lib/design/components/Button.svelte';
 	import FloatingDayPill from '$lib/design/components/FloatingDay.svelte';
 	import PanelToggle from '$lib/design/components/PanelToggle.svelte';
 	import { ViewKeeper } from '$lib/ui/view-keeper';
@@ -95,6 +96,7 @@
 	import { takeSignInLink } from '$lib/ui/sign-in-link';
 	import { SignInLinks } from '$lib/ui/link-controller.svelte';
 	import { findProposal } from '$lib/protocol/proposals';
+	import { answerLinks, offerLink, openHandoffChannel, type HandedOver, type HandoffChannel } from '$lib/ui/tab-handoff';
 	import { idMillis } from '$lib/ui/time';
 	import { tabTitle } from '$lib/ui/attention';
 	import { FloatingDay } from '$lib/ui/floating-day.svelte';
@@ -311,6 +313,13 @@
 	/** Link previews removed from the composer's draft, by URL. */
 	let composerDismissed = $state<string[]>([]);
 	let connectOpen = $state(false);
+	/**
+	 * Another tab took over (`tab-handoff.ts`): a sign-in link this tab asked for opened there, this tab approved
+	 * it and let go of its connection, and shows only that Apron is open in the other tab.
+	 */
+	let dormant = $state(false);
+	/** The channel this origin's tabs hand sign-in links over on, where the browser has one. */
+	let handoffChannel: HandoffChannel | undefined;
 	/** Disconnected from the server pane: the connect screen can't be cancelled back to it. */
 	let disconnected = $state(false);
 	/** The sign-in scheme the connect screen opens with, when something asked for one. */
@@ -351,8 +360,47 @@
 			serverInput = server;
 			connectScheme = scheme;
 			connectOpen = true;
+		},
+		// The tab that asked for the link approves it, if it is still open; this one then takes over.
+		handOff: (link) => (handoffChannel && !previewMode ? offerLink(handoffChannel, link) : Promise.resolve({ kind: 'unclaimed' })),
+		tookOver: (server, handed) => {
+			if (!client) return;
+			// The other tab signed in on `server` and handed its session over: this one signs in with it, leaving what it showed.
+			if (server !== client.url) {
+				leaveBackend();
+				serverInput = server;
+				saveServerUrl(server);
+			} else {
+				signedOut()();
+			}
+			client.takeUpKeptSession(handed.session, server);
+			connected();
+			// And opens where the other tab was.
+			if (handed.room) linked = { server, room: handed.room, ...(handed.thread ? { thread: handed.thread } : {}) };
 		}
 	});
+
+	/**
+	 * Approves a link another tab offers for a proposal this tab holds (`tab-handoff.ts`), with the place this
+	 * tab has open for that tab to take over at; undefined for one it doesn't hold.
+	 */
+	function takeHandedLink(state: string, token: string): Promise<HandedOver> | undefined {
+		const chat = client;
+		if (!chat || dormant || !chat.holdsProposal(state)) return undefined;
+		const place = { ...(selectedRoomId ? { room: selectedRoomId } : {}), ...(activeThread ? { thread: activeThread } : {}) };
+		const server = findProposal(state)?.url ?? chat.url;
+		return chat.approveHandedLink(token, state, () => (server !== chat.url ? leaveBackend() : signedOut()())).then(() => {
+			const session = chat.handedSession();
+			return { ...place, ...(session ? { session } : {}) };
+		});
+	}
+
+	/** This tab handed its sign-in to another, which shows Apron from now on: it lets go of its connection. */
+	function goDormant(): void {
+		dormant = true;
+		connectOpen = false;
+		client?.stop();
+	}
 	/** The open thread's `room_id`; undefined in the room view. */
 	let activeThread = $state<string | undefined>();
 	/** The toast for the last thread that failed to load, cleared once it no longer applies. */
@@ -1291,6 +1339,10 @@
 			if (event.key === INSTALL_OFFER_KEY) installAnswered = installOfferAnswered();
 		};
 		window.addEventListener('storage', storageChanged);
+		// A sign-in link this tab asked for, opened in another tab, comes back here to approve (`tab-handoff.ts`).
+		const channel = previewMode ? undefined : openHandoffChannel();
+		handoffChannel = channel;
+		const stopAnswering = channel ? answerLinks(channel, takeHandedLink, ({ ok }) => { if (ok) goDormant(); }) : undefined;
 		// Any input on the page means someone is attending it (§4.5 `idle`). Captured, so a
 		// handler that stops an event's propagation doesn't hide it.
 		const inputOptions = { capture: true, passive: true };
@@ -1373,6 +1425,9 @@
 			window.removeEventListener('hashchange', hashChanged);
 			document.removeEventListener('click', apronLinkClicked);
 			window.removeEventListener('storage', storageChanged);
+			stopAnswering?.();
+			channel?.close();
+			handoffChannel = undefined;
 			for (const type of ['keydown', 'pointerdown'] as const) window.removeEventListener(type, pressed, inputOptions);
 			for (const type of ['pointermove', 'wheel', 'touchmove'] as const) window.removeEventListener(type, moved, inputOptions);
 			window.removeEventListener('beforeinstallprompt', installOffered);
@@ -3404,6 +3459,13 @@
 {/if}
 {#if !client}
 	<AppShell viewport />
+{:else if dormant}
+	<!-- This tab handed its sign-in to another (`tab-handoff.ts`), which shows Apron from now on. -->
+	<div class="ap-connect ap-connect-page" data-testid="dormant-tab">
+		<EmptyState title="Apron is open in another tab" detail="You signed in there, so this tab let go of its connection. You can close it.">
+			{#snippet actions()}<Button variant="primary" label="Use Apron here" onclick={() => location.reload()} />{/snippet}
+		</EmptyState>
+	</div>
 {:else if connectOpen}
 	<ConnectScreen
 		{client} {session} bind:serverInput bind:displayName {passkeyUnavailable} {recentServers}

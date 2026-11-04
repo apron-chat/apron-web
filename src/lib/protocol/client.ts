@@ -1334,6 +1334,65 @@ export class ChatClient {
 		if (proposal) this.emit();
 	}
 
+	/**
+	 * Whether this tab holds the open proposal with `state` (§4.11.1): a
+	 * sign-in waiting on its own connection, or an addition on this one. A
+	 * link for it opened in another tab hands its token here
+	 * (`approveHandedLink`), since only this tab's connection can approve it
+	 * for certain: a code's, or a guest's registration (§4.11.3).
+	 */
+	holdsProposal(state: string): boolean {
+		const proposal = this.signInProposal;
+		if (proposal?.proposed && !proposal.connection.closed && proposal.state === state) return true;
+		const addition = this.addition;
+		return Boolean(addition && addition.state === state && addition.connection === this.connectionId && this.authenticated);
+	}
+
+	/**
+	 * Approves the open proposal with `state` that this tab holds
+	 * (`holdsProposal`) with a link's token another tab handed over, on the
+	 * connection that proposed it: a sign-in then carries on with that
+	 * connection, as with a code, and saves its session for the server; an
+	 * addition adds, or registers a guest. Rejects with why it didn't.
+	 */
+	async approveHandedLink(token: string, state: string, beforeSwitch?: () => void): Promise<void> {
+		const secret = token.trim();
+		if (!secret) throw new Error('The link has no token');
+		const proposal = this.signInProposal;
+		if (proposal?.proposed && !proposal.connection.closed && proposal.state === state) {
+			await this.approveSignIn(proposal.connection, proposal.scheme, secret, { beforeSwitch, retryable: true, state });
+			return;
+		}
+		const addition = this.addition;
+		if (addition && addition.state === state && addition.connection === this.connectionId) {
+			await this.approveAddition(addition.scheme, secret, state);
+			return;
+		}
+		throw new Error('The request this link answers is no longer open here');
+	}
+
+	/** The session this tab is signed in with, to hand to another tab that takes over (`takeUpKeptSession`). */
+	handedSession(): HandedSession | undefined {
+		return this.sessionToken && this.registeredSession ? { token: this.sessionToken, ...(this.you ? { userId: this.you.user_id } : {}) } : undefined;
+	}
+
+	/**
+	 * Takes up the session another tab of this browser saved for this server
+	 * for `url` (this client's server by default; a switch to another, as
+	 * `setUrl`) when it signed in there (`approveHandedLink`), or the one it
+	 * `handed` over: connects anew with it, as a load of the page would.
+	 */
+	takeUpKeptSession(handed?: HandedSession, url = this.serverUrl): void {
+		this.switchServer(addressOf(url.trim()) || this.serverUrl);
+		// Storage reaches other tabs a moment late: the session the other tab handed over is the one to take.
+		if (handed?.token && this.sessionToken !== handed.token) {
+			this.storeSession(handed.token, handed.userId);
+			this.loadStoredSession();
+		}
+		if (this.running) this.restart();
+		else this.start();
+	}
+
 	/** Closes `connection`, and forgets the open proposal if it was that one's. */
 	private closeSignInConnection(connection: SignInConnection): void {
 		if (this.signInProposal?.connection === connection) this.signInProposal = undefined;
@@ -5325,6 +5384,12 @@ const NOT_OFFERED: Record<ProposalScheme, string> = {
 };
 
 /** A sign-in proposal on a connection of its own (§4.11.1); `page` is an external one's, which shows its code. */
+/** A session one tab hands another (`handedSession`, `takeUpKeptSession`): its bearer token and whose it is. */
+export interface HandedSession {
+	token: string;
+	userId?: string;
+}
+
 interface SignInProposal {
 	connection: SignInConnection;
 	scheme: ProposalScheme;

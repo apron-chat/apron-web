@@ -3,6 +3,7 @@ import type { ClientSnapshot } from '$lib/protocol/client';
 import type { Proposal, ProposalScheme } from '$lib/protocol/proposals';
 import { addError, backendHost } from './connection';
 import { askedLinkFailure, linkUse, runSignInLink, sessionSettled, type LinkUse, type SignInLink, type SignInLinkClient } from './sign-in-link';
+import type { HandedOver, OfferOutcome } from './tab-handoff';
 import { Task } from './task.svelte';
 
 /**
@@ -38,6 +39,14 @@ export interface LinkHost {
 	signedIn(server: string, switched: boolean): void;
 	/** The link didn't sign in: the connect screen opens on its server, with `error`, and `scheme` (a proposal's own) to start again. */
 	failed(failure: { error: string; server: string; scheme?: ProposalScheme }): void;
+	/**
+	 * Offers a link of this browser's own proposal to the tab that asked for it, still open and waiting
+	 * (`tab-handoff.ts`), which approves it on its connection and goes dormant. Absent, or where the browser
+	 * can't, the link is used here.
+	 */
+	handOff?(link: { state: string; token: string }): Promise<OfferOutcome>;
+	/** The tab that asked approved the link (`handOff`): this one takes up the session it handed over for `server`, at its place. */
+	tookOver?(server: string, handed: HandedOver): void;
 }
 
 /** An addition this browser proposed, waiting for the session of the account that proposed it. */
@@ -84,9 +93,31 @@ export class SignInLinks {
 	follow(link: SignInLink): void {
 		const use = linkUse(link, (state) => this.host.findProposal(state));
 		if (!use) return;
+		if (use.kind === 'ask') {
+			this.asked = use.link;
+			return;
+		}
+		// The tab that asked, if still open, approves it and hands this tab the session; else it is used here.
+		if (this.host.handOff) void this.#handOff(use, this.host.handOff);
+		else this.#ownLink(use);
+	}
+
+	/** A link of this browser's own proposal, used here: a sign-in at once, an addition once its account's session settles. */
+	#ownLink(use: Exclude<LinkUse, { kind: 'ask' }>): void {
 		if (use.kind === 'addition') this.addition = use;
-		else if (use.kind === 'own') this.use(use);
-		else this.asked = use.link;
+		else this.use(use);
+	}
+
+	async #handOff(use: Exclude<LinkUse, { kind: 'ask' }>, handOff: NonNullable<LinkHost['handOff']>): Promise<void> {
+		this.host.feedback.pending('Signing in…');
+		const outcome = await handOff({ state: use.state, token: use.token });
+		this.host.feedback.clear();
+		if (outcome.kind === 'unclaimed') this.#ownLink(use);
+		else if (outcome.kind === 'signedIn') {
+			const { kind: _kind, ...handed } = outcome;
+			this.host.tookOver?.(use.server, handed);
+		}
+		else this.host.feedback.error(`The link didn’t sign you in (${outcome.error}). Send a new code to try again.`);
 	}
 
 	/** The viewer confirmed signing in with the asked link. */

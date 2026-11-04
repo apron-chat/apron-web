@@ -18,6 +18,11 @@ export type MockOptions = {
 	history?: Record<string, unknown>[];
 	/** Set by `mockServer` once the page connects: sends the page a frame, such as a live `message`. */
 	deliver?: (frame: Record<string, unknown>) => void;
+	/**
+	 * Email sign-in (§4.11): a proposal (`email`, no `token`) answers `{}`; an approval (a `token` starting
+	 * `apron_email_`, or six digits) signs in as `you` with the session `token`, which resumes as `you` too.
+	 */
+	email?: { you: Record<string, unknown>; token: string };
 };
 
 /**
@@ -49,6 +54,17 @@ export async function mockServer(page: Page, options: MockOptions = {}): Promise
 			switch (frame.method) {
 				case 'ping': return ws.send(JSON.stringify({ method: 'pong' }));
 				case 'auth': {
+					const email = options.email;
+					const token = typeof frame.params?.token === 'string' ? frame.params.token : undefined;
+					if (email && frame.params?.scheme === 'email' && token === undefined) return reply({});
+					if (email && token && (token.startsWith('apron_email_') || /^[0-9]{6}$/.test(token))) {
+						you = { ...email.you };
+						return reply({ you, token: email.token });
+					}
+					if (email && token === email.token) {
+						you = { ...email.you };
+						return reply({ you });
+					}
 					if (options.token && frame.params?.scheme === 'guest' && auths++ > 0) {
 						you = { user_id: 'guest_2', name: 'Guest 2', status: 'online' };
 						return reply({ you });
