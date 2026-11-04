@@ -3334,10 +3334,10 @@
 			return;
 		}
 		// Alt+↑/↓ (⌥ on a Mac): the room or thread above or below the open one in the rooms list, and with Shift the
-		// nearest with news, from anywhere but a dialog or a field other than the composer. On a room's row Alt+↑/↓
+		// room, past any threads, from anywhere but a dialog or a field other than the composer. On a room's row Alt+↑/↓
 		// moves it instead: the Sidebar's reorderKey takes it first. A room listed to join opens to read, not joined
 		// (a key that steps shouldn't join every room it passes): Join in its header, or posting there, joins it.
-		// With nowhere to go (an end of the list, no news), the key is the field's or the page's as usual.
+		// With nowhere to go (an end of the list), the key is the field's or the page's as usual.
 		if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown') && !event.ctrlKey && !event.metaKey && !event.defaultPrevented && client && !connectOpen && !modalOpen()) {
 			if (inField(event.target) && !(event.target as HTMLElement).closest('#message-input')) return;
 			const row = nextRoomRow(document.querySelector('.ap-shell-side') ?? document, event.key === 'ArrowDown' ? 1 : -1, event.shiftKey);

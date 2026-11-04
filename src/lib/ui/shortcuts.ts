@@ -42,8 +42,8 @@ export function shortcutGroups(mac: boolean): ShortcutGroup[] {
 			title: 'Rooms',
 			shortcuts: [
 				// +page.svelte's windowKeydown (room-steps.ts).
-				{ label: 'Previous or next room', keys: [[alt, '↑'], [alt, '↓']] },
-				{ label: 'Previous or next unread room', keys: [[alt, shift, '↑'], [alt, shift, '↓']] },
+				{ label: 'Previous or next room or thread', keys: [[alt, '↑'], [alt, '↓']] },
+				{ label: 'Previous or next room, past threads', keys: [[alt, shift, '↑'], [alt, shift, '↓']] },
 				// Sidebar.svelte's reorderKey.
 				{ label: 'Move a room up or down', where: 'On a room in the list', keys: [[alt, '↑'], [alt, '↓']] }
 			]

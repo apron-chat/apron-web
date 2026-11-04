@@ -51,12 +51,15 @@ describe('nextRoomRow', () => {
 		expect(id(nextRoomRow(rooms, -1))).toBe('random');
 	});
 
-	it('with `unread`, finds the nearest with news that way, going round the end, never the open one', () => {
-		const rooms = list('a!', 'b', 'c*', 'd', 'e!');
-		expect(id(nextRoomRow(rooms, 1, true))).toBe('e');
-		expect(id(nextRoomRow(rooms, -1, true))).toBe('a');
-		expect(id(nextRoomRow(list('a', 'b*', 'c!'), -1, true))).toBe('c');
-		expect(nextRoomRow(list('a', 'b*!', 'c'), 1, true)).toBeUndefined();
-		expect(id(nextRoomRow(list('a', 'b!'), 1, true))).toBe('b');
+	it('with `rooms`, goes to the nearest room that way past any threads, joined or listed, stopping at the ends', () => {
+		const rooms = list('general*', 't-cert', 'other:t-plan', 'eng', 't-deploy', 'join:lobby');
+		expect(id(nextRoomRow(rooms, 1, true))).toBe('eng');
+		expect(nextRoomRow(rooms, -1, true)).toBeUndefined();
+		const inThread = list('general', 't-cert*', 'other:t-plan', 'eng', 't-deploy', 'join:lobby');
+		// From a thread: on to the next room down, or up to the room it's under.
+		expect(id(nextRoomRow(inThread, 1, true))).toBe('eng');
+		expect(id(nextRoomRow(inThread, -1, true))).toBe('general');
+		expect(id(nextRoomRow(list('general', 'eng*', 't-deploy', 'join:lobby'), 1, true))).toBe('lobby');
+		expect(nextRoomRow(list('general', 't-cert*'), 1, true)).toBeUndefined();
 	});
 });

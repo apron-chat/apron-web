@@ -7,19 +7,19 @@
  */
 const ROWS = 'button.ap-room:is([data-room], [data-thread], [data-other-thread], [data-join], [aria-current="page"])';
 
+/** A room's row, not a thread's: joined (`data-room`) or listed to join (`data-join`). */
+const isRoom = (row: HTMLElement) => row.dataset.room !== undefined || row.dataset.join !== undefined;
+
 /**
- * The row `step` places after the open one (-1 before), or with `unread` the nearest that way with news (`ap-room-unread`:
- * unread and not muted), going round the end. With no row open, the first (or last). Undefined at the end of the list,
- * or with no news elsewhere.
+ * The row `step` places after the open one (-1 before), or with `rooms` the nearest room that way, past any threads
+ * (from a thread, the room it's under going up). With no row open, the first (or last). Undefined at the end of the
+ * list.
  */
-export function nextRoomRow(list: ParentNode, step: 1 | -1, unread = false): HTMLElement | undefined {
+export function nextRoomRow(list: ParentNode, step: 1 | -1, rooms = false): HTMLElement | undefined {
 	const rows = [...list.querySelectorAll<HTMLElement>(ROWS)];
 	const at = rows.findIndex((row) => row.getAttribute('aria-current') === 'page');
-	if (!unread) return at < 0 ? rows.at(step > 0 ? 0 : -1) : rows[at + step];
-	const from = at >= 0 ? at : step > 0 ? -1 : rows.length;
-	for (let n = 1; n <= rows.length; n++) {
-		const index = (((from + step * n) % rows.length) + rows.length) % rows.length;
-		if (index !== at && rows[index].classList.contains('ap-room-unread')) return rows[index];
+	for (let index = at < 0 ? (step > 0 ? 0 : rows.length - 1) : at + step; index >= 0 && index < rows.length; index += step) {
+		if (!rooms || isRoom(rows[index])) return rows[index];
 	}
 	return undefined;
 }

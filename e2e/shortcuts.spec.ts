@@ -94,7 +94,7 @@ test('↑ in the empty composer edits your last message, and Escape there cancel
 	});
 });
 
-test('Alt+↑/↓ steps through the rooms list from the composer, Alt+Shift to the next with news; on a room\'s row it moves the room', async ({ preview, page }) => {
+test('Alt+↑/↓ steps through the rooms list from the composer, Alt+Shift from room to room past threads; on a room\'s row it moves the room', async ({ preview, page }) => {
 	await preview.open();
 	const sidebar = page.getByRole('complementary', { name: 'Rooms' });
 	/** The rows stepped through, as drawn: joined rooms and threads, and the open one. */
@@ -130,13 +130,15 @@ test('Alt+↑/↓ steps through the rooms list from the composer, Alt+Shift to t
 		await expect(page).not.toHaveURL(new RegExp(`thread=${id}`));
 	});
 
-	await test.step('Alt+Shift+↓ goes to the room with news, past the ones without', async () => {
-		await preview.post('engineering', 'ada', 'Something new');
-		const news = sidebar.locator('button.ap-room[data-room="engineering"]');
-		await expect(news).toHaveClass(/ap-room-unread/);
+	await test.step('Alt+Shift+↓ and ↑ go from room to room, past the threads between', async () => {
+		// From one of general's threads, past the rest of them to the next room, and back up to general.
+		await expect(page).toHaveURL(/[#&]thread=/);
 		await page.keyboard.press('Alt+Shift+ArrowDown');
-		await expect(news).toHaveAttribute('aria-current', 'page');
-		await expect(page).toHaveURL(/[#&]room=engineering(&|$)/);
+		await expect(page).toHaveURL(/[#&]room=engineering$/);
+		await page.keyboard.press('Alt+Shift+ArrowUp');
+		await expect(page).toHaveURL(/[#&]room=general$/);
+		await page.keyboard.press('Alt+Shift+ArrowDown');
+		await expect(page).toHaveURL(/[#&]room=engineering$/);
 	});
 
 	await test.step('on a room\'s row, Alt+↑ moves the room up instead, and the open room stays', async () => {

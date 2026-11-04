@@ -1111,8 +1111,8 @@ folded section's hidden rooms passed over. The rows listed to join are among the
 a thread listed under a room (Other Threads), as clicking it does, and a room under Other Rooms, which (unlike a click
 on its row, which joins it) opens read through its history as a guest's does, so a key that steps never joins
 every room it passes. **Join** in its header, or posting there, joins it. It
-stops at either end, and the keyboard stays where it was. With Shift too it opens the nearest row that way with
-news (unread, and not muted), going round the end. With nowhere to go (an end of the list, no news elsewhere) the
+stops at either end, and the keyboard stays where it was. With Shift too it opens the next room that way, past any
+threads (from a thread, going up opens the room it's under), joined or listed to join. With nowhere to go (an end of the list) the
 keys do what they would anyway, such as a Mac's ⌥↑ moving the caret in the composer. Not over the connect screen.
 
 The sidebar's **Private** section, right below Rooms and above Other Rooms,
