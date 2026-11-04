@@ -4,12 +4,12 @@ import { nextRoomRow } from './room-steps';
 
 afterEach(() => (document.body.innerHTML = ''));
 
-/** A rooms list, its rows by id: `*` the open one, `!` with news, `join:` one listed to join. */
+/** A rooms list, its rows by id: `*` the open one, `!` with news, `join:` a room listed to join, `other:` a thread listed to read. */
 function list(...rows: string[]): HTMLElement {
 	const aside = document.createElement('aside');
 	aside.innerHTML = rows.map((row) => {
-		const id = row.replace(/[*!]/g, '').replace(/^join:/, '');
-		const where = row.startsWith('join:') ? `data-join="${id}"` : id.startsWith('t-') ? `data-thread="${id}"` : `data-room="${id}"`;
+		const id = row.replace(/[*!]/g, '').replace(/^(join|other):/, '');
+		const where = row.startsWith('join:') ? `data-join="${id}"` : row.startsWith('other:') ? `data-other-thread="${id}"` : id.startsWith('t-') ? `data-thread="${id}"` : `data-room="${id}"`;
 		return `<button class="ap-room${row.includes('!') ? ' ap-room-unread' : ''}" ${where}${row.includes('*') ? ' aria-current="page"' : ''}>${id}</button>`;
 	}).join('');
 	document.body.append(aside);
@@ -24,6 +24,12 @@ describe('nextRoomRow', () => {
 		expect(id(nextRoomRow(rooms, -1))).toBe('general');
 		expect(nextRoomRow(list('only*'), 1)).toBeUndefined();
 		expect(nextRoomRow(list('a*', 'b'), -1)).toBeUndefined();
+	});
+
+	it('steps into threads listed to read without joining, as a guest on a server whose threads are all of those', () => {
+		const rooms = list('general*', 'other:t-roundup', 'other:t-security', 'join:chefs');
+		expect(id(nextRoomRow(rooms, 1))).toBe('t-roundup');
+		expect(id(nextRoomRow(list('general', 'other:t-roundup*', 'other:t-security'), 1))).toBe('t-security');
 	});
 
 	it('passes over rooms listed to join, but steps from the open one even when it is one of them', () => {

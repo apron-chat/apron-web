@@ -16,7 +16,7 @@ test('? shows the keyboard shortcuts, but types a ? in a field; Ctrl+/ and the �
 		await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
 		await page.keyboard.press('Shift+?');
 		await expect(shortcuts).toBeVisible();
-		await expect(shortcuts.getByRole('heading', { level: 3 })).toHaveText(['General', 'Composer', 'Messages', 'Rooms', 'Viewers']);
+		await expect(shortcuts.getByRole('heading', { level: 3 })).toHaveText(['General', 'Composer', 'Messages', 'Rooms']);
 		await expect(shortcuts.locator('.ap-keys-row').filter({ hasText: 'Edit your last message' })).toContainText('In an empty composer');
 		await page.keyboard.press('Escape');
 		await expect(shortcuts).toHaveCount(0);
@@ -98,7 +98,7 @@ test('Alt+↑/↓ steps through the rooms list from the composer, Alt+Shift to t
 	await preview.open();
 	const sidebar = page.getByRole('complementary', { name: 'Rooms' });
 	/** The rows stepped through, as drawn: joined rooms and threads, and the open one. */
-	const rows = () => sidebar.locator('button.ap-room:is([data-room], [data-thread], [aria-current="page"])');
+	const rows = () => sidebar.locator('button.ap-room:is([data-room], [data-thread], [data-other-thread], [aria-current="page"])');
 	/** The open row's room or thread. */
 	const open = () => sidebar.locator('button.ap-room[aria-current="page"]').evaluate((button: HTMLElement) => button.dataset.room ?? button.dataset.thread ?? button.dataset.join);
 	const composer = preview.composer();
@@ -113,6 +113,21 @@ test('Alt+↑/↓ steps through the rooms list from the composer, Alt+Shift to t
 		await expect(composer).toBeFocused();
 		await page.keyboard.press('Alt+ArrowUp');
 		await expect.poll(open).toBe(before);
+	});
+
+	await test.step('it steps into the threads listed to read without joining, and joins none of them', async () => {
+		const other = sidebar.locator('button.ap-room[data-other-thread]').first();
+		const id = await other.getAttribute('data-other-thread');
+		await other.evaluate((row) => row.scrollIntoView());
+		// From the row before it.
+		const order = await rows().evaluateAll((buttons: HTMLElement[]) => buttons.map((button) => button.dataset.room ?? button.dataset.thread ?? button.dataset.otherThread));
+		await page.locator(`button.ap-room[data-thread="${order[order.indexOf(id!) - 1]}"], button.ap-room[data-room="${order[order.indexOf(id!) - 1]}"]`).click();
+		await composer.click();
+		await page.keyboard.press('Alt+ArrowDown');
+		await expect(page).toHaveURL(new RegExp(`thread=${id}`));
+		expect(await preview.sent('room_join')).toEqual([]);
+		await page.keyboard.press('Alt+ArrowUp');
+		await expect(page).not.toHaveURL(new RegExp(`thread=${id}`));
 	});
 
 	await test.step('Alt+Shift+↓ goes to the room with news, past the ones without', async () => {

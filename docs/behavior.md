@@ -397,8 +397,9 @@ replying cancels the reply and keeps the draft (with an autocomplete open, Escap
 puts that away first).
 
 **Keyboard shortcuts**: `?` (outside a field, where it is a character), or
-Ctrl+/ (⌘/ on a Mac; with Shift too, where `/` is a shifted key) anywhere, lists the app's keyboard shortcuts in a centered
-dialog, grouped (General, Composer, Messages, Rooms, Viewers), each with where
+Ctrl+/ (⌘/ on a Mac; with Shift too, where `/` is a shifted key) anywhere, lists the keyboard shortcuts worth learning (not the keys every app has, such as Enter to send, Esc to
+close, or the arrows in a list, though they work too) in a centered
+dialog, grouped (General, Composer, Messages, Rooms), each with where
 it works and its keys as this platform writes them (⌘ ⌥ ⇧ on a Mac, Ctrl, Alt,
 Shift elsewhere), and named in words for a screen reader. It opens while signed
 in, off the connect screen, and with no other dialog open; Escape (which leaves a selection as it was), its close button or a click beside it
@@ -1106,7 +1107,8 @@ places. Threads keep their own order, most recently active first.
 
 Alt+↑ or Alt+↓ anywhere else (⌥ on a Mac; from the composer too, but not another field or a dialog) opens the room or
 thread above or below the open one in the list, as drawn: the joined rooms and threads, threads under their room, a
-folded section's hidden rooms passed over, and rooms or threads listed to join left out (picking one would join it). It
+folded section's hidden rooms passed over; the threads listed under a room to read without joining are among them
+(opening one joins nothing), but the rooms listed to join (Other Rooms) are left out, since picking one joins it. It
 stops at either end, and the keyboard stays where it was. With Shift too it opens the nearest row that way with
 news (unread, and not muted), going round the end. With nowhere to go (an end of the list, no news elsewhere) the
 keys do what they would anyway, such as a Mac's ⌥↑ moving the caret in the composer. Not over the connect screen.
