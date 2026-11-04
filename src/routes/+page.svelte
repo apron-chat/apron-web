@@ -3304,7 +3304,8 @@
 
 	function windowKeydown(event: KeyboardEvent): void {
 		// The keyboard shortcuts, signed in, from anywhere on the page but another dialog (lib/ui/shortcuts.ts lists them).
-		if (client && !event.defaultPrevented && shortcutsKey(event) && !modalOpen()) {
+		// The key is read first, so typing calls nothing more here.
+		if ((event.key === '?' || event.key === '/') && client && !event.defaultPrevented && shortcutsKey(event) && !modalOpen()) {
 			event.preventDefault();
 			shortcutsOpen = true;
 			return;

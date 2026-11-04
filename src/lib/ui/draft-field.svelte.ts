@@ -43,7 +43,10 @@ export interface DraftHost {
 	readonly disabled: boolean;
 	/** Enter where it sends (or saves): `enterAction`, with no picker taking it. */
 	submit(): void;
-	/** A key no picker took, before Enter's: the caller's own, such as ↑ in an empty composer. True when it took it. */
+	/**
+	 * A key no picker took that types no character (Escape, an arrow, Enter), before Enter's: the caller's own, such as
+	 * ↑ in an empty composer. True when it took it. Typing doesn't ask.
+	 */
 	key?(event: KeyboardEvent): boolean;
 	/** The draft changed by typing or a pick, not set from outside. */
 	oninput?(): void;
@@ -225,7 +228,7 @@ export class DraftField {
 				}
 			}
 		}
-		if (event.isComposing || this.host.key?.(event)) return;
+		if (event.isComposing || (event.key.length > 1 && this.host.key?.(event))) return;
 		if (event.key === 'Enter') {
 			event.preventDefault();
 			if (enterAction(event, this.onHandheld) === 'newline') document.execCommand('insertText', false, '\n');
