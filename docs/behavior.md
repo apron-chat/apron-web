@@ -447,7 +447,8 @@ author typed, and IDs, tokens and URLs are never changed. Times and days, as
 the browser's locale writes them, keep their own direction too, so under a
 right-to-left layout an English time still reads "3:42 PM". A rendered body (plain or CommonMark, never inside
 code) shows a known user's `@user_id` as a chip with their current name, a known room's
-`#room_id` as a link showing its title that opens the room (or joins it), and unknown
+`#room_id` as a link showing its title that opens the room (one you haven't joined, to read without joining, as picking it under
+Other Rooms does; or, when the client knows nothing of it, joins it), and unknown
 IDs as written ([PROTOCOL.md Appendix A.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#a3-prefixes-in-text)): `@` names only users. The ID after
 `@` or `#` is the longest run of letters, digits and `_.+@:-` that starts and
 ends with a letter, a digit or `_`, so `@ada@example.com` and
@@ -1109,7 +1110,7 @@ Alt+↑ or Alt+↓ anywhere else (⌥ on a Mac; from the composer too, but not a
 thread above or below the open one in the list, as drawn: the joined rooms and threads, threads under their room, a
 folded section's hidden rooms passed over. The rows listed to join are among them (Other Threads, Other Rooms), and
 open to read without joining, as clicking them does: a key that steps never joins every room it passes. It
-stops at either end, and the keyboard stays where it was. With Shift too it opens the next room that way, past any
+stops at either end, and opens each as picking its row does, the composer (where there is one) taking the keyboard. With Shift too it opens the next room that way, past any
 threads (from a thread, going up opens the room it's under), joined or listed to join. With nowhere to go (an end of the list) the
 keys do what they would anyway, such as a Mac's ⌥↑ moving the caret in the composer. Not over the connect screen.
 

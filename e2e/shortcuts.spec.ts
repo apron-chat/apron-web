@@ -284,4 +284,16 @@ test.describe('Alt+↑/↓ onto a room listed to join', () => {
 		await expect(sidebar.locator('[data-testid="room-list"] button.ap-room[data-room="design"]')).toHaveAttribute('aria-current', 'page');
 		await expect(join).toHaveCount(0);
 	});
+
+	test('/join on a room open to read joins it, rather than only opening it', async ({ preview, page }) => {
+		await preview.open();
+		await page.getByTestId('room-directory').locator('button.ap-room[data-join="design"]').click();
+		await expect(page.getByTestId('join-room')).toBeVisible();
+		await preview.openRoom('general');
+		await preview.composer().click();
+		await page.keyboard.type('/join design');
+		await page.keyboard.press('Enter');
+		await preview.waitForSent('room_join', (params) => params.room_id === 'design');
+		await expect(page.getByRole('complementary', { name: 'Rooms' }).locator('[data-testid="room-list"] button.ap-room[data-room="design"]')).toBeVisible();
+	});
 });

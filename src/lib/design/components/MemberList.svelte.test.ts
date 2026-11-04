@@ -109,6 +109,9 @@ describe('MemberList', () => {
 			// Enter on the name (a click with no pointer) is a press too: the card.
 			who('bo').dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 0 }));
 			expect(onprofile.mock.calls).toEqual([['bo', who('bo')]]);
+			// With Alt the arrows are the page's (they step through rooms): no menu.
+			expect(dom.press(who('bo'), 'ArrowDown', { altKey: true })).toBe(true);
+			expect(dom.queryByRole('menu')).toBeNull();
 			expect(dom.press(who('bo'), 'ArrowDown')).toBe(false);
 			flushSync();
 			await tick();

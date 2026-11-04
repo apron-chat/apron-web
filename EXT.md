@@ -234,8 +234,8 @@ Defined in [EXTENSIONS.md](https://github.com/shazow/apron/blob/main/EXTENSIONS.
   reason where it was asked, and an `unsupported` one stops the offer.
 - With `write: false`, apron-web only reads: it replaces the composer with a
   note, and offers no reactions, edits, moves, deletions, joins, leaves, room
-  or thread changes, or member changes. Other Rooms lists rooms without Join:
-  picking one reads it through its history. For a guest, the note offers to
+  or thread changes, or member changes. A room picked under Other Rooms reads
+  through its history, as it does for anyone, but its header offers no Join. For a guest, the note offers to
   sign in; reading an archive (`ext:archive`), it says whose archive it is
   instead ([ARCHIVE.md §4](ARCHIVE.md#4-serving)).
 - With `add_members`, the member list's + and a profile card's Add to room

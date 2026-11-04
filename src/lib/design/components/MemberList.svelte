@@ -127,7 +127,8 @@
 
 	/** ↓ or ↑ on the name drops its menu down beneath the row, its first choice focused, as on a menu button. */
 	function namekey(event: KeyboardEvent, person: MemberListPerson, name: string): void {
-		if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+		// With a modifier the arrows are the page's (Alt+↑/↓ steps through rooms).
+		if ((event.key !== 'ArrowDown' && event.key !== 'ArrowUp') || event.altKey || event.ctrlKey || event.metaKey) return;
 		const who = event.currentTarget as HTMLElement, row = who.closest('li') ?? who;
 		const box = row.getBoundingClientRect(), start = who.getBoundingClientRect();
 		const rtl = getComputedStyle(row).direction === 'rtl';

@@ -2212,7 +2212,7 @@
 			const joining = joinFirst(chat, paneRoom);
 			if (joining) {
 				joining.then(post, (cause: unknown) => {
-					feedback.error(cause, 'Unable to join the thread');
+					feedback.error(cause, `Unable to join the ${paneRoom.parentRoomId === undefined ? 'room' : 'thread'}`);
 					restore();
 				});
 			} else {
@@ -2288,7 +2288,9 @@
 	function joinByName(name: string, failed: (cause: unknown) => void): void {
 		if (!client) return;
 		const wanted = name.toLowerCase();
-		const joined = session.rooms.find((room) => room.id === name) ?? session.rooms.find((room) => room.title.toLowerCase() === wanted);
+		// Only a room you've joined just opens: one open to read without joining (picked under Other Rooms) is joined.
+		const mine = session.rooms.filter((room) => room.joined);
+		const joined = mine.find((room) => room.id === name) ?? mine.find((room) => room.title.toLowerCase() === wanted);
 		if (joined) {
 			openMentionedRoom(joined.id);
 			return;
@@ -2564,19 +2566,23 @@
 
 	/**
 	 * Posting needs no membership (§4.2.2), but a poster who hasn't joined
-	 * doesn't receive the broadcast: a reply in a thread read without joining
-	 * joins it first, so the reply and what follows arrive.
+	 * doesn't receive the broadcast: a post in a room or thread read without
+	 * joining joins it first, so the post and what follows arrive.
 	 */
 	function joinFirst(chat: ChatClient, room: RoomSnapshot): Promise<unknown> | undefined {
 		if (room.joined || !session.canManageRooms) return undefined;
 		return chat.joinRoom(room.id).promise;
 	}
 
-	/** A room mention in a message was clicked: open it, or join it when you haven't. */
+	/**
+	 * A room mention in a message was clicked: open it. One you haven't joined opens to read without joining, as
+	 * picking it under Other Rooms does, when the client can (it's listed, or was seen); else it's joined.
+	 */
 	function openMentionedRoom(roomId: string): void {
 		const room = session.rooms.find((candidate) => candidate.id === roomId);
 		if (!room) {
-			if (session.canManageRooms) joinRoom(roomId);
+			if (client?.viewRoom(roomId)) openWithoutJoining(roomId);
+			else if (session.canManageRooms) joinRoom(roomId);
 			return;
 		}
 		if (room.parentRoomId !== undefined && session.rooms.some((candidate) => candidate.id === room.parentRoomId)) openDestination(room.parentRoomId, room.id);
