@@ -1102,6 +1102,12 @@ rearrangeable listbox; its row names the keys as `aria-keyshortcuts`), the keybo
 folded section a room moves among the ones shown, the hidden ones keeping their
 places. Threads keep their own order, most recently active first.
 
+Alt+↑ or Alt+↓ anywhere else (⌥ on a Mac; from the composer too, but not another field or a dialog) opens the room or
+thread above or below the open one in the list, as drawn: the joined rooms and threads, threads under their room, a
+folded section's hidden rooms passed over, and rooms or threads listed to join left out (picking one would join it). It
+stops at either end, and the keyboard stays where it was. With Shift too it opens the nearest row that way with
+news (unread, and not muted), going round the end; with none elsewhere it does nothing.
+
 The sidebar's **Private** section, right below Rooms and above Other Rooms,
 lists every joined top-level private room (`private: true` and no
 `parent_room_id`, [PROTOCOL.md §4.2.4](https://github.com/shazow/apron/blob/main/PROTOCOL.md#424-creating-and-editing)):
@@ -1267,6 +1273,10 @@ with their `user_id`, §4.2.2), where you may add people: in a private room's
 thread, or where the server grants you `add_members` (or lacks `ext:permissions`). The server
 decides each (it adds no guests); the moves stand either way, and the toast says
 how many authors weren't added and why. Escape leaves select mode.
+
+On a message with the keyboard on it (its toolbar reached with Tab, or the row clicked), `r` replies to it and `e`
+edits it when it is yours, as their toolbar buttons do; neither does anything in select mode, while it is being
+edited, or in a field (where they are letters), nor with Ctrl, Alt or ⌘.
 
 A reply's quote is one line above the sender's name (the quoted sender's
 avatar and name, then the start of their message), with a line from the

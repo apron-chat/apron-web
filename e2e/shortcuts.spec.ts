@@ -1,7 +1,8 @@
 import { DEVICES, expect, test } from './fixtures';
 
 /**
- * The keyboard shortcuts (`lib/ui/shortcuts.ts`): `?` or Ctrl/⌘+/ shows them, as does the room header's ⋯ menu; and
+ * The keyboard shortcuts (`lib/ui/shortcuts.ts`): `?` or Ctrl/⌘+/ shows them, as does the room header's ⋯ menu; Alt+↑/↓
+ * through the rooms list; `r` and `e` on a message; and
  * the composer's own, ↑ in the empty field to edit your last message and Escape to cancel a reply.
  */
 
@@ -91,4 +92,68 @@ test('↑ in the empty composer edits your last message, and Escape there cancel
 		await expect(composer).toHaveText('draft');
 		await expect(composer).toBeFocused();
 	});
+});
+
+test('Alt+↑/↓ steps through the rooms list from the composer, Alt+Shift to the next with news; on a room\'s row it moves the room', async ({ preview, page }) => {
+	await preview.open();
+	const sidebar = page.getByRole('complementary', { name: 'Rooms' });
+	/** The rows stepped through, as drawn: joined rooms and threads, and the open one. */
+	const rows = () => sidebar.locator('button.ap-room:is([data-room], [data-thread], [aria-current="page"])');
+	/** The open row's room or thread. */
+	const open = () => sidebar.locator('button.ap-room[aria-current="page"]').evaluate((button: HTMLElement) => button.dataset.room ?? button.dataset.thread ?? button.dataset.join);
+	const composer = preview.composer();
+
+	await test.step('Alt+↓ and Alt+↑ open the row below and above, the keyboard staying in the composer', async () => {
+		await composer.click();
+		const before = await open();
+		const order = await rows().evaluateAll((buttons: HTMLElement[]) => buttons.map((button) => button.dataset.room ?? button.dataset.thread ?? button.dataset.join));
+		const at = order.indexOf(before);
+		await page.keyboard.press('Alt+ArrowDown');
+		await expect.poll(open).toBe(order[at + 1]);
+		await expect(composer).toBeFocused();
+		await page.keyboard.press('Alt+ArrowUp');
+		await expect.poll(open).toBe(before);
+	});
+
+	await test.step('Alt+Shift+↓ goes to the room with news, past the ones without', async () => {
+		await preview.post('engineering', 'ada', 'Something new');
+		const news = sidebar.locator('button.ap-room[data-room="engineering"]');
+		await expect(news).toHaveClass(/ap-room-unread/);
+		await page.keyboard.press('Alt+Shift+ArrowDown');
+		await expect(news).toHaveAttribute('aria-current', 'page');
+		await expect(page).toHaveURL(/[#&]room=engineering(&|$)/);
+	});
+
+	await test.step('on a room\'s row, Alt+↑ moves the room up instead, and the open room stays', async () => {
+		const row = sidebar.locator('button.ap-room[data-room="engineering"]');
+		const ids = async () => sidebar.locator('[data-testid="room-list"] button[data-room]').evaluateAll((buttons) => buttons.map((button) => (button as HTMLElement).dataset.room));
+		const before = await ids();
+		await row.focus();
+		await page.keyboard.press('Alt+ArrowUp');
+		await expect.poll(ids).not.toEqual(before);
+		await expect(row).toHaveAttribute('aria-current', 'page');
+	});
+});
+
+test('r replies to the focused message, and e edits it when it is yours', async ({ preview, page }) => {
+	await preview.open();
+	const welcome = page.locator('article[data-message-id="1710000000001"]');
+	await welcome.click();
+	await page.keyboard.press('r');
+	await expect(page.getByTestId('reply-draft')).toBeVisible();
+	await expect(preview.composer()).toBeFocused();
+	await expect(preview.composer()).toHaveText('');
+	await page.keyboard.press('Escape');
+
+	await page.keyboard.type('mine');
+	await page.keyboard.press('Enter');
+	const mine = preview.message('mine');
+	await expect(mine).toBeVisible();
+	// Someone else's isn't yours to edit.
+	await welcome.click();
+	await page.keyboard.press('e');
+	await expect(page.getByRole('textbox', { name: 'Edit message', exact: true })).toHaveCount(0);
+	await mine.click();
+	await page.keyboard.press('e');
+	await expect(page.getByRole('textbox', { name: 'Edit message', exact: true })).toBeFocused();
 });

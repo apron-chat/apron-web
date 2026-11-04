@@ -90,6 +90,7 @@
 	import { mediaSettings } from '$lib/ui/media-settings.svelte';
 	import { receiptSettings } from '$lib/ui/receipt-settings.svelte';
 	import { onlyPreferencesDiffer, preferencesOpener } from '$lib/ui/preferences.svelte';
+	import { nextRoomRow } from '$lib/ui/room-steps';
 	import { buildRoomTimeline, newDividerBefore, steady, threadEntries, threadStartedFrom, threadDescriptionFor, threadTitleFor, type ThreadEntry, type TimelineItem } from '$lib/ui/timeline';
 	import { takeSignInLink } from '$lib/ui/sign-in-link';
 	import { SignInLinks } from '$lib/ui/link-controller.svelte';
@@ -3308,6 +3309,15 @@
 		if ((event.key === '?' || event.key === '/') && client && !event.defaultPrevented && shortcutsKey(event) && !modalOpen()) {
 			event.preventDefault();
 			shortcutsOpen = true;
+			return;
+		}
+		// Alt+↑/↓ (⌥ on a Mac): the room or thread above or below the open one in the rooms list, and with Shift the
+		// nearest with news, from anywhere but a dialog or a field other than the composer. On a room's row Alt+↑/↓
+		// moves it instead: the Sidebar's reorderKey takes it first.
+		if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown') && !event.ctrlKey && !event.metaKey && !event.defaultPrevented && client && !modalOpen()) {
+			if (inField(event.target) && !(event.target as HTMLElement).closest('#message-input')) return;
+			event.preventDefault();
+			nextRoomRow(document.querySelector('.ap-shell-side') ?? document, event.key === 'ArrowDown' ? 1 : -1, event.shiftKey)?.click();
 			return;
 		}
 		// Ctrl+F (⌘F on a Mac) searches local history, from anywhere on the page but another dialog; there, and

@@ -35,6 +35,8 @@ export function shortcutGroups(mac: boolean): ShortcutGroup[] {
 			title: 'Messages',
 			shortcuts: [
 				// Message.svelte's keydown; +page.svelte's windowKeydown ends the selection.
+				{ label: 'Reply to a message', where: 'On a focused message', keys: [['r']] },
+				{ label: 'Edit your message', where: 'On a focused message', keys: [['e']] },
 				{ label: 'Select a message', where: 'On a focused message', keys: [['x']] },
 				{ label: 'Stop selecting', where: 'While selecting', keys: [['Esc']] },
 				// MessageEditor.svelte.
@@ -45,6 +47,9 @@ export function shortcutGroups(mac: boolean): ShortcutGroup[] {
 		{
 			title: 'Rooms',
 			shortcuts: [
+				// +page.svelte's windowKeydown (room-steps.ts).
+				{ label: 'Previous or next room', keys: [[alt, '↑'], [alt, '↓']] },
+				{ label: 'Previous or next unread room', keys: [[alt, shift, '↑'], [alt, shift, '↓']] },
 				// Sidebar.svelte's reorderKey.
 				{ label: 'Move a room up or down', where: 'On a room in the list', keys: [[alt, '↑'], [alt, '↓']] },
 				// SidebarLayout's handleKey, and PanelHandle's click.
