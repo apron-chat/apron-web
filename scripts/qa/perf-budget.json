@@ -6,7 +6,7 @@
 	"probes": {
 		"load": {
 			"requests": 22,
-			"startupJsKB": 897.3,
+			"startupJsKB": 906.6,
 			"domNodes": 537,
 			"layouts": 10,
 			"styleRecalcs": 18,
@@ -24,7 +24,7 @@
 		},
 		"load-phone": {
 			"requests": 22,
-			"startupJsKB": 897.3,
+			"startupJsKB": 906.6,
 			"domNodes": 538,
 			"layouts": 10,
 			"styleRecalcs": 16,
