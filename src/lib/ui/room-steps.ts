@@ -2,7 +2,7 @@
  * Alt+↑/↓ through the rooms list (`+page.svelte`'s windowKeydown): its rows as drawn, so the order is the one on
  * screen, threads under their room and folded sections left out. Every room and thread row is stepped through: the
  * joined ones (`data-room`, `data-thread`), the threads listed to read without joining (`data-other-thread`), and the
- * rooms listed to join (`data-join`), which the caller opens to read rather than joining, as picking the row would.
+ * rooms listed to join (`data-join`): picking any of those reads it without joining.
  * The rest of the list (a section's "more…", its +) isn't a room.
  */
 const ROWS = 'button.ap-room:is([data-room], [data-thread], [data-other-thread], [data-join], [aria-current="page"])';

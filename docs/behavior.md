@@ -1107,10 +1107,8 @@ places. Threads keep their own order, most recently active first.
 
 Alt+↑ or Alt+↓ anywhere else (⌥ on a Mac; from the composer too, but not another field or a dialog) opens the room or
 thread above or below the open one in the list, as drawn: the joined rooms and threads, threads under their room, a
-folded section's hidden rooms passed over. The rows listed to join are among them, and open to read without joining:
-a thread listed under a room (Other Threads), as clicking it does, and a room under Other Rooms, which (unlike a click
-on its row, which joins it) opens read through its history as a guest's does, so a key that steps never joins
-every room it passes. **Join** in its header, or posting there, joins it. It
+folded section's hidden rooms passed over. The rows listed to join are among them (Other Threads, Other Rooms), and
+open to read without joining, as clicking them does: a key that steps never joins every room it passes. It
 stops at either end, and the keyboard stays where it was. With Shift too it opens the next room that way, past any
 threads (from a thread, going up opens the room it's under), joined or listed to join. With nowhere to go (an end of the list) the
 keys do what they would anyway, such as a Mac's ⌥↑ moving the caret in the composer. Not over the connect screen.
@@ -1249,10 +1247,13 @@ server that keeps you in a room answers `denied`, and its message shows as
 the error.
 **Other Rooms** in the sidebar lists, via `room_list` with
 `filter: "not_joined"`, the most active visible rooms you haven't joined, each
-with its member count and **Join**. It starts open, so a newcomer sees what
+with its member count. It starts open, so a newcomer sees what
 else there is without looking for it, and folds as the other sections do;
 unfolding it lists afresh.
-Picking one joins it and opens it once its `room_update` arrives.
+Picking one opens it to read through its history (§4.3) without joining it, since joining shows in it for everyone:
+its row shows it open, its threads are listed under it to read too, and the header has **Join**, the primary
+button beside its ⋯ menu, which joins it (`room_join`), as posting there does first. Until then it doesn't
+deliver live (§3.4); Join makes it live and lists it with your rooms.
 
 With the `edit` capability, several messages move at a time: shift-click a
 message (or press `x` on it, or pick **Select** from its More menu) to enter select mode, shift-click another to fill the range, and the
@@ -1818,8 +1819,8 @@ button (it opens the sign-in panel on Passkey); signed in to an account, or as
 a guest on a server whose `auth` offers only `guest` (nothing would lift it,
 as on `/archive`), the bar only says so. Replying, reacting, editing, moving and deleting messages,
 starting threads, editing rooms and threads, adding or removing members, and
-Join and Leave are hidden; a room picked under Other Rooms (which says no
-Join) opens to read through its history without joining it, and Other Threads
+Join and Leave are hidden; a room picked under Other Rooms opens to read
+through its history without joining it, as it does for anyone, and Other Threads
 offers no Join, since picking one already reads it. Other
 servers' denials show as errors as usual.
 

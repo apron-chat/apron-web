@@ -170,9 +170,6 @@
 		{/if}
 	</div>
 	{#if note}<span class="ap-roomhead-sub" role="status">{note}</span>{/if}
-	{#if canJoin}
-		<button type="button" class="ap-btn ap-btn-sm" data-testid={joinTestid} aria-label="Join {noun}" title={thread ? 'Get its replies live, and list it under the room' : 'Get its messages live, and list it with your rooms'} disabled={busy} onclick={onjoin}>Join</button>
-	{/if}
 	{#if onmemberlist}
 		<button type="button" class={['ap-iconbtn', 'ap-roomhead-members', memberListOpen && 'ap-iconbtn-on']} aria-label={memberLabel} aria-expanded={memberListOpen} title={memberLabel} onclick={onmemberlist}>
 			<Users size={18} strokeWidth={1.8} aria-hidden="true" />
@@ -187,6 +184,10 @@
 		<button type="button" class="ap-iconbtn ap-roomhead-unmute" data-testid={unmuteButtonTestid} aria-label="Unmute {unmuteNoun}" title="Muted{unmuteNoun !== noun ? ' with its room' : ''} {muted}. Unmute {unmuteNoun}" onclick={onunmute}>
 			<BellOff size={18} strokeWidth={1.8} aria-hidden="true" />
 		</button>
+	{/if}
+	<!-- Read without joining: Join, the primary action here, beside the ⋯ at the end. -->
+	{#if canJoin}
+		<button type="button" class="ap-btn ap-btn-sm ap-btn-primary ap-roomhead-join" data-testid={joinTestid} aria-label="Join {noun}" title={thread ? 'Get its replies live, and list it under the room' : 'Get its messages live, and list it with your rooms'} disabled={busy} onclick={onjoin}>Join</button>
 	{/if}
 	{#if actions.length > 0}
 		<MenuButton label={thread ? 'Thread actions' : 'Room actions'} buttonTestid={actionsTestid} choices={actions} disabled={busy} onselect={act} bind:open={actionsOpen}>

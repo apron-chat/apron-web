@@ -268,4 +268,20 @@ test.describe('Alt+↑/↓ onto a room listed to join', () => {
 		await expect(preview.message('Hello, design')).toBeVisible();
 		await expect(sidebar.locator('button.ap-room[data-room="design"]')).toHaveAttribute('aria-current', 'page');
 	});
+
+	test('a click on its row opens it to read too, and the header\'s Join, beside the ⋯, joins it', async ({ preview, page }) => {
+		await preview.open();
+		const sidebar = page.getByRole('complementary', { name: 'Rooms' });
+		await page.getByTestId('room-directory').locator('button.ap-room[data-join="design"]').click();
+		await expect(page).toHaveURL(/[#&]room=design(&|$)/);
+		expect((await preview.sent('room_join')).filter((params) => params.room_id === 'design')).toEqual([]);
+		const join = page.getByTestId('join-room');
+		await expect(join).toHaveClass(/ap-btn-primary/);
+		// Right before the ⋯ menu, at the header's end.
+		expect(await join.evaluate((button) => button.nextElementSibling?.querySelector('[data-testid="room-actions"]') !== null || button.nextElementSibling?.matches('[data-testid="room-actions"]'))).toBe(true);
+		await join.click();
+		await preview.waitForSent('room_join', (params) => params.room_id === 'design');
+		await expect(sidebar.locator('[data-testid="room-list"] button.ap-room[data-room="design"]')).toHaveAttribute('aria-current', 'page');
+		await expect(join).toHaveCount(0);
+	});
 });

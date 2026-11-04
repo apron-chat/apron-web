@@ -2521,9 +2521,9 @@
 
 	/**
 	 * Opens a listed room or thread without joining it, read through its
-	 * history (§4.3): for a guest on a server whose guests only read, and for
-	 * Alt+↑/↓ onto a room listed to join. Join in its header, or posting there
-	 * (`joinFirst`), joins it.
+	 * history (§4.3): a room picked under Other Rooms (or reached with Alt+↑/↓),
+	 * and anything a guest opens on a server whose guests only read. Join in its
+	 * header, or posting there (`joinFirst`), joins it.
 	 */
 	function openWithoutJoining(roomId: string): void {
 		if (!client || !client.viewRoom(roomId)) return;
@@ -3335,16 +3335,14 @@
 		}
 		// Alt+↑/↓ (⌥ on a Mac): the room or thread above or below the open one in the rooms list, and with Shift the
 		// room, past any threads, from anywhere but a dialog or a field other than the composer. On a room's row Alt+↑/↓
-		// moves it instead: the Sidebar's reorderKey takes it first. A room listed to join opens to read, not joined
-		// (a key that steps shouldn't join every room it passes): Join in its header, or posting there, joins it.
+		// moves it instead: the Sidebar's reorderKey takes it first. A room listed to join opens to read, as a click does.
 		// With nowhere to go (an end of the list), the key is the field's or the page's as usual.
 		if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown') && !event.ctrlKey && !event.metaKey && !event.defaultPrevented && client && !connectOpen && !modalOpen()) {
 			if (inField(event.target) && !(event.target as HTMLElement).closest('#message-input')) return;
 			const row = nextRoomRow(document.querySelector('.ap-shell-side') ?? document, event.key === 'ArrowDown' ? 1 : -1, event.shiftKey);
 			if (!row) return;
 			event.preventDefault();
-			if (row.dataset.join !== undefined) openWithoutJoining(row.dataset.join);
-			else row.click();
+			row.click();
 			return;
 		}
 		// Ctrl+F (⌘F on a Mac) searches local history, from anywhere on the page but another dialog; there, and
@@ -3447,7 +3445,7 @@
 			pause={canPause ? { ...(pausedUntil !== undefined && isPaused(pausedUntil) ? { until: pausedUntil } : {}) } : undefined} onpause={pauseNotifications} onresume={() => client?.setMute(false) ?? Promise.resolve()}
 			onsignin={previewMode ? undefined : (name, scheme) => openConnect(scheme ? { scheme, name } : { signIn: true, name })}
 			returnTo={activeRoom ? (activeThread ? threadTitle(activeThread) : activeRoom.title) : undefined} onreturn={closeRooms}
-			onroom={chooseRoom} onthread={chooseThread} onopenthread={openThreadCard} onjoin={joinRoom} onleavethread={leaveThread} oncreateroom={(roomId, options) => (pendingJoin = { room: roomId, private: options.private })} onnewthread={newThreadInRoom} onsignout={signedOut} keptHistory={historyKeeper}
+			onroom={chooseRoom} onthread={chooseThread} onopenthread={openThreadCard} onjoin={joinRoom} onopenroom={openWithoutJoining} onleavethread={leaveThread} oncreateroom={(roomId, options) => (pendingJoin = { room: roomId, private: options.private })} onnewthread={newThreadInRoom} onsignout={signedOut} keptHistory={historyKeeper}
 			onnewprivate={canStartPrivate ? () => (newPrivateOpen = true) : undefined}
 		/>
 	{/snippet}
