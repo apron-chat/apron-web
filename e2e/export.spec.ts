@@ -96,7 +96,7 @@ test('an export opened with its images loads them from the sites it names, and n
 	// Held to the sites it was agreed to load from, whatever Media said, which it names.
 	await expect(preferences.getByTestId('media-policy')).toHaveValue('trusted');
 	await expect(preferences.getByTestId('media-note')).toHaveText('From this server and the trusted origins below. Other images wait for a click.');
-	await expect(preferences.getByTestId('media-server-origins')).toHaveText('Includes origins trusted by the server: media.example');
+	await expect(preferences.getByTestId('media-server-origins')).toHaveText(`Includes origins trusted by this app and the server: ${new URL(page.url()).host}, media.example`);
 	await preferences.getByTestId('media-policy').selectOption('any');
 	await expect(preferences.getByTestId('media-note')).toHaveText('Everything, from any site.');
 	await page.keyboard.press('Escape');

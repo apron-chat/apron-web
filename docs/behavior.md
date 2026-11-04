@@ -1607,8 +1607,10 @@ being written.
 
 Media loads from where Preferences, under **Media**, says. **Server and
 trusted sites**, the default, loads it from the chat server's own origin, the
-origins the server names with `ext:media` (named above the **Trusted
-origins** field, as "Includes origins trusted by the server: media.apron.chat"),
+origin this app was loaded from (where a server's avatar can be the app's icon,
+and which loading from tells no one anything new), the origins the server names
+with `ext:media` (both named above the **Trusted origins** field, as "Includes
+origins trusted by this app and the server: web.apron.chat, media.apron.chat"),
 and the trusted origins listed in that field (hosts or URLs, one per line, kept
 as `https:` origins). **Any site**
 loads it from anywhere; the trusted origins stay listed for when the default is

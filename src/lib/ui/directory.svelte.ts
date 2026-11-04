@@ -32,7 +32,7 @@ class Directory {
 	/** The origins the server names for its media (`ext.media.origins`, EXT.md §6); replaced only when they change. */
 	private serverMedia = $state.raw<readonly string[]>([]);
 	/**
-	 * The origins besides the server's own that media loads from: the server's, and as the viewer chose
+	 * The origins besides the server's own that media loads from: the server's, this app's, and as the viewer chose
 	 * (`mediaSettings`), their trusted origins, or any (`ANY_ORIGIN`). Their blocked origins, which win over these, the
 	 * gates leave out.
 	 */

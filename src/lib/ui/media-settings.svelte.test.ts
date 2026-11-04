@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ANY_ORIGIN } from '$lib/protocol/embeds';
 import { memoryStorage } from '$lib/test/storage';
-import { MediaSettings, parseBlockedOrigins, parseMediaOrigins } from './media-settings.svelte';
+import { appOrigin, impliedOrigins, MediaSettings, parseBlockedOrigins, parseMediaOrigins } from './media-settings.svelte';
 
 const values = new Map<string, string>();
 
@@ -38,6 +38,30 @@ describe('media settings', () => {
 		settings.trust('https://more.example');
 		expect(settings.policy).toBe('any');
 		expect(settings.origins).toContain('https://more.example');
+	});
+
+	it('trusts the origin the app was loaded from, whatever was chosen, before the server’s', () => {
+		const settings = new MediaSettings();
+		const server = ['https://media.example'];
+		expect(appOrigin()).toBeUndefined();
+		expect(impliedOrigins(server)).toEqual(server);
+		vi.stubGlobal('location', { origin: 'https://web.example' });
+		expect(appOrigin()).toBe('https://web.example');
+		expect(impliedOrigins(server)).toEqual(['https://web.example', 'https://media.example']);
+		// Once, when the server names it too.
+		expect(impliedOrigins(['https://web.example'])).toEqual(['https://web.example']);
+		expect(settings.trusted(server)).toEqual(['https://web.example', 'https://media.example']);
+		settings.update('trusted', ['https://web.example', 'https://cdn.example']);
+		expect(settings.trusted(server)).toEqual(['https://web.example', 'https://media.example', 'https://cdn.example']);
+		settings.update('any');
+		expect(settings.trusted(server)).toEqual(['https://web.example', 'https://media.example', ANY_ORIGIN]);
+		settings.limit();
+		expect(settings.trusted([])).toEqual(['https://web.example']);
+		// Only an http(s) page: a file or an opaque origin trusts nothing more.
+		vi.stubGlobal('location', { origin: 'null' });
+		expect(appOrigin()).toBeUndefined();
+		vi.stubGlobal('location', { origin: 'file://' });
+		expect(appOrigin()).toBeUndefined();
 	});
 
 	it('blocks origins over the trusted ones; Block adds one, and they are saved', () => {
