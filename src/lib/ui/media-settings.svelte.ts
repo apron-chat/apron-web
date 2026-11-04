@@ -98,10 +98,15 @@ export class MediaSettings {
 	origins = $state.raw<string[]>([]);
 	/** The origins whose media never loads, whatever trusts them, Preferences' Blocked origins. */
 	blocked = $state.raw<string[]>([]);
-	/** Held to the server's origins on this page (`limit`), until something is chosen. */
+	/** Held to the server's origins on this page (`limit`), until something is chosen or trusted. */
 	private limited = $state(false);
-	/** The policy chosen and saved, which `limit` doesn't change. */
+	/**
+	 * The policy chosen and saved. Nothing but a choice (`update`) changes it: what holds on this page only
+	 * (`held`) never is saved in its place.
+	 */
 	private chosen: MediaPolicy = DEFAULT_MEDIA_POLICY;
+	/** This page's policy where it isn't the one chosen (`limit`): `policy` is this, else `chosen`. Never saved. */
+	private held: MediaPolicy | undefined;
 
 	load(): void {
 		const saved = loadMediaSettings();
@@ -110,7 +115,7 @@ export class MediaSettings {
 			return (Array.isArray(value) ? value : []).filter((origin) => typeof origin === 'string').join(' ');
 		};
 		this.chosen = policyOf(isJsonObject(saved) ? saved.policy : undefined);
-		this.policy = this.limited ? DEFAULT_MEDIA_POLICY : this.chosen;
+		this.policy = this.held ?? this.chosen;
 		this.origins = parseMediaOrigins(list('origins'));
 		this.blocked = parseBlockedOrigins(list('blocked'));
 	}
@@ -123,6 +128,7 @@ export class MediaSettings {
 	update(policy: string, origins: readonly string[] = this.origins, blocked: readonly string[] = this.blocked): void {
 		if (!known(policy)) return;
 		this.limited = false;
+		this.held = undefined;
 		this.policy = policy;
 		this.chosen = policy;
 		this.origins = [...origins];
@@ -130,10 +136,17 @@ export class MediaSettings {
 		saveMediaSettings({ policy, origins, blocked });
 	}
 
-	/** Trusts `origin` from now on, as Always load does: it joins the Trusted origins, whatever the policy. */
+	/**
+	 * Trusts `origin` from now on, as Always load does: it joins the Trusted origins, whatever the policy. A page
+	 * held to the server's origins (`limit`) then loads from the trusted ones too, still not from any site, and
+	 * the policy saved stays the one chosen.
+	 */
 	trust(origin: string): void {
 		const [parsed] = parseMediaOrigins(origin);
-		if (parsed && !this.origins.includes(parsed)) this.update(this.policy, [...this.origins, parsed]);
+		if (!parsed || this.origins.includes(parsed)) return;
+		this.limited = false;
+		this.origins = [...this.origins, parsed];
+		saveMediaSettings({ policy: this.chosen, origins: this.origins, blocked: this.blocked });
 	}
 
 	/** Blocks `origin` from now on, as Block does: it joins the Blocked origins, which win over the trusted ones. */
@@ -158,7 +171,8 @@ export class MediaSettings {
 	 */
 	limit(): void {
 		this.limited = true;
-		this.policy = DEFAULT_MEDIA_POLICY;
+		this.held = DEFAULT_MEDIA_POLICY;
+		this.policy = this.held;
 	}
 
 	/** The origins media loads from besides the server's own (`embedMedia`'s `trusted`), given those it names. */

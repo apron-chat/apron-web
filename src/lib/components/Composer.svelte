@@ -16,23 +16,13 @@
 	import StagedFile from './StagedFile.svelte';
 	import DesignComposer from '$lib/design/components/Composer.svelte';
 	import MessageField from './MessageField.svelte';
+	import { VoiceRecorder, type VoiceFormat } from '$lib/ui/voice-recorder.svelte';
 	import type { ComposerField } from '$lib/design/components/types';
 
 	/** How long typing pauses before the draft's links are looked up; a paste looks them up at once. */
 	const PREVIEW_TYPING_PAUSE_MS = 800;
-	/** Plenty for speech, in Opus or AAC: about 240 KB a minute, so a 5 MB upload holds 20 minutes. */
-	const VOICE_BITS_PER_SECOND = 32_000;
 	/** What a clip may be recorded as where the server states the types it takes, by preference. */
 	const VOICE_TYPES = ['audio/webm', 'audio/ogg', 'audio/mp4'];
-	/** A clip stops by itself at this share of the server's `max_bytes` for its type, the rest left for its last second. */
-	const VOICE_LIMIT_SHARE = 0.95;
-
-	/** The file extension for a recorded clip's type: Safari records MP4, Firefox Ogg, Chrome WebM. */
-	function voiceExtension(type: string): string {
-		if (type.includes('mp4')) return 'm4a';
-		if (type.includes('ogg')) return 'ogg';
-		return 'webm';
-	}
 
 	interface Props {
 		/** The draft as sent: mentions are `@user_id` (Appendix A.3); the field shows them as name chips. */
@@ -100,11 +90,9 @@
 	/** The field: chips and autocomplete, as in the message editor. */
 	let field = $state<MessageField | undefined>();
 	let emojiButton = $state<HTMLButtonElement | undefined>();
-	let recordSeconds = $state<number | undefined>();
-	let recorder: MediaRecorder | undefined;
-	let recordTimer: ReturnType<typeof setInterval> | undefined;
+	const recorder = new VoiceRecorder();
 
-	let recording = $derived(recordSeconds !== undefined);
+	let recording = $derived(recorder.phase === 'recording');
 	/** The file picker's `accept`: the patterns the server takes, unless one is any type. */
 	let accept = $derived(uploadLimits && !Object.hasOwn(uploadLimits, '*/*') ? Object.keys(uploadLimits).join(',') : undefined);
 	/**
@@ -112,7 +100,7 @@
 	 * type without stated limits, else the first of `VOICE_TYPES` that the
 	 * browser records and the server takes. Undefined: no voice clips.
 	 */
-	let voice = $derived.by((): { type?: string; maxBytes?: number } | undefined => {
+	let voice = $derived.by((): VoiceFormat | undefined => {
 		if (typeof MediaRecorder === 'undefined') return undefined;
 		if (!uploadLimits) return {};
 		for (const type of VOICE_TYPES) {
@@ -201,51 +189,13 @@
 	}
 
 	/** Microphone: record, then hand the clip over as an audio file. */
-	async function startRecording(): Promise<void> {
-		if (disabled || !canRecord || recorder) return;
-		let stream: MediaStream;
-		try {
-			stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-		} catch {
-			return;
-		}
-		const chunks: Blob[] = [];
-		const { type: mimeType, maxBytes } = voice ?? {};
-		const current = new MediaRecorder(stream, { audioBitsPerSecond: VOICE_BITS_PER_SECOND, ...(mimeType ? { mimeType } : {}) });
-		recorder = current;
-		recordSeconds = 0;
-		recordTimer = setInterval(() => (recordSeconds = (recordSeconds ?? 0) + 1), 1000);
-		let recorded = 0;
-		current.ondataavailable = (event) => {
-			if (event.data.size > 0) chunks.push(event.data);
-			recorded += event.data.size;
-			// Under a stated limit, the clip comes in a slice a second, and stops itself short of the limit.
-			if (maxBytes !== undefined && recorded >= maxBytes * VOICE_LIMIT_SHARE && current.state === 'recording') current.stop();
-		};
-		current.onstop = () => {
-			for (const track of stream.getTracks()) track.stop();
-			if (recorder !== current) return;
-			const seconds = recordSeconds ?? 0;
-			clearRecording();
-			if (chunks.length === 0 || seconds < 1) return;
-			const type = current.mimeType || chunks[0].type || 'audio/webm';
-			onfiles([new File(chunks, `voice-message.${voiceExtension(type)}`, { type })]);
-		};
-		current.start(maxBytes === undefined ? undefined : 1000);
+	function startRecording(): void {
+		if (disabled || !canRecord || !voice) return;
+		void recorder.start(voice, (clip) => onfiles([clip]));
 	}
 
 	function stopRecording(send = true): void {
-		const current = recorder;
-		if (!current) return;
-		if (!send) clearRecording();
-		current.stop();
-	}
-
-	function clearRecording(): void {
-		recorder = undefined;
-		if (recordTimer) clearInterval(recordTimer);
-		recordTimer = undefined;
-		recordSeconds = undefined;
+		recorder.stop(send);
 	}
 </script>
 
@@ -264,7 +214,7 @@
 	onrecord={startRecording}
 	onstoprecording={() => stopRecording()}
 	{recording}
-	recordingTime={clockLabel(recordSeconds ?? 0)}
+	recordingTime={clockLabel(recorder.seconds)}
 	onsend={send}
 	{waitUntil}
 	field={editable}

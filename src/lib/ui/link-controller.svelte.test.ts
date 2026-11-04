@@ -143,3 +143,31 @@ describe('a link for an addition this browser proposed', () => {
 		expect(links.addition).toBeUndefined();
 	});
 });
+
+describe('one link at a time', () => {
+	it('uses no second link while one signs in, so the first is never marked done by another', async () => {
+		const { links, chat, answer } = page();
+		links.follow({ token: 'tok', state: 'mail' });
+		links.follow({ token: 'tok2', state: 'sso' });
+		expect(chat.signInWithLink).toHaveBeenCalledOnce();
+		expect(links.working).toBe('signing-in');
+		answer.signIn.resolve();
+		await settled();
+		expect(links.busy).toBe(false);
+	});
+
+	it('keeps an addition waiting until the link under way is done', async () => {
+		const { links, chat, answer } = page();
+		const snapshot = { status: 'connected', authBusy: false, authenticated: true, you: { user_id: 'ada' }, server: { apron: 10, auth: ['email'], capabilities: [] } } as unknown as ClientSnapshot;
+		links.follow({ token: 'tok', state: 'mail' });
+		links.follow({ token: 'add-tok', state: 'add' });
+		links.settle(snapshot);
+		expect(chat.addWithLink).not.toHaveBeenCalled();
+		expect(links.addition).toBeDefined();
+		answer.signIn.resolve();
+		await settled();
+		links.settle(snapshot);
+		expect(chat.addWithLink).toHaveBeenCalledWith('add-tok', 'add');
+		expect(links.working).toBe('adding');
+	});
+});

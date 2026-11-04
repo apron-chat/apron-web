@@ -112,5 +112,11 @@ describe('media settings', () => {
 		expect(settings.trusted([])).toEqual([]);
 		settings.trust('https://img.example');
 		expect(settings.trusted([])).toEqual(['https://cdn.example', 'https://img.example']);
+		expect(settings.policy).toBe('trusted');
+		// What was chosen stays saved: Always load on this page doesn't turn "Any site" into the trusted ones.
+		const saved = new MediaSettings();
+		saved.load();
+		expect(saved.policy).toBe('any');
+		expect(saved.origins).toEqual(['https://cdn.example', 'https://img.example']);
 	});
 });

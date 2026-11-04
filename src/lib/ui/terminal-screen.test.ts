@@ -61,6 +61,18 @@ describe('a terminal embed’s screen (§4.8.6)', () => {
 		expect(FakeTerminal.made[0].written.slice(3)).toEqual([ESC_C, 'done\r\n']);
 	});
 
+	it('says so when xterm fails to load, and takes what a live text writes after without a terminal', async () => {
+		const box = host();
+		const screen = new TerminalScreen(box, { load: () => Promise.reject(new Error('Failed to fetch')) });
+		screen.write('before');
+		await settle();
+		expect(box.dataset.failed).toBe('');
+		// Nothing is kept for a terminal that won't come: a failed screen holds no queue (its `failed` state has none).
+		expect(() => screen.write('more')).not.toThrow();
+		screen.dispose();
+		expect(FakeTerminal.made).toEqual([]);
+	});
+
 	it('makes no terminal once disposed, even if xterm arrives later', async () => {
 		const xterm = deferredXterm();
 		const screen = new TerminalScreen(host(), { load: xterm.load });

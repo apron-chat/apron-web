@@ -7,7 +7,8 @@
 	import { faceOf, roomFaces } from '$lib/ui/faces';
 	import { matching, pickable } from '$lib/ui/people';
 	import { couldNotAdd } from '$lib/ui/members';
-	import { directRoomWith, privateRooms, quietestFirst, startPrivateRoom } from '$lib/ui/private-rooms';
+	import { directRoomWith, privateRooms, quietestFirst, START_FAILED, startPrivateRoom } from '$lib/ui/private-rooms';
+	import { messageOf, Task } from '$lib/ui/task.svelte';
 	import type { SessionView } from '$lib/ui/session.svelte';
 	import { idSince } from '$lib/ui/time';
 
@@ -40,8 +41,8 @@
 	let query = $state('');
 	let name = $state('');
 	let chosenIds = $state<string[]>([]);
-	let saving = $state(false);
-	let error = $state<string | undefined>();
+	/** Starting the room, and why it, or leaving one to make space, didn't work. */
+	const task = new Task<'saving', string>();
 	let leaving = $state<string[]>([]);
 
 	let you = $derived(session.you?.user_id);
@@ -71,7 +72,7 @@
 	}
 
 	function pick(userId: string): void {
-		error = undefined;
+		task.note = undefined;
 		chosenIds = chosenIds.includes(userId) ? chosenIds.filter((id) => id !== userId) : [...chosenIds, userId];
 	}
 
@@ -85,11 +86,11 @@
 	async function leave(roomId: string): Promise<void> {
 		if (leaving.includes(roomId)) return;
 		leaving = [...leaving, roomId];
-		error = undefined;
+		task.note = undefined;
 		try {
 			await client.leaveRoom(roomId).promise;
 		} catch (cause) {
-			error = cause instanceof Error ? cause.message : 'Unable to leave';
+			task.note = messageOf(cause, 'Unable to leave');
 		} finally {
 			leaving = leaving.filter((id) => id !== roomId);
 		}
@@ -97,7 +98,7 @@
 
 	/** Starts the room with everyone picked, or opens the conversation you already have with the one picked. */
 	async function start(): Promise<void> {
-		if (saving || !enabled || atLimit || !chosenIds.length) return;
+		if (task.busy || !enabled || atLimit || !chosenIds.length) return;
 		const ids = [...chosenIds];
 		const existing = ids.length === 1 ? directRoomWith(session.rooms, you, ids[0]) : undefined;
 		if (existing) {
@@ -105,23 +106,19 @@
 			open = false;
 			return;
 		}
-		saving = true;
-		error = undefined;
-		try {
-			const title = ids.length > 1 ? name.trim() : '';
-			const started = await startPrivateRoom(client, ids, { ...(title ? { title } : {}), named: onnamed });
-			saving = false;
-			onopen(started.roomId, started.failed.length ? couldNotAdd(started.failed, (id) => directory.name({ user_id: id })) : undefined);
-			open = false;
-		} catch (cause) {
-			saving = false;
-			error = cause instanceof Error ? cause.message : 'Unable to start a private room';
-		}
+		const title = ids.length > 1 ? name.trim() : '';
+		let started: Awaited<ReturnType<typeof startPrivateRoom>> | undefined;
+		const worked = await task.run('saving', async () => {
+			started = await startPrivateRoom(client, ids, { ...(title ? { title } : {}), named: onnamed });
+		}, { failed: (cause) => messageOf(cause, START_FAILED) });
+		if (!worked || !started) return;
+		onopen(started.roomId, started.failed.length ? couldNotAdd(started.failed, (id) => directory.name({ user_id: id })) : undefined);
+		open = false;
 	}
 </script>
 
 <PrivateRoomForm
 	bind:open bind:query bind:name {people} {chosen} {quota} {full} fullMore={atLimit ? Math.max(0, mine.length - FULL_SHOWN) : 0}
-	status={saving ? 'saving' : 'idle'} {error} disabled={!enabled} listTestid="private-people"
+	status={task.busy ? 'saving' : 'idle'} error={task.note} disabled={!enabled} listTestid="private-people"
 	onpick={pick} onremove={pick} onopen={openExisting} onleaveroom={leave} onsubmit={start} {onclose}
 />

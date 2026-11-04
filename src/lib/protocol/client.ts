@@ -642,8 +642,6 @@ export class ChatClient {
 	}
 
 	stop(): void {
-		this.connectionProbe?.abort();
-		this.cancelPasskey();
 		this.running = false;
 		if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
 		this.reconnectTimer = undefined;
@@ -651,28 +649,19 @@ export class ChatClient {
 		globalThis.document?.removeEventListener('visibilitychange', this.visibilityChanged);
 		globalThis.removeEventListener?.('online', this.networkReturned);
 		this.clearReadCursors();
-		this.clearStableTimer();
 		this.clearIdleRetry();
 		if (this.muteTimer) clearTimeout(this.muteTimer);
 		this.muteTimer = undefined;
 		if (this.roomMuteTimer) clearTimeout(this.roomMuteTimer);
 		this.roomMuteTimer = undefined;
-		const socket = this.socket;
-		this.socket = undefined;
-		this.authenticated = false;
-		this.authRequested = false;
-		this.clearTyping();
-		this.stopPing();
-		for (const request of this.requests.values()) {
-			clearTimeout(request.timer);
-			request.reject(new Error('Connection stopped'));
-		}
-		this.requests.clear();
-		this.historyQueue.dropHeld('Connection stopped');
+		// The rooms are kept, hidden, as through a drop: connecting again (`start`) resumes them as the same
+		// identity, or lists another's afresh. What the server offered stays, for the connect screen to show.
+		const server = this.server;
+		this.endConnection({ view: 'suspend', reason: 'Connection stopped', requests: 'Connection stopped', close: 'client stopped' });
+		this.server = server;
 		this.clearLimits();
 		this.signInProposal = undefined;
 		for (const connection of [...this.signInConnections]) connection.close(new Error('Connection stopped'));
-		if (socket && socket.readyState !== WebSocket.CLOSED) socket.close(1000, 'client stopped');
 		this.status = 'offline';
 		this.emit();
 	}
@@ -689,25 +678,26 @@ export class ChatClient {
 		this.disconnected = true;
 	}
 
+	/**
+	 * Connects anew: the current connection, if any, ends, and with it everything shown from it (its rooms and
+	 * records, `discardProtocolView`), so the next session starts from nothing kept here but what
+	 * `beforeFreshSession` brings back. A disconnected client starts again the same way.
+	 */
 	restart(): void {
 		if (!this.running) {
-			if (this.disconnected) this.start();
+			if (this.disconnected) {
+				// What `stop` kept to resume from belongs to the session disconnected: a restart is a new one.
+				this.discardProtocolView('Reconnecting');
+				this.start();
+			}
 			return;
 		}
-		this.connectionProbe?.abort();
 		this.connectionId += 1;
 		this.reconnectHeld = false;
 		this.signInNeeded = undefined;
 		if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
 		this.reconnectTimer = undefined;
-		this.cancelPasskey();
-		const socket = this.socket;
-		this.socket = undefined;
-		this.authenticated = false;
-		this.authRequested = false;
-		this.clearTransientRequests();
-		this.discardProtocolView('Reconnecting');
-		if (socket && socket.readyState !== WebSocket.CLOSED) socket.close(1000, 'reconnecting');
+		this.endConnection({ view: 'discard', reason: 'Reconnecting', close: 'reconnecting' });
 		this.disconnectedAt = undefined;
 		this.retryingSince = undefined;
 		this.status = 'reconnecting';
@@ -735,20 +725,9 @@ export class ChatClient {
 		if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
 		this.reconnectTimer = undefined;
 		this.reconnectAttempt = 0;
-		const socket = this.socket;
-		if (socket) {
-			// A socket that is open but never authenticated (or still opening) is
-			// stuck; drop it and start over. Its close handler is ignored because
-			// the connection id advances in connectNow.
-			this.socket = undefined;
-			this.cancelPasskey();
-			this.authenticated = false;
-			this.authRequested = false;
-			this.clearTransientRequests();
-			// Its pings go with it: the next socket's server frame starts its own.
-			this.stopPing();
-			if (socket.readyState !== WebSocket.CLOSED) socket.close(1000, 'retrying');
-		}
+		// A socket that is open but never authenticated (or still opening) is stuck; drop it and start over, as
+		// if it had closed. Its close handler is ignored because the connection id advances in connectNow.
+		if (this.socket) this.endConnection({ view: 'suspend', reason: 'Connection closed', close: 'retrying' });
 		this.disconnectedAt ??= this.now();
 		// Asked for: the quiet window starts over from here.
 		this.retryingSince = this.now();
@@ -1065,7 +1044,7 @@ export class ChatClient {
 			await this.readyToSignIn(controller.signal);
 			// Cancelled, or the connection changed, while it waited.
 			controller.signal.throwIfAborted();
-			this.passkeyAbort = controller;
+			this.claimCeremony(controller);
 			this.passkeyStarting = undefined;
 			const connection = this.connectionId;
 			this.emit();
@@ -1321,21 +1300,12 @@ export class ChatClient {
 		const { socket, server, frames } = connection.detach();
 		this.signInConnections.delete(connection);
 		if (connection.url !== this.serverUrl) this.switchServer(connection.url);
-		this.connectionProbe?.abort();
 		this.reconnectHeld = false;
 		this.signInNeeded = undefined;
 		if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
 		this.reconnectTimer = undefined;
-		this.cancelPasskey();
-		const previous = this.socket;
-		this.socket = undefined;
-		this.authenticated = false;
-		this.authRequested = false;
-		this.clearTransientRequests();
-		this.discardProtocolView('Signed in');
-		this.stopPing();
-		this.clearStableTimer();
-		if (previous && previous.readyState !== WebSocket.CLOSED) previous.close(1000, 'signed in on another connection');
+		this.endConnection({ view: 'discard', reason: 'Signed in', close: 'signed in on another connection' });
+		this.connectionErrored = false;
 		this.disconnectedAt = undefined;
 		this.retryingSince = undefined;
 		this.reconnectAttempt = 0;
@@ -1483,9 +1453,10 @@ export class ChatClient {
 	private async approveAddition(scheme: ProposalScheme, token: string, state: string | undefined, method: ProposalScheme | 'link' = scheme): Promise<void> {
 		if (this.passkeyStarting) throw new Error('Already signing in; finish or cancel that first');
 		await this.readyToSignIn();
+		if (this.passkeyStarting) throw new Error('Already signing in; finish or cancel that first');
 		const account = this.you?.user_id;
 		const controller = new AbortController();
-		this.passkeyAbort = controller;
+		this.claimCeremony(controller);
 		this.adding = true;
 		const connection = this.connectionId;
 		this.emit();
@@ -1633,20 +1604,31 @@ export class ChatClient {
 	/** Abandons a passkey prompt the user walked away from; its ceremony rejects with an AbortError. */
 	cancelPasskeyPrompt(): void {
 		if (!this.passkeyAbort && !this.passkeyStarting) return;
-		const cancelled = new DOMException('Cancelled', 'AbortError');
-		this.passkeyAbort?.abort(cancelled);
-		this.passkeyStarting?.abort(cancelled);
-		this.passkeyAbort = undefined;
-		this.passkeyStarting = undefined;
+		this.endCeremony(new DOMException('Cancelled', 'AbortError'));
 		this.emit();
 	}
 
 	private cancelPasskey(): void {
-		const changed = new DOMException('Connection changed; try again', 'AbortError');
-		this.passkeyAbort?.abort(changed);
-		this.passkeyStarting?.abort(changed);
+		this.endCeremony(new DOMException('Connection changed; try again', 'AbortError'));
+	}
+
+	/** Ends the sign-in ceremony, and the wait for one to start, aborting either with `cause`. */
+	private endCeremony(cause: DOMException): void {
+		const held = this.passkeyAbort;
+		this.passkeyAbort?.abort(cause);
+		this.passkeyStarting?.abort(cause);
 		this.passkeyAbort = undefined;
 		this.passkeyStarting = undefined;
+		if (held) this.ceremonyEnded();
+	}
+
+	/**
+	 * Takes the sign-in guard for a ceremony on this connection (`controller` aborts it), once the connection is
+	 * ready for one (`readyToSignIn`). Taken in the same step as the check, so two taps never hold it together.
+	 */
+	private claimCeremony(controller: AbortController): void {
+		if (this.passkeyAbort) throw new Error('Already signing in; finish or cancel that first');
+		this.passkeyAbort = controller;
 	}
 
 	/**
@@ -2748,6 +2730,8 @@ export class ChatClient {
 			const head = room.latestLogId;
 			const needed = Boolean(room.recovery) || Boolean(head && (room.recoveryError || room.checkpoint === undefined || compareLogIds(head, room.checkpoint) > 0));
 			if (!needed) return Promise.resolve();
+			// Nothing would move a recovery on (`startRecovery`), nor settle a wait for one.
+			if (!room.recovery && !this.historyRoute()) return Promise.reject(new Error('Sign in to load this room'));
 			const settled = new Promise<void>((resolve, reject) => room.waiters.push({ resolve, reject }));
 			if (!room.recovery && head) {
 				this.startRecovery(room, head, this.rebuilds(room));
@@ -3012,23 +2996,14 @@ export class ChatClient {
 		};
 		const closed = (): void => {
 			if (!this.isCurrentSocket(id, socket)) return;
-			this.abandonSocket = undefined;
-			this.cancelPasskey();
 			// Only a session-only scrollback (no capability `history`) has a gap to mark; recovery fills any other.
 			this.showReconnectDivider = (this.rooms.size > 0 || this.showReconnectDivider) && !this.hasCap('history');
-			this.socket = undefined;
-			this.authenticated = false;
-			this.authRequested = false;
-			this.clearTransientRequests();
-			this.clearTyping();
-			this.stopPing();
-			this.clearStableTimer();
 			// The protocol view is rebuilt from the next connection's room_list
 			// (PROTOCOL.md §4.2.1; see tests/fixtures/wire/session), but each room's
 			// records and checkpoint are kept so it resumes where it stopped. The
 			// UI keeps the last authenticated view on screen meanwhile, keyed off
 			// disconnectedAt.
-			this.suspendProtocolView('Connection closed');
+			this.endConnection({ view: 'suspend', reason: 'Connection closed' });
 			if (this.running) {
 				this.disconnectedAt ??= this.now();
 				this.retryingSince = this.retryingNow();
@@ -4361,7 +4336,24 @@ export class ChatClient {
 		return true;
 	}
 
-	private startRecovery(room: RoomState, head: string | undefined, rebuild: boolean, preserveBuffer = false): void {
+	/**
+	 * How a `history` page goes out on this connection now: `signed-in`, or `pipelined` right behind an `auth`
+	 * not yet answered (§3.2). Undefined when none can: no connection, or one signed in as no one (an `auth`
+	 * that failed, the connection held open for a sign-in).
+	 */
+	private historyRoute(): 'signed-in' | 'pipelined' | undefined {
+		if (this.authenticated) return 'signed-in';
+		return this.authRequested ? 'pipelined' : undefined;
+	}
+
+	/**
+	 * Starts the room's recovery (§4.3.5), returning whether it did. A recovery is under way only while its pages
+	 * can be asked for (`historyRoute`): one that couldn't ask would hold the room recovering, its timeline
+	 * frozen, with nothing to move it on. Without a route, nothing starts, and the next sign-in's listing
+	 * recovers the room from where it is (`recoverIfBehind`).
+	 */
+	private startRecovery(room: RoomState, head: string | undefined, rebuild: boolean, preserveBuffer = false): boolean {
+		if (!this.historyRoute()) return false;
 		room.limited = false;
 		room.synced = false;
 		const retained = preserveBuffer
@@ -4394,9 +4386,10 @@ export class ChatClient {
 		if (head !== undefined && compareLogIds(nextAfter, head) > 0) {
 			this.clearForRebuild(room);
 			this.finishRecovery(room);
-			return;
+			return true;
 		}
 		this.requestHistoryPage(room, generation);
+		return true;
 	}
 
 	/**
@@ -4429,8 +4422,13 @@ export class ChatClient {
 		const recovery = room.recovery;
 		if (!recovery || recovery.generation !== generation) return;
 		// A room kept from the last connection resumes right behind `auth` (§3.2).
-		const pipelined = !this.authenticated && this.authRequested;
-		if (!this.authenticated && !pipelined) return;
+		const route = this.historyRoute();
+		if (!route) {
+			// The `auth` this ran behind failed: the next page can't go (`startRecovery`).
+			this.pauseRecovery(room, 'Sign in to load this room');
+			return;
+		}
+		const pipelined = route === 'pipelined';
 		// Without a checkpoint, the newest page (§4.3.5): up to H, or to the head the page reports when H isn't known yet.
 		const params = recovery.newest
 			? { room_id: room.id, ...(recovery.head !== undefined ? { before: recovery.head } : {}), limit: THREAD_PAGE_SIZE }
@@ -4623,12 +4621,8 @@ export class ChatClient {
 	private abortRecovery(room: RoomState, message: string): void {
 		const recovery = room.recovery;
 		if (!recovery) return;
-		if (room.limited) {
-			// Only a wait: once it is over the room goes on from what this recovered, or a rebuild that
-			// hadn't replaced what the room had yet starts again.
-			if (recovery.rebuild) room.checkpoint = undefined;
-			else if (recovery.nextAfter !== undefined && compareLogIds(recovery.nextAfter, FIRST_LOG_ID) > 0) room.checkpoint = decrement(recovery.nextAfter);
-		}
+		// Only a wait: once it is over the room goes on from what this recovered.
+		if (room.limited) this.keepRecovered(room, recovery);
 		this.retireRecoveryRequest(room);
 		room.recoveryError = message;
 		room.synced = false;
@@ -4637,6 +4631,33 @@ export class ChatClient {
 		room.recovery = undefined;
 		room.dirty = true;
 		for (const waiter of room.waiters.splice(0)) waiter.reject(new Error(message));
+		this.emit();
+	}
+
+	/**
+	 * A recovery that stops before its end without failing keeps what it recovered: the checkpoint moves to where
+	 * its pages reached, so the next recovery goes on from there; a rebuild that hadn't replaced what the room
+	 * had yet starts again.
+	 */
+	private keepRecovered(room: RoomState, recovery: NonNullable<RoomState['recovery']>): void {
+		if (recovery.rebuild) room.checkpoint = undefined;
+		else if (recovery.nextAfter !== undefined && compareLogIds(recovery.nextAfter, FIRST_LOG_ID) > 0) room.checkpoint = decrement(recovery.nextAfter);
+	}
+
+	/**
+	 * A recovery whose next page can no longer go (`historyRoute`): it ends where it got to, keeping what it
+	 * recovered and without failing the room, which the next sign-in's listing recovers again from there
+	 * (`recoverIfBehind`). Whoever waited for it hears `reason`.
+	 */
+	private pauseRecovery(room: RoomState, reason: string): void {
+		const recovery = room.recovery;
+		if (!recovery) return;
+		this.keepRecovered(room, recovery);
+		this.retireRecoveryRequest(room);
+		room.synced = false;
+		room.recovery = undefined;
+		room.dirty = true;
+		for (const waiter of room.waiters.splice(0)) waiter.reject(new Error(reason));
 		this.emit();
 	}
 
@@ -4914,9 +4935,6 @@ export class ChatClient {
 		options: { visible: boolean; allowBeforeAuth: boolean }
 	): OperationHandle<T> {
 		const id = makeRequestId(method);
-		if (this.passkeyAbort && method !== 'auth') {
-			return rejectedHandle<T>(method, new Error('Finish signing in before sending requests'), id);
-		}
 		const held = this.heldBack(method, params);
 		if (held) return rejectedHandle<T>(method, held, id);
 		let resolvePromise!: (result: T) => void;
@@ -4925,13 +4943,6 @@ export class ChatClient {
 			resolvePromise = resolve;
 			rejectPromise = reject;
 		});
-		const timer = setTimeout(() => {
-			const request = this.requests.get(id);
-			if (!request) return;
-			this.requests.delete(id);
-			request.reject(new RequestTimeout(method));
-			this.emit();
-		}, REQUEST_TIMEOUT_MS);
 		const request: PendingRequest = {
 			id,
 			method,
@@ -4939,7 +4950,7 @@ export class ChatClient {
 			visible: options.visible,
 			allowBeforeAuth: options.allowBeforeAuth,
 			createdAt: Date.now(),
-			timer,
+			timer: this.requestTimeout(id),
 			resolve: resolvePromise as (result: JsonObject) => void,
 			reject: rejectPromise
 		};
@@ -4949,12 +4960,52 @@ export class ChatClient {
 		return { id, promise };
 	}
 
+	/**
+	 * Whether `request` may go out now. During a sign-in ceremony on this connection (`passkeyAbort`: a passkey,
+	 * or an addition) only its `auth` does: whatever else is asked meanwhile waits for it to end (`ceremonyEnded`),
+	 * then goes as whoever it left signed in, rather than run as an identity about to change.
+	 */
 	private canSend(request: PendingRequest): boolean {
 		return Boolean(
 			this.socket &&
 			this.socket.readyState === WebSocket.OPEN &&
-			(request.allowBeforeAuth || this.authenticated)
+			(request.allowBeforeAuth || this.authenticated) &&
+			(!this.passkeyAbort || request.method === 'auth')
 		);
+	}
+
+	/**
+	 * Fails request `id` once REQUEST_TIMEOUT_MS pass without an answer. Time spent held back by a sign-in
+	 * ceremony (`canSend`) doesn't count: it hasn't gone, and a passkey sheet can stay up far longer. Its time
+	 * starts over once the ceremony ends (`ceremonyEnded`).
+	 */
+	private requestTimeout(id: string): ReturnType<typeof setTimeout> {
+		return setTimeout(() => {
+			const request = this.requests.get(id);
+			if (!request) return;
+			if (this.heldForCeremony(request)) {
+				request.timer = this.requestTimeout(id);
+				return;
+			}
+			this.requests.delete(id);
+			request.reject(new RequestTimeout(request.method));
+			this.emit();
+		}, REQUEST_TIMEOUT_MS);
+	}
+
+	/** `request` waits for a sign-in ceremony on this connection to end, unsent (`canSend`). */
+	private heldForCeremony(request: PendingRequest): boolean {
+		return Boolean(this.passkeyAbort) && request.method !== 'auth' && request.sentConnection !== this.connectionId;
+	}
+
+	/** A sign-in ceremony ended, however it did: what waited for it goes now (`canSend`), its time starting from now. */
+	private ceremonyEnded(): void {
+		for (const request of this.requests.values()) {
+			if (request.sentConnection === this.connectionId) continue;
+			clearTimeout(request.timer);
+			request.timer = this.requestTimeout(request.id);
+			this.sendRequest(request);
+		}
 	}
 
 	private sendRequest(request: PendingRequest): void {
@@ -4968,13 +5019,40 @@ export class ChatClient {
 		this.socket.send(JSON.stringify(frame));
 	}
 
-	private clearTransientRequests(): void {
-		for (const [id, request] of this.requests) {
+	/**
+	 * Ends the current connection, however it ends: every way out (`stop`, `restart`, `retryNow`, a sign-in on
+	 * another connection, the socket closing or going quiet) comes through here, so nothing scoped to the
+	 * connection outlives it. Its requests fail with `requests` (their delivery uncertain, by default), and its
+	 * typing, pings and passkey ceremony go. Its protocol view is either kept to resume from (`suspend`: each
+	 * room hidden with its records, floor and checkpoint) or forgotten (`discard`), and never left shown as it
+	 * was: a room shown with no connection under it has nothing to recover or load it. The socket, unless it is
+	 * closing already, closes with `close`.
+	 */
+	private endConnection({ view, reason, requests = 'Connection closed; delivery is uncertain. Please retry', close }: {
+		view: 'suspend' | 'discard';
+		reason: string;
+		requests?: string;
+		close?: string;
+	}): void {
+		const socket = this.socket;
+		this.connectionProbe?.abort();
+		this.abandonSocket = undefined;
+		this.socket = undefined;
+		this.authenticated = false;
+		this.authRequested = false;
+		this.cancelPasskey();
+		for (const request of this.requests.values()) {
 			clearTimeout(request.timer);
-			this.requests.delete(id);
-			request.reject(new Error('Connection closed; delivery is uncertain. Please retry'));
+			request.reject(new Error(requests));
 		}
-		this.historyQueue.dropHeld('Connection closed');
+		this.requests.clear();
+		this.historyQueue.dropHeld(reason);
+		this.clearTyping();
+		this.stopPing();
+		this.clearStableTimer();
+		if (view === 'suspend') this.suspendProtocolView(reason);
+		else this.discardProtocolView(reason);
+		if (close !== undefined && socket && (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN)) socket.close(1000, close);
 	}
 
 	private resetSession(reason: string): void {

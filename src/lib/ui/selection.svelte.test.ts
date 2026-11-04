@@ -66,6 +66,56 @@ describe('MessageSelection.move', () => {
 	});
 });
 
+describe('MessageSelection while a move is under way', () => {
+	/** A client whose moves wait until `release`, and then are refused for `deny`. */
+	function slowClient(deny: string[] = []) {
+		let release!: () => void;
+		const released = new Promise<void>((resolve) => (release = resolve));
+		const moveMessage = vi.fn((id: string) => ({ promise: released.then(() => (deny.includes(id) ? Promise.reject(new Error('denied')) : { message_id: id })) }));
+		return { client: { moveMessage } as unknown as ChatClient, release };
+	}
+
+	it('keeps Cancel from ending a move, but leaving ends select mode, and the move\'s reply doesn\'t bring it back', async () => {
+		const { client, release } = slowClient(['2']);
+		const selection = picked(['1', '2']);
+		const moving = selection.move(client, 'thread', own);
+		selection.cancel();
+		expect(selection.current?.saving).toBe(true);
+		// Another server, another pane: what was picked is gone.
+		selection.leave();
+		release();
+		expect(await moving).toMatchObject({ moved: false });
+		expect(selection.active).toBe(false);
+	});
+
+	it('leaves a selection begun meanwhile as it is', async () => {
+		const { client, release } = slowClient(['2']);
+		const selection = picked(['1', '2']);
+		const moving = selection.move(client, 'thread', own);
+		selection.leave();
+		selection.begin('ops', '9');
+		release();
+		await moving;
+		expect(selection.current).toEqual({ room: 'ops', ids: ['9'], last: '9', saving: false });
+	});
+});
+
+describe('MessageSelection.moveToNewThread while select mode goes', () => {
+	it('moves the messages into the thread it created, rather than leave it empty, and brings back no select mode', async () => {
+		let named!: () => void;
+		const moveMessage = vi.fn((id: string) => ({ promise: Promise.resolve({ message_id: id }) }));
+		const createRoom = vi.fn(() => ({ promise: new Promise((resolve) => (named = () => resolve({ room_id: 'thread_new' }))) }));
+		const client = { moveMessage, createRoom, joinRoom: vi.fn() } as unknown as ChatClient;
+		const selection = picked(['1', '2']);
+		const moving = selection.moveToNewThread(client, { parentRoomId: 'general', title: 'Side', own, movable: () => true });
+		selection.leave();
+		named();
+		expect(await moving).toEqual({ moved: true, room: 'thread_new' });
+		expect(moveMessage.mock.calls.map(([id]) => id)).toEqual(['1', '2']);
+		expect(selection.active).toBe(false);
+	});
+});
+
 describe('MessageSelection.move with authors', () => {
 	it('adds each moved message\'s author to the thread once, but you and those in it', async () => {
 		const { client, joinRoom } = fakeClient();

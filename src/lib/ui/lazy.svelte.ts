@@ -1,3 +1,5 @@
+import { onDemand } from './on-demand';
+
 /**
  * Code the page renders only on demand (a dialog, an editor), loaded apart from the page's own. Reading `component`
  * asks for it: undefined until it has loaded, then the component, which stays, so later opens render at once (render
@@ -7,7 +9,6 @@
  */
 export class Lazy<T> {
 	#component = $state<T>();
-	#loading?: Promise<T>;
 	#load: () => Promise<T>;
 	#arrived: Promise<T>;
 
@@ -15,7 +16,7 @@ export class Lazy<T> {
 	constructor(load: () => Promise<T>) {
 		let arrive!: (component: T) => void;
 		this.#arrived = new Promise((settle) => (arrive = settle));
-		this.#load = () => load().then((component) => (arrive(component), component));
+		this.#load = onDemand(() => load().then((component) => (arrive(component), (this.#component = component))));
 		registered.push(this);
 	}
 
@@ -58,14 +59,7 @@ export class Lazy<T> {
 	}
 
 	load(): Promise<T> {
-		this.#loading ??= this.#load().then(
-			(component) => (this.#component = component),
-			(error) => {
-				this.#loading = undefined;
-				throw error;
-			}
-		);
-		return this.#loading;
+		return this.#load();
 	}
 }
 
@@ -76,18 +70,10 @@ export class Lazy<T> {
  */
 export function lazyChunk<M>(load: () => Promise<M>): <T>(pick: (loaded: M) => T) => Lazy<T> {
 	const parts: Lazy<unknown>[] = [];
-	let chunk: Promise<M> | undefined;
-	const loadChunk = (): Promise<M> =>
-		(chunk ??= load().then(
-			(loaded) => {
-				for (const part of parts) part.load().catch(() => undefined);
-				return loaded;
-			},
-			(error: unknown) => {
-				chunk = undefined;
-				throw error;
-			}
-		));
+	const loadChunk = onDemand(() => load().then((loaded) => {
+		for (const part of parts) part.load().catch(() => undefined);
+		return loaded;
+	}));
 	return (pick) => {
 		const lazy = new Lazy(() => loadChunk().then(pick));
 		parts.push(lazy);

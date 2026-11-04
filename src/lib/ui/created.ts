@@ -15,6 +15,16 @@ export const PRIVACY_LOST = 'The server made the new thread visible to people ou
 export const notPrivate = (title?: string) => `The server made ${title ? `“${title}”` : 'the new conversation'} an ordinary room that others can see and join, not a private one. Leave it, or use it knowing that.`;
 
 /**
+ * A room this viewer joined, or created, opened once its `room_update` has arrived. `private`: it was asked for
+ * as a private room, so its record must say so before it is used (§4.2.4). One value, so each join says for
+ * itself whether it must be private: a later join never inherits an earlier one's.
+ */
+export interface PendingJoin {
+	room: string;
+	private: boolean;
+}
+
+/**
  * A thread this viewer created, opened once its `room_update` has arrived;
  * `replyTo`, the message it was started from, which its composer then
  * replies to (the thread-from-message convention).

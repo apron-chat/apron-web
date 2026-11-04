@@ -323,7 +323,8 @@ describe('HistoryKeeper', () => {
 		const posted = server.post('general', 'grace', 'After');
 		await waitFor(() => ids(client.snapshot(), 'general').includes(posted));
 		await keeper.flush();
-		expect(await readKept(await accountDb(indexedDB))).toBeUndefined();
+		// Not even an empty database comes back, to count as an account with history kept.
+		expect((await indexedDB.databases()).map((entry) => entry.name)).not.toContain(historyName(URL, ACCOUNT));
 		expect(keeper.failure).toBeUndefined();
 		await keeper.stop();
 	});

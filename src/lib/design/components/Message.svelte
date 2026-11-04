@@ -1,18 +1,8 @@
 <script module lang="ts">
 	import type { MessageHandlers } from './types';
+	import { longPress } from './hold';
 
-	const LONG_PRESS_MS = 500;
-	/** How far a held finger may drift before the press counts as a scroll: a finger is never quite still. */
-	const SLOP_PX = 10;
 	const NONE: MessageHandlers = {};
-	/** The one touch long press in progress, page-wide, and where it began: a second finger elsewhere starts over. */
-	let press: { timer: ReturnType<typeof setTimeout>; x: number; y: number } | undefined;
-
-	function cancelPress(): void {
-		if (!press) return;
-		clearTimeout(press.timer);
-		press = undefined;
-	}
 </script>
 
 <script lang="ts">
@@ -49,10 +39,15 @@
 	let engaged = $state(false);
 	/** The last press on the row was a touch: its toolbar shows only once a long press opens it (`held`). */
 	let touch = $state(false);
-	/** A long press opened the toolbar as touch's menu: larger, with Reply and React up front and the rest behind ⋯. */
+	/**
+	 * A long press opened the toolbar as touch's menu: larger, with Reply and React up front and the rest behind ⋯.
+	 * Choosing Select or Edit from it puts it away (the toolbar goes with them), so it isn't back when they end.
+	 */
 	let held = $state(false);
 	/** The click that ends a long press: the press opened the menu, so the click does nothing else. */
 	let swallow = false;
+	/** The long press this row started (`longPress`). */
+	let pressed: object | undefined;
 
 	const t = $derived(times(view.timestamp, view.time));
 	const quoted = $derived(Boolean(view.reply) && !view.deleted);
@@ -75,9 +70,9 @@
 			? { id: 'react', label: 'React', title: 'React', popup: true, expanded: on.picking?.(view), attach: on.pickAnchor, onclick: (event) => on.pick?.(view, event.currentTarget as HTMLElement) }
 			: undefined;
 		const thread: MessageAction | undefined = can.startThread ? { id: 'thread', label: 'Start thread', title: 'Start thread', onclick: () => on.startThread?.(view) } : undefined;
-		const edit: MessageAction | undefined = can.edit ? { id: 'edit', label: 'Edit message', title: 'Edit', glyph: 'Edit', onclick: () => on.edit?.(view) } : undefined;
+		const edit: MessageAction | undefined = can.edit ? { id: 'edit', label: 'Edit message', title: 'Edit', glyph: 'Edit', onclick: () => ((held = false), on.edit?.(view)) } : undefined;
 		const unreply: MessageAction | undefined = can.edit && view.reply ? { id: 'unreply', label: 'Remove reply reference', glyph: 'Remove reply', onclick: () => on.removeReply?.(view) } : undefined;
-		const select: MessageAction | undefined = can.select ? { id: 'select', label: 'Select message', title: 'Select', glyph: 'Select', testid: testids?.select, onclick: () => on.beginSelect?.(view) } : undefined;
+		const select: MessageAction | undefined = can.select ? { id: 'select', label: 'Select message', title: 'Select', glyph: 'Select', testid: testids?.select, onclick: () => ((held = false), on.beginSelect?.(view)) } : undefined;
 		const copy: MessageAction | undefined = held && view.body && on.copyText ? { id: 'copy', label: 'Copy text', glyph: 'Copy text', done: { label: 'Text copied', glyph: 'Copied' }, onclick: () => on.copyText?.(view) } : undefined;
 		const link: MessageAction | undefined = can.link ? { id: 'link', label: 'Copy link to message', title: 'Copy link', glyph: 'Copy link', done: { label: 'Link copied', glyph: 'Copied' }, onclick: () => on.copyLink?.(view) } : undefined;
 		const remove: MessageAction | undefined = can.edit ? { id: 'delete', label: 'Delete message', title: 'Delete', glyph: 'Delete', danger: true, onclick: () => on.delete?.(view) } : undefined;
@@ -173,24 +168,26 @@
 
 	/** Touch has no hover or right-click: a long press opens the toolbar as its menu. A tap doesn't, so a stray one can't. */
 	function pointerdown(event: PointerEvent): void {
-		cancelPress();
 		swallow = false;
 		touch = event.pointerType === 'touch';
 		if (!touch || held || !holdable(event.target)) return;
 		const row = event.currentTarget as HTMLElement;
-		press = {
-			timer: setTimeout(() => {
-				press = undefined;
-				if (row.isConnected) hold(row);
-			}, LONG_PRESS_MS),
-			x: event.clientX,
-			y: event.clientY
-		};
+		const target = event.target;
+		// Held where it still may open: the row may have gone into select mode or the editor meanwhile.
+		pressed = longPress.start(event, () => {
+			if (row.isConnected && !held && holdable(target)) hold(row);
+		});
 	}
 
-	/** A finger that drifts past SLOP_PX is scrolling, not holding. */
+	/** A finger that drifts is scrolling, not holding (`longPress`). */
 	function pointermove(event: PointerEvent): void {
-		if (press && Math.hypot(event.clientX - press.x, event.clientY - press.y) > SLOP_PX) cancelPress();
+		longPress.move(event);
+	}
+
+	/** The finger lifted: this row's long press, if one is under way, doesn't fire. */
+	function cancelPress(): void {
+		longPress.cancel(pressed);
+		pressed = undefined;
 	}
 
 	/** Android's own long press, which would select the text under the finger: it opens the menu in its place. */

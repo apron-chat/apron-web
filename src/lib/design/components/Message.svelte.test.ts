@@ -406,6 +406,34 @@ describe('select gestures', () => {
 		expect(copyText).toHaveBeenCalledOnce();
 	});
 
+	it('puts its menu away when Select or Edit is chosen from it, so it isn\u2019t back when they end, nor opens from a press held into them', () => {
+		vi.useFakeTimers();
+		const props: { view: MessageView; on: MessageHandlers } = $state({ view: view({ caps: ALL }), on: {} });
+		props.on = { beginSelect: () => (props.view = { ...props.view, selecting: true }), edit: () => (props.view = { ...props.view, editing: true }) };
+		dom.render(Message, props);
+		const row = () => document.querySelector('article')!;
+		for (const [choice, mode] of [['Select message', 'selecting'], ['Edit message', 'editing']] as const) {
+			hold(row().querySelector('.ap-msg-text')!);
+			expect(held(row())).toBe(true);
+			dom.button('More actions').click();
+			flushSync();
+			dom.button(choice).click();
+			flushSync();
+			props.view = { ...props.view, [mode]: false };
+			flushSync();
+			expect(held(row())).toBe(false);
+		}
+		// A press under way when the row goes into select mode opens nothing.
+		dom.touch('pointerdown', row().querySelector('.ap-msg-text')!);
+		props.view = { ...props.view, selecting: true };
+		flushSync();
+		vi.advanceTimersByTime(500);
+		flushSync();
+		props.view = { ...props.view, selecting: false };
+		flushSync();
+		expect(held(row())).toBe(false);
+	});
+
 	it('opens the menu only from a press held still, never a tap, nor on a chip, a link or a row gone', () => {
 		vi.useFakeTimers();
 		const row = render({ caps: ALL, reactions: [{ emoji: '👍', count: 1 }] });

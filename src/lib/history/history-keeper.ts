@@ -226,6 +226,18 @@ export class HistoryKeeper {
 	}
 
 	/**
+	 * The database of `userId`'s history on `server`, only if there is one (`HistoryGone` if not): what goes on
+	 * from what is kept, a write continuing it or a page read from it, never makes one, which would bring back,
+	 * empty, a history another tab just deleted.
+	 */
+	private async openExisting(server: string, userId: string): Promise<IDBDatabase> {
+		const name = historyName(server, userId);
+		const db = (await this.openKept(name)) ? this.dbs.get(name) : undefined;
+		if (!db) throw new HistoryGone();
+		return db;
+	}
+
+	/**
 	 * The database `name` opened, as `openNamed` keeps it, if there is one: none is made when there isn't. Kept only
 	 * once open, so a writer opening it meanwhile (`openNamed`) never meets a "none here" meant for this.
 	 */
@@ -377,7 +389,7 @@ export class HistoryKeeper {
 		const known = this.known;
 		if (!cover || known?.server !== server || (cover.from !== undefined && compareLogIds(before, cover.from) < 0)) return undefined;
 		try {
-			const { page, more, version } = await pageHistory(await this.open(server, known.userId), roomId, { before, limit }, cover.from === undefined ? undefined : Number(cover.from));
+			const { page, more, version } = await pageHistory(await this.openExisting(server, known.userId), roomId, { before, limit }, cover.from === undefined ? undefined : Number(cover.from));
 			// Another tab wrote meanwhile: what is kept may no longer be what this one restored from.
 			if (!this.writer?.granted && version !== this.known?.version) {
 				this.coverage.clear();
@@ -752,7 +764,8 @@ export class HistoryKeeper {
 		const flags = `${complete} ${current}`;
 		if (!changes.length && !whole.length && !rows.length && !dropped.length && !sweep && !withUsers && flags === writer.flags) return;
 		try {
-			const db = await this.open(writer.server, writer.userId);
+			// Only a write that starts afresh makes the database; one going on from what is kept needs it there.
+			const db = writer.reset ? await this.open(writer.server, writer.userId) : await this.openExisting(writer.server, writer.userId);
 			const version = await writeHistory(db, {
 				changes, whole, rooms: rows, dropped, ...(sweep ? { keepOnly: sweep } : {}), reset: writer.reset, continues: !writer.reset,
 				meta: { server: writer.server, userId: writer.userId, complete, current, ...(withUsers ? { users: state.users, ...(state.aliases ? { aliases: state.aliases } : {}) } : {}) }

@@ -24,6 +24,18 @@ describe('unread tracking', () => {
 		expect(tracker.total).toBe(1);
 	});
 
+	it('starts over on another server, where a room of the same name is another room', () => {
+		const tracker = new UnreadTracker();
+		tracker.observe([room('random', [message(20, 'random')], { latestLogId: '20' })], me, 'general', true);
+		tracker.observe([room('random', [message(20, 'random'), message(22, 'random')])], me, 'general', true);
+		expect(tracker.byRoom).toEqual({ random: 1 });
+		tracker.reset();
+		expect(tracker.total).toBe(0);
+		// The other server's `random` loads its history, after this page's old watermark: none of it arrived.
+		tracker.observe([room('random', [message(30, 'random'), message(31, 'random')], { latestLogId: '31' })], me, 'general', true);
+		expect(tracker.total).toBe(0);
+	});
+
 	it('clears a room once you read its end, or your read cursor or your own read position passes its arrivals', () => {
 		const tracker = new UnreadTracker();
 		tracker.observe([room('general', [], { latestLogId: '10' }), room('random', [], { latestLogId: '10' })], me, 'general', true);

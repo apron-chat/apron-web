@@ -111,7 +111,8 @@
 	import { notifyAccount, notifyScopesOf, pushWake } from '$lib/ui/notify-scopes';
 	import { arrivalAlerts } from '$lib/ui/alerts';
 	import { readAction, readElsewhere, readFurthest } from '$lib/ui/read-action';
-	import { createdRoom, createdThread, moveCheck, type PendingThread } from '$lib/ui/created';
+	import { createdRoom, createdThread, moveCheck, type PendingJoin, type PendingThread } from '$lib/ui/created';
+	import { messageOf, Task } from '$lib/ui/task.svelte';
 	import { accountServer, canOfferInstall, isStandalone, keepsPushOff, needsHomeScreen, offeredWake, webPushAccount, webPushSupported, type InstallPromptEvent } from '$lib/ui/web-push';
 
 	/**
@@ -359,9 +360,7 @@
 	/** A thread this viewer created (`startThread`, `createThread`), opened once its `room_update` has arrived. */
 	let pendingOpen = $state<PendingThread | undefined>();
 	/** A room or thread joined from the directory or just created, opened once its `room_update` has arrived. */
-	let pendingJoin = $state<string | undefined>();
-	/** `pendingJoin` was created as a private room: its record must say `private: true` before it is used (§4.2.4). */
-	let pendingPrivate = $state(false);
+	let pendingJoin = $state.raw<PendingJoin | undefined>();
 	/**
 	 * Where the New divider sits in the open pane: after your read position
 	 * (`ReadPositions`) as it was when the pane opened. It stays put while you
@@ -422,7 +421,8 @@
 	let seenThrough = $state<string | undefined>();
 	/** Bumped when you send or jump to the latest: a pane still opening at its divider stays at the latest instead. */
 	let pins = 0;
-	let typingTimer: ReturnType<typeof setTimeout> | undefined;
+	/** The room your typing indicator shows in, and the timer that ends it there 5 s after the last keystroke. */
+	let typingIn: { room: string; timer: ReturnType<typeof setTimeout> } | undefined;
 	/** The last read whose notifications were closed (account, server, room, message), so each closes once. */
 	let closedThrough: string | undefined;
 	/**
@@ -742,11 +742,11 @@
 	let addedHere = $derived(Boolean(activeRoom && !activeThread && activeRoom.private && activeRoom.parentRoomId === undefined && addedRooms.includes(activeRoom.id)));
 	/** Muting one room (§4.5 `mute` with its `room_id`) takes capability `status` and an account. */
 	let canMuteRoom = $derived(Boolean(session.capabilities.status && session.passkeySession));
-	let addedBusy = $state(false);
-	let addedError = $state<string | undefined>();
+	/** Muting or unmuting from the banner, and why it didn't: the open room's, until another opens. */
+	const addedTask = new Task<'saving', string>();
 	$effect(() => {
 		void activeRoom?.id;
-		addedError = undefined;
+		addedTask.reset();
 	});
 	/**
 	 * The start of the open private room, once its history reaches back to it (`reachesStart`) and all of it is on
@@ -1004,12 +1004,11 @@
 	// A room joined from the directory, or created from the sidebar, opens once its `room_update` has arrived.
 	$effect(() => {
 		const joined = pendingJoin;
-		const room = joined ? session.rooms.find((candidate) => candidate.id === joined) : undefined;
-		if (!room) return;
+		const room = joined ? session.rooms.find((candidate) => candidate.id === joined.room) : undefined;
+		if (!joined || !room) return;
 		pendingJoin = undefined;
 		// A server that doesn't keep private rooms may create an ordinary one anyway: say so, and don't open it to post in.
-		const step = createdRoom(room, untrack(() => pendingPrivate));
-		pendingPrivate = false;
+		const step = createdRoom(room, joined.private);
 		if ('refuse' in step) {
 			untrack(() => feedback.error(step.refuse));
 			return;
@@ -1043,7 +1042,7 @@
 
 	// Leaving a pane ends its selection in setDestination; losing the capability ends it here.
 	$effect(() => {
-		if (!session.canEdit) selection.cancel();
+		if (!session.canEdit) selection.leave();
 	});
 
 	// A thread this viewer just created opens once its `room_update` has arrived.
@@ -1373,7 +1372,7 @@
 			for (const type of ['pointermove', 'wheel', 'touchmove'] as const) window.removeEventListener(type, moved, inputOptions);
 			window.removeEventListener('beforeinstallprompt', installOffered);
 			window.removeEventListener('appinstalled', installed);
-			if (typingTimer) clearTimeout(typingTimer);
+			if (typingIn) clearTimeout(typingIn.timer);
 			if (highlightTimer) clearTimeout(highlightTimer);
 			reveal.stop();
 			floatingDay.dispose();
@@ -1448,11 +1447,11 @@
 		activeThread = undefined;
 		pendingOpen = undefined;
 		pendingJoin = undefined;
-		pendingPrivate = false;
 		newThread = undefined;
 		roomEditorOpen = false;
-		selection.cancel();
+		selection.leave();
 		mentions.reset();
+		unread.reset();
 		arrivals.reset();
 		incomingMessages.reset();
 		pushRoom = undefined;
@@ -2006,7 +2005,8 @@
 		editingId = undefined;
 		roomEditorOpen = false;
 		newThread = undefined;
-		selection.cancel();
+		selection.leave();
+		if (typingIn && typingIn.room !== (thread ?? roomId)) stopTyping();
 		composer?.reset();
 		mentions.clearUnseen();
 		mentions.clearRoom(roomId);
@@ -2127,9 +2127,23 @@
 		// A live message shows itself as it is typed: no typing indicator besides.
 		if (liveLoaded?.composing) return;
 		const roomId = paneRoom.id;
+		// Typing somewhere else now: it ends where it was, rather than show there until it runs out.
+		if (typingIn && typingIn.room !== roomId) stopTyping();
 		client.sendTyping(roomId, true);
-		if (typingTimer) clearTimeout(typingTimer);
-		typingTimer = setTimeout(() => client?.sendTyping(roomId, false), 5000);
+		if (typingIn) clearTimeout(typingIn.timer);
+		const timer = setTimeout(() => {
+			if (typingIn?.timer === timer) typingIn = undefined;
+			client?.sendTyping(roomId, false);
+		}, 5000);
+		typingIn = { room: roomId, timer };
+	}
+
+	/** Your typing indicator ends where it shows: you stopped, sent, or went elsewhere. */
+	function stopTyping(): void {
+		if (!typingIn) return;
+		clearTimeout(typingIn.timer);
+		client?.sendTyping(typingIn.room, false);
+		typingIn = undefined;
 	}
 
 	/**
@@ -2232,7 +2246,7 @@
 		}
 		clearComposer(roomId);
 		chat.sendTyping(roomId, false);
-		if (typingTimer) clearTimeout(typingTimer);
+		stopTyping();
 		composer?.focus();
 	}
 
@@ -2254,7 +2268,7 @@
 					if (drafts.restore(restored, text, replyTo)) composer?.focus();
 				},
 				started: () => {
-					if (typingTimer) clearTimeout(typingTimer);
+					stopTyping();
 					stickToBottom = true;
 					pins++;
 					composer?.focus();
@@ -2276,8 +2290,9 @@
 		}
 		const listed = [...(snapshot.directory ?? []), ...Object.values(snapshot.threadDirectory).flat()];
 		const target = listed.find((listing) => listing.id === name) ?? listed.find((listing) => listing.title.toLowerCase() === wanted);
-		pendingJoin = target?.id ?? name;
-		client.joinRoom(pendingJoin).promise.catch(failed);
+		const room = target?.id ?? name;
+		pendingJoin = { room, private: false };
+		client.joinRoom(room).promise.catch(failed);
 	}
 
 	/**
@@ -2331,7 +2346,7 @@
 		const options = { ...(reply ? { replyTo: reply } : {}), ...(mentions.length ? { mentions } : {}), ...(embeds.length ? { embeds } : {}) };
 		clearComposer(roomId);
 		chat.sendTyping(roomId, false);
-		if (typingTimer) clearTimeout(typingTimer);
+		stopTyping();
 		stickToBottom = true;
 		pins++;
 		composer?.focus();
@@ -2444,12 +2459,12 @@
 	 * else added you to, and gets its banner.
 	 */
 	function noteArrivals(next: ClientSnapshot): void {
-		const arrived = arrivals.next(next).filter((id) => id !== pendingJoin);
+		const arrived = arrivals.next(next).filter((id) => id !== pendingJoin?.room);
 		if (arrived.length) keepAdded([...addedRooms.filter((id) => !arrived.includes(id)), ...arrived]);
 		// A room someone added you to counts its messages unread from your join, also those said while you were away;
 		// being added alerts nothing by itself. Without capability `rooms`, a room appears joined when its first
 		// message arrives: nobody added you.
-		if (next.capabilities.rooms) for (const id of arrivals.added) if (id !== pendingJoin) unread.addedTo(id);
+		if (next.capabilities.rooms) for (const id of arrivals.added) if (id !== pendingJoin?.room) unread.addedTo(id);
 	}
 
 	/** Keeps the private rooms whose "You were added" banner shows, for this account on this device. */
@@ -2460,16 +2475,9 @@
 
 	/** Mutes, or unmutes, the room someone added you to (§4.5 `mute` with its `room_id`), from its banner. */
 	async function muteAdded(roomId: string, mute: boolean): Promise<void> {
-		if (!client || addedBusy) return;
-		addedBusy = true;
-		addedError = undefined;
-		try {
-			await client.setMute(mute, roomId);
-		} catch (cause) {
-			addedError = cause instanceof Error ? cause.message : mute ? 'Unable to mute' : 'Unable to unmute';
-		} finally {
-			addedBusy = false;
-		}
+		if (!client) return;
+		const chat = client;
+		await addedTask.run('saving', () => chat.setMute(mute, roomId), { failed: (cause) => messageOf(cause, mute ? 'Unable to mute' : 'Unable to unmute') });
 	}
 
 	/** Mutes the open room or thread, or the room of an open thread (§4.5 `mute` with its `room_id`), for a while or until unmuted, or with `false` unmutes it. */
@@ -2488,8 +2496,7 @@
 		const room = session.rooms.find((candidate) => candidate.id === roomId);
 		if (room?.private) chooseRoom(room);
 		else {
-			pendingJoin = roomId;
-			pendingPrivate = true;
+			pendingJoin = { room: roomId, private: true };
 		}
 		if (problem) feedback.error(problem);
 	}
@@ -2503,7 +2510,7 @@
 			openWithoutJoining(roomId);
 			return;
 		}
-		pendingJoin = roomId;
+		pendingJoin = { room: roomId, private: false };
 		feedback.track(client.joinRoom(roomId), 'Joining…');
 	}
 
@@ -3362,7 +3369,7 @@
 			pause={canPause ? { ...(pausedUntil !== undefined && isPaused(pausedUntil) ? { until: pausedUntil } : {}) } : undefined} onpause={pauseNotifications} onresume={() => client?.setMute(false) ?? Promise.resolve()}
 			onsignin={previewMode ? undefined : (name, scheme) => openConnect(scheme ? { scheme, name } : { signIn: true, name })}
 			returnTo={activeRoom ? (activeThread ? threadTitle(activeThread) : activeRoom.title) : undefined} onreturn={closeRooms}
-			onroom={chooseRoom} onthread={chooseThread} onopenthread={openThreadCard} onjoin={joinRoom} onleavethread={leaveThread} oncreateroom={(roomId, options) => { pendingJoin = roomId; pendingPrivate = options.private; }} onnewthread={newThreadInRoom} onsignout={signedOut} keptHistory={historyKeeper}
+			onroom={chooseRoom} onthread={chooseThread} onopenthread={openThreadCard} onjoin={joinRoom} onleavethread={leaveThread} oncreateroom={(roomId, options) => (pendingJoin = { room: roomId, private: options.private })} onnewthread={newThreadInRoom} onsignout={signedOut} keptHistory={historyKeeper}
 			onnewprivate={canStartPrivate ? () => (newPrivateOpen = true) : undefined}
 		/>
 	{/snippet}
@@ -3419,7 +3426,7 @@
 			{#if addedHere && activeRoom}
 				{@const added = activeRoom}
 				<AddedBanner
-					testid="added-banner" busy={addedBusy || !paneReady} error={addedError} muted={added.mutedUntil !== undefined}
+					testid="added-banner" busy={addedTask.busy || !paneReady} error={addedTask.note} muted={added.mutedUntil !== undefined}
 					onmute={canMuteRoom ? () => muteAdded(added.id, true) : undefined} onunmute={canMuteRoom ? () => muteAdded(added.id, false) : undefined}
 					onleave={session.canManageRooms && !session.readOnly ? leavePane : undefined} ondismiss={() => keepAdded(addedRooms.filter((id) => id !== added.id))}
 				/>

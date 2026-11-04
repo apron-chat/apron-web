@@ -2,6 +2,7 @@
 	import { untrack } from 'svelte';
 	import RoomForm from '$lib/design/components/RoomForm.svelte';
 	import type { ChatClient } from '$lib/protocol/client';
+	import { messageOf, Task } from '$lib/ui/task.svelte';
 
 	interface Props {
 		client: ChatClient;
@@ -22,8 +23,8 @@
 	let open = $state(true);
 	let title = $state(initialTitle);
 	let description = $state(initialDescription);
-	let saving = $state(false);
-	let error = $state<string | undefined>();
+	/** Saving it, and why it didn't save. */
+	const task = new Task<'saving', string>();
 	let noun = $derived(thread ? 'thread' : 'room');
 
 	/**
@@ -34,7 +35,7 @@
 	 * decline.
 	 */
 	async function save(): Promise<void> {
-		if (saving || !enabled) return;
+		if (task.busy || !enabled) return;
 		const nextTitle = title.trim();
 		const nextDescription = description.trim();
 		const patch = {
@@ -45,17 +46,8 @@
 			open = false;
 			return;
 		}
-		saving = true;
-		error = undefined;
-		try {
-			await client.updateRoom(room.id, patch).promise;
-			saving = false;
-			open = false;
-		} catch (cause) {
-			saving = false;
-			error = cause instanceof Error ? cause.message : `Unable to save ${noun}`;
-		}
+		if (await task.run('saving', () => client.updateRoom(room.id, patch).promise, { failed: (cause) => messageOf(cause, `Unable to save ${noun}`) })) open = false;
 	}
 </script>
 
-<RoomForm bind:open kind={thread ? 'thread' : 'room'} mode="edit" bind:name={title} bind:description status={saving ? 'saving' : 'idle'} {error} disabled={!enabled} onsubmit={save} {onclose} />
+<RoomForm bind:open kind={thread ? 'thread' : 'room'} mode="edit" bind:name={title} bind:description status={task.busy ? 'saving' : 'idle'} error={task.note} disabled={!enabled} onsubmit={save} {onclose} />
