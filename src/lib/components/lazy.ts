@@ -10,6 +10,7 @@ export const newThreadDialog = part((m) => m.NewThreadDialog);
 export const preferencesDialog = part((m) => m.PreferencesDialog);
 export const roomEditor = part((m) => m.RoomEditor);
 export const searchDialog = part((m) => m.SearchDialog);
+export const shortcutsDialog = part((m) => m.ShortcutsDialog);
 export const signInLinkDialog = part((m) => m.SignInLinkDialog);
 export const profileEditor = part((m) => m.ProfileEditor);
 export const addMembersDialog = part((m) => m.AddMembersDialog);

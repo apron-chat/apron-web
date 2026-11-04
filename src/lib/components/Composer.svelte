@@ -79,13 +79,16 @@
 		onunstage: (id: string) => void;
 		/** A staged file's new name, which it is sent with. */
 		onrename: (id: string, title: string) => void;
+		/** Escape while replying (`reply`) cancels it too. */
 		oncancelreply: () => void;
+		/** ↑ in the empty field: edit your newest message here. True when there was one to edit. */
+		onedit?: () => boolean;
 		/** The mention picker opened: a moment to refresh who can be named. */
 		onmention?: () => void;
 		/** Sending waits until then, as the server asked (`retry_after`, epoch milliseconds): Send counts down, and the draft stays. */
 		waitUntil?: number;
 	}
-	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled, holdSend = false, canUpload, files = [], uploadLimits, canCommand = false, live, people, rooms = [], reply, oninput, onsend, onfiles, onunstage, onrename, oncancelreply, onmention, waitUntil }: Props = $props();
+	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled, holdSend = false, canUpload, files = [], uploadLimits, canCommand = false, live, people, rooms = [], reply, oninput, onsend, onfiles, onunstage, onrename, oncancelreply, onedit, onmention, waitUntil }: Props = $props();
 
 	/** The field: chips and autocomplete, as in the message editor. */
 	let field = $state<MessageField | undefined>();
@@ -166,6 +169,15 @@
 		onsend();
 	}
 
+	/** The field's keys no picker took: Escape cancels a reply, and ↑ in the empty field edits your last message. */
+	function key(event: KeyboardEvent): boolean {
+		if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return false;
+		if (event.key === 'Escape' && reply) oncancelreply();
+		else if (!(event.key === 'ArrowUp' && !value && files.length === 0 && onedit?.())) return false;
+		event.preventDefault();
+		return true;
+	}
+
 	/** The emoji button: the full picker, whose pick lands where the caret was. Emoji are text, so no capability gates it. */
 	function openEmoji(): void {
 		if (emojiButton) emojiPicker.toggle({ anchor: emojiButton, onpick: (emoji) => field?.insert(emoji) });
@@ -239,7 +251,7 @@
 />
 
 {#snippet editable({ placeholder, disabled }: ComposerField)}
-	<MessageField bind:this={field} bind:value bind:mentions {people} {rooms} {placeholder} {disabled} id="message-input" data-testid="message-input" pickerTestid="mention-picker" onsubmit={send} {oninput} {onmention} onpaste={paste} />
+	<MessageField bind:this={field} bind:value bind:mentions {people} {rooms} {placeholder} {disabled} id="message-input" data-testid="message-input" pickerTestid="mention-picker" onsubmit={send} onkey={key} {oninput} {onmention} onpaste={paste} />
 {/snippet}
 {#snippet replyText()}<MentionText text={reply?.text ?? ''} />{/snippet}
 {#snippet staged()}

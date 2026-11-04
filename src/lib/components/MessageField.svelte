@@ -26,6 +26,8 @@
 		known?: string[];
 		/** Enter where it sends or saves (`enterAction`), with no picker taking it. */
 		onsubmit: () => void;
+		/** A key no picker took, before Enter's, such as ↑ in an empty composer: true when it was taken. */
+		onkey?: (event: KeyboardEvent) => boolean;
 		/** The draft changed by typing or a pick, not set from outside. */
 		oninput?: () => void;
 		/** The mention picker opened: a moment to refresh who can be named. */
@@ -33,7 +35,7 @@
 		/** A `data-testid` for the people's picker. */
 		pickerTestid?: string;
 	}
-	let { value = $bindable(), mentions = $bindable([]), people, rooms = [], known, disabled = false, onsubmit, oninput, onmention, pickerTestid, ...rest }: Props = $props();
+	let { value = $bindable(), mentions = $bindable([]), people, rooms = [], known, disabled = false, onsubmit, onkey, oninput, onmention, pickerTestid, ...rest }: Props = $props();
 
 	/** Unique per field, for its picker's ID. */
 	const uid = $props.id();
@@ -47,6 +49,7 @@
 		get known() { return known; },
 		get disabled() { return disabled; },
 		submit: () => onsubmit(),
+		key: (event) => onkey?.(event) ?? false,
 		oninput: () => oninput?.(),
 		onmention: () => onmention?.(),
 		// Read once a picker would open, which is what asks for its code (`autocompletePicker`): until it has come, none shows.

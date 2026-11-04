@@ -388,6 +388,21 @@ Shift+Enter; the Send button sends. Where an autocomplete below offers Enter
 to pick, it picks either way. Pressing Send leaves the focus in the
 field, so a phone's keyboard stays up between messages. However long the
 room or thread's name, the field's placeholder takes one line, cut short.
+With a keyboard, ↑ in the empty field (nothing typed or attached) edits your newest message in the room or
+thread that you may edit, as its **Edit** would, and once the edit is saved or cancelled
+the keyboard is back in the composer; with text in the field, ↑ moves the caret as usual. Escape while
+replying cancels the reply and keeps the draft (with an autocomplete open, Escape
+puts that away first).
+
+**Keyboard shortcuts**: `?` (outside a field, where it is a character), or
+Ctrl+/ (⌘/ on a Mac) anywhere, lists the app's keyboard shortcuts in a centered
+dialog, grouped (General, Composer, Messages, Rooms, Viewers), each with where
+it works and its keys as this platform writes them (⌘ ⌥ ⇧ on a Mac, Ctrl, Alt,
+Shift elsewhere), and named in words for a screen reader. It opens while signed
+in and no other dialog is open; Escape, its close button or a click beside it
+closes it. The room header's ⋯ menu offers it too (**Keyboard shortcuts**, its
+hint `?`), except on a touch screen. `lib/ui/shortcuts.ts` is the list: a new
+shortcut goes there too.
 
 The timeline is anchored at its bottom edge. When the area below it grows or
 shrinks (the composer taking another line, a reply bar, staged files, the

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { installNudge, messageEditor, newPrivateDialog, newThreadDialog, profileCardHost, reactorsPopover, roomEditor, searchDialog, selectionBar, serverPaneHost, signInLinkDialog } from '$lib/components/lazy';
+	import { installNudge, messageEditor, newPrivateDialog, newThreadDialog, profileCardHost, reactorsPopover, roomEditor, searchDialog, selectionBar, serverPaneHost, shortcutsDialog, signInLinkDialog } from '$lib/components/lazy';
 	import { onMount, tick, untrack } from 'svelte';
 	import { fromAction } from 'svelte/attachments';
 	import { pushState, replaceState } from '$app/navigation';
@@ -318,10 +318,14 @@
 	let passkeyUnavailable = $state<string | undefined>();
 	let highlightedId = $state<string | undefined>();
 	let editingId = $state<string | undefined>();
+	/** ↑ in the empty composer opened the edit: the keyboard goes back there when it ends. */
+	let editFromComposer = false;
 	/** The Edit form for the open room or thread (its title and description). */
 	let roomEditorOpen = $state(false);
 	/** Search local history is open (`SearchDialog`). */
 	let searchOpen = $state(false);
+	/** The keyboard shortcuts' overlay (`?`) is open. */
+	let shortcutsOpen = $state(false);
 	/**
 	 * Sign-in links (§4.11.2): one of no proposal this browser made waits for the viewer's answer (`asked`), one
 	 * for an addition proposed here for its account's session (`addition`), and why one didn't sign in (`failure`).
@@ -2692,7 +2696,10 @@
 			const event = rowEvent(view);
 			return event ? reactionsFor(event) : [];
 		}),
-		edit: onRow((event) => (editingId = event.message_id)),
+		edit: onRow((event) => {
+			editingId = event.message_id;
+			editFromComposer = false;
+		}),
 		delete: onRow(deleteMessage),
 		startThread: onRow(startThread),
 		copyLink: async (view) => {
@@ -3040,11 +3047,27 @@
 		};
 	}
 
+	/** ↑ in the empty composer: edits your newest message in the pane that you can, as its Edit would. False when there's none. */
+	function editLast(): boolean {
+		const event = messages.findLast((candidate) => capsFor(candidate).edit);
+		if (!event) return false;
+		editingId = event.message_id;
+		editFromComposer = true;
+		return true;
+	}
+
+	/** The edit ends, saved or not: back to the composer, when ↑ there opened it. */
+	function endEdit(): void {
+		editingId = undefined;
+		if (editFromComposer) composer?.focus();
+		editFromComposer = false;
+	}
+
 	/** Saves an edit: the new text, and any embeds removed or renamed in the editor, together. */
 	function saveEdit(event: MessageRecord, text: string, edits: EmbedEdits | undefined, mentions: string[]): void {
 		if (!client || !session.canEdit) return;
 		feedback.track(client.editMessage(event.message_id, text, undefined, edits, mentions), 'Saving edit…');
-		editingId = undefined;
+		endEdit();
 	}
 
 	function deleteMessage(event: MessageRecord): void {
@@ -3243,8 +3266,7 @@
 	 */
 	function windowPaste(event: ClipboardEvent): void {
 		if (event.defaultPrevented || !canAttach) return;
-		const target = event.target;
-		if (target instanceof HTMLElement && (target.isContentEditable || target.closest('input, textarea, select'))) return;
+		if (inField(event.target)) return;
 		const files = pastedFiles(event.clipboardData);
 		if (!files.length) return;
 		event.preventDefault();
@@ -3268,7 +3290,25 @@
 		}
 	}
 
+	/** Where text is written, whose keys are its own: `?` there is a character. */
+	function inField(target: EventTarget | null): boolean {
+		return target instanceof HTMLElement && (target.isContentEditable || target.closest('input, textarea, select') !== null);
+	}
+
+	/** `?` outside a field, or Ctrl+/ (⌘/ on a Mac) anywhere: the key that shows the keyboard shortcuts. */
+	function shortcutsKey(event: KeyboardEvent): boolean {
+		if (event.altKey || event.isComposing) return false;
+		if (event.ctrlKey || event.metaKey) return event.key === '/' && !event.shiftKey;
+		return event.key === '?' && !inField(event.target);
+	}
+
 	function windowKeydown(event: KeyboardEvent): void {
+		// The keyboard shortcuts, signed in, from anywhere on the page but another dialog (lib/ui/shortcuts.ts lists them).
+		if (client && !event.defaultPrevented && shortcutsKey(event) && !modalOpen()) {
+			event.preventDefault();
+			shortcutsOpen = true;
+			return;
+		}
 		// Ctrl+F (⌘F on a Mac) searches local history, from anywhere on the page but another dialog; there, and
 		// before signing in, the browser finds in the page as usual. (Ctrl+K is kept for a quick switcher.)
 		if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'f' && canSearch && !modalOpen()) {
@@ -3335,7 +3375,7 @@
 {#snippet editMessage(view: MessageView)}
 	{@const MessageEditor = messageEditor.component}
 	{@const event = rowEvent(view)}
-	{#if MessageEditor && event}<MessageEditor text={textOf(event)} embeds={embedsOf(event)} uploads={snapshot.uploads} mentions={event.body?.mentions} {people} rooms={roomSuggestions} onsave={(text, edits, mentions) => saveEdit(event, text, edits, mentions)} oncancel={() => (editingId = undefined)} onmention={() => { if (!paneRoom?.joined) listMembers(MEMBERS_FRESH_MS); }} />{/if}
+	{#if MessageEditor && event}<MessageEditor text={textOf(event)} embeds={embedsOf(event)} uploads={snapshot.uploads} mentions={event.body?.mentions} {people} rooms={roomSuggestions} onsave={(text, edits, mentions) => saveEdit(event, text, edits, mentions)} oncancel={endEdit} onmention={() => { if (!paneRoom?.joined) listMembers(MEMBERS_FRESH_MS); }} />{/if}
 {/snippet}
 <!-- The pane's history waiting as the server asked, where its messages will appear: it loads by itself at zero. -->
 {#snippet historyNotice()}{#if historyWait}<RateLimitNotice scope="history" until={historyWait.until} />{/if}{/snippet}
@@ -3402,7 +3442,7 @@
 				memberListToggle={!memberListWide}
 				{unreadElsewhere}
 				{mentionsElsewhere}
-				onsearch={canSearch ? () => (searchOpen = true) : undefined} {searchHint}
+				onsearch={canSearch ? () => (searchOpen = true) : undefined} {searchHint} onshortcuts={searchHint ? () => (shortcutsOpen = true) : undefined}
 				onback={openRooms} onroom={backToRoom} onedit={() => (roomEditorOpen = true)} onleave={leavePane} oncopylink={copyPaneLink} onjoin={joinPane} onmemberlist={toggleMemberList}
 				onmute={canMuteRoom ? mutePane : undefined}
 			/>
@@ -3547,7 +3587,7 @@
 					{people}
 					rooms={roomSuggestions}
 					reply={drafts.reply ? replyPreview(drafts.reply) : undefined}
-					oninput={composerInput} onsend={sendMessage} files={drafts.files} onfiles={stageFiles} onunstage={(id) => drafts.unstage(id)} onrename={(id, title) => drafts.rename(id, title)} oncancelreply={cancelReply}
+					oninput={composerInput} onsend={sendMessage} files={drafts.files} onfiles={stageFiles} onunstage={(id) => drafts.unstage(id)} onrename={(id, title) => drafts.rename(id, title)} oncancelreply={cancelReply} onedit={editLast}
 					onmention={() => { if (!paneRoom?.joined) listMembers(MEMBERS_FRESH_MS); }}
 					waitUntil={composerWait}
 				/>
@@ -3576,6 +3616,10 @@
 	{#if searchOpen && client && searchDialog.component}
 		{@const SearchDialog = searchDialog.component}
 		<SearchDialog {client} keeper={sessionKeeper()} rooms={session.rooms} {roomSuggestions} initial={paneRoom ? `room:#${paneRoom.id} ` : ''} note={searchNote()} onopen={openFound} kept={historySettings.title} onhistory={showHistoryPreferences} onclose={() => (searchOpen = false)} />
+	{/if}
+	{#if shortcutsOpen && shortcutsDialog.component}
+		{@const ShortcutsDialog = shortcutsDialog.component}
+		<ShortcutsDialog onclose={() => (shortcutsOpen = false)} />
 	{/if}
 	{#if newPrivateOpen && newPrivateDialog.component}
 		{@const NewPrivateDialog = newPrivateDialog.component}

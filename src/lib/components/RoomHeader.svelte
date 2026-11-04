@@ -64,10 +64,12 @@
 		/** Opens Search local history; `searchHint` names its shortcut. */
 		onsearch?: () => void;
 		searchHint?: string;
+		/** Opens the keyboard shortcuts' overlay. */
+		onshortcuts?: () => void;
 	}
 	let {
 		room, pane, showTopic = true, threadTitle, typing, replyCount, moreReplies = false, waiting = false, updating = false, canEdit, editDisabled, canLeave, canJoin = false,
-		memberListOpen, memberListToggle = true, unreadElsewhere = 0, mentionsElsewhere = 0, onback, onroom, onedit, onleave, oncopylink, onjoin, onmute, onmemberlist, ondescription, onsearch, searchHint
+		memberListOpen, memberListToggle = true, unreadElsewhere = 0, mentionsElsewhere = 0, onback, onroom, onedit, onleave, oncopylink, onjoin, onmute, onmemberlist, ondescription, onsearch, searchHint, onshortcuts
 	}: Props = $props();
 
 	/** Mutes the pane for the chosen while, from when it's chosen. */
@@ -137,6 +139,7 @@
 	{ondescription}
 	{onsearch}
 	{searchHint}
+	{onshortcuts}
 	tagTestid="back-unread"
 	topicTestid="room-description"
 	joinTestid="join-room"

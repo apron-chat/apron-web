@@ -43,6 +43,8 @@ export interface DraftHost {
 	readonly disabled: boolean;
 	/** Enter where it sends (or saves): `enterAction`, with no picker taking it. */
 	submit(): void;
+	/** A key no picker took, before Enter's: the caller's own, such as ↑ in an empty composer. True when it took it. */
+	key?(event: KeyboardEvent): boolean;
 	/** The draft changed by typing or a pick, not set from outside. */
 	oninput?(): void;
 	/** The mention picker opened: a moment to refresh who can be named. */
@@ -223,7 +225,8 @@ export class DraftField {
 				}
 			}
 		}
-		if (event.key === 'Enter' && !event.isComposing) {
+		if (event.isComposing || this.host.key?.(event)) return;
+		if (event.key === 'Enter') {
 			event.preventDefault();
 			if (enterAction(event, this.onHandheld) === 'newline') document.execCommand('insertText', false, '\n');
 			else this.host.submit();
