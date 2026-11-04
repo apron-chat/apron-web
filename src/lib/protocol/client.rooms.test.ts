@@ -286,6 +286,36 @@ describe('threads read without joining', () => {
 		expect(room('20')?.loaded).toBe(true);
 	});
 
+	it('joins a room read without joining it keeping what was read, older pages too, and catches up only on what came since', async () => {
+		await authenticate(['rooms', 'history']);
+		await socket.reply('room_list', { joined: [{ room_id: 'general', log_id: '10', title: 'General', latest_log_id: '12', history_log_id: '10', members: [{ user_id: 'guest_1' }] }], users: [] });
+		await socket.reply('history', { more: false, latest_log_id: '12', history_log_id: '10' });
+		const listed = client.listRooms();
+		await socket.reply('room_list', { not_joined: [{ room_id: 'design', log_id: '30', title: 'Design', latest_log_id: '44', history_log_id: '30' }] });
+		await listed;
+		const message = (id: string) => ({ message_id: id, log_id: id, room_id: 'design', from: { user_id: 'bob' }, body: { text: id } });
+		expect(client.viewRoom('design')).toBe(true);
+		const load = client.loadRoom('design');
+		expect(bounds(socket.request('history').params)).toEqual({ room_id: 'design', before: '44' });
+		await socket.reply('history', { messages: [message('42'), message('44')], first_log_id: '42', last_log_id: '44', more: true, latest_log_id: '44', history_log_id: '30' });
+		await load;
+		// Scrolled back while reading: an older page.
+		const older = client.loadOlder('design');
+		expect(bounds(socket.request('history').params)).toEqual({ room_id: 'design', before: '41' });
+		await socket.reply('history', { messages: [message('35'), message('40')], first_log_id: '35', last_log_id: '41', more: true, latest_log_id: '44', history_log_id: '30' });
+		await older;
+		expect(room('design')?.timeline.order).toEqual(['35', '40', '42', '44']);
+		// Joined: what came since the last load (the join's membership) is caught up on, and nothing read goes.
+		quiet(client.joinRoom('design'));
+		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'design', log_id: '30', title: 'Design', latest_log_id: '46', history_log_id: '30', members: [{ user_id: 'bob' }, { user_id: 'guest_1' }] }], memberships: [{ log_id: '46', room_id: 'design', members: [{ user: { user_id: 'guest_1' }, joined: true }] }], users: [] } });
+		expect(room('design')?.joined).toBe(true);
+		expect(bounds(socket.request('history').params)).toEqual({ room_id: 'design', after: '45', before: '46' });
+		await socket.reply('history', { messages: [message('45')], memberships: [{ log_id: '46', room_id: 'design', members: [{ user: { user_id: 'guest_1' }, joined: true }] }], first_log_id: '45', last_log_id: '46', more: false, latest_log_id: '46', history_log_id: '30' });
+		await settle();
+		expect(room('design')).toMatchObject({ joined: true, loaded: true, olderAvailable: true });
+		expect(room('design')?.timeline.order).toEqual(['35', '40', '42', '44', '45']);
+	});
+
 	it('counts a thread joined with nothing new since its last load as loaded, without asking again', async () => {
 		await authenticate(['rooms', 'history']);
 		await socket.reply('room_list', { joined: [{ room_id: 'general', log_id: '10', title: 'General', latest_log_id: '12', history_log_id: '10', members: [{ user_id: 'guest_1' }] }], users: [] });

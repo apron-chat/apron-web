@@ -1254,7 +1254,8 @@ unfolding it lists afresh.
 Picking one opens it to read through its history (§4.3) without joining it, since joining shows in it for everyone:
 its row shows it open, its threads are listed under it to read too, and the header has **Join**, the primary
 button beside its ⋯ menu, which joins it (`room_join`), as posting there does first. Until then it doesn't
-deliver live (§3.4); Join makes it live and lists it with your rooms.
+deliver live (§3.4); Join makes it live and lists it with your rooms, keeping what was read (older pages
+scrolled back through too) and catching up only on what came since, rather than starting over from its newest page.
 
 With the `edit` capability, several messages move at a time: shift-click a
 message (or press `x` on it, or pick **Select** from its More menu) to enter select mode, shift-click another to fill the range, and the
