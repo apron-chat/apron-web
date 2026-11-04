@@ -3,6 +3,7 @@
 	import BellOff from '@lucide/svelte/icons/bell-off';
 	import ChevronLeft from '@lucide/svelte/icons/chevron-left';
 	import Ellipsis from '@lucide/svelte/icons/ellipsis';
+	import Keyboard from '@lucide/svelte/icons/keyboard';
 	import Link from '@lucide/svelte/icons/link';
 	import Lock from '@lucide/svelte/icons/lock';
 	import LogOut from '@lucide/svelte/icons/log-out';
@@ -190,7 +191,7 @@
 	{#if actions.length > 0}
 		<MenuButton label={thread ? 'Thread actions' : 'Room actions'} buttonTestid={actionsTestid} choices={actions} disabled={busy} onselect={act} bind:open={actionsOpen}>
 			{#snippet icon()}<Ellipsis size={18} strokeWidth={1.8} aria-hidden="true" />{/snippet}
-			{#snippet lead(value)}{#if value === 'search'}<Search size={15} aria-hidden="true" />{:else if value === 'edit'}<Pencil size={15} aria-hidden="true" />{:else if value === 'mute'}<BellOff size={15} aria-hidden="true" />{:else if value === 'unmute'}<Bell size={15} aria-hidden="true" />{:else if value === 'link'}<Link size={15} aria-hidden="true" />{:else}<LogOut size={15} aria-hidden="true" />{/if}{/snippet}
+			{#snippet lead(value)}{#if value === 'search'}<Search size={15} aria-hidden="true" />{:else if value === 'edit'}<Pencil size={15} aria-hidden="true" />{:else if value === 'mute'}<BellOff size={15} aria-hidden="true" />{:else if value === 'unmute'}<Bell size={15} aria-hidden="true" />{:else if value === 'link'}<Link size={15} aria-hidden="true" />{:else if value === 'shortcuts'}<Keyboard size={15} aria-hidden="true" />{:else}<LogOut size={15} aria-hidden="true" />{/if}{/snippet}
 		</MenuButton>
 	{/if}
 	{#if updating}<span class="ap-roomhead-updating" data-testid="room-updating" aria-hidden="true"></span>{/if}
