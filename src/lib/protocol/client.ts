@@ -382,6 +382,10 @@ export class ChatClient {
 	private readonly webSocketFactory: WebSocketFactory;
 	/** Where the first connection may come from, opened before the client was made (`ChatClientOptions.earlyConnection`); asked once. */
 	private earlyConnection?: ChatClientOptions['earlyConnection'];
+	/** What each connection waits on before it opens (`ChatClientOptions.beforeConnect`). */
+	private readonly beforeConnect?: ChatClientOptions['beforeConnect'];
+	/** The wait under way for `beforeConnect`, while a connection waits on it. */
+	private connectGate?: Promise<void>;
 	private reconnectTimer?: ReturnType<typeof setTimeout>;
 	private pingTimer?: ReturnType<typeof setInterval>;
 	/** Resets the reconnect backoff once the current connection has stayed up. */
@@ -546,7 +550,7 @@ export class ChatClient {
 		displayName = '',
 		webSocketFactory: WebSocketFactory = (url) => new WebSocket(url),
 		private readonly now: () => number = () => Date.now(),
-		{ historyStart = 'newest', historyConcurrency, earlyConnection }: Pick<ChatClientOptions, 'historyStart' | 'historyConcurrency' | 'earlyConnection'> = {}
+		{ historyStart = 'newest', historyConcurrency, earlyConnection, beforeConnect }: Pick<ChatClientOptions, 'historyStart' | 'historyConcurrency' | 'earlyConnection' | 'beforeConnect'> = {}
 	) {
 		// A server is known by its normalized address (§1): its kept session too.
 		this.serverUrl = addressOf(serverUrl);
@@ -559,6 +563,7 @@ export class ChatClient {
 		}, historyConcurrency);
 		this.webSocketFactory = webSocketFactory;
 		this.earlyConnection = earlyConnection;
+		this.beforeConnect = beforeConnect;
 		this.displayName = displayName.trim();
 		this.loadStoredSession();
 	}
@@ -670,6 +675,7 @@ export class ChatClient {
 
 	stop(): void {
 		this.running = false;
+		this.connectGate = undefined;
 		if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
 		this.reconnectTimer = undefined;
 		this.stopWaitingForPresence();
@@ -2951,10 +2957,33 @@ export class ChatClient {
 		return room.kind === 'joined' || room.latestLogId === undefined || compareLogIds(room.latestLogId, room.loadCheckpoint) <= 0;
 	}
 
-	/** Opens the next connection, or goes on with `handover`, one opened already (a probe's standby). */
-	private connectNow(handover?: { socket: WebSocket; open: boolean; frames: unknown[] }): void {
-		if (!this.running || this.socket) return;
+	/**
+	 * Opens the next connection, or goes on with `handover`, one opened already (a probe's standby). Each first waits
+	 * on `beforeConnect`, unless `gated` (it has).
+	 */
+	private connectNow(handover?: { socket: WebSocket; open: boolean; frames: unknown[] }, gated = false): void {
+		if (!this.running || this.socket || this.connectGate) {
+			if (handover) closeUnused(handover.socket);
+			return;
+		}
 		this.stopWaitingForPresence();
+		const gate = gated ? undefined : this.beforeConnect?.();
+		if (gate) {
+			// A standby waits for nothing: it closes, and the connection after the wait opens its own.
+			if (handover) closeUnused(handover.socket);
+			// Connecting as far as anyone can tell: it opens once the gate lets it (or the page reloads instead), and
+			// once the page is shown and online again if it went hidden or offline meanwhile.
+			const waiting: Promise<void> = gate.catch(() => undefined).then(() => {
+				if (this.connectGate !== waiting) return;
+				this.connectGate = undefined;
+				if (this.waitForPresence()) return;
+				this.connectNow(undefined, true);
+			});
+			this.connectGate = waiting;
+			this.status = this.reconnectAttempt > 0 ? 'reconnecting' : 'connecting';
+			this.emit();
+			return;
+		}
 		if (this.fresh && this.freshHook && !this.rooms.size && !this.retainedRooms.size) {
 			// A new session: what was kept for this server goes in before it signs in (`beforeFreshSession`),
 			// while the connection opens.

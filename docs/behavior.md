@@ -77,9 +77,17 @@ seconds); after such a `denied` error the client stops reconnecting, shows
 **Signed out** with the server's message, and waits for **Sign in**.
 When a newer version of the client is deployed (SvelteKit's version poll, or a
 lazily loaded file the deploy removed), a notice at the top offers **Reload**
-or **Later**; it never reloads by itself. Drafts live only in memory, so while
+or **Later**; the notice never reloads by itself. Drafts live only in memory, so while
 any room or thread has unsent text or files it adds that reloading clears your
 unsent message.
+A copy of the app that hasn't confirmed in 3 days that it is the latest (a tab or
+installed app resumed after days, or the page kept for offline) checks first,
+before it connects or reconnects (`version.json`, waiting up to 5 seconds), and
+reloads into a newer version rather than connecting with the old one; with an
+unsent draft, or if the reload brought back the same old page, it connects and
+shows the notice instead. A page loaded from the network is the latest already,
+and the time of the last check is shared by the device's tabs, so this rarely
+costs a request; a check that can't be made lets the connection go ahead.
 
 A reload, or opening the app again, picks up where you were. With a session
 saved on this device (a passkey or email account; a guest's isn't kept), the

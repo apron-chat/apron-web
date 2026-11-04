@@ -607,6 +607,27 @@ describe('a connection that doesn’t come up', () => {
 		expect(opened()).toBe(before + 4);
 	});
 
+	it('connects only once the page is shown again, if it was hidden while `beforeConnect` held the connection', async () => {
+		const { show } = page();
+		let release!: () => void;
+		let asked = 0;
+		// Made here, not with `startClient`, which expects the first socket to be open already.
+		FakeSocket.instances = [];
+		vi.stubGlobal('WebSocket', FakeSocket);
+		const client = new ChatClient('ws://fake.test/', undefined, undefined, undefined, {
+			beforeConnect: () => (asked++ ? undefined : new Promise<void>((resolve) => (release = resolve)))
+		});
+		client.start();
+		onTestFinished(() => client.stop());
+		expect(FakeSocket.instances).toHaveLength(0);
+		show('hidden');
+		release();
+		await settle();
+		expect(FakeSocket.instances).toHaveLength(0);
+		show('visible');
+		expect(FakeSocket.instances).toHaveLength(1);
+	});
+
 	describe('back after a long absence', () => {
 		it('opens a standby only when the probed socket hasn’t answered in 2 s, after a minute away or the network back, and closes it unused once it does', async () => {
 			const { away, online } = page();
@@ -713,6 +734,30 @@ describe('a connection that doesn’t come up', () => {
 			standby.receive({ method: 'pong' });
 			expect(FakeSocket.instances).toHaveLength(2);
 			expect(standby.readyState).toBe(FakeSocket.OPEN);
+		});
+
+		it('closes a standby about to take over when the connection waits on `beforeConnect` (a check for a newer deploy), and connects once it lets it', async () => {
+			const { away } = page();
+			let gate: Promise<void> | undefined;
+			const { socket } = startClient({ beforeConnect: () => gate });
+			await socket.greet([], { ping: 30 });
+			away(5 * 60_000);
+			vi.advanceTimersByTime(2_000);
+			const standby = latest();
+			standby.open();
+			let release!: () => void;
+			gate = new Promise<void>((resolve) => (release = resolve));
+			// Its greeting comes first: the probed socket is gone, and the standby closes unused, having sent nothing.
+			standby.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: [], ping: 30 } });
+			expect(socket.readyState).toBe(FakeSocket.CLOSED);
+			expect(standby.readyState).toBe(FakeSocket.CLOSED);
+			expect(standby.sent).toEqual([]);
+			expect(FakeSocket.instances).toHaveLength(2);
+			// Let through: the next connection opens, its own.
+			release();
+			await settle();
+			expect(FakeSocket.instances).toHaveLength(3);
+			expect(latest().readyState).toBe(FakeSocket.CONNECTING);
 		});
 
 		it('drops a standby waiting to open, or opening, when the probed connection ends another way, or the page is hidden again', async () => {

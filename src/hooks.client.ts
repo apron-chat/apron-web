@@ -7,18 +7,23 @@ import { readDestination } from '$lib/ui/address';
 import { PUSH_ROOM_PARAM } from '$lib/ui/notifications';
 import { startServer } from '$lib/ui/start-server';
 import { loadRecentServers, loadServerUrl } from '$lib/ui/storage';
+import { beforeConnect } from '$lib/ui/version-check';
 
 /**
  * As the app starts, before it loads the page: what is kept on this device for the next session begins to be read,
  * and the connection to the server the page will sign in to begins to open (`$lib/protocol/early-connection`), so
- * its handshake goes on while the page's code loads.
+ * its handshake goes on while the page's code loads. Once in a while it checks for a newer deploy first.
  */
 export function init(): void {
 	const path = window.location.pathname;
 	// Only for the page that signs in (`/`): `/__preview` and `/archive` keep nothing.
 	if (path === '/') {
 		startKeeping();
-		connectEarly();
+		// A copy not checked for a while first checks it's the latest deploy (`$lib/ui/version-check`): if not, it
+		// reloads into that one before connecting. The page's client waits on the same check.
+		const checking = beforeConnect();
+		if (checking) void checking.then(connectEarly);
+		else connectEarly();
 	} else if (__APRON_PREVIEW__ && path === '/__preview') {
 		// The preview's page connects to its in-memory server, as `/` does to a real one. The server's code comes with
 		// the page: the socket opens now, and the server hears of it once that code has loaded, as if it had all along.
