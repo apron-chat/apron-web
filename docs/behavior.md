@@ -1107,8 +1107,10 @@ places. Threads keep their own order, most recently active first.
 
 Alt+↑ or Alt+↓ anywhere else (⌥ on a Mac; from the composer too, but not another field or a dialog) opens the room or
 thread above or below the open one in the list, as drawn: the joined rooms and threads, threads under their room, a
-folded section's hidden rooms passed over; the threads listed under a room to read without joining are among them
-(opening one joins nothing), but the rooms listed to join (Other Rooms) are left out, since picking one joins it. It
+folded section's hidden rooms passed over. The rows listed to join are among them, and open to read without joining:
+a thread listed under a room (Other Threads), as clicking it does, and a room under Other Rooms, which (unlike a click
+on its row, which joins it) opens read through its history as a guest's does, so a key that steps never joins
+every room it passes. **Join** in its header, or posting there, joins it. It
 stops at either end, and the keyboard stays where it was. With Shift too it opens the nearest row that way with
 news (unread, and not muted), going round the end. With nowhere to go (an end of the list, no news elsewhere) the
 keys do what they would anyway, such as a Mac's ⌥↑ moving the caret in the composer. Not over the connect screen.

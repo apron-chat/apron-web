@@ -1,11 +1,11 @@
 /**
  * Alt+↑/↓ through the rooms list (`+page.svelte`'s windowKeydown): its rows as drawn, so the order is the one on
- * screen, threads under their room and folded sections left out. The rows stepped through are the joined rooms and
- * threads (`data-room`, `data-thread`), the threads listed to read without joining (`data-other-thread`: opening one
- * joins nothing), and the open one whatever it is; a room listed to join (`data-join`) is passed over, since picking
- * it would join it.
+ * screen, threads under their room and folded sections left out. Every room and thread row is stepped through: the
+ * joined ones (`data-room`, `data-thread`), the threads listed to read without joining (`data-other-thread`), and the
+ * rooms listed to join (`data-join`), which the caller opens to read rather than joining, as picking the row would.
+ * The rest of the list (a section's "more…", its +) isn't a room.
  */
-const ROWS = 'button.ap-room:is([data-room], [data-thread], [data-other-thread], [aria-current="page"])';
+const ROWS = 'button.ap-room:is([data-room], [data-thread], [data-other-thread], [data-join], [aria-current="page"])';
 
 /**
  * The row `step` places after the open one (-1 before), or with `unread` the nearest that way with news (`ap-room-unread`:

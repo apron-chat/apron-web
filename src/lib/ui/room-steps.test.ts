@@ -32,11 +32,17 @@ describe('nextRoomRow', () => {
 		expect(id(nextRoomRow(list('general', 'other:t-roundup*', 'other:t-security'), 1))).toBe('t-security');
 	});
 
-	it('passes over rooms listed to join, but steps from the open one even when it is one of them', () => {
-		expect(id(nextRoomRow(list('general*', 'join:lobby', 'random'), 1))).toBe('random');
+	it('steps onto rooms listed to join too, for the caller to open to read, and on from one open', () => {
+		expect(id(nextRoomRow(list('general*', 'join:lobby', 'random'), 1))).toBe('lobby');
 		const reading = list('general', 'join:lobby*', 'random');
 		expect(id(nextRoomRow(reading, 1))).toBe('random');
 		expect(id(nextRoomRow(reading, -1))).toBe('general');
+	});
+
+	it('steps over what in the list isn\'t a room: a section\'s "more…" or a join button', () => {
+		const rooms = list('general*', 'random');
+		rooms.querySelector('button')!.insertAdjacentHTML('afterend', '<button class="ap-room ap-room-more">3 more…</button><button class="ap-iconbtn ap-room-join" data-join="lobby">Join</button>');
+		expect(id(nextRoomRow(rooms, 1))).toBe('random');
 	});
 
 	it('with no row open, starts at the first or the last', () => {

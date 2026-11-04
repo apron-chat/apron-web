@@ -237,3 +237,33 @@ test('? over the connect screen doesn\'t open the shortcuts, then or once it is 
 	await expect(page.getByTestId('connection-status')).toHaveText('Connected');
 	await expect(page.getByRole('dialog', { name: 'Keyboard shortcuts' })).toHaveCount(0);
 });
+
+test.describe('Alt+↑/↓ onto a room listed to join', () => {
+	test.use({ knobs: { seed: 'rich' } });
+
+	test('opens it to read without joining, with Join in its header; posting there joins it', async ({ preview, page }) => {
+		await preview.open();
+		const sidebar = page.getByRole('complementary', { name: 'Rooms' });
+		const listed = page.getByTestId('room-directory').locator('button.ap-room[data-join="design"]');
+		await expect(listed).toBeVisible();
+		const rows = sidebar.locator('button.ap-room:is([data-room], [data-thread], [data-other-thread], [data-join], [aria-current="page"])');
+		const order = await rows.evaluateAll((buttons: HTMLElement[]) => buttons.map((button) => button.dataset.room ?? button.dataset.thread ?? button.dataset.otherThread ?? button.dataset.join));
+		// From the row above it, Alt+↓.
+		const before = order[order.indexOf('design') - 1];
+		await sidebar.locator(`button.ap-room:is([data-room="${before}"], [data-thread="${before}"], [data-other-thread="${before}"], [data-join="${before}"])`).click();
+		await preview.composer().click();
+		await page.keyboard.press('Alt+ArrowDown');
+		await expect(page).toHaveURL(/[#&]room=design(&|$)/);
+		await expect(listed).toHaveAttribute('aria-current', 'page');
+		await expect(page.getByTestId('join-room')).toBeVisible();
+		expect((await preview.sent('room_join')).filter((params) => params.room_id === 'design')).toEqual([]);
+
+		// Posting joins it, so what follows arrives live.
+		await preview.composer().click();
+		await page.keyboard.type('Hello, design');
+		await page.keyboard.press('Enter');
+		await preview.waitForSent('room_join', (params) => params.room_id === 'design');
+		await expect(preview.message('Hello, design')).toBeVisible();
+		await expect(sidebar.locator('button.ap-room[data-room="design"]')).toHaveAttribute('aria-current', 'page');
+	});
+});
