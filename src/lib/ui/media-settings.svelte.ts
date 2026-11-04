@@ -13,22 +13,6 @@ import { loadMediaSettings, MEDIA_KEY, saveMediaSettings } from './storage';
  * Either way, nothing loads from the origins the viewer blocked (`blocked`), or from under them, whatever trusts them.
  * Inline images (`data:`) always show.
  */
-
-/**
- * The origin this app was loaded from (`http(s):` only), else undefined. Media from it tells no one anything the
- * page itself didn't, so it is trusted as the server's own origins are: a server's avatar can be the icon of the web
- * client that serves it, say.
- */
-export function appOrigin(): string | undefined {
-	const origin = globalThis.location?.origin;
-	return origin?.startsWith('https:') || origin?.startsWith('http:') ? origin : undefined;
-}
-
-/** The origins media loads from whatever the viewer chose, besides the server's own: this app's, and those the server names (`server`). */
-export function impliedOrigins(server: readonly string[]): readonly string[] {
-	const app = appOrigin();
-	return app && !server.includes(app) ? [app, ...server] : server;
-}
 export const MEDIA_POLICIES = [
 	{ value: 'trusted', label: 'Server and trusted sites' },
 	{ value: 'any', label: 'Any site' }
@@ -105,6 +89,22 @@ export function parseBlockedOrigins(text: string): string[] {
 		const named = labels.every(Boolean) && !host.includes('*') && (labels.length > 1 || host === 'localhost');
 		return named ? `https://${host}` : undefined;
 	});
+}
+
+/**
+ * The origin this app was loaded from (`http(s):` only), else undefined. Media from it tells no one anything the
+ * page itself didn't, so it is trusted as the server's own origins are: a server's avatar can be the icon of the web
+ * client that serves it, say.
+ */
+export function appOrigin(): string | undefined {
+	const origin = globalThis.location?.origin;
+	return origin?.startsWith('https:') || origin?.startsWith('http:') ? origin : undefined;
+}
+
+/** The origins media loads from whatever the viewer chose, besides the server's own: this app's, and those the server names (`server`). */
+export function impliedOrigins(server: readonly string[]): readonly string[] {
+	const app = appOrigin();
+	return app && !server.includes(app) ? [app, ...server] : server;
 }
 
 /** Where media loads from, shared by the page and Preferences. */
