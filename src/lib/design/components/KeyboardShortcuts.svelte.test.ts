@@ -19,14 +19,14 @@ describe('KeyboardShortcuts', () => {
 		expect(document.getElementById(dialog.getAttribute('aria-labelledby')!)!.textContent).toBe('Keyboard shortcuts');
 		expect([...dialog.querySelectorAll('h3')].map((heading) => heading.textContent)).toEqual(['General', 'Composer']);
 		const rows = [...dialog.querySelectorAll('.ap-keys-row')];
-		expect(rows.map((row) => row.querySelector('dt')!.textContent)).toEqual(['Search local history', 'Show keyboard shortcuts', 'Edit your last messageIn an empty composer']);
+		expect(rows.map((row) => row.querySelector('dt')!.textContent)).toEqual(['Search local history', 'Show keyboard shortcuts', 'Edit your last message, In an empty composer']);
 		// A combination is a <kbd> of <kbd>s, hidden from a screen reader, which hears it in words; alternatives are joined by "or".
 		const show = rows[1].querySelector('dd')!;
 		expect([...show.querySelectorAll('.ap-keys-combo')].map((combo) => [...combo.querySelectorAll('kbd')].map((key) => key.textContent))).toEqual([['?'], ['⌘', '/']]);
 		expect(show.querySelector('.ap-keys-combo')!.getAttribute('aria-hidden')).toBe('true');
 		expect([...show.querySelectorAll('.ap-sr')].map((words) => words.textContent)).toEqual(['Question mark', 'Command Slash']);
 		expect(show.querySelector('.ap-keys-or')!.textContent).toBe('or');
-		expect(rows[2].querySelector('.ap-sr')!.textContent).toBe('Up arrow');
+		expect(rows[2].querySelector('dd .ap-sr')!.textContent).toBe('Up arrow');
 	});
 
 	it('closes with its close button, saying so', () => {

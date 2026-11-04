@@ -389,17 +389,19 @@ to pick, it picks either way. Pressing Send leaves the focus in the
 field, so a phone's keyboard stays up between messages. However long the
 room or thread's name, the field's placeholder takes one line, cut short.
 With a keyboard, ↑ in the empty field (nothing typed or attached) edits your newest message in the room or
-thread that you may edit, as its **Edit** would, and once the edit is saved or cancelled
-the keyboard is back in the composer; with text in the field, ↑ moves the caret as usual. Escape while
+thread that you may edit, as its **Edit** would, and once the edit is saved or cancelled (or its message goes)
+the keyboard is back in the composer; with an edit already open, ↑ goes back to it, its words kept; with text in
+the field, ↑ moves the caret as usual. An edit opened from the message itself (its **Edit**, or `e`) gives the
+keyboard back to the message's row once it ends. Escape while
 replying cancels the reply and keeps the draft (with an autocomplete open, Escape
 puts that away first).
 
 **Keyboard shortcuts**: `?` (outside a field, where it is a character), or
-Ctrl+/ (⌘/ on a Mac) anywhere, lists the app's keyboard shortcuts in a centered
+Ctrl+/ (⌘/ on a Mac; with Shift too, where `/` is a shifted key) anywhere, lists the app's keyboard shortcuts in a centered
 dialog, grouped (General, Composer, Messages, Rooms, Viewers), each with where
 it works and its keys as this platform writes them (⌘ ⌥ ⇧ on a Mac, Ctrl, Alt,
 Shift elsewhere), and named in words for a screen reader. It opens while signed
-in and no other dialog is open; Escape, its close button or a click beside it
+in, off the connect screen, and with no other dialog open; Escape (which leaves a selection as it was), its close button or a click beside it
 closes it. The room header's ⋯ menu offers it too (**Keyboard shortcuts**, its
 hint `?`), except on a touch screen. `lib/ui/shortcuts.ts` is the list: a new
 shortcut goes there too.
@@ -1106,7 +1108,8 @@ Alt+↑ or Alt+↓ anywhere else (⌥ on a Mac; from the composer too, but not a
 thread above or below the open one in the list, as drawn: the joined rooms and threads, threads under their room, a
 folded section's hidden rooms passed over, and rooms or threads listed to join left out (picking one would join it). It
 stops at either end, and the keyboard stays where it was. With Shift too it opens the nearest row that way with
-news (unread, and not muted), going round the end; with none elsewhere it does nothing.
+news (unread, and not muted), going round the end. With nowhere to go (an end of the list, no news elsewhere) the
+keys do what they would anyway, such as a Mac's ⌥↑ moving the caret in the composer. Not over the connect screen.
 
 The sidebar's **Private** section, right below Rooms and above Other Rooms,
 lists every joined top-level private room (`private: true` and no

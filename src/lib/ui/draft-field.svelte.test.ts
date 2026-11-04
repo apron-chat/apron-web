@@ -8,6 +8,8 @@ function field(shown: { value: boolean }) {
 	let value = $state('');
 	let mentions = $state<string[]>([]);
 	const submit = vi.fn();
+	/** The caller's own keys (`DraftHost.key`): it takes none here. */
+	const key = vi.fn((_event: KeyboardEvent) => false);
 	let draft!: DraftField;
 	const stop = $effect.root(() => {
 		draft = new DraftField({
@@ -19,6 +21,7 @@ function field(shown: { value: boolean }) {
 			rooms: [],
 			disabled: false,
 			submit,
+			key: (event) => key(event),
 			get pickerShown() { return shown.value; }
 		}, 'test-suggestions');
 	});
@@ -50,10 +53,33 @@ function field(shown: { value: boolean }) {
 		draft.input(new InputEvent('input', { bubbles: true }));
 		flushSync();
 	};
-	return { draft, submit, type, enter, lines, value: () => value, mentions: () => mentions, done: () => { stop(); element.remove(); } };
+	return { draft, submit, key, type, enter, lines, value: () => value, mentions: () => mentions, done: () => { stop(); element.remove(); } };
 }
 
 describe('DraftField', () => {
+	it('asks the caller only about keys that type nothing, outside a composition and a picker, before Enter sends', () => {
+		const shown = $state({ value: true });
+		const f = field(shown);
+		const press = (init: KeyboardEventInit) => f.draft.keydown(new KeyboardEvent('keydown', { cancelable: true, ...init }));
+		press({ key: 'a' });
+		press({ key: 'ArrowUp', isComposing: true });
+		expect(f.key).not.toHaveBeenCalled();
+		press({ key: 'ArrowUp' });
+		expect(f.key).toHaveBeenCalledTimes(1);
+		// Taken by the caller, Enter doesn't send.
+		f.key.mockReturnValueOnce(true);
+		f.enter();
+		expect(f.submit).not.toHaveBeenCalled();
+		f.enter();
+		expect(f.submit).toHaveBeenCalledOnce();
+		// A picker open takes its keys first.
+		f.key.mockClear();
+		f.type('@al');
+		press({ key: 'Escape' });
+		expect(f.key).not.toHaveBeenCalled();
+		f.done();
+	});
+
 	it('takes no keys for a picker that isn’t drawn yet: Enter sends, and the field names no picker', () => {
 		const shown = $state({ value: false });
 		const f = field(shown);

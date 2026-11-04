@@ -52,9 +52,9 @@ export function shortcutGroups(mac: boolean): ShortcutGroup[] {
 				{ label: 'Previous or next unread room', keys: [[alt, shift, '↑'], [alt, shift, '↓']] },
 				// Sidebar.svelte's reorderKey.
 				{ label: 'Move a room up or down', where: 'On a room in the list', keys: [[alt, '↑'], [alt, '↓']] },
-				// SidebarLayout's handleKey, and PanelHandle's click.
-				{ label: 'Resize the room list', where: 'On its border', keys: [['←'], ['→']] },
-				{ label: 'Collapse or expand the room list', where: 'On its border', keys: [['Enter']] }
+				// SidebarLayout's handleKey, and PanelHandle's click: the rooms list's border and the member list's.
+				{ label: 'Resize the room or member list', where: 'On its border', keys: [['←'], ['→']] },
+				{ label: 'Collapse or expand the room or member list', where: 'On its border', keys: [['Enter'], ['Space']] }
 			]
 		},
 		{

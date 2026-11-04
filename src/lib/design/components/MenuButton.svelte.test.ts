@@ -36,6 +36,16 @@ describe('MenuButton', () => {
 		expect(document.activeElement).toBe(trigger);
 	});
 
+	it('leaves the arrows with a modifier (Alt+↓ steps through rooms) to the page, shut', () => {
+		const { trigger } = render();
+		trigger.focus();
+		const event = new KeyboardEvent('keydown', { key: 'ArrowDown', altKey: true, bubbles: true, cancelable: true });
+		trigger.dispatchEvent(event);
+		flushSync();
+		expect(event.defaultPrevented).toBe(false);
+		expect(items()).toEqual([]);
+	});
+
 	it('opens from the keyboard with the arrows, moves through the choices, and closes with Escape, or Tab, its items out of the tab order', async () => {
 		const { trigger } = render();
 		trigger.focus();

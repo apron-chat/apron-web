@@ -100,8 +100,8 @@
 	function keydown(event: KeyboardEvent): void {
 
 		if (!open) {
-			// On the closed button, the arrows open the menu at its first or last item.
-			if (!busy && event.target === trigger && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+			// On the closed button, the arrows open the menu at its first or last item; with a modifier they're the page's.
+			if (!busy && event.target === trigger && (event.key === 'ArrowDown' || event.key === 'ArrowUp') && !event.altKey && !event.ctrlKey && !event.metaKey) {
 				event.preventDefault();
 				void show(event.key === 'ArrowDown' ? 0 : -1);
 			}

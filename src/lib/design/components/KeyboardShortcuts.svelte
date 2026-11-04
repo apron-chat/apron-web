@@ -38,7 +38,7 @@
 				<dl class="ap-keys-list">
 					{#each group.shortcuts as shortcut (shortcut.label)}
 						<div class="ap-keys-row">
-							<dt class="ap-keys-label">{shortcut.label}{#if shortcut.where}<span class="ap-keys-where">{shortcut.where}</span>{/if}</dt>
+							<dt class="ap-keys-label">{shortcut.label}{#if shortcut.where}<span class="ap-sr">{", "}</span><span class="ap-keys-where">{shortcut.where}</span>{/if}</dt>
 							<dd class="ap-keys-keys">
 								{#each shortcut.keys as combo, at (at)}
 									{#if at > 0}<span class="ap-keys-or">or</span>{/if}

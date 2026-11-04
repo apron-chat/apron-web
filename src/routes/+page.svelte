@@ -319,8 +319,8 @@
 	let passkeyUnavailable = $state<string | undefined>();
 	let highlightedId = $state<string | undefined>();
 	let editingId = $state<string | undefined>();
-	/** ↑ in the empty composer opened the edit: the keyboard goes back there when it ends. */
-	let editFromComposer = false;
+	/** Where the edit was opened: the keyboard goes back there when it ends (↑ in the composer, or the message's row). */
+	let editFrom: 'composer' | 'row' | undefined;
 	/** The Edit form for the open room or thread (its title and description). */
 	let roomEditorOpen = $state(false);
 	/** Search local history is open (`SearchDialog`). */
@@ -1094,7 +1094,7 @@
 
 	$effect(() => {
 		if (editingId && !timeline.some((item) => item.kind === 'message' && item.event.message_id === editingId && !item.event.deleted)) {
-			editingId = undefined;
+			untrack(endEdit);
 		}
 	});
 
@@ -2699,7 +2699,7 @@
 		}),
 		edit: onRow((event) => {
 			editingId = event.message_id;
-			editFromComposer = false;
+			editFrom = 'row';
 		}),
 		delete: onRow(deleteMessage),
 		startThread: onRow(startThread),
@@ -3048,20 +3048,39 @@
 		};
 	}
 
-	/** ↑ in the empty composer: edits your newest message in the pane that you can, as its Edit would. False when there's none. */
+	/**
+	 * ↑ in the empty composer: edits your newest message in the pane that you can, as its Edit would; with an edit
+	 * already open, the keyboard goes back to it, its words kept. False when there's nothing to edit.
+	 */
 	function editLast(): boolean {
+		if (editingId !== undefined) {
+			const field = document.querySelector<HTMLElement>('[data-testid="message-editor"] [role="textbox"]');
+			field?.focus();
+			return field !== null;
+		}
 		const event = messages.findLast((candidate) => capsFor(candidate).edit);
 		if (!event) return false;
 		editingId = event.message_id;
-		editFromComposer = true;
+		editFrom = 'composer';
 		return true;
 	}
 
-	/** The edit ends, saved or not: back to the composer, when ↑ there opened it. */
+	/**
+	 * The edit ends, saved, cancelled or its message gone: the keyboard goes back to the composer when ↑ there opened
+	 * it, else to the message's row, once the editor's going has left it nowhere.
+	 */
 	function endEdit(): void {
+		const id = editingId;
+		const from = editFrom;
 		editingId = undefined;
-		if (editFromComposer) composer?.focus();
-		editFromComposer = false;
+		editFrom = undefined;
+		if (from === 'composer') composer?.focus();
+		else if (from === 'row' && id !== undefined) {
+			void tick().then(() => {
+				if (document.activeElement && document.activeElement !== document.body) return;
+				document.querySelector<HTMLElement>(`article[data-message-id="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
+			});
+		}
 	}
 
 	/** Saves an edit: the new text, and any embeds removed or renamed in the editor, together. */
@@ -3299,14 +3318,15 @@
 	/** `?` outside a field, or Ctrl+/ (⌘/ on a Mac) anywhere: the key that shows the keyboard shortcuts. */
 	function shortcutsKey(event: KeyboardEvent): boolean {
 		if (event.altKey || event.isComposing) return false;
-		if (event.ctrlKey || event.metaKey) return event.key === '/' && !event.shiftKey;
+		// With Shift too: on many layouts (German, Nordic, Spanish) `/` is Shift+7.
+		if (event.ctrlKey || event.metaKey) return event.key === '/';
 		return event.key === '?' && !inField(event.target);
 	}
 
 	function windowKeydown(event: KeyboardEvent): void {
 		// The keyboard shortcuts, signed in, from anywhere on the page but another dialog (lib/ui/shortcuts.ts lists them).
 		// The key is read first, so typing calls nothing more here.
-		if ((event.key === '?' || event.key === '/') && client && !event.defaultPrevented && shortcutsKey(event) && !modalOpen()) {
+		if ((event.key === '?' || event.key === '/') && client && !connectOpen && !event.defaultPrevented && shortcutsKey(event) && !modalOpen()) {
 			event.preventDefault();
 			shortcutsOpen = true;
 			return;
@@ -3314,10 +3334,13 @@
 		// Alt+↑/↓ (⌥ on a Mac): the room or thread above or below the open one in the rooms list, and with Shift the
 		// nearest with news, from anywhere but a dialog or a field other than the composer. On a room's row Alt+↑/↓
 		// moves it instead: the Sidebar's reorderKey takes it first.
-		if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown') && !event.ctrlKey && !event.metaKey && !event.defaultPrevented && client && !modalOpen()) {
+		// With nowhere to go (an end of the list, no news), the key is the field's or the page's as usual.
+		if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown') && !event.ctrlKey && !event.metaKey && !event.defaultPrevented && client && !connectOpen && !modalOpen()) {
 			if (inField(event.target) && !(event.target as HTMLElement).closest('#message-input')) return;
+			const row = nextRoomRow(document.querySelector('.ap-shell-side') ?? document, event.key === 'ArrowDown' ? 1 : -1, event.shiftKey);
+			if (!row) return;
 			event.preventDefault();
-			nextRoomRow(document.querySelector('.ap-shell-side') ?? document, event.key === 'ArrowDown' ? 1 : -1, event.shiftKey)?.click();
+			row.click();
 			return;
 		}
 		// Ctrl+F (⌘F on a Mac) searches local history, from anywhere on the page but another dialog; there, and
@@ -3327,8 +3350,8 @@
 			searchOpen = true;
 			return;
 		}
-		// Escape in the NewThreadDialog closes it and keeps the selection it was asked for.
-		if (event.key !== 'Escape' || !selection.active || newThread) return;
+		// Escape in a dialog (the NewThreadDialog, the keyboard shortcuts) closes it and keeps the selection.
+		if (event.key !== 'Escape' || !selection.active || newThread || modalOpen()) return;
 		if (selection.menuOpen) {
 			selection.menuOpen = false;
 			return;
