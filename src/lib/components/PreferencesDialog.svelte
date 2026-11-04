@@ -349,7 +349,7 @@
 				{/snippet}
 			</SettingRow>
 			<SettingRow title="Trusted origins" for="ap-media-sites" hint="One per line, such as cdn.example.com. Each site sees what you load." stacked class="ap-pref-media-sites">
-				{#if mediaHosts.length}<p class="ap-form-hint" data-testid="media-server-origins">Includes origins trusted by the server: {mediaHosts.join(', ')}</p>{/if}
+				{#if mediaHosts.length}<p class="ap-form-hint" data-testid="media-server-origins">Includes origins trusted by this app and the server: {mediaHosts.join(', ')}</p>{/if}
 				{#snippet control()}
 					<textarea id="ap-media-sites" class="ap-field ap-pref-sites" rows="4" spellcheck="false" autocomplete="off" value={addedSites} onchange={(event) => mediaSettings.update(mediaSettings.policy, parseMediaOrigins(event.currentTarget.value))} data-testid="media-sites"></textarea>
 				{/snippet}

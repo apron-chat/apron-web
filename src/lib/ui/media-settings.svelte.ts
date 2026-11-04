@@ -6,9 +6,9 @@ import { loadMediaSettings, MEDIA_KEY, saveMediaSettings } from './storage';
  * Where images, avatars and other media load from. Loading one tells the site
  * that hosts it that someone is reading, and from where (PROTOCOL.md §5.5).
  * - `trusted`: the chat server's own origin, those it names for its media
- *   (`ext:media`, EXT.md §6), and the origins the viewer trusts (`origins`).
- *   Media in the timeline from anywhere else waits for a click; avatars and
- *   custom emoji from anywhere else don't show.
+ *   (`ext:media`, EXT.md §6), this app's own (`appOrigin`), and the origins
+ *   the viewer trusts (`origins`). Media in the timeline from anywhere else
+ *   waits for a click; avatars and custom emoji from anywhere else don't show.
  * - `any`: any site.
  * Either way, nothing loads from the origins the viewer blocked (`blocked`), or from under them, whatever trusts them.
  * Inline images (`data:`) always show.
@@ -89,6 +89,22 @@ export function parseBlockedOrigins(text: string): string[] {
 		const named = labels.every(Boolean) && !host.includes('*') && (labels.length > 1 || host === 'localhost');
 		return named ? `https://${host}` : undefined;
 	});
+}
+
+/**
+ * The origin this app was loaded from (`http(s):` only), else undefined. Media from it tells no one anything the
+ * page itself didn't, so it is trusted as the server's own origins are: a server's avatar can be the icon of the web
+ * client that serves it, say.
+ */
+export function appOrigin(): string | undefined {
+	const origin = globalThis.location?.origin;
+	return origin?.startsWith('https:') || origin?.startsWith('http:') ? origin : undefined;
+}
+
+/** The origins media loads from whatever the viewer chose, besides the server's own: this app's, and those the server names (`server`). */
+export function impliedOrigins(server: readonly string[]): readonly string[] {
+	const app = appOrigin();
+	return app && !server.includes(app) ? [app, ...server] : server;
 }
 
 /** Where media loads from, shared by the page and Preferences. */
@@ -175,11 +191,15 @@ export class MediaSettings {
 		this.policy = this.held;
 	}
 
-	/** The origins media loads from besides the server's own (`embedMedia`'s `trusted`), given those it names. */
+	/**
+	 * The origins media loads from besides the server's own (`embedMedia`'s `trusted`), given those it names: those,
+	 * and this app's (`impliedOrigins`), always; then the viewer's trusted ones, or any.
+	 */
 	trusted(server: readonly string[]): readonly string[] {
-		if (this.policy === 'any') return [...server, ANY_ORIGIN];
-		if (this.limited) return server;
-		return [...new Set([...server, ...this.origins])];
+		const implied = impliedOrigins(server);
+		if (this.policy === 'any') return [...implied, ANY_ORIGIN];
+		if (this.limited) return implied;
+		return [...new Set([...implied, ...this.origins])];
 	}
 
 	/** Whether media from anywhere else waits for a click, rather than loading. */

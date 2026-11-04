@@ -19,7 +19,7 @@ describe('media settings', () => {
 		expect(parseMediaOrigins('cdn.example\nhttps://img.example/a/b.png, http://plain.example  cdn.example:443 ftp://x.example nonsense:/ \n')).toEqual(['https://cdn.example', 'https://img.example']);
 	});
 
-	it('trusts the server’s origins and the trusted ones, or any; Always load adds one', () => {
+	it('trusts the server’s origins, this app’s, and the trusted ones, or any; Always load adds one', () => {
 		const settings = new MediaSettings();
 		const server = ['https://media.example'];
 		expect(settings.policy).toBe('trusted');
@@ -38,6 +38,13 @@ describe('media settings', () => {
 		settings.trust('https://more.example');
 		expect(settings.policy).toBe('any');
 		expect(settings.origins).toContain('https://more.example');
+		// The origin the app was loaded from, whatever was chosen, even on a page held to the server's; once, and only http(s).
+		vi.stubGlobal('location', { origin: 'https://web.example' });
+		expect(settings.trusted(server)).toEqual(['https://web.example', 'https://media.example', ANY_ORIGIN]);
+		settings.limit();
+		expect(settings.trusted(['https://web.example'])).toEqual(['https://web.example']);
+		vi.stubGlobal('location', { origin: 'null' });
+		expect(settings.trusted([])).toEqual([]);
 	});
 
 	it('blocks origins over the trusted ones; Block adds one, and they are saved', () => {

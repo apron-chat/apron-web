@@ -9,6 +9,7 @@
 	import { shownPerson } from '$lib/protocol/plain-text';
 	import { bioOf, cleanBio, keepsBio, MAX_BIO_CHARS, serverMedia, serverSettings, type ChatClient, type OperationHandle } from '$lib/protocol/client';
 	import { receiptSettings } from '$lib/ui/receipt-settings.svelte';
+	import { impliedOrigins } from '$lib/ui/media-settings.svelte';
 	import { addError, passkeyMessage, statusLabel, wayBackNudge, wayBackWords } from '$lib/ui/connection';
 	import { returnUrl } from '$lib/ui/sign-in-link';
 	import { directory } from '$lib/ui/directory.svelte';
@@ -644,7 +645,7 @@
 			readReceipts={serverSettings(session.server).read_receipts === 'private' && session.passkeySession ? { on: receiptSettings.on, onchange: (on: boolean) => receiptSettings.set(on) } : undefined}
 			{keptHistory}
 			{keptAccount}
-			mediaHosts={serverMedia(session.server).origins.map((origin) => new URL(origin).host)}
+			mediaHosts={impliedOrigins(serverMedia(session.server).origins).map((origin) => new URL(origin).host)}
 			serverHost={serverHost}
 			onclosed={() => preferencesTrigger?.focus()}
 		/>
