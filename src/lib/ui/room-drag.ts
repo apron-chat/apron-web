@@ -158,7 +158,8 @@ export function dragRooms(zone: HTMLElement, options: DragRoomsOptions): { destr
 		copy.setAttribute('aria-hidden', 'true');
 		copy.style.cssText = `position: fixed; top: 0; left: 0; margin: 0; z-index: 9999; width: ${block.getBoundingClientRect().width}px`;
 		const face = block.cloneNode(true) as HTMLElement;
-		for (const threads of face.querySelectorAll('.ap-threads')) threads.remove();
+		// Just its row: the threads go, and whatever holds them, which would keep the block's gap below the row.
+		for (const child of [...face.children]) if (!child.matches(ROW) && !child.querySelector(ROW)) child.remove();
 		for (const named of face.querySelectorAll('[id]')) named.removeAttribute('id');
 		face.classList.add('ap-roomblock-lifted');
 		copy.append(face);
@@ -278,8 +279,10 @@ export function dragRooms(zone: HTMLElement, options: DragRoomsOptions): { destr
 				slide.onfinish = slide.oncancel = () => finish(landed);
 			});
 		};
+		// A finger still held past the lift is a long press to the browser: no menu for it (an avatar's, on Android), which
+		// would take the touch away.
 		const unfollow = listen(by === 'touch'
-			? [['touchmove', follow, { passive: false }], ['touchend', release, { passive: false }], ['touchcancel', () => finish(undefined)]]
+			? [['touchmove', follow, { passive: false }], ['touchend', release, { passive: false }], ['touchcancel', () => finish(undefined)], ['contextmenu', (event: Event) => event.preventDefault()]]
 			: [['mousemove', follow], ['mouseup', release]]);
 
 		function finish(landed: string[] | undefined): void {

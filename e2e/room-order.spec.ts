@@ -106,9 +106,13 @@ test.describe('room order, with a mouse', () => {
 		await openGeneral(preview);
 		await row(page, 'general').focus();
 		const from = await middle(page, 'general');
+		const rowHeight = (await row(page, 'general').boundingBox())!.height;
 		await page.mouse.move(from.x, from.y);
 		await page.mouse.down();
 		await page.mouse.move(from.x, from.y + 12, { steps: 3 });
+		// Its copy is just its row, the threads it had left behind.
+		await expect(page.locator(`#${CARRIED_ID}`)).toBeAttached();
+		expect(Math.abs((await page.locator(`#${CARRIED_ID}`).boundingBox())!.height - rowHeight)).toBeLessThanOrEqual(0.5);
 		// Far off to the right of the sidebar and below the list: the room keeps to the list's column and its end.
 		await page.mouse.move(700, 600, { steps: 10 });
 		await expect.poll(async () => {
