@@ -5,7 +5,8 @@
  * Large images are scaled so their longest side fits and encoded as WebP, or
  * JPEG where the browser can't encode WebP, stepping the quality down until
  * the file fits. Animated images can't go through a canvas without losing
- * their animation: they're sent unchanged.
+ * their animation: they're sent as they are, but for their metadata, cut from
+ * around their frames.
  *
  * What fits is the client's own preference, below, unless the server states
  * its limits (`ext:media`, EXT.md §6): then a file goes out only as a type the
@@ -133,6 +134,71 @@ function gifFrames(bytes: Uint8Array): number {
 	return frames;
 }
 
+/** PNG's chunks that carry metadata: EXIF, and text, where XMP rides. */
+const PNG_METADATA = new Set(['eXIf', 'tEXt', 'iTXt', 'zTXt']);
+/** WebP's, and the VP8X flags that say it has them. */
+const WEBP_METADATA = new Set(['EXIF', 'XMP ']);
+const WEBP_METADATA_FLAGS = 0x0c;
+
+/**
+ * An image's bytes without its metadata chunks and with nothing re-encoded, so
+ * an animation keeps every frame: a PNG's EXIF and text chunks (each chunk has
+ * a checksum of its own, so the rest stand as they are); a WebP's EXIF and XMP
+ * chunks, its flags for them cleared and its size made to match. Whatever
+ * follows the image's end goes too. Undefined for bytes it can't follow chunk
+ * by chunk to that end.
+ */
+export function stripMetadata(bytes: Uint8Array, type: ImageFacts['type']): Uint8Array | undefined {
+	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+	const kept: Uint8Array[] = [];
+	if (type === 'image/png') {
+		kept.push(bytes.subarray(0, 8));
+		for (let offset = 8; offset + 12 <= bytes.length;) {
+			const end = offset + 12 + view.getUint32(offset);
+			if (end > bytes.length) return undefined;
+			const chunk = ascii(bytes, offset + 4, 4);
+			if (!PNG_METADATA.has(chunk)) kept.push(bytes.subarray(offset, end));
+			if (chunk === 'IEND') return concat(kept);
+			offset = end;
+		}
+		return undefined;
+	}
+	// Metadata comes only in the extended format, whose VP8X chunk, first, holds its flags.
+	if (type !== 'image/webp' || bytes.length < 30 || ascii(bytes, 12, 4) !== 'VP8X' || view.getUint32(16, true) !== 10) return undefined;
+	const end = 8 + view.getUint32(4, true);
+	if (end > bytes.length) return undefined;
+	kept.push(bytes.subarray(0, 12));
+	for (let offset = 12; offset < end;) {
+		if (offset + 8 > end) return undefined;
+		// Each chunk is padded to an even length.
+		const size = view.getUint32(offset + 4, true);
+		const next = offset + 8 + size + (size & 1);
+		if (next > end) return undefined;
+		if (!WEBP_METADATA.has(ascii(bytes, offset, 4))) kept.push(bytes.subarray(offset, next));
+		offset = next;
+	}
+	const stripped = concat(kept);
+	new DataView(stripped.buffer).setUint32(4, stripped.length - 8, true);
+	stripped[20] &= ~WEBP_METADATA_FLAGS;
+	return stripped;
+}
+
+function concat(parts: Uint8Array[]): Uint8Array {
+	const whole = new Uint8Array(parts.reduce((total, part) => total + part.length, 0));
+	let offset = 0;
+	for (const part of parts) {
+		whole.set(part, offset);
+		offset += part.length;
+	}
+	return whole;
+}
+
+/** `file` without its metadata (`stripMetadata`), by the same name and type; as it is where its bytes can't be followed. */
+async function withoutMetadata(file: File, type: ImageFacts['type']): Promise<File> {
+	const stripped = stripMetadata(new Uint8Array(await file.arrayBuffer()), type);
+	return stripped ? new File([stripped as BlobPart], file.name, { type: file.type, lastModified: file.lastModified }) : file;
+}
+
 function ascii(bytes: Uint8Array, start: number, length: number): string {
 	let text = '';
 	for (let index = start; index < start + length && index < bytes.length; index++) text += String.fromCharCode(bytes[index]);
@@ -224,8 +290,9 @@ async function encodeUnder(codec: ImageCodec, image: DecodedImage, crop: Crop, w
  * is at most 2048 px, or the server's `max_side` if smaller, and re-encoded
  * under 5 MB, or the server's `max_bytes`; small images without metadata, of
  * a type the server takes, go as they are. Photos are always re-encoded so
- * their EXIF is dropped. What can't be re-encoded (an animated image, audio,
- * video, any other file, an image the browser can't decode) goes as it is:
+ * their EXIF is dropped; an animated image loses its metadata chunks instead.
+ * What can't be re-encoded (an animated image, audio, video, any other file,
+ * an image the browser can't decode) goes as it is:
  * refused with `NotAcceptedError` only by the server's stated `limits`
  * (`ext.media.upload`), and otherwise left for the server to judge.
  */
@@ -233,14 +300,14 @@ export async function prepareUpload(
 	file: File,
 	{ maxBytes = UPLOAD_MAX_BYTES, maxSide = UPLOAD_MAX_SIDE, limits, codec = browserCodec() }: { maxBytes?: number; maxSide?: number; limits?: MediaTypes; codec?: ImageCodec | undefined } = {}
 ): Promise<Attachment> {
-	const asIs = (size?: { width: number; height: number }): Attachment => {
-		accept(file, limits);
-		return { file, ...size };
+	const asIs = (size?: { width: number; height: number }, sent = file): Attachment => {
+		accept(sent, limits);
+		return { file: sent, ...size };
 	};
 	const facts = sniffImage(await headOf(file));
 	// Other formats the browser decodes (HEIC, AVIF, BMP) are converted, since not every browser shows them.
 	if (!facts && !file.type.startsWith('image/')) return asIs();
-	if (facts?.animated) return asIs(codec ? await dimensions(codec, file) : undefined);
+	if (facts?.animated) return asIs(codec ? await dimensions(codec, file) : undefined, facts.metadata ? await withoutMetadata(file, facts.type) : file);
 	const fit = reencoding(limits, maxBytes, maxSide);
 	if (!codec || !fit.types.length) return asIs();
 	let image: DecodedImage;
