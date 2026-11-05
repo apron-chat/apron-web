@@ -1799,6 +1799,16 @@
 			return;
 		}
 		linked = undefined;
+		// On a phone the rooms list makes way for the pane, as picking a room does: its entry is the pane's now, so Back
+		// doesn't show it again. Opening another room or thread above took the entry already.
+		if (page.state.rooms) {
+			try {
+				replaceState(window.location.href, target.thread ? { room: target.room, thread: target.thread } : { room: target.room });
+			} catch {
+				// The router isn't started yet (in development): the list just stays its entry.
+			}
+		}
+		mobilePane = 'main';
 		if (target.message) void revealLinkedMessage(target.room, target.thread, target.message, () => abandonLink('message', target.searched));
 		if (target.user) void revealLinkedUser(target.thread ?? target.room, target.user);
 	}
