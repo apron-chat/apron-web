@@ -3391,7 +3391,7 @@ export class ChatClient {
 	 */
 	private handleAuth(result: JsonObject, signedIn?: SignInMethod, added = false): boolean {
 		const identity = result.you;
-		if (!isJsonObject(identity) || typeof identity.user_id !== 'string') {
+		if (!isIdentity(identity)) {
 			this.error = 'Server authentication response did not include an identity';
 			this.emit();
 			return false;

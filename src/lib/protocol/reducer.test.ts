@@ -135,6 +135,14 @@ describe('wire decoding', () => {
 		expect(decodeRoom({ room_id: 'x', member_count: 1.5 })!.delivery).toEqual({});
 	});
 
+	it('leaves out a field of the wrong type, as if absent', () => {
+		const message = decodeMessage({ ...snapshot(1), body: 'hi', deleted: 'yes', ext: ['a'] })!.record;
+		expect(Object.keys(message).sort()).toEqual(['from', 'log_id', 'message_id', 'room_id']);
+		expect(decodeMessage({ ...snapshot(1), body: ['hi'] })!.record).not.toHaveProperty('body');
+		const room = decodeRoom({ room_id: 'x', title: { text: 'General' }, description: 42, ext: 'x' })!.record;
+		expect(JSON.parse(JSON.stringify(room))).toEqual({ room_id: 'x' });
+	});
+
 	it('replaces room records in full and lets a record without log_id always replace', () => {
 		const store = new ProtocolStore();
 		store.putRoom(decodeRoom({ room_id: 'general', log_id: '10', title: 'General', ext: { a: 1 } })!.record);

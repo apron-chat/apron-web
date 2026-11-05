@@ -216,6 +216,21 @@ describe('a guest sign-in refused with retry_after', () => {
 	});
 });
 
+describe('a sign-in result', () => {
+	it('signs in as no one whose user_id is empty or has whitespace (§2.4)', async () => {
+		let snapshot!: ClientSnapshot;
+		vi.useFakeTimers();
+		startClient({ onSnapshot: (next) => (snapshot = next) });
+		const socket = latest();
+		socket.open();
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: [] } });
+		await socket.reply('auth', { you: { user_id: ' ' } });
+		expect(snapshot.authenticated).toBe(false);
+		expect(snapshot.you).toBeUndefined();
+		expect(snapshot.error).toBe('Server authentication response did not include an identity');
+	});
+});
+
 describe('a guest sign-in that fails for the moment', () => {
 	let snapshot: ClientSnapshot;
 
