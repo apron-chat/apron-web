@@ -1,6 +1,7 @@
 import { historySettings } from '$lib/history/settings.svelte';
+import { loadKeptSessionUser } from '$lib/protocol/client-internals';
 import type { Identity } from '$lib/protocol/types';
-import { clearView, loadView, saveView } from './session-cache';
+import { clearView, clearViewOf, loadView, saveView } from './session-cache';
 import type { HeldSession } from './session.svelte';
 
 /**
@@ -60,14 +61,19 @@ export class ViewKeeper {
 
 	/**
 	 * The view kept for the client's server, while its session signs in and catches up: only for the session
-	 * saved there. `show` takes it, unless the page has moved on meanwhile.
+	 * saved there, and only when it was kept for that session's account, where that is noted
+	 * (`loadKeptSessionUser`). `show` takes it, unless the page has moved on meanwhile.
 	 */
 	async restore(client: KeeperClient, show: (view: HeldSession) => void): Promise<void> {
 		if (!this.enabled) return;
 		if (!this.keeping()) return this.clear();
 		if (!client.keptSessionFor(client.url)) return;
 		const kept = await loadView(client.url, this.databases);
-		if (kept) show(kept.view);
+		if (!kept) return;
+		// Another account's (signed in there as someone else since): it goes, as a sign-in as them would drop it.
+		const account = loadKeptSessionUser(client.url);
+		if (account !== undefined && account !== kept.userId) return clearViewOf(client.url, kept.userId, this.databases);
+		show(kept.view);
 	}
 
 	/** Keeping nothing: whatever was kept, for any server, goes, as Don't keep deletes every account's history. */
