@@ -958,6 +958,22 @@
 		untrack(() => void landAtDivider(room.id));
 	});
 
+	// Back in view: whatever arrived while the page was hidden drew no frame, so the observer of the latest (which
+	// reports after one) hasn't said whether the latest is still on screen. Unless the pane follows the latest, the
+	// latest row is measured once now, before reading it marks anything read. Before the read below, in this order.
+	$effect.pre(() => {
+		if (!presence.visible) return;
+		untrack(() => {
+			const scroll = messageScroll;
+			const latest = scroll && !stickToBottom ? lastRow(scroll) : undefined;
+			if (!scroll || !latest) return;
+			const at = latest.getBoundingClientRect();
+			const box = scroll.getBoundingClientRect();
+			latestVisible = at.bottom > box.top && at.top < box.bottom;
+			latestVisibleIn = paneRoom?.id;
+		});
+	});
+
 	// Reading the latest message advances your read position, and your read cursor (capability `activity`),
 	// which the server syncs to your other devices.
 	// Only from a live, visible, loaded pane at its latest message, once it has opened at its divider (`readAction`).
