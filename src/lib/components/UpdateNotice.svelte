@@ -8,22 +8,24 @@
 
 	/**
 	 * Offers a reload once a newer deploy is out: SvelteKit polls for it
-	 * (`version.pollInterval`), and a lazily loaded chunk the deploy removed
-	 * means this tab is stale too. It never reloads by itself, and drafts live
-	 * only in memory, so it says when reloading would clear one.
+	 * (`version.pollInterval`), and a lazily loaded chunk that failed to load
+	 * has it check at once, for a deploy that removed the chunk means this tab
+	 * is stale too. A dropped connection fails the same way but finds no newer
+	 * deploy, so it isn't taken for one (the toast says the load failed). It
+	 * never reloads by itself, and drafts live only in memory, so it says when
+	 * reloading would clear one.
 	 */
-	let chunkMissing = $state(false);
 	let dismissed = $state(false);
 	let unsent = $derived(pageDrafts.current?.unsent ?? false);
 
 	onMount(() => {
-		const stale = () => (chunkMissing = true);
+		const stale = () => void updated.check();
 		window.addEventListener('vite:preloadError', stale);
 		return () => window.removeEventListener('vite:preloadError', stale);
 	});
 </script>
 
-{#if (updated.current || chunkMissing) && !dismissed}
+{#if updated.current && !dismissed}
 	<ActionBanner float title="Apron has been updated" detail={unsent ? 'Reloading clears your unsent message.' : undefined}>
 		{#snippet icon()}<RefreshCw size={16} aria-hidden="true" />{/snippet}
 		{#snippet action()}
