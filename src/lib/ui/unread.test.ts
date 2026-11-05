@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { MessageRecord } from '$lib/protocol/types';
-import { UnreadTracker, countElsewhere } from './unread.svelte';
+import { UnreadTracker, countElsewhere, sameCounts } from './unread.svelte';
 import { tabTitle } from './attention';
 import { messageRecord, roomSnapshot as room } from '$lib/test/builders';
 
@@ -135,6 +135,16 @@ describe('countElsewhere', () => {
 		expect(countElsewhere({ general: 3, random: 2, thread_1: 4 }, 'random')).toBe(7);
 		expect(countElsewhere({ general: 3 }, 'general')).toBe(0);
 		expect(countElsewhere({ general: 3, random: 2 }, undefined)).toBe(5);
+	});
+});
+
+describe('sameCounts', () => {
+	it('says two per-room counts are the same when each room counts the same, in any order', () => {
+		expect(sameCounts({ general: 3, random: 2 }, { random: 2, general: 3 })).toBe(true);
+		expect(sameCounts({}, {})).toBe(true);
+		expect(sameCounts({ general: 3 }, { general: 2 })).toBe(false);
+		expect(sameCounts({ general: 3 }, { general: 3, random: 1 })).toBe(false);
+		expect(sameCounts({ general: 3, random: 1 }, { general: 3 })).toBe(false);
 	});
 });
 
