@@ -239,8 +239,31 @@ export const PROBE_MS = 5_000;
  * one after another would cost more than it saves.
  */
 export const PROBE_PATIENT_MS = 30_000;
-/** How long after a probe last replaced a socket the next waits `PROBE_PATIENT_MS`; then `PROBE_MS` again. */
+/**
+ * How long after a socket was last replaced for staying quiet (a probe unanswered, or an opening that ran out) the
+ * next probe or opening waits `PROBE_PATIENT_MS`; then `PROBE_MS` or `OPENING_MS` again.
+ */
 export const PROBE_PATIENT_FOR_MS = 180_000;
+/**
+ * How long a new socket may take to open and bring the server's `server` frame (§3.1) before it is dropped as if it
+ * had failed, and another tried: browsers put no limit on a WebSocket's handshake, and one sent into a network that
+ * went away (a phone just woken, a laptop's Wi-Fi changed) waits out the system's connect timeout, a minute or more,
+ * with nothing else trying meanwhile.
+ */
+export const OPENING_MS = 10_000;
+/**
+ * How long the page must have been hidden for the probe on its return to open a standby socket beside the one it
+ * checks: away this long, a socket has often died without a close (a phone's app suspended, its network changed),
+ * and the standby's handshake then runs during the probe instead of after it. A network that comes back always
+ * opens one.
+ */
+export const STANDBY_AFTER_HIDDEN_MS = 60_000;
+/**
+ * How long such a probe waits for its answer before it opens the standby: a socket that is alive answers well within
+ * it, and opens none. Nor does a probe within `PROBE_PATIENT_FOR_MS` of a socket replaced for staying quiet: a flaky
+ * network gets one socket at a time.
+ */
+export const STANDBY_AFTER_MS = 2_000;
 /**
  * How often one room's read cursor goes to the server at most (`markRead`):
  * reading down a busy room sends a frame every ten seconds, not one a message.

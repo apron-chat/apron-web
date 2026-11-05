@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatClient, ClientSnapshot } from './client';
-import { FakeSocket, settle, startClient, type ClientHarness } from '$lib/test/client';
+import { FakeSocket, nextSocket, settle, startClient, type ClientHarness } from '$lib/test/client';
 
 /**
  * Push registration (§4.9): one `push_id` per account, registered after each
@@ -221,9 +221,7 @@ describe('push registration', () => {
 		// Answered, it is done.
 		const answered = socket;
 		socket.drop();
-		vi.advanceTimersByTime(60_000);
-		socket = FakeSocket.latest();
-		expect(socket).not.toBe(answered);
+		socket = await nextSocket(answered);
 		await greet({ webpush: { key: 'BNcR' } });
 		expect(sent('push_unregister')).toEqual([]);
 	});

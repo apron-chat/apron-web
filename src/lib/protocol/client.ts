@@ -79,6 +79,7 @@ import {
 	pushKey,
 	MAX_TYPING_S,
 	MAX_UNANSWERED_PINGS,
+	OPENING_MS,
 	PROBE_AFTER_HIDDEN_MS,
 	PROBE_MS,
 	READ_CURSOR_SEND_MS,
@@ -93,6 +94,8 @@ import {
 	RETRY_AFTER_MAX_MS,
 	ROOM_LIST_REUSE_MS,
 	STABLE_CONNECTION_MS,
+	STANDBY_AFTER_HIDDEN_MS,
+	STANDBY_AFTER_MS,
 	THREAD_PAGE_SIZE,
 	FRESH_HOOK_MS,
 	TYPING_REFRESH_MS,
@@ -387,10 +390,23 @@ export class ChatClient {
 	private presenceWaiter?: () => void;
 	/** Pings sent on the current socket since its last `pong`. */
 	private unansweredPings = 0;
-	/** A probe's ping waits for an answer (`probeWait`): without one, the socket is dropped. */
+	/** A probe's ping waits for an answer (`patientOr(PROBE_MS)`): without one, the socket is dropped. */
 	private probeTimer?: ReturnType<typeof setTimeout>;
-	/** When a probe last replaced a socket that didn't answer it. */
-	private probeDroppedAt?: number;
+	/** When a socket was last replaced for staying quiet: a probe it didn't answer, or an opening that ran out. */
+	private quietDroppedAt?: number;
+	/** The current socket has `openingWait` to open and bring its `server` frame (§3.1), or it is replaced. */
+	private openingTimer?: ReturnType<typeof setTimeout>;
+	/** Until when the current socket may take to open (`openingWait` from its start), until its `server` frame came. */
+	private openingUntil?: number;
+	/**
+	 * A socket opened beside the one a probe checks after a long absence (`probe`), sending nothing, as the app's
+	 * early connection does: `probed` answering first closes it, and its `server` frame coming first, a whole
+	 * handshake before one ping's answer, means `probed` is gone: it takes over at once, the handshake done.
+	 * It touches nothing of the client's but this until it takes over, through `connectNow` as a new connection.
+	 */
+	private standby?: { socket: WebSocket; probed: WebSocket; frames: unknown[] };
+	/** The probe's wait (`STANDBY_AFTER_MS`) before it opens the standby. */
+	private standbyTimer?: ReturnType<typeof setTimeout>;
 	/** When the page was last hidden, while it still is. */
 	private hiddenAt?: number;
 	/**
@@ -398,8 +414,8 @@ export class ChatClient {
 	 * rooms, a parent's `room_id` for its threads. They show as they were, but don't yet say what this server lists.
 	 */
 	private readonly keptListings = new Set<string>();
-	/** Drops the current socket as if it had closed: for one that stopped answering. */
-	private abandonSocket?: () => void;
+	/** Drops the current socket as if it had closed: for one that stopped answering, `reason` its close's. */
+	private abandonSocket?: (reason: string) => void;
 	private connectionId = 0;
 	private reconnectAttempt = 0;
 	private running = false;
@@ -503,16 +519,27 @@ export class ChatClient {
 			// The page may be closing: what you read goes now.
 			this.flushReadCursors();
 		} else {
-			if (this.hiddenAt !== undefined && this.now() - this.hiddenAt >= PROBE_AFTER_HIDDEN_MS) this.probe();
+			const away = this.hiddenAt === undefined ? 0 : this.now() - this.hiddenAt;
 			this.hiddenAt = undefined;
+			// One still opening may have outrun its wait while hidden pages' timers were held back: the next goes now,
+			// as it would have once shown, had its timer run.
+			if (this.openingUntil !== undefined && this.now() >= this.openingUntil) this.replaceOpening('opening timed out', false);
+			else if (away >= PROBE_AFTER_HIDDEN_MS) this.probe(away >= STANDBY_AFTER_HIDDEN_MS);
 		}
 		const since = this.retryingNow();
 		if (since === this.retryingSince) return;
 		this.retryingSince = since;
 		this.emit();
 	};
-	/** The network back: the socket may not have survived it. */
-	private readonly networkReturned = (): void => this.probe();
+	/**
+	 * The network back: the socket may not have survived it, and an open one is probed, with a standby. What failed
+	 * or is still opening did so on the network that went (nothing opens while the browser is offline): the next
+	 * connection goes now, its backoff from the start.
+	 */
+	private readonly networkReturned = (): void => {
+		if (this.socket && this.openingUntil === undefined) this.probe(true);
+		else this.replaceOpening('network changed', true);
+	};
 
 	constructor(
 		private serverUrl: string,
@@ -2924,7 +2951,8 @@ export class ChatClient {
 		return room.kind === 'joined' || room.latestLogId === undefined || compareLogIds(room.latestLogId, room.loadCheckpoint) <= 0;
 	}
 
-	private connectNow(): void {
+	/** Opens the next connection, or goes on with `handover`, one opened already (a probe's standby). */
+	private connectNow(handover?: { socket: WebSocket; open: boolean; frames: unknown[] }): void {
 		if (!this.running || this.socket) return;
 		this.stopWaitingForPresence();
 		if (this.fresh && this.freshHook && !this.rooms.size && !this.retainedRooms.size) {
@@ -2948,7 +2976,10 @@ export class ChatClient {
 		// The first connection may be open already, or opening, made as the app started: it goes on from there.
 		const takeEarly = this.earlyConnection;
 		this.earlyConnection = undefined;
-		const early = takeEarly?.(this.serverUrl);
+		const taken = takeEarly?.(this.serverUrl);
+		// Handed one: the app's early connection, if still unasked, is nobody's.
+		if (handover && taken) closeUnused(taken.socket);
+		const early = handover ?? taken;
 		if (early) {
 			this.attachSocket(early.socket, id, early.open);
 			if (early.open) this.socketOpened();
@@ -2985,9 +3016,10 @@ export class ChatClient {
 		};
 		socket.onmessage = (event) => {
 			if (!this.isCurrentSocket(id, socket)) return;
-			// Anything heard answers a probe: the socket is alive.
+			// Anything heard answers a probe: the socket is alive, and needs no standby.
 			if (this.probeTimer) clearTimeout(this.probeTimer);
 			this.probeTimer = undefined;
+			this.dropStandby();
 			this.handleMessage(event.data);
 		};
 		socket.onerror = () => {
@@ -3016,12 +3048,57 @@ export class ChatClient {
 			this.emit();
 		};
 		socket.onclose = closed;
-		// A socket whose peer vanished can stay OPEN here indefinitely; close it
-		// and carry on as if the close had arrived, without waiting for it.
-		this.abandonSocket = () => {
-			try { socket.close(4000, 'ping unanswered'); } catch { /* already closed */ }
+		// A socket whose peer vanished can stay OPEN here indefinitely, and one
+		// whose handshake went into a vanished network CONNECTING; close it and
+		// carry on as if the close had arrived, without waiting for it.
+		this.abandonSocket = (reason) => {
+			try { socket.close(4000, reason); } catch { /* already closed */ }
 			closed();
 		};
+		this.watchOpening(socket);
+	}
+
+	/** Gives `socket`, the current one, `openingWait` to open and bring its `server` frame, else replaces it. */
+	private watchOpening(socket: WebSocket): void {
+		this.clearOpening();
+		const wait = this.openingWait();
+		this.openingUntil = this.now() + wait;
+		this.openingTimer = setTimeout(() => {
+			this.openingTimer = undefined;
+			if (socket !== this.socket) return;
+			this.quietDroppedAt = this.now();
+			this.abandonSocket?.('opening timed out');
+		}, wait);
+	}
+
+	/**
+	 * Drops the socket still opening, if any, as if it had failed, and connects again now rather than after the
+	 * backoff (`fresh`: starting the backoff over), unless the server asked for a wait or holds reconnecting.
+	 */
+	private replaceOpening(reason: string, fresh: boolean): void {
+		if (this.openingUntil !== undefined) this.abandonSocket?.(reason);
+		if (!this.running || this.socket || this.reconnectHeld) return;
+		if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+		this.reconnectTimer = undefined;
+		if (fresh) this.reconnectAttempt = 0;
+		// The server's wait, or the page's return and the network's, go first: through the usual reconnect.
+		if (this.retryAfterRemaining() || absent()) {
+			this.scheduleReconnect(0);
+			return;
+		}
+		this.reconnectAttempt += 1;
+		this.connectNow();
+	}
+
+	private clearOpening(): void {
+		if (this.openingTimer) clearTimeout(this.openingTimer);
+		this.openingTimer = undefined;
+		this.openingUntil = undefined;
+	}
+
+	/** How long a socket may take to open: `OPENING_MS`, or longer just after one was replaced for staying quiet (`patientOr`). */
+	private openingWait(): number {
+		return this.patientOr(OPENING_MS);
 	}
 
 	/**
@@ -3136,6 +3213,8 @@ export class ChatClient {
 		if (!params || typeof params.apron !== 'number' || !Array.isArray(params.auth)) return;
 		const auth = params.auth.filter(isString);
 		if (!auth.length) return;
+		// Greeted: the socket is open and the server on it. From here pings (§1) and request timeouts watch it.
+		this.clearOpening();
 		const previousPing = this.server?.ping;
 		this.server = {
 			apron: params.apron,
@@ -3649,7 +3728,7 @@ export class ChatClient {
 					this.unansweredPings += 1;
 					return;
 				}
-				this.abandonSocket?.();
+				this.abandonSocket?.('ping unanswered');
 			}
 			clearInterval(timer);
 			if (this.pingTimer === timer) this.pingTimer = undefined;
@@ -3666,28 +3745,98 @@ export class ChatClient {
 
 	/**
 	 * Checks at once that an open socket still answers, on a page someone can see: one ping, and the socket is
-	 * replaced through the usual reconnect if nothing comes back within `probeWait`. Only where the server
-	 * pings (§1); the regular pings carry on as they were.
+	 * replaced through the usual reconnect if nothing comes back within `PROBE_MS` (`patientOr`). Only where the
+	 * server pings (§1); the regular pings carry on as they were. With `standby` (after a long absence, or the
+	 * network back), a second socket opens alongside if no answer comes within `STANDBY_AFTER_MS`, so a dead one
+	 * is replaced by a connection already made; not while a recent replacement makes the probe patient.
 	 */
-	private probe(): void {
+	private probe(standby = false): void {
 		const socket = this.socket;
 		if (!this.running || !socket || socket.readyState !== WebSocket.OPEN || this.server?.ping === undefined || this.probeTimer || absent()) return;
 		socket.send(PING_FRAME);
+		// Not while the server holds reconnecting (`denied`, a sign-in) or asked for a wait: a standby would get around it.
+		if (standby && !this.patient() && !this.reconnectHeld && !this.retryAfterRemaining()) {
+			this.standbyTimer = setTimeout(() => {
+				this.standbyTimer = undefined;
+				if (socket === this.socket && this.probeTimer && !absent()) this.openStandby(socket);
+			}, STANDBY_AFTER_MS);
+		}
 		this.probeTimer = setTimeout(() => {
 			this.probeTimer = undefined;
 			if (socket !== this.socket) return;
-			this.probeDroppedAt = this.now();
-			this.abandonSocket?.();
-		}, this.probeWait());
+			this.quietDroppedAt = this.now();
+			this.replaceQuietSocket();
+		}, this.patientOr(PROBE_MS));
 	}
 
 	/**
-	 * How long a probe waits for an answer: `PROBE_MS`, or `PROBE_PATIENT_MS` while a probe replaced a socket
-	 * within `PROBE_PATIENT_FOR_MS`, so a slow network isn't met with one new socket after another.
+	 * Opens the standby beside `probed`, sending nothing. Its first frame (the `server` frame, after a whole
+	 * handshake) coming while `probed` has yet to answer one ping replaces `probed` with it at once.
 	 */
-	private probeWait(): number {
-		const dropped = this.probeDroppedAt;
-		return dropped !== undefined && this.now() - dropped < PROBE_PATIENT_FOR_MS ? PROBE_PATIENT_MS : PROBE_MS;
+	private openStandby(probed: WebSocket): void {
+		this.dropStandby();
+		let socket: WebSocket;
+		try {
+			socket = this.webSocketFactory(this.serverUrl);
+		} catch {
+			return;
+		}
+		const standby = { socket, probed, frames: [] as unknown[] };
+		this.standby = standby;
+		socket.onmessage = (event: MessageEvent) => {
+			standby.frames.push(event.data);
+			// Its greeting, a whole handshake done: anything else (an error before a close) proves nothing.
+			if (this.standby === standby && this.socket === probed && this.probeTimer && isServerFrame(event.data)) this.replaceQuietSocket();
+		};
+		socket.onclose = socket.onerror = () => {
+			if (this.standby === standby) this.standby = undefined;
+		};
+	}
+
+	/** Closes the standby, if any, or stops it opening: the probed socket answered, or it ended. */
+	private dropStandby(): void {
+		if (this.standbyTimer) clearTimeout(this.standbyTimer);
+		this.standbyTimer = undefined;
+		const standby = this.standby;
+		this.standby = undefined;
+		if (standby) closeUnused(standby.socket);
+	}
+
+	/**
+	 * Drops the current socket, gone quiet, as if it had closed. With a standby still open or opening, connects
+	 * again on it at once, taking it as the app's early connection is taken; otherwise through the usual backoff.
+	 */
+	private replaceQuietSocket(): void {
+		const standby = this.standby;
+		this.standby = undefined;
+		// Ending the probed connection (`endConnection`) drops a standby still waiting to open.
+		this.abandonSocket?.('ping unanswered');
+		if (!standby) return;
+		const { socket, frames } = standby;
+		const usable = socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN;
+		// Taken only where connecting now is: the client running with no other connection, the page shown and online,
+		// and no hold or wait from the server since it opened.
+		if (!usable || !this.running || this.socket || this.reconnectHeld || this.retryAfterRemaining() || absent()) {
+			closeUnused(socket);
+			return;
+		}
+		if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+		this.reconnectTimer = undefined;
+		this.connectNow({ socket, open: socket.readyState === WebSocket.OPEN, frames });
+	}
+
+	/**
+	 * `wait`, or `PROBE_PATIENT_MS` while a socket was replaced for staying quiet within `PROBE_PATIENT_FOR_MS`, so
+	 * a slow network isn't met with one new socket after another.
+	 */
+	private patientOr(wait: number): number {
+		return this.patient() ? PROBE_PATIENT_MS : wait;
+	}
+
+	/** A socket was replaced for staying quiet within `PROBE_PATIENT_FOR_MS`: the network may be slow or flaky. */
+	private patient(): boolean {
+		const dropped = this.quietDroppedAt;
+		return dropped !== undefined && this.now() - dropped < PROBE_PATIENT_FOR_MS;
 	}
 
 	/**
@@ -5055,6 +5204,8 @@ export class ChatClient {
 		this.historyQueue.dropHeld(reason);
 		this.clearTyping();
 		this.stopPing();
+		this.clearOpening();
+		this.dropStandby();
 		this.clearStableTimer();
 		if (view === 'suspend') this.suspendProtocolView(reason);
 		else this.discardProtocolView(reason);
@@ -5408,4 +5559,25 @@ function renamedEmbed(embed: JsonObject, title: string): JsonObject {
 	const og = isJsonObject(embed.og) ? embed.og : undefined;
 	const old = typeof embed.title === 'string' ? embed.title : og?.title;
 	return { ...embed, title, ...(og && og.title !== undefined && og.title === old ? { og: { ...og, title } } : {}) };
+}
+
+/** Closes a socket nobody took (a probe's standby), its handlers first, so nothing it does after reaches the client. */
+function closeUnused(socket: WebSocket): void {
+	socket.onopen = socket.onmessage = socket.onclose = socket.onerror = null;
+	try {
+		if (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN) socket.close(1000, 'not used');
+	} catch {
+		// Closed already.
+	}
+}
+
+/** Whether a frame is the server's greeting (§3.1), cheaply: a standby's first frame, before anything reads it. */
+function isServerFrame(data: unknown): boolean {
+	if (typeof data !== 'string') return false;
+	try {
+		const frame: unknown = JSON.parse(data);
+		return isJsonObject(frame) && frame.method === 'server';
+	} catch {
+		return false;
+	}
 }
