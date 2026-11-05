@@ -8,6 +8,7 @@ import { deleteHistory, historyName, listHistories, openHistory, writeHistory, t
 import { HistoryKeeper, mergeOf, plannedRoom, RESTORE_WINDOW, restoredState, type HistoryClient } from './history-keeper';
 import type { RoomSync } from '$lib/protocol/client';
 import type { RestoredState } from '$lib/protocol/client-types';
+import { loadView, saveView } from '$lib/ui/session-cache';
 
 const URL = 'wss://chat.example/';
 /** The memory server's account. */
@@ -567,6 +568,26 @@ describe('HistoryKeeper', () => {
 		await keeper.flush();
 		expect(await listHistories(indexedDB)).toEqual([]);
 		await keeper.stop();
+	});
+
+	it('removes the view kept to paint the next visit with the history it shows', async () => {
+		const indexedDB = new IDBFactory();
+		const other = 'wss://other.example/';
+		const views = () => Promise.all([URL, other].map(async (server) => (await loadView(server, indexedDB))?.userId));
+		const keeper = new HistoryKeeper({ indexedDB, locks: null });
+		await saveView(URL, 'ada', { rooms: [] }, indexedDB);
+		await saveView(other, 'ada', { rooms: [] }, indexedDB);
+		// Another account's history on that server: Ada's view stays.
+		await keeper.forget(URL, 'zed');
+		expect(await views()).toEqual(['ada', 'ada']);
+		await keeper.forget(URL, 'ada');
+		expect(await views()).toEqual([undefined, 'ada']);
+		await saveView(URL, 'ada', { rooms: [] }, indexedDB);
+		await keeper.forget(other);
+		expect(await views()).toEqual(['ada', undefined]);
+		await saveView(other, 'ada', { rooms: [] }, indexedDB);
+		await keeper.setRetention(null);
+		expect(await views()).toEqual([undefined, undefined]);
 	});
 });
 

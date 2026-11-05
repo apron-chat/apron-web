@@ -19,6 +19,7 @@ import { compareLogIds, type StoreChange, type StoredRecords } from '$lib/protoc
 import type { JsonObject, MessageRecord, RoomRecord } from '$lib/protocol/types';
 import { decrement, loadKeptSessionUser } from '$lib/protocol/client-internals';
 import { deleteHistory, HistoryGone, historyName, listHistories, openHistory, pageHistory, pruneHistory, readHistory, readMeta, readRoomRows, scanMessages, timeLike, timeLikeLog, writeHistory, type Databases, type HistoryWrite, type KeptHistory, type MetaRow, type RoomRow } from './history-db';
+import { clearView, clearViewOf } from '$lib/ui/session-cache';
 import { historyResult } from './log';
 
 /** What the keeper needs of the chat client. */
@@ -494,7 +495,9 @@ export class HistoryKeeper {
 	 * Deletes what is kept, only ever when asked: `userId`'s on `server`, every account's on `server`, or, with
 	 * neither (keeping turned off, Clear all), every account's everywhere. A writer for what goes stops; one for
 	 * the signed-in account starts again from the next change, writing what the page has: clearing is for the
-	 * space older history takes, not to stop keeping (that's Retention's Don't keep).
+	 * space older history takes, not to stop keeping (that's Retention's Don't keep). The view kept to paint the
+	 * next visit (`session-cache.ts`) is history too: the one of each server cleared goes, if it is of an account
+	 * whose history goes.
 	 */
 	async forget(server?: string, userId?: string): Promise<void> {
 		const goes = (entry: { server: string; userId: string }) => (server === undefined || entry.server === server) && (userId === undefined || entry.userId === userId);
@@ -506,11 +509,13 @@ export class HistoryKeeper {
 		if (this.known && goes(this.known)) this.known = undefined;
 		// What was read ahead for a restore may be of what goes: read again.
 		if (server === undefined || this.prepared?.server === server) this.prepared = undefined;
+		const views = server === undefined ? clearView(undefined, this.factory) : userId === undefined ? clearView(server, this.factory) : clearViewOf(server, userId, this.factory);
 		try {
 			await Promise.all((await listHistories(this.factory)).filter(goes).map((entry) => this.drop(entry.name)));
 		} catch {
 			// Nothing kept, or no IndexedDB.
 		}
+		await views;
 	}
 
 	/** Whose history is kept on this device, every server's accounts; none without IndexedDB. */
