@@ -1,5 +1,6 @@
 import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
+import type { Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
 import { UPDATE_POLL_MS } from './src/lib/ui/update-poll';
 
@@ -29,13 +30,40 @@ const MOCKING_RUNES = MOCKING.filter((path) => path.endsWith('.svelte.test.ts'))
  */
 const env = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env ?? {};
 
+/**
+ * emoji-mart's data gives each skin twice: as its characters (`native`) and as their code points (`unified`), which
+ * emoji-mart reads only to build image URLs for its image sets. The picker draws the system's emoji (`set: 'native'`),
+ * so the data goes out without `unified`: 89 KB (12 KB gzipped) less to fetch, parse and hold when a picker or
+ * `:shortcode` first loads it.
+ */
+function emojiDataNativeOnly(): Plugin {
+	return {
+		name: 'apron:emoji-data-native-only',
+		enforce: 'pre',
+		transform(code, id) {
+			if (!id.split('?')[0].endsWith('/@emoji-mart/data/sets/15/native.json')) return;
+			const data = JSON.parse(code) as { emojis: Record<string, { skins: Array<{ unified?: string }> }> };
+			for (const emoji of Object.values(data.emojis)) for (const skin of emoji.skins) delete skin.unified;
+			return { code: JSON.stringify(data), map: null };
+		}
+	};
+}
+
 export default defineConfig(({ command }) => {
 	const preview = command === 'serve' || env.APRON_PREVIEW === '1';
 	return {
 		define: { __APRON_PREVIEW__: JSON.stringify(preview) },
-		// markdown-it always constructs linkify-it, which Apron never uses (`linkify: false`): see the stub.
-		resolve: { alias: { 'linkify-it': fileURLToPath(new URL('lib/protocol/linkify-off.ts', src)) } },
+		resolve: {
+			alias: [
+				// markdown-it always constructs linkify-it, which Apron never uses (`linkify: false`): see the stub.
+				{ find: /^linkify-it$/, replacement: fileURLToPath(new URL('lib/protocol/linkify-off.ts', src)) },
+				// markdown-it's character references and Unicode categories, from what the browser already has: see each.
+				{ find: /^entities$/, replacement: fileURLToPath(new URL('lib/protocol/entities-dom.ts', src)) },
+				{ find: /^uc\.micro$/, replacement: fileURLToPath(new URL('lib/protocol/uc-micro-native.ts', src)) }
+			]
+		},
 		plugins: [
+			emojiDataNativeOnly(),
 			sveltekit({
 				compilerOptions: {
 					runes: ({ filename }) =>
