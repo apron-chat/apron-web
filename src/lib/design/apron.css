@@ -140,6 +140,10 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 	.ap-msg :is(input, textarea, [contenteditable]) { -webkit-user-select: text; user-select: text; }
 }
 .ap-msg:hover .ap-msg-actions, .ap-msg:focus-within .ap-msg-actions, .ap-msg-actions:focus-within { visibility: visible; }
+/* A message the keyboard is on (↑ ↓ from the composer): the focus ring, inside the row so its neighbours don't cover it,
+   and room above it when it's scrolled to, for its toolbar, which sits over the row's top edge. */
+.ap-msg:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset-inset); }
+.ap-msg:focus { scroll-margin-top: var(--space-8); }
 /* The toolbar stays up while its React button's emoji picker is open. */
 .ap-msg-actions:has([aria-expanded='true']) { visibility: visible; }
 /* While a message's picker or menu is open it keeps its hover look, and the rest don't take it: new messages

@@ -406,11 +406,8 @@ Shift+Enter; the Send button sends. Where an autocomplete below offers Enter
 to pick, it picks either way. Pressing Send leaves the focus in the
 field, so a phone's keyboard stays up between messages. However long the
 room or thread's name, the field's placeholder takes one line, cut short.
-With a keyboard, ↑ in the empty field (nothing typed or attached) edits your newest message in the room or
-thread that you may edit, as its **Edit** would, and once the edit is saved or cancelled (or its message goes)
-the keyboard is back in the composer; with an edit already open, ↑ goes back to it, its words kept; with text in
-the field, ↑ moves the caret as usual. An edit opened from the message itself (its **Edit**, or `e`) gives the
-keyboard back to the message's row once it ends. Escape while
+With a keyboard, ↑ in the empty field (nothing typed or attached) moves the keyboard up to the messages, onto the
+newest (below); with text in the field, ↑ moves the caret as usual, and an open autocomplete takes it first. Escape while
 replying cancels the reply and keeps the draft (with an autocomplete open, Escape
 puts that away first).
 
@@ -1302,9 +1299,17 @@ thread, or where the server grants you `add_members` (or lacks `ext:permissions`
 decides each (it adds no guests); the moves stand either way, and the toast says
 how many authors weren't added and why. Escape leaves select mode.
 
-On a message with the keyboard on it (its toolbar reached with Tab, or the row clicked), `r` replies to it and `e`
-edits it when it is yours, as their toolbar buttons do; neither does anything in select mode, while it is being
-edited, or in a field (where they are letters), nor with Ctrl, Alt or ⌘.
+**The keyboard among the messages.** ↑ in the empty composer puts the keyboard on the newest message (its row
+outlined, its toolbar showing, as on hover); from there ↑ and ↓ go from message to message, Home and End to the
+oldest and newest drawn, and Page Up and Page Down a paneful at a time, keeping it in view. They go past system lines
+and notices, which have nothing to act on, and thread cards. ↑ at the oldest draws the rest of what's loaded, then
+loads older messages, as scrolling back does. ↓ at the newest, or Escape, gives the keyboard back to the composer
+(in select mode Escape ends it instead). On a message, `r` replies to it and `e` edits it when it is yours, as their
+toolbar buttons do, and Enter goes into its toolbar, where Escape comes back to the row; an edit opened on the message
+(`e`, or its **Edit**) gives the keyboard back to its row when it ends. Neither `r` nor `e` does anything in select
+mode, while it is being edited, or in a field (where they are letters), nor with Ctrl, Alt or ⌘. Clicking a message
+puts the keyboard on it too. Messages arriving leave the keyboard where it is, and opening another room or thread
+gives it back to the composer.
 
 A reply's quote is one line above the sender's name (the quoted sender's
 avatar and name, then the start of their message), with a line from the

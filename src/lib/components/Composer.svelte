@@ -81,14 +81,14 @@
 		onrename: (id: string, title: string) => void;
 		/** Escape while replying (`reply`) cancels it too. */
 		oncancelreply: () => void;
-		/** ↑ in the empty field: edit your newest message here. True when there was one to edit. */
-		onedit?: () => boolean;
+		/** ↑ in the empty field: the keyboard goes up to the messages. True when there was one to go to. */
+		onup?: () => boolean;
 		/** The mention picker opened: a moment to refresh who can be named. */
 		onmention?: () => void;
 		/** Sending waits until then, as the server asked (`retry_after`, epoch milliseconds): Send counts down, and the draft stays. */
 		waitUntil?: number;
 	}
-	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled, holdSend = false, canUpload, files = [], uploadLimits, canCommand = false, live, people, rooms = [], reply, oninput, onsend, onfiles, onunstage, onrename, oncancelreply, onedit, onmention, waitUntil }: Props = $props();
+	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled, holdSend = false, canUpload, files = [], uploadLimits, canCommand = false, live, people, rooms = [], reply, oninput, onsend, onfiles, onunstage, onrename, oncancelreply, onup, onmention, waitUntil }: Props = $props();
 
 	/** The field: chips and autocomplete, as in the message editor. */
 	let field = $state<MessageField | undefined>();
@@ -169,11 +169,11 @@
 		onsend();
 	}
 
-	/** The field's keys no picker took: Escape cancels a reply, and ↑ in the empty field edits your last message. */
+	/** The field's keys no picker took: Escape cancels a reply, and ↑ in the empty field goes up to the messages. */
 	function key(event: KeyboardEvent): boolean {
 		if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return false;
 		if (event.key === 'Escape' && reply) oncancelreply();
-		else if (!(event.key === 'ArrowUp' && !value && files.length === 0 && onedit?.())) return false;
+		else if (!(event.key === 'ArrowUp' && !value && files.length === 0 && onup?.())) return false;
 		event.preventDefault();
 		return true;
 	}
