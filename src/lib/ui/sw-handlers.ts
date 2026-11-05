@@ -5,6 +5,7 @@ import {
 	clickedTab, closeOlderInGroup, pageTarget, planPush, pushTarget, readPush,
 	type PushPayload, type PushTarget, type ShowNotificationOptions, type TabAnswer
 } from './notifications';
+import { PUSH_RESUBSCRIBED } from './push-store';
 
 /**
  * The service worker's push and notification-click handlers (§4.9), apart
@@ -45,6 +46,39 @@ export async function handlePush(payload: () => unknown, context: PushContext): 
 		closeOlderInGroup(await context.registration.getNotifications(), plan.notified.group, plan.notified.messageId);
 		await context.markShown(plan.notified.group, plan.notified.messageId);
 	}
+}
+
+/** What the subscription-change handler needs from the service worker. */
+export interface SubscriptionChangeContext {
+	pushManager: Pick<PushManager, 'subscribe'>;
+	/** Notes in IndexedDB that a page must register the subscription again (`markRegisterAgain`). */
+	markRegisterAgain(): Promise<void>;
+	tabs(): Promise<readonly Pick<Tab, 'postMessage'>[]>;
+}
+
+/** What the handler reads of a `pushsubscriptionchange` event. */
+export interface PushSubscriptionChange {
+	oldSubscription?: Pick<PushSubscription, 'options'> | null;
+	newSubscription?: PushSubscription | null;
+}
+
+/**
+ * Handles the push service replacing or expiring the subscription (`pushsubscriptionchange`): the server's endpoint
+ * is dead from now on. Subscribes again with the old one's key, unless the browser already has (`newSubscription`),
+ * and notes that a page must register it (§4.9), which the worker can't, having no connection: the tabs open now
+ * register it at once (`PUSH_RESUBSCRIBED`), and otherwise the next to start does.
+ */
+export async function handleSubscriptionChange(event: PushSubscriptionChange, context: SubscriptionChangeContext): Promise<void> {
+	const key = event.oldSubscription?.options.applicationServerKey;
+	if (!event.newSubscription && key) {
+		try {
+			await context.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+		} catch {
+			// The page subscribes with the server's key when it registers, finding none.
+		}
+	}
+	await context.markRegisterAgain();
+	for (const tab of await context.tabs()) tab.postMessage({ type: PUSH_RESUBSCRIBED });
 }
 
 /** What `appWindows` needs of the service worker's `clients`. */

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { memoryIdb } from '$lib/test/idb';
-import { saveEnabledPushIds } from '$lib/ui/push-store';
+import { loadRegisterAgain, PUSH_RESUBSCRIBED, saveEnabledPushIds } from '$lib/ui/push-store';
 import { NOTIFICATION_CLICK, PUSH_CLICK, QUIET_PUSH } from '$lib/ui/notifications';
 
 /**
@@ -28,6 +28,7 @@ let tabs: Array<{ visibilityState: string; postMessage: ReturnType<typeof vi.fn>
 const setAppBadge = vi.fn(async () => undefined);
 const openWindow = vi.fn(async () => undefined);
 const matchAll = vi.fn(async () => tabs);
+const subscribe = vi.fn(async () => ({}));
 /** The worker's cache, by URL or path. */
 const cached = new Map<string, unknown>();
 const key = (request: unknown) => (typeof request === 'string' ? request : (request as { url: string }).url);
@@ -53,7 +54,8 @@ beforeAll(async () => {
 		navigator: { setAppBadge, clearAppBadge: vi.fn(async () => undefined) },
 		registration: {
 			showNotification: vi.fn(async (title: string, options: NotificationOptions) => void shown.push({ title, options })),
-			getNotifications: async () => shown.map((entry) => ({ ...entry.options, title: entry.title, close: () => shown.splice(shown.indexOf(entry), 1) }))
+			getNotifications: async () => shown.map((entry) => ({ ...entry.options, title: entry.title, close: () => shown.splice(shown.indexOf(entry), 1) })),
+			pushManager: { subscribe }
 		},
 		clients: { matchAll, openWindow }
 	});
@@ -184,6 +186,20 @@ describe('the service worker', () => {
 		await dispatch('notificationclick', { notification: { close: vi.fn(), data } });
 		expect(second.postMessage).toHaveBeenCalledWith({ type: NOTIFICATION_CLICK, target: data });
 		expect(first.focus).toHaveBeenCalled();
+	});
+
+	it('subscribes again with the old key when the push service replaces the subscription, and has the open tabs register it', async () => {
+		const key = new Uint8Array([4, 1, 2]).buffer;
+		const tab = signedIn('a1', 't1');
+		tabs = [tab];
+		await dispatch('pushsubscriptionchange', { oldSubscription: { options: { applicationServerKey: key, userVisibleOnly: true } }, newSubscription: null });
+		expect(subscribe).toHaveBeenCalledWith({ userVisibleOnly: true, applicationServerKey: key });
+		expect(tab.postMessage).toHaveBeenCalledWith({ type: PUSH_RESUBSCRIBED });
+		// Noted for a page that isn't open: the next to start registers it.
+		expect(await loadRegisterAgain()).toBe(true);
+		// One the browser made already is kept: it only needs registering.
+		await dispatch('pushsubscriptionchange', { oldSubscription: { options: { applicationServerKey: key } }, newSubscription: { endpoint: 'https://push.example/2' } });
+		expect(subscribe).toHaveBeenCalledTimes(1);
 	});
 
 	it('installs the app’s files but not the themes’ fonts, and keeps a font once a theme loads it', async () => {

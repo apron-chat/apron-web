@@ -4,8 +4,8 @@
 /// <reference lib="webworker" />
 import { base, build, files, prerendered, version } from '$service-worker';
 import { setAppBadge, type BadgeNavigator } from '$lib/ui/notifications';
-import { loadEnabledPushIds, loadShownMarks, markShown } from '$lib/ui/push-store';
-import { anyWindowVisible, appWindows, askTab, handleClick, handlePush, isNewerMessage } from '$lib/ui/sw-handlers';
+import { loadEnabledPushIds, loadShownMarks, markRegisterAgain, markShown } from '$lib/ui/push-store';
+import { anyWindowVisible, appWindows, askTab, handleClick, handlePush, handleSubscriptionChange, isNewerMessage } from '$lib/ui/sw-handlers';
 
 /**
  * Keeps each deploy's app files cached so the app opens fast, still opens
@@ -13,7 +13,8 @@ import { anyWindowVisible, appWindows, askTab, handleClick, handlePush, isNewerM
  * Only the app's own files and page loads are handled: the WebSocket,
  * uploads, files, live text and every backend's URLs go straight to the network.
  * It also shows message notifications where a page can't show its own, and
- * the messages the server pushes (§4.9).
+ * the messages the server pushes (§4.9), and subscribes again when the push
+ * service replaces the subscription.
  */
 const sw = self as unknown as ServiceWorkerGlobalScope;
 
@@ -107,6 +108,15 @@ sw.addEventListener('push', (event) => {
 		setBadge: (unread) => setAppBadge(sw.navigator as BadgeNavigator, unread),
 		pageVisible: () => anyWindowVisible(sw.clients),
 		icon: `${base}/icon-192.png`
+	}));
+});
+
+// The push service replaced the subscription: subscribe again, and have a page register it.
+sw.addEventListener('pushsubscriptionchange', (event) => {
+	event.waitUntil(handleSubscriptionChange(event, {
+		pushManager: sw.registration.pushManager,
+		markRegisterAgain,
+		tabs: () => appWindows<WindowClient>(sw.clients)
 	}));
 });
 

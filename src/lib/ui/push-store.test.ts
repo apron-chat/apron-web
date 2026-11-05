@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { loadEnabledPushIds, withShown } from './push-store';
+import { memoryIdb } from '$lib/test/idb';
+import { clearRegisterAgain, loadEnabledPushIds, loadRegisterAgain, markRegisterAgain, withShown } from './push-store';
 import { isNewerMessage } from './sw-handlers';
 
 /** An IndexedDB whose one store holds `stored`, or whose open fails. */
@@ -66,5 +67,21 @@ describe('remembering what a room notified about', () => {
 		expect(Object.keys(next)).toHaveLength(200);
 		expect(next.g0).toBeUndefined();
 		expect(next.new).toBe('1');
+	});
+});
+
+describe('a subscription the push service replaced', () => {
+	it('is noted by the service worker for a page to register, until the page forgets it', async () => {
+		const idb = memoryIdb();
+		vi.stubGlobal('indexedDB', idb);
+		expect(await loadRegisterAgain()).toBe(false);
+		await markRegisterAgain();
+		expect(await loadRegisterAgain()).toBe(true);
+		await clearRegisterAgain();
+		expect(await loadRegisterAgain()).toBe(false);
+		// Unreadable: nothing to register again, as the page registers on each start anyway.
+		idb.failing = true;
+		await markRegisterAgain();
+		expect(await loadRegisterAgain()).toBe(false);
 	});
 });

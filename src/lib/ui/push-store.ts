@@ -1,14 +1,16 @@
 /**
  * What the page and the service worker share about push, in IndexedDB (the
  * service worker can't read localStorage): the `push_id`s of the accounts
- * push is on for, so a push for any other is dropped (§4.9), and the newest
+ * push is on for, so a push for any other is dropped (§4.9), the newest
  * message each notification group has notified about, so a late push or
- * page notification never notifies about it again.
+ * page notification never notifies about it again, and whether the push
+ * service replaced the subscription since a page last registered it.
  */
 const DB = 'apron-push';
 const STORE = 'state';
 const ENABLED = 'enabled';
 const SHOWN = 'shown';
+const REGISTER_AGAIN = 'registerAgain';
 /** Groups remembered: the most recently notified. */
 const SHOWN_MAX = 200;
 
@@ -118,5 +120,40 @@ export async function markShown(group: string, messageId: string, newer: (a: str
 		}
 	} catch {
 		// Remembering is best effort.
+	}
+}
+
+/**
+ * What the service worker posts to the app's tabs once the push service replaced the subscription
+ * (`pushsubscriptionchange`): each registers it again, which the worker can't, having no connection.
+ */
+export const PUSH_RESUBSCRIBED = 'apron:push-resubscribed';
+
+/**
+ * Notes that the push service replaced the subscription, so the server's endpoint is dead: a page registers the new
+ * one when it next can (`loadRegisterAgain`), and then forgets this (`clearRegisterAgain`).
+ */
+export async function markRegisterAgain(): Promise<void> {
+	try {
+		await run('readwrite', (store) => store.put(true, REGISTER_AGAIN));
+	} catch {
+		// The page registers on each connection anyway: the next start registers the new subscription.
+	}
+}
+
+/** Whether the subscription was replaced since a page last registered it (`markRegisterAgain`). */
+export async function loadRegisterAgain(): Promise<boolean> {
+	try {
+		return (await run('readonly', (store) => store.get(REGISTER_AGAIN))) === true;
+	} catch {
+		return false;
+	}
+}
+
+export async function clearRegisterAgain(): Promise<void> {
+	try {
+		await run('readwrite', (store) => store.delete(REGISTER_AGAIN));
+	} catch {
+		// Left set, the next page registers once more, which changes nothing.
 	}
 }
