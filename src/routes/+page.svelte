@@ -318,8 +318,6 @@
 	let passkeyUnavailable = $state<string | undefined>();
 	let highlightedId = $state<string | undefined>();
 	let editingId = $state<string | undefined>();
-	/** The edit was opened from its message (its Edit, or `e`): the keyboard goes back to the row when it ends. */
-	let editFrom: 'row' | undefined;
 	/** The Edit form for the open room or thread (its title and description). */
 	let roomEditorOpen = $state(false);
 	/** Search local history is open (`SearchDialog`). */
@@ -2763,10 +2761,7 @@
 			const event = rowEvent(view);
 			return event ? reactionsFor(event) : [];
 		}),
-		edit: onRow((event) => {
-			editingId = event.message_id;
-			editFrom = 'row';
-		}),
+		edit: onRow((event) => (editingId = event.message_id)),
 		delete: onRow(deleteMessage),
 		startThread: onRow(startThread),
 		copyLink: async (view) => {
@@ -3201,18 +3196,18 @@
 		};
 	}
 
-	/** The edit ends, saved, cancelled or its message gone: the keyboard goes back to the message's row, once the editor's going has left it nowhere. */
+	/**
+	 * The edit ends, saved, cancelled or its message gone: the keyboard goes back to the message's row, where every
+	 * edit opens from (its Edit, or `e`), once the editor's going has left it nowhere.
+	 */
 	function endEdit(): void {
 		const id = editingId;
-		const from = editFrom;
 		editingId = undefined;
-		editFrom = undefined;
-		if (from === 'row' && id !== undefined) {
-			void tick().then(() => {
-				if (document.activeElement && document.activeElement !== document.body) return;
-				document.querySelector<HTMLElement>(`article[data-message-id="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
-			});
-		}
+		if (id === undefined) return;
+		void tick().then(() => {
+			if (document.activeElement && document.activeElement !== document.body) return;
+			document.querySelector<HTMLElement>(`article[data-message-id="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
+		});
 	}
 
 	/** Saves an edit: the new text, and any embeds removed or renamed in the editor, together. */
