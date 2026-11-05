@@ -77,8 +77,10 @@ seconds); after such a `denied` error the client stops reconnecting, shows
 **Signed out** with the server's message, and waits for **Sign in**.
 When a newer version of the client is deployed (SvelteKit's version poll every
 5 minutes, at once on coming back after 5 minutes or more away, or a lazily
-loaded file the deploy removed), a notice at the top offers **Reload**
-or **Later**; it never reloads by itself. Drafts live only in memory, so while
+loaded file that failed to load, when the check then finds a newer deploy), a
+notice at the top offers **Reload** or **Later**; it never reloads by itself.
+A file that failed to load for a dropped connection instead shows a toast
+saying so, and the next click on what needed it tries again. Drafts live only in memory, so while
 any room or thread has unsent text or files it adds that reloading clears your
 unsent message.
 
@@ -94,7 +96,10 @@ under the New divider, and edits, deletions and reactions update in place. The k
 never sends a read cursor, notifies, or counts as unread, and the live session
 recovers every room as it would without it. It is kept per server in IndexedDB
 for the account signed in there, dropped after a week, removed on sign-out, and
-dropped as soon as the server signs in as anyone else. Without one (a first
+dropped as soon as the server signs in as anyone else. It is shown only to the
+account whose session is saved there, and it follows the history preferences:
+with Don't keep nothing is kept or shown, and clearing an account's history
+clears its view too. Without one (a first
 visit, or a guest), the page shows placeholder rooms, messages and members, with
 "Connecting…" and then "Loading messages…" at the foot of the timeline, instead of
 "Not signed in", "No rooms yet" or "No room open". While the open room or thread
@@ -114,7 +119,9 @@ back to it. Most reconnects are done by then, so they show nothing. A tab
 waiting while hidden shows nothing either, and the banner's "Still trying to
 reconnect…" also counts only from then, never the time the tab was away (hiding
 the tab mid-reconnect stops the count; a browser offline while the tab shows
-still counts). Its **Try Again** shows the new attempt at once.
+still counts). Its **Try Again** shows the new attempt at once. While the server
+has asked the client to wait (`retry_after`, or the connection status's
+`Retry-After`), the banner counts the wait down and Try Again waits with it.
 
 The pill is only for the open room or thread, whose newest messages may not be
 shown yet. Once it's current, other rooms still catching up (as after a reload
@@ -639,7 +646,8 @@ doesn't take focus from what you're typing; a screen reader reads it as it
 appears. While they're on, a notification replaces the chime (the chime
 still plays if one couldn't be shown), each room keeps one notification that
 the next message replaces (its newest mention, else its newest message), and
-clicking it opens that room or thread. Notifications show through the service
+clicking it opens that room or thread in the tab that showed it, which comes
+forward. Notifications show through the service
 worker, or from the page where there is none yet. Permission revoked in the
 browser's site settings reads as off.
 
@@ -657,7 +665,11 @@ while offline), and accounts on servers with the same key share it. When
 another server, with another key, holds it, the note names that server's host,
 and **Alert for this server instead** takes it over;
 tabs don't take it back on their own. Its `push_id`s are kept in IndexedDB for
-the service worker, which drops a push for any account push isn't on for.
+the service worker, which drops a push for any account push isn't on for. When
+the browser replaces the subscription (one that expired, or that its push
+service renewed), the service worker subscribes again with the same key and
+tells any open tab, which registers the new one with the server; with no tab
+open, the next one to start does.
 Subscribing and unsubscribing run one at a time, across tabs too under the
 `apron-push` Web Lock where the browser has one, and a step that finishes
 after push was turned off, or after the tab moved to another server or
@@ -827,7 +839,10 @@ server in the same way, and leaves the others' as they are. Accounts on the
 same server are kept apart too: signing in there as another leaves the one
 before as it is, and only the signed-in account's is restored, paged or
 searched. One tab
-writes at a time; another takes over when it closes. Preferences says how much Apron keeps on this device, and why it stopped
+writes at a time; another takes over when it closes. A write that fails for a
+moment is tried again a few times before keeping stops, and a tab left open
+removes what passed the retention every few hours, as a reload does.
+Preferences says how much Apron keeps on this device, and why it stopped
 keeping more if the device ran out of space.
 
 **Search local history** (first in the room header's ⋯ menu, or Ctrl+F, ⌘F on a Mac, in place of the browser's find while signed in and no other dialog is open, or its Messages switch in Go to a Room or Thread)
