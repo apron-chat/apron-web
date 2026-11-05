@@ -4086,11 +4086,16 @@ export class ChatClient {
 	/**
 	 * The room is joined now: visible and live. A thread read before without
 	 * joining it has missed what happened since its last load, which the next
-	 * `loadRoom` catches up on.
+	 * `loadRoom` catches up on. A top-level room read before keeps what was read
+	 * (the pages scrolled back through too): its recovery goes on from its last
+	 * load rather than starting over from the newest page, which would drop them.
 	 */
 	private markJoined(room: RoomState): void {
 		if (room.kind === 'viewed') {
-			if (room.loadCheckpoint !== undefined) room.resumed = true;
+			if (room.loadCheckpoint !== undefined) {
+				room.resumed = true;
+				if (!this.isThread(room.id)) room.checkpoint ??= room.loadCheckpoint;
+			}
 			this.forgetListings(this.store.room(room.id)?.parent_room_id);
 		}
 		room.kind = 'joined';
