@@ -59,7 +59,8 @@
 	const toolbar = $derived(engaged && !view.editing && !view.selecting && actionable);
 
 	/**
-	 * The toolbar's actions, in order; the rarer ones wait behind ⋯. Touch's menu (`held`) keeps only Reply and React
+	 * The toolbar's actions, in order; the rarer ones wait behind ⋯. Reply's and Edit's labels name them in apron.css too,
+	 * which boxes the first letter of each (`r`, `e`) for the keyboard: change one, change both. Touch's menu (`held`) keeps only Reply and React
 	 * up front, with everything else behind ⋯, and offers Copy text, since its rows take no text selection.
 	 */
 	function actions(): { items: MessageAction[]; more?: MessageAction[] } {

@@ -45,8 +45,9 @@ test('? shows the keyboard shortcuts, but types a ? in a field; Ctrl+/ and the �
 test('↑ in the empty composer goes up to the messages, ↑ ↓ move between them, and Escape there cancels a reply', async ({ preview, page }) => {
 	await preview.open();
 	const composer = preview.composer();
-	const focused = () => page.evaluate(() => (document.activeElement as HTMLElement | null)?.dataset.messageId);
-	const rows = () => page.getByTestId('message-list').locator('article.ap-msg[data-message-id]:not(.ap-msg-system)').evaluateAll((articles) => articles.map((article) => (article as HTMLElement).dataset.messageId));
+	// What ↑ ↓ stop at: messages and notices, and the thread cards between them; each by its id.
+	const focused = () => page.evaluate(() => { const element = document.activeElement as HTMLElement | null; return element?.dataset.messageId ?? element?.dataset.thread; });
+	const rows = () => page.getByTestId('message-list').locator('article[data-message-id]:not(.ap-msg-system), button.ap-thread').evaluateAll((items) => items.map((item) => (item as HTMLElement).dataset.messageId ?? (item as HTMLElement).dataset.thread));
 
 	await test.step('↑ goes to the newest message, ↑ ↓ from one to the next, ↓ at the newest back to the composer', async () => {
 		await composer.click();
@@ -356,5 +357,79 @@ test.describe('a guest who only reads', () => {
 		// ↓ from nowhere goes there too.
 		await page.keyboard.press('ArrowDown');
 		expect(await focused()).toBe(order.at(-1));
+	});
+});
+
+test('the timeline is one Tab stop: ← → go through a message, its keys boxed for the keyboard; thread cards are stops; Shift+↑ ↓ select a run', async ({ preview, page }) => {
+	await preview.open();
+	const composer = preview.composer();
+	const list = page.getByTestId('message-list');
+	const inList = () => list.evaluate((element) => element.contains(document.activeElement));
+	await composer.click();
+	for (const text of ['alpha-1', 'beta-2', 'gamma-3']) {
+		await page.keyboard.type(text);
+		await page.keyboard.press('Enter');
+		await expect(preview.message(text)).toBeVisible();
+	}
+	const three = preview.message('gamma-3');
+
+	await test.step('Shift+Tab from the composer lands on the newest message, and Tab goes past the timeline', async () => {
+		await page.keyboard.press('Shift+Tab');
+		await expect(three).toBeFocused();
+		await page.keyboard.press('Tab');
+		expect(await inList()).toBe(false);
+		await page.keyboard.press('Shift+Tab');
+		await expect(three).toBeFocused();
+		await page.keyboard.press('Shift+Tab');
+		expect(await inList()).toBe(false);
+		// Back in, to the item it was last on.
+		await page.keyboard.press('Tab');
+		await expect(three).toBeFocused();
+	});
+
+	await test.step('→ goes into its links and buttons, ← → through them, Escape back to the row; R and E boxed for the keyboard', async () => {
+		// Its key's letter, the first of the label, boxed (`::first-letter`).
+		const reply = three.getByRole('button', { name: 'Reply to message', exact: true });
+		expect(await reply.evaluate((element) => getComputedStyle(element, '::first-letter').backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
+		const seen: string[] = [];
+		for (let i = 0; i < 8; i++) {
+			await page.keyboard.press('ArrowRight');
+			seen.push(await page.evaluate(() => document.activeElement?.getAttribute('aria-label') ?? document.activeElement?.textContent ?? ''));
+		}
+		expect(seen).toContain('Reply to message');
+		expect(seen).toContain('Edit message');
+		expect(await three.evaluate((row) => row.contains(document.activeElement) && row !== document.activeElement)).toBe(true);
+		await page.keyboard.press('Escape');
+		await expect(three).toBeFocused();
+		// A pointer on a message alone doesn't box them.
+		await composer.click();
+		await preview.message('alpha-1').hover();
+		expect(await preview.message('alpha-1').getByRole('button', { name: 'Reply to message', exact: true }).evaluate((element) => getComputedStyle(element, '::first-letter').backgroundColor)).toBe('rgba(0, 0, 0, 0)');
+	});
+
+	await test.step('Shift+↑ selects up from the message, Shift+↓ gives them back', async () => {
+		await page.keyboard.press('ArrowUp');
+		await expect(three).toBeFocused();
+		await page.keyboard.press('Shift+ArrowUp');
+		const bar = page.getByTestId('selection-bar');
+		await expect(bar).toContainText('2 messages selected');
+		await page.keyboard.press('Shift+ArrowUp');
+		await expect(bar).toContainText('3 messages selected');
+		await expect(preview.message('alpha-1')).toBeFocused();
+		await page.keyboard.press('Shift+ArrowDown');
+		await expect(bar).toContainText('2 messages selected');
+		await page.keyboard.press('Escape');
+		await expect(bar).toHaveCount(0);
+	});
+
+	await test.step('a thread\'s card between the messages is a stop for ↑', async () => {
+		await composer.click();
+		await page.keyboard.press('ArrowUp');
+		let onCard = false;
+		for (let i = 0; i < 12 && !onCard; i++) {
+			await page.keyboard.press('ArrowUp');
+			onCard = await page.evaluate(() => document.activeElement?.classList.contains('ap-thread') ?? false);
+		}
+		expect(onCard).toBe(true);
 	});
 });

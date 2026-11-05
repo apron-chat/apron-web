@@ -35,11 +35,13 @@ export function shortcutGroups(mac: boolean): ShortcutGroup[] {
 				{ label: 'Go to the messages', where: 'In an empty composer, or with nothing focused', keys: [['↑']] },
 				{ label: 'Previous or next message', where: 'On a message', keys: [['↑'], ['↓']] },
 				{ label: 'Back to the composer', where: 'On a message', keys: [['Esc']] },
+				{ label: 'Its links and buttons', where: 'On a message', keys: [['←'], ['→']] },
 				{ label: 'Its actions', where: 'On a message', keys: [['Enter']] },
 				// Message.svelte's keydown.
 				{ label: 'Reply', where: 'On a message', keys: [['r']] },
 				{ label: 'Edit your message', where: 'On a message', keys: [['e']] },
-				{ label: 'Select it, to move it', where: 'On a message', keys: [['x']] }
+				{ label: 'Select it, to move it', where: 'On a message', keys: [['x']] },
+				{ label: 'Select up or down from it', where: 'On a message', keys: [[shift, '↑'], [shift, '↓']] }
 			]
 		},
 		{
