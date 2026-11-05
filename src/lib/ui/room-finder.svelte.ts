@@ -88,7 +88,7 @@ export class RoomFinder {
 			const [room] = scope;
 			const listing = this.listings[room.id];
 			if (!listing || listing.state === 'listing') return { note: `Listing ${room.title}’s other threads…` };
-			if (listing.state === 'failed') return { note: `${room.title}’s other threads didn’t list: ${listing.error}` };
+			if (listing.state === 'failed') return { note: `${room.title}’s other threads didn’t list: ${listing.error}`, label: 'Try Again', onclick: () => this.list(host, room.id, true) };
 			const others = (host.threadsListed[room.id] ?? []).filter((thread) => !thread.joined).length;
 			return { note: others ? `Threads you haven’t joined: the ${others === 1 ? 'one' : others} the server lists, its most recently active.` : 'No threads you haven’t joined, as the server lists them.' };
 		});
@@ -102,9 +102,12 @@ export class RoomFinder {
 		});
 	}
 
-	/** Lists `roomId`'s threads you haven't joined, once while it stays scoped; a listing the client reuses answers at once. */
-	private list(host: RoomFinderHost, roomId: string): void {
-		if (this.listings[roomId]) return;
+	/**
+	 * Lists `roomId`'s threads you haven't joined, once while search is open (a listing the client reuses answers at
+	 * once), or `again` after it failed, when Try Again asks: never by itself, which would ask as often as the page changes.
+	 */
+	private list(host: RoomFinderHost, roomId: string, again = false): void {
+		if (this.listings[roomId] && !(again && this.listings[roomId].state === 'failed')) return;
 		this.listings[roomId] = { state: 'listing' };
 		host.client.listRooms(roomId).then(
 			() => (this.listings[roomId] = { state: 'listed' }),

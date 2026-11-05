@@ -74,6 +74,25 @@ describe('RoomFinder', () => {
 		stop();
 	});
 
+	it('says when the listing failed, and Try Again lists again, only then', async () => {
+		const { state, finder, listRooms, stop } = setup(rooms);
+		listRooms.mockRejectedValueOnce(new Error('too many requests'));
+		state.query = 'room:#general ';
+		flushSync();
+		await Promise.resolve();
+		flushSync();
+		expect(finder.foot).toMatchObject({ note: 'General’s other threads didn’t list: too many requests', label: 'Try Again' });
+		// The page changing doesn't ask again by itself.
+		state.unread = { t1: 1 };
+		flushSync();
+		expect(listRooms).toHaveBeenCalledTimes(1);
+		finder.foot?.onclick?.();
+		flushSync();
+		expect(listRooms).toHaveBeenCalledTimes(2);
+		expect(finder.foot).toEqual({ note: 'Listing General’s other threads…' });
+		stop();
+	});
+
 	it('lists nothing where the server lists no rooms, and says nothing then', () => {
 		const { state, finder, listRooms, stop } = setup(rooms);
 		state.canList = false;

@@ -83,7 +83,7 @@
 		get threadsListed() { return threadsListed; },
 		get unread() { return unread; },
 		get mentions() { return mentions; },
-		get you() { return users[client.snapshot().you?.user_id ?? ''] ?? client.snapshot().you; },
+		get you() { return directory.you; },
 		get query() { return parsed; },
 		get active() { return mode === 'rooms'; },
 		get canList() { return canList; }
