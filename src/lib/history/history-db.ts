@@ -283,9 +283,10 @@ async function pageRows(records: IDBObjectStore, room: string, query: PageQuery,
 
 /**
  * Reads back what is kept, or undefined when nothing is: for each room `plan` takes (its row with a sync, and
- * where to read from, if not its start), its newest `window` entries, in one transaction.
+ * where to read from, if not its start), its newest `window` entries, in one transaction. `plan` sees the meta
+ * row too, which says how recently every room kept was caught up.
  */
-export async function readHistory(db: IDBDatabase, window: number, plan: (row: RoomRow) => { from?: number } | undefined): Promise<KeptHistory | undefined> {
+export async function readHistory(db: IDBDatabase, window: number, plan: (row: RoomRow, meta: MetaRow) => { from?: number } | undefined): Promise<KeptHistory | undefined> {
 	const transaction = db.transaction(['meta', 'rooms', 'records'], 'readonly');
 	const [meta, rows] = await Promise.all([
 		done(transaction.objectStore('meta').get(META)) as Promise<MetaRow | undefined>,
@@ -294,7 +295,7 @@ export async function readHistory(db: IDBDatabase, window: number, plan: (row: R
 	if (!meta) return undefined;
 	const records = transaction.objectStore('records');
 	const rooms = await Promise.all(rows.map(async (row) => {
-		const planned = row.sync ? plan(row) : undefined;
+		const planned = row.sync ? plan(row, meta) : undefined;
 		if (!planned) return undefined;
 		const { page, more } = await pageRows(records, row.room, { limit: window }, planned.from);
 		return { row, entries: page, older: more };

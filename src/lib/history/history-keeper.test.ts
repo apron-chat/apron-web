@@ -7,6 +7,7 @@ import { readKept } from '$lib/test/kept-history';
 import { deleteHistory, historyName, listHistories, openHistory, writeHistory, type Databases } from './history-db';
 import { HistoryKeeper, mergeOf, plannedRoom, RESTORE_WINDOW, restoredState, type HistoryClient } from './history-keeper';
 import type { RoomSync } from '$lib/protocol/client';
+import type { RestoredState } from '$lib/protocol/client-types';
 
 const URL = 'wss://chat.example/';
 /** The memory server's account. */
@@ -42,6 +43,24 @@ function saved(client: ChatClient): HistoryClient {
 		restore: (state) => client.restore(state),
 		beforeFreshSession: (hook) => client.beforeFreshSession(hook),
 		olderPagesFrom: (source) => client.olderPagesFrom(source)
+	};
+}
+
+/** A client with nothing of its own, its session saved here: for what the keeper does before a session starts. */
+function stub(): HistoryClient {
+	return {
+		url: URL,
+		keptSessionFor: () => true,
+		keptState: () => undefined,
+		usersRevision: () => 0,
+		storedRecords: () => ({ rooms: [], messages: [], reactions: [], memberships: [] }),
+		observeStore: () => () => undefined,
+		subscribe: () => () => undefined,
+		message: () => undefined,
+		roomRecord: () => undefined,
+		restore: () => true,
+		beforeFreshSession: () => undefined,
+		olderPagesFrom: () => undefined
 	};
 }
 
@@ -780,6 +799,37 @@ describe('plannedRoom and restoredState', () => {
 		expect(restoredState({ meta: { ...meta, current: true }, skipped: 0, rooms: rows }, 30 * day, now).state.rooms.map((sync) => sync.id)).toEqual(['quiet']);
 		// Saved while a room was catching up: each goes by its own checkpoint.
 		expect(restoredState({ meta, skipped: 0, rooms: rows }, 30 * day, now).state.rooms).toEqual([]);
+	});
+
+	it('reads back a quiet room caught up when it was saved, so the restore stays complete', async () => {
+		const today = Date.now();
+		const ago = (days: number) => String(today - days * day);
+		const indexedDB = new IDBFactory();
+		const db = await openHistory(indexedDB, historyName(URL, 'ada'));
+		const message = (room: string, log: string) => ({ message_id: log, log_id: log, room_id: room, from: { user_id: 'ada' } });
+		const write = (current: boolean) => writeHistory(db, {
+			changes: [], dropped: [], reset: true,
+			rooms: [{ room: 'quiet', sync: { id: 'quiet', checkpoint: ago(40), floor: ago(40) } }, { room: 'busy', sync: { id: 'busy', checkpoint: ago(1), floor: ago(1) } }],
+			whole: [{ room: 'quiet', messages: [message('quiet', ago(40))], reactions: [], memberships: [] }, { room: 'busy', messages: [message('busy', ago(1))], reactions: [], memberships: [] }],
+			meta: { server: URL, userId: 'ada', complete: true, current, users: [] }
+		}, new Set());
+		const restored = async () => {
+			let state: RestoredState | undefined;
+			const keeper = new HistoryKeeper({ indexedDB, locks: null, retentionMs: 30 * day, now: () => today });
+			await keeper.prepare(URL);
+			await keeper.restore({ ...stub(), restore: (taken) => ((state = taken), true) });
+			return state!;
+		};
+		await write(true);
+		const state = await restored();
+		expect(state.rooms.map((sync) => sync.id).sort()).toEqual(['busy', 'quiet']);
+		expect(state.rooms.find((sync) => sync.id === 'quiet')).toMatchObject({ olderBefore: String(today - 30 * day), hasOlder: true });
+		expect(state.complete).toBe(true);
+		// Saved while a room was catching up: the quiet room goes by its own checkpoint, and starts over.
+		await write(false);
+		const behind = await restored();
+		expect(behind.rooms.map((sync) => sync.id)).toEqual(['busy']);
+		expect(behind.complete).toBe(false);
 	});
 
 	it('keeps everything without a cutoff, or where positions are not times', () => {

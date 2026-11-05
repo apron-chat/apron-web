@@ -18,7 +18,7 @@ import type { ClientSnapshot, KeptState, RestoredState, RoomSync } from '$lib/pr
 import { compareLogIds, type StoreChange, type StoredRecords } from '$lib/protocol/reducer';
 import type { JsonObject, MessageRecord, RoomRecord } from '$lib/protocol/types';
 import { decrement, loadKeptSessionUser } from '$lib/protocol/client-internals';
-import { deleteHistory, HistoryGone, historyName, listHistories, openHistory, pageHistory, pruneHistory, readHistory, readMeta, readRoomRows, scanMessages, timeLike, timeLikeLog, writeHistory, type Databases, type HistoryWrite, type KeptHistory, type RoomRow } from './history-db';
+import { deleteHistory, HistoryGone, historyName, listHistories, openHistory, pageHistory, pruneHistory, readHistory, readMeta, readRoomRows, scanMessages, timeLike, timeLikeLog, writeHistory, type Databases, type HistoryWrite, type KeptHistory, type MetaRow, type RoomRow } from './history-db';
 import { historyResult } from './log';
 
 /** What the keeper needs of the chat client. */
@@ -72,6 +72,11 @@ export function plannedRoom(sync: RoomSync, cutoff: number | undefined, caughtUp
 	if (synced !== undefined && synced < cutoff) return undefined;
 	const oldest = sync.olderBefore ?? sync.floor;
 	return oldest === undefined || Number(oldest) < cutoff ? { sync: { ...sync, olderBefore: String(cutoff), hasOlder: true }, from: cutoff } : { sync };
+}
+
+/** When every room kept was caught up, if that is known: written with every joined room kept and none catching up. */
+export function caughtUpSince(meta: MetaRow): number | undefined {
+	return meta.complete && meta.current ? meta.savedAt : undefined;
 }
 
 /**
@@ -307,8 +312,9 @@ export class HistoryKeeper {
 		// The account of the session saved there: the one kept for the server, which signing in confirms.
 		const account = await this.keptAccount(server);
 		if (!account) return undefined;
-		const kept = await readHistory(await this.open(server, account), RESTORE_WINDOW, (row) => {
-			const planned = plannedRoom(row.sync!, cutoff);
+		// Planned as `restoredState` plans them, so a quiet room caught up when it was saved is read, not passed over.
+		const kept = await readHistory(await this.open(server, account), RESTORE_WINDOW, (row, meta) => {
+			const planned = plannedRoom(row.sync!, cutoff, caughtUpSince(meta));
 			return planned && (planned.from !== undefined ? { from: planned.from } : {});
 		});
 		return kept && { kept, now };
