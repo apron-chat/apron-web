@@ -1,0 +1,41 @@
+/**
+ * How well a room's name matches what is typed, shared by the composer's `#` and search's `room:` suggestions
+ * (`searchRooms`) and Go to a Room or Thread (`$lib/ui/room-search`): kept apart from the rest of that, which loads
+ * only once search opens.
+ */
+import { folded } from './fold';
+
+/** How well a name matches, best first: the whole of it, its start, the start of a word in it, anywhere in it, its description. */
+export type MatchTier = 0 | 1 | 2 | 3 | 4;
+
+/** What separates the words of a title, for a match at the start of one. */
+const WORD_BREAK = /[\s\-_.,:;/()[\]#@&+|]/;
+
+/** Each room's folded title, `room_id` and description, folded once however many queries it is ranked for. */
+const foldings = new WeakMap<object, { title: string; id: string; description: string }>();
+
+function foldingOf(room: { id: string; title: string; description?: string }): { title: string; id: string; description: string } {
+	let folding = foldings.get(room);
+	if (!folding) {
+		folding = { title: folded(room.title.trim()), id: folded(room.id), description: room.description ? folded(room.description) : '' };
+		foldings.set(room, folding);
+	}
+	return folding;
+}
+
+/** How `room` matches `wanted` (folded, trimmed, without a `#`), or undefined when it doesn't; its description counts only with `described`. */
+export function matchTier(room: { id: string; title: string; description?: string }, wanted: string, described = false): MatchTier | undefined {
+	if (!wanted) return 0;
+	const { title, id, description } = foldingOf(room);
+	if (title === wanted || id === wanted) return 0;
+	if (title.startsWith(wanted) || id.startsWith(wanted)) return 1;
+	for (let at = title.indexOf(wanted); at > 0; at = title.indexOf(wanted, at + 1)) if (WORD_BREAK.test(title[at - 1])) return 2;
+	if (title.includes(wanted) || id.includes(wanted)) return 3;
+	if (described && description.includes(wanted)) return 4;
+	return undefined;
+}
+
+/** What is typed, as a match wants it: folded, trimmed, without a leading `#`. */
+export function wantedOf(typed: string): string {
+	return folded(typed.trim().replace(/^#/, ''));
+}

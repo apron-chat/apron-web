@@ -17,6 +17,7 @@ export function shortcutGroups(mac: boolean): ShortcutGroup[] {
 			shortcuts: [
 				// +page.svelte's windowKeydown.
 				{ label: 'Show keyboard shortcuts', keys: [['?'], [mod, '/']] },
+				{ label: 'Go to a room or thread', keys: [[mod, 'K']] },
 				{ label: 'Search local history', keys: [[mod, 'F']] }
 			]
 		},
@@ -51,7 +52,9 @@ export function shortcutGroups(mac: boolean): ShortcutGroup[] {
 				{ label: 'Previous or next room or thread', keys: [[alt, '↑'], [alt, '↓']] },
 				{ label: 'Previous or next room, past threads', keys: [[alt, shift, '↑'], [alt, shift, '↓']] },
 				// Sidebar.svelte's reorderKey.
-				{ label: 'Move a room up or down', where: 'On a room in the list', keys: [[alt, '↑'], [alt, '↓']] }
+				{ label: 'Move a room up or down', where: 'On a room in the list', keys: [[alt, '↑'], [alt, '↓']] },
+				// SearchDialog's fieldKey.
+				{ label: 'Search a room’s threads', where: 'On a room, in Go to a room or thread', keys: [['→']] }
 			]
 		}
 	];

@@ -15,7 +15,7 @@
 		},
 		"load-busy": {
 			"requests": 20,
-			"startupJsKB": 878.8,
+			"startupJsKB": 888.2,
 			"domNodes": 1193,
 			"layouts": 13,
 			"styleRecalcs": 16,
@@ -33,7 +33,7 @@
 		},
 		"load-phone-busy": {
 			"requests": 20,
-			"startupJsKB": 878.8,
+			"startupJsKB": 888.2,
 			"domNodes": 1194,
 			"layouts": 9,
 			"styleRecalcs": 15,
@@ -93,11 +93,11 @@
 	},
 	"bundle": {
 		"jsGzipKB": 615.7,
-		"cssGzipKB": 25.8
+		"cssGzipKB": 26.4
 	},
 	"production": {
 		"startupFiles": 13,
-		"startupJsKB": 817.6,
-		"startupJsBrotliKB": 239.3
+		"startupJsKB": 826.1,
+		"startupJsBrotliKB": 241.2
 	}
 }
