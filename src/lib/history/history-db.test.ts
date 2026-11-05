@@ -48,15 +48,25 @@ describe('writeHistory', () => {
 	it('drops what a bound or a rebuild drops, and a rebuild’s sync with it', async () => {
 		const db = await opened();
 		const membership = { log_id: at(3), room_id: 'general', user: ada, joined: true };
+		const grace = { user_id: 'grace' };
 		await writeHistory(db, write({
-			whole: [{ room: 'general', messages: [message(at(3)), message(at(1))], reactions: [{ log_id: at(3), message_id: at(1), room_id: 'general', from: ada, emojis: ['👍'] }], memberships: [membership] }],
+			whole: [{
+				room: 'general', messages: [message(at(3)), message(at(1))], memberships: [membership],
+				reactions: [
+					{ log_id: at(3), message_id: at(1), room_id: 'general', from: ada, emojis: ['👍'] },
+					// On the message the bound evicts, logged below it and above.
+					{ log_id: at(3, 1), message_id: at(3), room_id: 'general', from: grace, emojis: ['👀'] },
+					{ log_id: at(1, 1), message_id: at(3), room_id: 'general', from: ada, emojis: ['🎉'] }
+				]
+			}],
 			rooms: [{ room: 'general', record: { room_id: 'general' }, sync: { id: 'general', checkpoint: at(1) } }]
 		}), new Set());
 		await writeHistory(db, write({ changes: [{ kind: 'evict', room: 'general', floor: at(2) }] }), new Set(['general']));
 		let kept = await readKept(db);
 		expect(kept?.messages.map((record) => record.message_id)).toEqual([at(1)]);
 		expect(kept?.memberships).toEqual([]);
-		expect(kept?.reactions).toHaveLength(1);
+		// The set below the bound on a message above it stays; the evicted message's go with it.
+		expect(kept?.reactions.map((set) => set.emojis)).toEqual([['👍']]);
 
 		await writeHistory(db, write({ changes: [{ kind: 'membership', entry: membership }, { kind: 'clearRoom', room: 'general' }] }), new Set(['general']));
 		kept = await readKept(db);

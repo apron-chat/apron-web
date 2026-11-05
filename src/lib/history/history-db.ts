@@ -398,10 +398,21 @@ export async function writeHistory(db: IDBDatabase, write: HistoryWrite, kept: R
 			case 'membership':
 				if (kept.has(change.entry.room_id)) records.put(membershipRow(change.entry));
 				break;
-			case 'evict':
-				// What the client drops below a room's bound: its messages and memberships (`evictBefore`).
-				if (kept.has(change.room)) await eachRow(records, roomRange(change.room, Number(change.floor)), (row, cursor) => { if (row.kind !== 'r') cursor.delete(); });
+			case 'evict': {
+				// What the client drops below a room's bound (`evictBefore`): its memberships, and its messages with their
+				// reaction sets wherever those are logged. A set below the bound on a message above it stays with its message.
+				if (!kept.has(change.room)) break;
+				const evicted: string[] = [];
+				await eachRow(records, roomRange(change.room, Number(change.floor)), (row, cursor) => {
+					if (row.kind === 'r') return;
+					if (row.kind === 'm') evicted.push(row.id);
+					cursor.delete();
+				});
+				// A set's id is its message's and its sender's (`reactionRow`): every set of a message is one index range.
+				const sets = await Promise.all(evicted.map((id) => done(byKey.getAllKeys(IDBKeyRange.bound(['r', `${id} `], ['r', `${id}!`], false, true)))));
+				for (const key of sets.flat()) if ((key as [string])[0] === change.room) records.delete(key);
 				break;
+			}
 			case 'clearRoom': {
 				// A rebuild: its messages and reactions go, and its sync with them until the room settles again.
 				if (!kept.has(change.room)) break;
