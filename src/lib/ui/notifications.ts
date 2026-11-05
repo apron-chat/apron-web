@@ -2,7 +2,7 @@ import { embedsLabel } from '$lib/protocol/embeds';
 import { compareLogIds } from '$lib/protocol/reducer';
 import { withoutBidiOverrides } from '$lib/protocol/plain-text';
 import { isJsonObject } from '$lib/protocol/types';
-import { loadShownMarks, markShown } from './push-store';
+import { loadShownMarks, markShown, type RoomTitle } from './push-store';
 
 export type NotificationPermissionState = 'default' | 'granted' | 'denied' | 'unsupported';
 export type NotificationTestResult = 'sent' | 'denied' | 'unsupported' | 'error';
@@ -256,13 +256,15 @@ export interface PushPayload {
 /**
  * Reads a push payload (§4.9): an object with `push_id`, `unread` and
  * `message`, ignoring other fields. Without `message` (a badge push) there
- * is no notification. Undefined for anything but an object.
+ * is no notification. Undefined for anything but an object. `titles`: the
+ * room titles kept for each account (`loadRoomTitles`), to name the room as
+ * the page would.
  */
-export function readPush(payload: unknown): PushPayload | undefined {
+export function readPush(payload: unknown, titles?: ReadonlyMap<string, ReadonlyMap<string, RoomTitle>>): PushPayload | undefined {
 	if (!isJsonObject(payload)) return undefined;
 	const pushId = typeof payload.push_id === 'string' && payload.push_id ? payload.push_id : undefined;
 	const unread = typeof payload.unread === 'number' && Number.isInteger(payload.unread) && payload.unread >= 0 ? payload.unread : undefined;
-	const notification = Object.hasOwn(payload, 'message') ? pushNotification(payload.message, pushId) : undefined;
+	const notification = Object.hasOwn(payload, 'message') ? pushNotification(payload.message, pushId, pushId ? titles?.get(pushId) : undefined) : undefined;
 	const unreadable = Object.hasOwn(payload, 'message') && !notification;
 	return { ...(pushId ? { pushId } : {}), ...(unread !== undefined ? { unread } : {}), ...(notification ? { notification } : {}), ...(unreadable ? { unreadable: true as const } : {}) };
 }
@@ -349,9 +351,11 @@ export function notificationTitle(sender: string, room: { title: string; namedFo
  * the message's own notification, which replaces the page's for the same
  * message quietly, and the other way round. Undefined for anything else,
  * and without a `push_id` or `message_id`, which every push of this
- * client's registrations carries.
+ * client's registrations carries. The payload names its room only by
+ * `room_id` (§4.9.3): with the account's kept `titles`, the room is named as
+ * the page names it, else by its `room_id`.
  */
-export function pushNotification(message: unknown, pushId: string | undefined): { title: string; options: ShowNotificationOptions } | undefined {
+export function pushNotification(message: unknown, pushId: string | undefined, titles?: ReadonlyMap<string, RoomTitle>): { title: string; options: ShowNotificationOptions } | undefined {
 	if (!isJsonObject(message) || typeof message.room_id !== 'string' || !message.room_id) return undefined;
 	const messageId = typeof message.message_id === 'string' && message.message_id ? message.message_id : undefined;
 	if (pushId === undefined || messageId === undefined) return undefined;
@@ -363,7 +367,8 @@ export function pushNotification(message: unknown, pushId: string | undefined): 
 	const text = isJsonObject(message.body) && typeof message.body.text === 'string' ? message.body.text : undefined;
 	const body = notificationBody(text) || embedsLabel(isJsonObject(message.body) ? message.body.embeds : undefined) || 'New message';
 	const target: PushTarget = { push: true, roomId, pushId, messageId, group: notificationGroup(pushId, roomId) };
-	return { title: `${sender} · ${shown(roomId)}`, options: { body, tag: messageNotificationTag(pushId, messageId), renotify: false, data: target } };
+	const room = titles?.get(roomId);
+	return { title: room ? notificationTitle(sender, room) : `${sender} · ${shown(roomId)}`, options: { body, tag: messageNotificationTag(pushId, messageId), renotify: false, data: target } };
 }
 
 /** The app badge API, where the browser has it (`navigator` in a page or a service worker). */

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { memoryIdb } from '$lib/test/idb';
-import { loadRegisterAgain, PUSH_RESUBSCRIBED, saveEnabledPushIds } from '$lib/ui/push-store';
+import { loadRegisterAgain, PUSH_RESUBSCRIBED, saveEnabledPushIds, saveRoomTitles } from '$lib/ui/push-store';
 import { NOTIFICATION_CLICK, PUSH_CLICK, QUIET_PUSH } from '$lib/ui/notifications';
 
 /**
@@ -92,6 +92,17 @@ describe('the service worker', () => {
 		expect(shown.map((entry) => [entry.options.tag, entry.options.body])).toEqual([['apron:a1:11', 'again']]);
 		expect(setAppBadge).toHaveBeenLastCalledWith(5);
 		expect(idb.stored('apron-push', 'state').get('shown')).toEqual({ 'a1:general': '11' });
+	});
+
+	it('names a pushed room as the page does, from the titles it kept for that account, and by its room_id without one', async () => {
+		await saveEnabledPushIds(['a1']);
+		await saveRoomTitles('a1', new Map([['7f3a9c', { title: 'Design reviews' }], ['p1', { title: 'Bob', namedForMembers: true as const }]]));
+		const inRoom = (roomId: string, messageId: string) => push({ ...message, message: { ...message.message, room_id: roomId, message_id: messageId } });
+		await inRoom('7f3a9c', '20');
+		await inRoom('p1', '21');
+		await inRoom('unknown-room', '22');
+		expect(shown.map((entry) => entry.title)).toEqual(['Bob · Design reviews', 'Bob', 'Bob · unknown-room']);
+		await saveRoomTitles('a1', undefined);
 	});
 
 	it('drops a push for an account push isn’t on for, as the page saved them', async () => {

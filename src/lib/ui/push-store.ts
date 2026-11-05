@@ -3,14 +3,18 @@
  * service worker can't read localStorage): the `push_id`s of the accounts
  * push is on for, so a push for any other is dropped (§4.9), the newest
  * message each notification group has notified about, so a late push or
- * page notification never notifies about it again, and whether the push
- * service replaced the subscription since a page last registered it.
+ * page notification never notifies about it again, whether the push
+ * service replaced the subscription since a page last registered it, and the
+ * titles of each account's rooms, so a push names its room as the page does.
  */
 const DB = 'apron-push';
 const STORE = 'state';
 const ENABLED = 'enabled';
 const SHOWN = 'shown';
 const REGISTER_AGAIN = 'registerAgain';
+const TITLES = 'titles';
+/** Rooms whose titles are kept for each account: a push for any other names it by its `room_id`. */
+export const TITLES_MAX = 500;
 /** Groups remembered: the most recently notified. */
 const SHOWN_MAX = 200;
 
@@ -155,5 +159,81 @@ export async function clearRegisterAgain(): Promise<void> {
 		await run('readwrite', (store) => store.delete(REGISTER_AGAIN));
 	} catch {
 		// Left set, the next page registers once more, which changes nothing.
+	}
+}
+
+/**
+ * How a room is named in a notification, as the page names it (`notificationTitle`): its shown title, and whether
+ * that is its members' names (`namedForMembers`).
+ */
+export interface RoomTitle {
+	title: string;
+	namedForMembers?: true;
+}
+
+/**
+ * Kept as a list of `[push_id, [[room_id, title, named], …]]`, not as objects keyed by id: a `room_id` is any string
+ * the server chose (§2.4), `__proto__` included.
+ */
+type KeptTitles = Array<[string, Array<[string, string, boolean]>]>;
+
+/** What `TITLES` holds, as a map of maps, without anything of the wrong shape. */
+function readTitles(value: unknown): Map<string, Map<string, RoomTitle>> {
+	const accounts = new Map<string, Map<string, RoomTitle>>();
+	if (!Array.isArray(value)) return accounts;
+	for (const account of value) {
+		if (!Array.isArray(account) || typeof account[0] !== 'string' || !Array.isArray(account[1])) continue;
+		const rooms = new Map<string, RoomTitle>();
+		for (const room of account[1]) {
+			if (!Array.isArray(room) || typeof room[0] !== 'string' || typeof room[1] !== 'string' || !room[1]) continue;
+			rooms.set(room[0], room[2] === true ? { title: room[1], namedForMembers: true } : { title: room[1] });
+		}
+		accounts.set(account[0], rooms);
+	}
+	return accounts;
+}
+
+/** The room titles kept for each account's `push_id`; empty when there are none or IndexedDB can't be read. */
+export async function loadRoomTitles(): Promise<Map<string, Map<string, RoomTitle>>> {
+	try {
+		return readTitles(await run('readonly', (store) => store.get(TITLES)));
+	} catch {
+		return new Map();
+	}
+}
+
+/**
+ * Keeps `titles` as the room titles of the account with `pushId`, replacing what was kept for it, at most
+ * `TITLES_MAX` of them; undefined `titles` forgets that account's. Accounts push is no longer on for here are
+ * forgotten as well. The read and the write are one transaction, so tabs of different accounts can't undo each other.
+ */
+export async function saveRoomTitles(pushId: string, titles: ReadonlyMap<string, RoomTitle> | undefined): Promise<void> {
+	try {
+		const db = await open();
+		try {
+			await new Promise<void>((resolve, reject) => {
+				const transaction = db.transaction(STORE, 'readwrite');
+				const store = transaction.objectStore(STORE);
+				const read = store.get(TITLES);
+				const enabled = store.get(ENABLED);
+				enabled.onsuccess = () => {
+					const accounts = readTitles(read.result);
+					if (titles) accounts.set(pushId, new Map([...titles].slice(0, TITLES_MAX)));
+					else accounts.delete(pushId);
+					const on: unknown = enabled.result;
+					if (Array.isArray(on)) for (const id of accounts.keys()) if (id !== pushId && !on.includes(id)) accounts.delete(id);
+					const kept: KeptTitles = [...accounts].map(([id, rooms]) => [id, [...rooms].map(([room, { title, namedForMembers }]) => [room, title, namedForMembers === true])]);
+					if (kept.length) store.put(kept, TITLES);
+					else store.delete(TITLES);
+				};
+				transaction.oncomplete = () => resolve();
+				transaction.onerror = () => reject(transaction.error);
+				transaction.onabort = () => reject(transaction.error);
+			});
+		} finally {
+			db.close();
+		}
+	} catch {
+		// Without them, a push names its room by its `room_id`, as before.
 	}
 }

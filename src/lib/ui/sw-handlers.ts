@@ -5,7 +5,7 @@ import {
 	clickedTab, closeOlderInGroup, pageTarget, planPush, pushTarget, readPush,
 	type PushPayload, type PushTarget, type ShowNotificationOptions, type TabAnswer
 } from './notifications';
-import { PUSH_RESUBSCRIBED } from './push-store';
+import { PUSH_RESUBSCRIBED, type RoomTitle } from './push-store';
 
 /**
  * The service worker's push and notification-click handlers (§4.9), apart
@@ -22,6 +22,8 @@ export interface PushContext {
 	loadEnabled(): Promise<string[] | undefined | 'unreadable'>;
 	/** The newest message each group notified about. */
 	loadMarks(): Promise<Record<string, string>>;
+	/** The room titles kept for each account's `push_id` (`loadRoomTitles`); without it, rooms are named by `room_id`. */
+	loadTitles?(): Promise<ReadonlyMap<string, ReadonlyMap<string, RoomTitle>>>;
 	markShown(group: string, messageId: string): Promise<void>;
 	setBadge(unread: number): Promise<void>;
 	/** A page of the app is in view: it keeps the badge itself. */
@@ -32,12 +34,12 @@ export interface PushContext {
 /** Handles a push: its payload, read as JSON (throwing when it isn't). */
 export async function handlePush(payload: () => unknown, context: PushContext): Promise<void> {
 	let push: PushPayload | undefined;
+	const [titles, visible, enabled, marks] = await Promise.all([context.loadTitles?.(), context.registration.getNotifications(), context.loadEnabled(), context.loadMarks()]);
 	try {
-		push = readPush(payload());
+		push = readPush(payload(), titles);
 	} catch {
 		push = undefined;
 	}
-	const [visible, enabled, marks] = await Promise.all([context.registration.getNotifications(), context.loadEnabled(), context.loadMarks()]);
 	const plan = planPush(push, visible, { ...(enabled !== undefined ? { enabled } : {}), marks });
 	if (plan.badge !== undefined && !(await context.pageVisible())) await context.setBadge(plan.badge);
 	if (!plan.show) return;

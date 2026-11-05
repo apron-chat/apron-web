@@ -665,7 +665,11 @@ while offline), and accounts on servers with the same key share it. When
 another server, with another key, holds it, the note names that server's host,
 and **Alert for this server instead** takes it over;
 tabs don't take it back on their own. Its `push_id`s are kept in IndexedDB for
-the service worker, which drops a push for any account push isn't on for. When
+the service worker, which drops a push for any account push isn't on for. So
+are the titles of that account's rooms, up to 500 (joined ones first), while
+push is on for it: a push names its room only by `room_id` (§4.9.3), so a
+notification shown while Apron is closed names the room as the page would, and
+by its `room_id` for a room the page hadn't seen. When
 the browser replaces the subscription (one that expired, or that its push
 service renewed), the service worker subscribes again with the same key and
 tells any open tab, which registers the new one with the server; with no tab

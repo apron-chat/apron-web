@@ -4,7 +4,7 @@
 /// <reference lib="webworker" />
 import { base, build, files, prerendered, version } from '$service-worker';
 import { setAppBadge, type BadgeNavigator } from '$lib/ui/notifications';
-import { loadEnabledPushIds, loadShownMarks, markRegisterAgain, markShown } from '$lib/ui/push-store';
+import { loadEnabledPushIds, loadRoomTitles, loadShownMarks, markRegisterAgain, markShown } from '$lib/ui/push-store';
 import { anyWindowVisible, appWindows, askTab, handleClick, handlePush, handleSubscriptionChange, isNewerMessage } from '$lib/ui/sw-handlers';
 
 /**
@@ -104,6 +104,7 @@ sw.addEventListener('push', (event) => {
 		registration: sw.registration,
 		loadEnabled: loadEnabledPushIds,
 		loadMarks: loadShownMarks,
+		loadTitles: loadRoomTitles,
 		markShown: (group, messageId) => markShown(group, messageId, isNewerMessage),
 		setBadge: (unread) => setAppBadge(sw.navigator as BadgeNavigator, unread),
 		pageVisible: () => anyWindowVisible(sw.clients),
