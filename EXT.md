@@ -201,6 +201,8 @@ Defined in [EXTENSIONS.md](https://github.com/shazow/apron/blob/main/EXTENSIONS.
   of 2048 pixels and `max_side`, and steps the quality down to fit
   `max_bytes`. It crops an avatar to a square of 512 pixels, or 256 when 512
   does not fit, no larger than `max_side`.
+- apron-web sends an animated image (GIF, APNG, or animated WebP) without
+  re-encoding it, but drops its EXIF, XMP and text metadata from the file.
 - apron-web fits the file of a `/emoji add` command to `emoji`, and other
   attachments to `upload`. Without `emoji`, it fits that file to `upload`.
 - Without a category, or for a type without `max_bytes`, apron-web aims for
