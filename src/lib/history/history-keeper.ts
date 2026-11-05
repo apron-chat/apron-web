@@ -18,7 +18,8 @@ import type { ClientSnapshot, KeptState, RestoredState, RoomSync } from '$lib/pr
 import { compareLogIds, type StoreChange, type StoredRecords } from '$lib/protocol/reducer';
 import type { JsonObject, MessageRecord, RoomRecord } from '$lib/protocol/types';
 import { decrement, loadKeptSessionUser } from '$lib/protocol/client-internals';
-import { deleteHistory, HistoryGone, historyName, listHistories, openHistory, pageHistory, pruneHistory, readHistory, readMeta, readRoomRows, scanMessages, timeLike, timeLikeLog, writeHistory, type Databases, type HistoryWrite, type KeptHistory, type RoomRow } from './history-db';
+import { deleteHistory, HistoryGone, historyName, listHistories, openHistory, pageHistory, pruneHistory, readHistory, readMeta, readRoomRows, scanMessages, timeLike, timeLikeLog, writeHistory, type Databases, type HistoryWrite, type KeptHistory, type MetaRow, type RoomRow } from './history-db';
+import { clearView, clearViewOf } from '$lib/ui/session-cache';
 import { historyResult } from './log';
 
 /** What the keeper needs of the chat client. */
@@ -40,6 +41,15 @@ export interface HistoryClient {
 
 /** The longest a batch of changes waits to be written. */
 export const FLUSH_MS = 2000;
+
+/**
+ * How long a write that failed for a passing reason (`AbortError`, `UnknownError`: the browser gave up on the
+ * transaction, not the disk on the data) waits before it is tried again, each time; after the last, keeping stops.
+ */
+export const WRITE_RETRY_MS = [2000, 10_000, 30_000];
+
+/** How often a page left open (an installed app, a tab kept for days) prunes what has aged past the retention. */
+export const PRUNE_MS = 6 * 60 * 60 * 1000;
 
 /** About how many records one write puts down for rooms written whole. */
 export const WHOLE_BUDGET = 1000;
@@ -72,6 +82,11 @@ export function plannedRoom(sync: RoomSync, cutoff: number | undefined, caughtUp
 	if (synced !== undefined && synced < cutoff) return undefined;
 	const oldest = sync.olderBefore ?? sync.floor;
 	return oldest === undefined || Number(oldest) < cutoff ? { sync: { ...sync, olderBefore: String(cutoff), hasOlder: true }, from: cutoff } : { sync };
+}
+
+/** When every room kept was caught up, if that is known: written with every joined room kept and none catching up. */
+export function caughtUpSince(meta: MetaRow): number | undefined {
+	return meta.complete && meta.current ? meta.savedAt : undefined;
 }
 
 /**
@@ -176,6 +191,7 @@ export class HistoryKeeper {
 	private readonly locks: Locks | undefined;
 	private readonly now: () => number;
 	private readonly onfailure: ((message: string) => void) | undefined;
+	private readonly retryMs: readonly number[];
 	/** The databases this tab has open, by name: each closes, and goes from here, when another tab deletes it. */
 	private dbs = new Map<string, Promise<IDBDatabase>>();
 	private client: HistoryClient | undefined;
@@ -193,6 +209,10 @@ export class HistoryKeeper {
 	/** The writer: who for, and whether this tab holds the lock. */
 	private writer: Writer | undefined;
 	private timer: ReturnType<typeof setTimeout> | undefined;
+	/** A failed write waits to be tried again (`WRITE_RETRY_MS`): nothing else writes meanwhile. */
+	private backoff: ReturnType<typeof setTimeout> | undefined;
+	/** How many times in a row a write has failed and been tried again. */
+	private retries = 0;
 	private writing: Promise<void> | undefined;
 	private again = false;
 	/** The last write left rooms to write whole in the next. */
@@ -206,10 +226,12 @@ export class HistoryKeeper {
 
 	/**
 	 * `retentionMs`: how long to keep (undefined, everything loaded); null keeps nothing. `indexedDB` and `locks`
-	 * default to the browser's. `onfailure` hears why keeping stopped.
+	 * default to the browser's. `onfailure` hears why keeping stopped. `retryMs`: how long a failed write waits each
+	 * time it is tried again (`WRITE_RETRY_MS`).
 	 */
-	constructor(options: { retentionMs?: number | null; indexedDB?: Databases; locks?: Locks | null; now?: () => number; onfailure?: (message: string) => void } = {}) {
+	constructor(options: { retentionMs?: number | null; indexedDB?: Databases; locks?: Locks | null; now?: () => number; onfailure?: (message: string) => void; retryMs?: readonly number[] } = {}) {
 		this.onfailure = options.onfailure;
+		this.retryMs = options.retryMs ?? WRITE_RETRY_MS;
 		this.retentionMs = options.retentionMs === undefined ? undefined : options.retentionMs;
 		this.databases = options.indexedDB;
 		this.locks = options.locks === null ? undefined : options.locks ?? globalThis.navigator?.locks;
@@ -307,8 +329,9 @@ export class HistoryKeeper {
 		// The account of the session saved there: the one kept for the server, which signing in confirms.
 		const account = await this.keptAccount(server);
 		if (!account) return undefined;
-		const kept = await readHistory(await this.open(server, account), RESTORE_WINDOW, (row) => {
-			const planned = plannedRoom(row.sync!, cutoff);
+		// Planned as `restoredState` plans them, so a quiet room caught up when it was saved is read, not passed over.
+		const kept = await readHistory(await this.open(server, account), RESTORE_WINDOW, (row, meta) => {
+			const planned = plannedRoom(row.sync!, cutoff, caughtUpSince(meta));
 			return planned && (planned.from !== undefined ? { from: planned.from } : {});
 		});
 		return kept && { kept, now };
@@ -375,6 +398,9 @@ export class HistoryKeeper {
 		this.unwatch.push(client.observeStore((change) => this.changed(change)));
 		this.unwatch.push(client.subscribe((snapshot) => this.consider(snapshot)));
 		void this.prune();
+		// Not only as the page starts: one left open would otherwise keep everything until it reloads.
+		const pruning = setInterval(() => void this.prune(), PRUNE_MS);
+		this.unwatch.push(() => clearInterval(pruning));
 	}
 
 	/**
@@ -463,6 +489,8 @@ export class HistoryKeeper {
 				await this.writing.catch(() => undefined);
 				continue;
 			}
+			// A failed write tried again soon writes what waits then.
+			if (this.backoff) return;
 			this.progressed = false;
 			await this.write();
 			// A write that couldn't go (signed out meanwhile, another server) leaves the rest for when one can.
@@ -488,7 +516,9 @@ export class HistoryKeeper {
 	 * Deletes what is kept, only ever when asked: `userId`'s on `server`, every account's on `server`, or, with
 	 * neither (keeping turned off, Clear all), every account's everywhere. A writer for what goes stops; one for
 	 * the signed-in account starts again from the next change, writing what the page has: clearing is for the
-	 * space older history takes, not to stop keeping (that's Retention's Don't keep).
+	 * space older history takes, not to stop keeping (that's Retention's Don't keep). The view kept to paint the
+	 * next visit (`session-cache.ts`) is history too: the one of each server cleared goes, if it is of an account
+	 * whose history goes.
 	 */
 	async forget(server?: string, userId?: string): Promise<void> {
 		const goes = (entry: { server: string; userId: string }) => (server === undefined || entry.server === server) && (userId === undefined || entry.userId === userId);
@@ -500,11 +530,13 @@ export class HistoryKeeper {
 		if (this.known && goes(this.known)) this.known = undefined;
 		// What was read ahead for a restore may be of what goes: read again.
 		if (server === undefined || this.prepared?.server === server) this.prepared = undefined;
+		const views = server === undefined ? clearView(undefined, this.factory) : userId === undefined ? clearView(server, this.factory) : clearViewOf(server, userId, this.factory);
 		try {
 			await Promise.all((await listHistories(this.factory)).filter(goes).map((entry) => this.drop(entry.name)));
 		} catch {
 			// Nothing kept, or no IndexedDB.
 		}
+		await views;
 	}
 
 	/** Whose history is kept on this device, every server's accounts; none without IndexedDB. */
@@ -673,13 +705,26 @@ export class HistoryKeeper {
 	private endWriter(): void {
 		this.writer?.release?.();
 		this.writer = undefined;
+		if (this.backoff) clearTimeout(this.backoff);
+		this.backoff = undefined;
+		this.retries = 0;
 	}
 
 	private schedule(delay = FLUSH_MS): void {
-		if (!this.writer?.granted || (this.timer && delay > 0)) return;
+		if (!this.writer?.granted || this.backoff || (this.timer && delay > 0)) return;
 		if (this.timer) clearTimeout(this.timer);
 		this.timer = setTimeout(() => {
 			this.timer = undefined;
+			void this.write();
+		}, delay);
+	}
+
+	/** Writes again after `delay`, and not before: what changes meanwhile waits for it. */
+	private retryAfter(delay: number): void {
+		if (this.timer) clearTimeout(this.timer);
+		this.timer = undefined;
+		this.backoff = setTimeout(() => {
+			this.backoff = undefined;
 			void this.write();
 		}, delay);
 	}
@@ -717,6 +762,9 @@ export class HistoryKeeper {
 		// A room joined and settled that isn't kept yet goes in whole: everything the client has of it.
 		// A few rooms a write, so writing many isn't one long task: the rest go in the next, at once.
 		const whole: HistoryWrite['whole'] = [];
+		// What taking each room over from what another tab kept used up, put back should the write fail and go again.
+		const taken = new Map<string, RoomSync>();
+		const covered: string[] = [];
 		let budget = WHOLE_BUDGET;
 		for (const room of state.rooms) {
 			if (!room.sync || synced.has(room.id) || writer.skip.has(room.id)) continue;
@@ -724,14 +772,19 @@ export class HistoryKeeper {
 				this.leftover = true;
 				break;
 			}
-			const merge = mergeOf(writer.disk?.get(room.id), room.sync);
+			const disk = writer.disk?.get(room.id);
+			const merge = mergeOf(disk, room.sync);
+			if (disk) taken.set(room.id, disk);
 			writer.disk?.delete(room.id);
 			if (merge === 'skip') {
 				writer.skip.add(room.id);
 				continue;
 			}
 			synced.add(room.id);
-			if (merge.cover) this.coverage.set(room.id, merge.cover);
+			if (merge.cover) {
+				this.coverage.set(room.id, merge.cover);
+				covered.push(room.id);
+			}
 			const { messages, reactions, memberships } = client.storedRecords(room.id);
 			whole.push({ room: room.id, ...(merge.from !== undefined ? { from: merge.from } : {}), messages, reactions, memberships });
 			budget -= messages.length + reactions.length + memberships.length;
@@ -771,6 +824,7 @@ export class HistoryKeeper {
 				meta: { server: writer.server, userId: writer.userId, complete, current, ...(withUsers ? { users: state.users, ...(state.aliases ? { aliases: state.aliases } : {}) } : {}) }
 			}, kept);
 			if (this.writer !== writer) return;
+			this.retries = 0;
 			writer.reset = false;
 			if (sweep) writer.swept = true;
 			writer.synced = synced;
@@ -791,8 +845,24 @@ export class HistoryKeeper {
 				this.queue = [];
 				return;
 			}
-			// A full disk, or IndexedDB gone: what is kept stays as it was, and this page keeps nothing more.
-			this.failure = cause instanceof Error && cause.name === 'QuotaExceededError' ? 'There isn’t enough space on this device to keep more history.' : 'History couldn’t be saved on this device.';
+			const name = (cause as { name?: unknown } | undefined)?.name;
+			const delay = name === 'AbortError' || name === 'UnknownError' ? this.retryMs[this.retries] : undefined;
+			if (delay !== undefined) {
+				// Its writer ended meanwhile (signed out, another account): there is nothing to try again for.
+				if (this.writer !== writer) return;
+				// Nothing of it was written: what it took waits again, ahead of what came since, to go in the next.
+				this.retries++;
+				this.queue.unshift(...changes);
+				for (const [room, sync] of taken) writer.disk?.set(room, sync);
+				for (const room of covered) this.coverage.delete(room);
+				this.leftover = false;
+				this.progressed = false;
+				console.warn('[apron] writing history failed, trying again', cause);
+				this.retryAfter(delay);
+				return;
+			}
+			// A full disk, IndexedDB gone, or failing still: what is kept stays as it was, and this page keeps nothing more.
+			this.failure = name === 'QuotaExceededError' ? 'There isn’t enough space on this device to keep more history.' : 'History couldn’t be saved on this device.';
 			console.warn('[apron] keeping history stopped', cause);
 			this.endWriter();
 			this.known = undefined;

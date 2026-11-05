@@ -1,8 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { memoryIdb } from '$lib/test/idb';
+import { memoryStorage } from '$lib/test/storage';
+import { keptSessionUserKey } from '$lib/protocol/client-internals';
 import { messageRecord, roomSnapshot } from '$lib/test/builders';
 import { VIEW_SAVE_MS, ViewKeeper, type KeeperClient } from './view-keeper';
 import { VIEW_MAX_AGE_MS } from './session-cache';
+import { historySettings } from '$lib/history/settings.svelte';
 import type { HeldSession } from './session.svelte';
 
 const SERVER = 'wss://chat.example/';
@@ -59,6 +62,30 @@ describe('keeping the view on this device', () => {
 		expect([kept().size, previewKept().size]).toEqual([0, 0]);
 	});
 
+	it('keeps and shows nothing with Retention’s Don’t keep, and removes what was kept', async () => {
+		const other = 'wss://other.example/';
+		const { keeper: before, idb, kept } = keeper();
+		await before.keep(client(), view, ada);
+		await before.keep(client([other], other), view, ada);
+		expect(kept().size).toBe(2);
+		const off = new ViewKeeper({ indexedDB: idb, keeping: () => false });
+		expect(await restored(off, client())).toBeUndefined();
+		expect(kept().size).toBe(0);
+		await off.keep(client(), view, ada);
+		expect(kept().size).toBe(0);
+		// By default, as Retention says.
+		const retention = historySettings.retention;
+		historySettings.retention = 'off';
+		try {
+			await new ViewKeeper({ indexedDB: idb }).keep(client(), view, ada);
+			expect(kept().size).toBe(0);
+		} finally {
+			historySettings.retention = retention;
+		}
+		await new ViewKeeper({ indexedDB: idb }).keep(client(), view, ada);
+		expect(kept().size).toBe(1);
+	});
+
 	it('keeps it at most once per VIEW_SAVE_MS while the room is busy', async () => {
 		const { keeper: busy, advance } = keeper();
 		expect(busy.wait()).toBe(0);
@@ -86,6 +113,25 @@ describe('showing the kept view', () => {
 		expect(await restored(new ViewKeeper({ indexedDB: idb, enabled: false }), client())).toBeUndefined();
 		idb.failing = true;
 		expect(await restored(some, client())).toBeUndefined();
+	});
+
+	it('shows only the view of the account whose session is saved here, where that is noted', async () => {
+		const values = new Map<string, string>();
+		vi.stubGlobal('localStorage', memoryStorage(values));
+		try {
+			const { keeper: some, kept } = keeper();
+			await some.keep(client(), view, ada);
+			// Not noted (a pasted token): the sign-in says whose it is, and drops the view if it isn't Ada's.
+			expect(await restored(some, client())).toBeDefined();
+			values.set(keptSessionUserKey(SERVER), 'ada');
+			expect(await restored(some, client())).toBeDefined();
+			// Signed in there as Bob since: Ada's view isn't shown, and goes.
+			values.set(keptSessionUserKey(SERVER), 'bob');
+			expect(await restored(some, client())).toBeUndefined();
+			expect(kept().size).toBe(0);
+		} finally {
+			vi.unstubAllGlobals();
+		}
 	});
 
 	it('drops a view too old to show', async () => {

@@ -133,6 +133,8 @@ import {
 	roomTitle,
 	sameEmojiSet,
 	typingKey,
+	hasKeptSession,
+	keptSessionKey,
 	keptSessionUserKey,
 	untitledPrivate,
 	untitledThread,
@@ -5351,7 +5353,7 @@ export class ChatClient {
 	 * resume removes the entry.
 	 */
 	private sessionStorageKey(): string {
-		return `apron.session:${this.serverUrl}`;
+		return keptSessionKey(this.serverUrl);
 	}
 
 	private loadStoredSession(): void {
@@ -5407,11 +5409,7 @@ export class ChatClient {
 	 * as the one a sign-in link would switch to.
 	 */
 	keptSessionFor(url: string): boolean {
-		try {
-			return Boolean(globalThis.localStorage?.getItem(`apron.session:${addressOf(url)}`));
-		} catch {
-			return false;
-		}
+		return hasKeptSession(addressOf(url));
 	}
 
 	/** Remembers a way back in that was added to the account. */

@@ -5,8 +5,10 @@ import { ChatClient, timelineMessages, type ClientSnapshot } from '$lib/protocol
 import { MemoryProtocolServer } from '$lib/preview/memory-server';
 import { readKept } from '$lib/test/kept-history';
 import { deleteHistory, historyName, listHistories, openHistory, writeHistory, type Databases } from './history-db';
-import { HistoryKeeper, mergeOf, plannedRoom, RESTORE_WINDOW, restoredState, type HistoryClient } from './history-keeper';
+import { HistoryKeeper, mergeOf, plannedRoom, PRUNE_MS, RESTORE_WINDOW, restoredState, type HistoryClient } from './history-keeper';
 import type { RoomSync } from '$lib/protocol/client';
+import type { RestoredState } from '$lib/protocol/client-types';
+import { loadView, saveView } from '$lib/ui/session-cache';
 
 const URL = 'wss://chat.example/';
 /** The memory server's account. */
@@ -42,6 +44,24 @@ function saved(client: ChatClient): HistoryClient {
 		restore: (state) => client.restore(state),
 		beforeFreshSession: (hook) => client.beforeFreshSession(hook),
 		olderPagesFrom: (source) => client.olderPagesFrom(source)
+	};
+}
+
+/** A client with nothing of its own, its session saved here: for what the keeper does before a session starts. */
+function stub(): HistoryClient {
+	return {
+		url: URL,
+		keptSessionFor: () => true,
+		keptState: () => undefined,
+		usersRevision: () => 0,
+		storedRecords: () => ({ rooms: [], messages: [], reactions: [], memberships: [] }),
+		observeStore: () => () => undefined,
+		subscribe: () => () => undefined,
+		message: () => undefined,
+		roomRecord: () => undefined,
+		restore: () => true,
+		beforeFreshSession: () => undefined,
+		olderPagesFrom: () => undefined
 	};
 }
 
@@ -549,6 +569,58 @@ describe('HistoryKeeper', () => {
 		expect(await listHistories(indexedDB)).toEqual([]);
 		await keeper.stop();
 	});
+
+	it('prunes as it goes while the page stays open, not only as it starts, until it stops', async () => {
+		vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+		try {
+			const day = 24 * 60 * 60 * 1000;
+			let clock = Date.now();
+			const indexedDB = new IDBFactory();
+			const db = await accountDb(indexedDB, URL, 'ada');
+			const log = String(clock - day);
+			await writeHistory(db, {
+				changes: [], dropped: [],
+				whole: [{ room: 'general', messages: [{ message_id: log, log_id: log, room_id: 'general', from: { user_id: 'ada' } }], reactions: [], memberships: [] }],
+				rooms: [{ room: 'general', sync: { id: 'general', checkpoint: log } }],
+				meta: { server: URL, userId: 'ada', complete: true, users: [] }
+			}, new Set());
+			const keeper = new HistoryKeeper({ indexedDB, locks: null, retentionMs: 30 * day, now: () => clock });
+			keeper.watch(stub());
+			await keeper.restore(stub());
+			expect((await readKept(db))?.messages).toHaveLength(1);
+			// A month on, the page still open.
+			clock += 30 * day;
+			vi.advanceTimersByTime(PRUNE_MS);
+			for (let i = 0; (await readKept(db))?.messages.length; i++) {
+				if (i > 400) throw new Error('Did not prune');
+				await new Promise((resolve) => setTimeout(resolve, 5));
+			}
+			await keeper.stop();
+			expect(vi.getTimerCount()).toBe(0);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it('removes the view kept to paint the next visit with the history it shows', async () => {
+		const indexedDB = new IDBFactory();
+		const other = 'wss://other.example/';
+		const views = () => Promise.all([URL, other].map(async (server) => (await loadView(server, indexedDB))?.userId));
+		const keeper = new HistoryKeeper({ indexedDB, locks: null });
+		await saveView(URL, 'ada', { rooms: [] }, indexedDB);
+		await saveView(other, 'ada', { rooms: [] }, indexedDB);
+		// Another account's history on that server: Ada's view stays.
+		await keeper.forget(URL, 'zed');
+		expect(await views()).toEqual(['ada', 'ada']);
+		await keeper.forget(URL, 'ada');
+		expect(await views()).toEqual([undefined, 'ada']);
+		await saveView(URL, 'ada', { rooms: [] }, indexedDB);
+		await keeper.forget(other);
+		expect(await views()).toEqual(['ada', undefined]);
+		await saveView(other, 'ada', { rooms: [] }, indexedDB);
+		await keeper.setRetention(null);
+		expect(await views()).toEqual([undefined, undefined]);
+	});
 });
 
 /** One Web Lock per name, as tabs share them: granted in turn, or `null` at once with `ifAvailable` while held. */
@@ -661,6 +733,72 @@ describe('HistoryKeeper, when things go wrong', () => {
 		for (let n = 0; n < 20; n++) server.post('general', 'grace', `#${n}`);
 		await waitFor(() => ids(client.snapshot(), 'general').length > 20);
 		expect((keeper as unknown as { queue: unknown[] }).queue).toEqual([]);
+		await keeper.stop();
+	});
+});
+
+describe('HistoryKeeper, when a write fails', () => {
+	/**
+	 * A keeper writing the memory server's session, its first write done, whose writes then fail as `abort` says:
+	 * with the error the transaction gives (undefined, an `AbortError` of its own), or not at all (false).
+	 */
+	async function failing(abort: () => DOMException | undefined | false) {
+		const server = new MemoryProtocolServer({ account: true });
+		const indexedDB = new IDBFactory();
+		const client = new ChatClient(URL, 'Ada', server.factory);
+		clients.push(client);
+		const failures: string[] = [];
+		const keeper = new HistoryKeeper({ indexedDB, locks: null, retryMs: [5, 5], onfailure: (message) => failures.push(message) });
+		keeper.watch(saved(client));
+		client.start();
+		await waitFor(() => Boolean(room(client.snapshot(), 'general')?.loaded));
+		await keeper.flush();
+		const db = await [...(keeper as unknown as { dbs: Map<string, Promise<IDBDatabase>> }).dbs.values()][0];
+		const transaction = db.transaction.bind(db);
+		let attempts = 0;
+		db.transaction = ((...args: Parameters<IDBDatabase['transaction']>) => {
+			const begun = transaction(...args);
+			const error = args[1] === 'readwrite' ? abort() : false;
+			if (error === false) return begun;
+			attempts++;
+			if (error) Object.defineProperty(begun, 'error', { get: () => error, set: () => undefined });
+			queueMicrotask(() => begun.abort());
+			return begun;
+		}) as IDBDatabase['transaction'];
+		const post = async (text: string) => {
+			const id = server.post('general', 'grace', text);
+			await waitFor(() => ids(client.snapshot(), 'general').includes(id));
+			await keeper.flush();
+			return id;
+		};
+		return { keeper, db, failures, post, attempts: () => attempts };
+	}
+
+	it('tries a write the browser gave up on again, a few times, then stops keeping', async () => {
+		let remaining = 2;
+		const { keeper, db, failures, post, attempts } = await failing(() => (remaining-- > 0 ? undefined : false));
+		const id = await post('Kept once tried again');
+		for (let i = 0; !(await readKept(db))?.messages.some((message) => message.message_id === id); i++) {
+			if (i > 400) throw new Error('Not kept');
+			await new Promise((resolve) => setTimeout(resolve, 5));
+		}
+		expect(attempts()).toBe(2);
+		expect(failures).toEqual([]);
+		// Failing every time: after the last try, keeping stops.
+		remaining = Infinity;
+		await post('Not kept');
+		await waitFor(() => failures.length > 0);
+		expect(attempts()).toBe(2 + 3);
+		expect(failures).toEqual(['History couldn’t be saved on this device.']);
+		await keeper.stop();
+	});
+
+	it('stops at once on a full disk, and says so, even when the write fails as aborted', async () => {
+		const { keeper, failures, post, attempts } = await failing(() => new DOMException('The disk is full', 'QuotaExceededError'));
+		await post('Not kept');
+		await waitFor(() => failures.length > 0);
+		expect(attempts()).toBe(1);
+		expect(failures).toEqual(['There isn’t enough space on this device to keep more history.']);
 		await keeper.stop();
 	});
 });
@@ -780,6 +918,37 @@ describe('plannedRoom and restoredState', () => {
 		expect(restoredState({ meta: { ...meta, current: true }, skipped: 0, rooms: rows }, 30 * day, now).state.rooms.map((sync) => sync.id)).toEqual(['quiet']);
 		// Saved while a room was catching up: each goes by its own checkpoint.
 		expect(restoredState({ meta, skipped: 0, rooms: rows }, 30 * day, now).state.rooms).toEqual([]);
+	});
+
+	it('reads back a quiet room caught up when it was saved, so the restore stays complete', async () => {
+		const today = Date.now();
+		const ago = (days: number) => String(today - days * day);
+		const indexedDB = new IDBFactory();
+		const db = await openHistory(indexedDB, historyName(URL, 'ada'));
+		const message = (room: string, log: string) => ({ message_id: log, log_id: log, room_id: room, from: { user_id: 'ada' } });
+		const write = (current: boolean) => writeHistory(db, {
+			changes: [], dropped: [], reset: true,
+			rooms: [{ room: 'quiet', sync: { id: 'quiet', checkpoint: ago(40), floor: ago(40) } }, { room: 'busy', sync: { id: 'busy', checkpoint: ago(1), floor: ago(1) } }],
+			whole: [{ room: 'quiet', messages: [message('quiet', ago(40))], reactions: [], memberships: [] }, { room: 'busy', messages: [message('busy', ago(1))], reactions: [], memberships: [] }],
+			meta: { server: URL, userId: 'ada', complete: true, current, users: [] }
+		}, new Set());
+		const restored = async () => {
+			let state: RestoredState | undefined;
+			const keeper = new HistoryKeeper({ indexedDB, locks: null, retentionMs: 30 * day, now: () => today });
+			await keeper.prepare(URL);
+			await keeper.restore({ ...stub(), restore: (taken) => ((state = taken), true) });
+			return state!;
+		};
+		await write(true);
+		const state = await restored();
+		expect(state.rooms.map((sync) => sync.id).sort()).toEqual(['busy', 'quiet']);
+		expect(state.rooms.find((sync) => sync.id === 'quiet')).toMatchObject({ olderBefore: String(today - 30 * day), hasOlder: true });
+		expect(state.complete).toBe(true);
+		// Saved while a room was catching up: the quiet room goes by its own checkpoint, and starts over.
+		await write(false);
+		const behind = await restored();
+		expect(behind.rooms.map((sync) => sync.id)).toEqual(['busy']);
+		expect(behind.complete).toBe(false);
 	});
 
 	it('keeps everything without a cutoff, or where positions are not times', () => {
