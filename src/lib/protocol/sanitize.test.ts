@@ -73,6 +73,25 @@ describe('sanitizeHtml: media in an HTML embed (§4.8)', () => {
 		expect(embed('<a href="https://example.com">x</a>')).toBe('<a href="https://example.com" target="_blank" rel="noreferrer noopener">x</a>');
 	});
 
+	it('keeps tables, lists and text as they are', () => {
+		const html =
+			'<h3>Build 42</h3><table><caption>Services</caption><thead><tr><th scope="col">Service</th><th>Status</th></tr></thead><tbody><tr><td colspan="2">api</td></tr></tbody></table>' +
+			'<ol start="3"><li>one</li><li><b>two</b> <code>x</code></li></ol><ul><li><em>a</em></li></ul><dl><dt>p99</dt><dd>182 ms</dd></dl>' +
+			'<blockquote><p>quoted</p></blockquote><pre><code>log</code></pre><details><summary>More</summary><p>hidden</p></details>';
+		expect(embed(html)).toBe(html);
+	});
+
+	it('names none of the page’s own parts, and shows nothing on its own', () => {
+		// The app's fixed scrim and banner, worn to draw over the room and its composer.
+		expect(embed('<div class="ap-popover-scrim"></div><div class="ap-banner-float ap-connect-card" id="composer" role="alert" tabindex="0">Reconnect</div>')).toBe('<div></div><div>Reconnect</div>');
+		expect(embed('<p hidden popover aria-label="Send" style="position: fixed">x</p><details open><summary>s</summary></details><dialog open>d</dialog><marquee>m</marquee>')).toBe('<p>x</p><details><summary>s</summary></details>dm');
+	});
+
+	it('keeps no image map, whose areas link anywhere', () => {
+		const html = embed('<img src="https://chat.example/a.png" usemap="#m"><map name="m"><area shape="rect" coords="0,0,9,9" href="https://evil.example/"></map>');
+		expect(html).toBe('<img src="https://chat.example/a.png">');
+	});
+
 	it('remembers each result by its markup and its gate', () => {
 		const html = '<img src="https://chat.example/a.png" alt="A">';
 		expect(embed(html)).toContain('<img');
