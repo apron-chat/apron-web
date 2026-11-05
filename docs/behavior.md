@@ -828,7 +828,7 @@ the one before. One tab
 writes at a time; another takes over when it closes. Preferences says how much Apron keeps on this device, and why it stopped
 keeping more if the device ran out of space.
 
-**Search local history** (first in the room header's ⋯ menu, or Ctrl+F, ⌘F on a Mac, in place of the browser's find while signed in and no other dialog is open, or its Messages switch in Go to a Room or Thread)
+**Search local history** (first in the room header's ⋯ menu, or Ctrl+F, ⌘F on a Mac, in place of the browser's find while signed in and no other dialog is open, or its Messages switch)
 starts narrowed to the open room or thread (`room:#general `, the caret after
 it; Backspace widens it to everywhere), and looks through this server's history kept on this device for the
 account signed in (none as a guest, or while keeping is off) and what the page has
@@ -858,32 +858,32 @@ yet loads its newest page), and searches again, now with them. Pressed again it
 goes a page further back. Once none has more, it says everything the server has
 there is loaded.
 
-**Go to a Room or Thread** (Ctrl+K, ⌘K on a Mac, as Search local history opens,
-or its Rooms and Threads switch; Ctrl/⌘F and Ctrl/⌘K switch between the two in
-it, keeping what's typed) finds rooms and threads by name among those the page
-knows of: the ones you've joined, which the server lists in full, threads
-included (§4.2.1), however long ago they were active and whether or not the rooms
-list shows them; those open without joining; those Other Rooms and each room's
-Other Threads last listed; and those whose records this device keeps (a private
-room you left isn't, since it can't be read). A name matches in any case and
-with or without accents: the whole title or `room_id` first, then the start of
-one, the start of a word in the title, anywhere in it, and then the
-description. The ones you've joined come first, under Joined, then those you
-haven't, under Not joined, each then by how well it matches and then by when it
-was last active; with nothing typed it lists them all that way, at most fifty.
-Each row has a # for a room or a hooked arrow for a thread, its title with what
-matched marked (a lock if private), a thread's room or else what the room is
-about, the day it was last active, and what's new in it as the rooms list counts
-it, or Not joined. `room:` (suggested as in Search local history) narrows it to
-the threads of that room, and → at the end of the field on a room does the
-same, putting in `room:#room_id `; Backspace there takes the filter away again.
-Enter or a click opens it: one you've joined, or open, as a mention of it does;
-any other read without joining, under its room if it's a thread, as a link to it
-does, with Join in its header. **Search the Server**, after the results, lists
-the rooms to join again, and the threads of the room `room:` names or else the
-open room's, fresh (`room_list`, two requests); a server lists only its most
-recently active rooms to join, so the note says those it didn't list aren't
-found. The protocol has no way to ask for older ones or to search by name.
+**Rooms and threads**, search's other mode (Ctrl+K, ⌘K on a Mac, as Search local
+history opens on it, or its Rooms and Threads switch; Ctrl/⌘F and Ctrl/⌘K switch
+between the two from anywhere in it, keeping what's typed, under the one title)
+finds rooms and threads by name among those the page knows of: the ones you've
+joined, which the server lists in full, threads included (§4.2.1), however long
+ago they were active and whether or not the rooms list shows them; those open
+without joining; those Other Rooms and each room's Other Threads last listed;
+and those whose records this device keeps (a private room you left isn't, since
+it can't be read). A name matches in any case and with or without accents: the
+whole title or `room_id` first, then the start of one, the start of a word in
+the title, anywhere in it, and then the description. The ones you've joined come
+first, under Joined, then those you haven't, under Not joined, each then by how
+well it matches and then by when it was last active; with nothing typed it lists
+them all that way, at most fifty. Each is drawn as the rooms list draws it (a
+private room with its faces, a lock, what's new in it, a bell-off when muted, a
+thread you haven't joined with when it was last active), what matched marked,
+and a thread with its room under its title. `room:` (suggested as in Search
+local history, rooms only) narrows it to the threads of that room, and → at the
+end of the field on a room does the same, putting in `room:#room_id `; Backspace
+there takes the filter away again. A room `room:` names has its threads you
+haven't joined listed from the server then (`room_list` with its
+`parent_room_id`, reusing a listing as recent as the rooms list's), and the line
+after the results says how many the server listed: only its most recently active
+ones, as the protocol lets a server list. Enter or a click opens one: one you've
+joined, or open, as a mention of it does; any other read without joining, under
+its room if it's a thread, as a link to it does, with Join in its header.
 
 **Export** saves what this page has loaded from the server as a `.jsonl` file
 (`apron-<host>-<day>.jsonl`, in the format [ARCHIVE.md](../ARCHIVE.md)

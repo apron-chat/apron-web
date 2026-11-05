@@ -85,37 +85,41 @@ describe('SearchPanel', () => {
 		expect(document.querySelector('.ap-dialog-titlebtn')).toBeNull();
 	});
 
-	it('finds rooms: each with its kind, its title marked, where it is, and Not joined or what is new, under headings', () => {
+	it('finds rooms, each drawn as the rooms list draws it with what matched marked, under headings', () => {
 		const rooms: RoomResult[] = [
-			{ kind: 'room', id: 't1', group: 'Joined', joined: true, thread: true, parts: [{ text: 'Dep', match: true }, { text: 'loy checklist', match: false }], detail: 'in Engineering · Today', unread: 2 },
-			{ kind: 'room', id: 'r1', group: 'Not joined', joined: false, private: true, parts: [{ text: 'Dep', match: true }, { text: 'artures', match: false }] }
+			{ kind: 'room', id: 't1', group: 'Joined', joined: true, thread: true, parts: [{ text: 'Dep', match: true }, { text: 'loy checklist', match: false }], parent: 'Engineering', unread: 2 },
+			{ kind: 'room', id: 'r1', group: 'Not joined', joined: false, private: true, parts: [{ text: 'Dep', match: true }, { text: 'artures', match: false }], description: '14 members' }
 		];
-		const state = $state<Record<string, unknown>>({ open: true, kind: 'rooms', title: 'Go to a Room or Thread', query: 'dep', results: rooms, onpick: vi.fn() });
+		const state = $state<Record<string, unknown>>({ open: true, kind: 'rooms', query: 'dep', results: rooms, onpick: vi.fn() });
 		dom.render(SearchPanel, state as never);
 		flushSync();
 		const list = dom.queryByRole('listbox', 'Rooms and threads found')!;
 		expect([...list.querySelectorAll('.ap-search-group')].map((group) => group.textContent)).toEqual(['Joined', 'Not joined']);
 		const [thread, room] = [...list.querySelectorAll('[role="option"]')];
-		expect(thread.querySelector('[aria-label="Thread"]')).not.toBeNull();
 		expect(thread.querySelector('mark')!.textContent).toBe('Dep');
-		expect(thread.querySelector('.ap-search-detail')!.textContent).toBe('in Engineering · Today');
-		expect(thread.querySelector('.ap-count')!.getAttribute('aria-label')).toBe('2 unread replies');
-		expect(room.querySelector('[aria-label="Room"]')).not.toBeNull();
+		expect(thread.textContent).toContain('in Engineering');
+		expect(thread.querySelector('[aria-label="2 unread replies"]')).not.toBeNull();
 		expect(room.querySelector('[aria-label="Private"]')).not.toBeNull();
-		expect(room.querySelector('.ap-search-tag')!.textContent).toBe('Not joined');
+		expect(room.textContent).toContain('14 members');
+		// No buttons in an option: no door in or out, and nothing the interop suite finds rooms by.
+		expect(list.querySelector('button, [data-room], [data-thread], [data-join]')).toBeNull();
 		expect(document.querySelector('[role="status"]')!.textContent).toBe('2 rooms found.');
+		(room as HTMLElement).click();
+		flushSync();
+		expect(state.onpick).toHaveBeenCalledWith('r1');
+		state.open = true;
 		state.results = [];
 		flushSync();
 		expect(queryByText('No rooms or threads match “dep”.')).not.toBeNull();
 	});
 
-	it('switches between its modes, and after its results offers an action, which keeps the keyboard in the field', () => {
+	it('switches between its modes, and after its results says more, with a button that keeps the keyboard in the field', () => {
 		const onclick = vi.fn();
-		const { state, field } = render({ modes: [{ id: 'rooms', label: 'Rooms and threads', keys: 'Ctrl K', shortcut: 'Control+K' }, { id: 'messages', label: 'Messages', keys: 'Ctrl F', shortcut: 'Control+F' }], mode: 'messages', action: { label: 'Load More from Server', note: 'Older messages are on the server.', onclick } });
+		const { state, field } = render({ modes: [{ id: 'rooms', label: 'Rooms and threads', keys: 'Ctrl K', shortcut: 'Control+K' }, { id: 'messages', label: 'Messages', keys: 'Ctrl F', shortcut: 'Control+F' }], mode: 'messages', foot: { note: 'Older messages are on the server.', label: 'Load More from Server', onclick } });
 		const toggle = (name: RegExp) => [...document.querySelectorAll<HTMLButtonElement>('[aria-pressed]')].find((button) => name.test(button.textContent ?? ''))!;
 		expect(toggle(/Messages/).getAttribute('aria-pressed')).toBe('true');
 		expect(toggle(/Rooms/).getAttribute('aria-pressed')).toBe('false');
-		expect(toggle(/Rooms/).querySelector('kbd')!.textContent).toBe('Ctrl K');
+		expect(toggle(/Rooms/).getAttribute('aria-keyshortcuts')).toBe('Control+K');
 		expect(toggle(/Rooms/).querySelector('kbd')!.getAttribute('aria-hidden')).toBe('true');
 		toggle(/Rooms/).click();
 		flushSync();
@@ -126,13 +130,13 @@ describe('SearchPanel', () => {
 		flushSync();
 		expect(onclick).toHaveBeenCalledOnce();
 		expect(document.activeElement).toBe(field);
-		state.action = { label: 'Load More from Server', busy: true, onclick };
+		state.foot = { note: 'Older messages are on the server.', label: 'Load More from Server', busy: true, onclick };
 		flushSync();
 		expect(dom.button('Loading…').disabled).toBe(true);
-		state.action = { label: 'Load More from Server', note: 'Everything is loaded.', done: true, onclick };
+		state.foot = { note: 'Everything is loaded.' };
 		flushSync();
-		expect(document.querySelector('.ap-search-action button')).toBeNull();
 		expect(queryByText('Everything is loaded.')).not.toBeNull();
+		expect(document.querySelector('dialog button.ap-btn')).toBeNull();
 	});
 
 	it('hands the field\'s keys to `onfieldkey` first, with the result the keyboard is on', () => {

@@ -558,17 +558,23 @@ export interface RoomResult {
 	group?: string;
 	/** Its title, in runs, each match marked. */
 	parts: { text: string; match: boolean }[];
-	/** It is a thread (a hooked arrow), not a room (a #). */
+	/** It is a thread, drawn as a ThreadItem; else a room, drawn as a RoomItem. */
 	thread?: boolean;
-	/** The line under its title, such as "in Engineering · Today" or what it's about. */
-	detail?: string;
-	/** You joined it: one you haven't says so at the row's end, where one you have shows what's new. */
+	/** A thread's room, on a line under its title, where it isn't the room searched. */
+	parent?: string;
+	/** What it's about, as one line of text. */
+	description?: string;
+	/** You joined it: one you haven't is drawn as the rooms list draws one listed to join. */
 	joined: boolean;
 	private?: boolean;
+	/** Who a private room is with (RoomItem's `faces`). */
+	faces?: Face[];
 	/** What's new in it, as the rooms list counts it. */
 	unread?: number;
 	mentions?: number;
 	muted?: boolean;
+	/** When a thread you haven't joined was last active (ThreadItem's `ago`). */
+	ago?: { text: string; datetime?: string; title?: string };
 }
 
 /** What a SearchPanel can be switched between, such as rooms and messages: a name, and its shortcut. */
@@ -581,16 +587,14 @@ export interface SearchMode {
 	shortcut?: string;
 }
 
-/** A button after a SearchPanel's results, such as to ask the server for more, and the words beside it. */
-export interface SearchAction {
-	label: string;
-	/** Beside it: what was searched, and what the button does. */
+/** A line after a SearchPanel's results, such as what was searched, and a button beside it, such as to load more. */
+export interface SearchFoot {
 	note?: string;
+	/** The button, if any, and what pressing it does. */
+	label?: string;
+	onclick?: () => void;
 	/** Under way: the button waits, and says so. */
 	busy?: boolean;
-	/** Nothing more to do: the note stands, without the button. */
-	done?: boolean;
-	onclick: () => void;
 }
 
 /** One of your private rooms, offered to leave in a PrivateRoomForm at the limit. */

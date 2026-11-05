@@ -1,4 +1,4 @@
-<!-- @dsCard group="Input" height=640 subtitle="Go to a Room or Thread, a SearchPanel of rooms: its modes above the field, each with its shortcut; joined rooms and threads first, each with a # or a hooked arrow, its title marked, where it is and what's new; those you haven't joined after, marked Not joined; and after them a button to ask the server for more" -->
+<!-- @dsCard group="Input" height=640 subtitle="A SearchPanel of rooms and threads: its modes above the field, each with its shortcut; joined rooms and threads first, each drawn as the rooms list draws it (a RoomItem or a ThreadItem) with what matched marked, a thread with its room under it; those you haven't joined after; and after them what the server listed" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>SearchPanelRooms</title></head>
@@ -9,22 +9,22 @@
   function title(text, n) { return [{ text: text.slice(0, n), match: true }, { text: text.slice(n), match: false }]; }
   A.render(A.SearchPanel, root, {
     open: true,
-    title: 'Go to a Room or Thread',
     kind: 'rooms',
-    modes: [{ id: 'rooms', label: 'Rooms and threads', keys: 'Ctrl K' }, { id: 'messages', label: 'Messages', keys: 'Ctrl F' }],
+    modes: [{ id: 'rooms', label: 'Rooms and threads', keys: 'Ctrl K', shortcut: 'Control+K' }, { id: 'messages', label: 'Messages', keys: 'Ctrl F', shortcut: 'Control+F' }],
     mode: 'rooms',
     query: 'dep',
-    note: 'Rooms and threads you’ve joined first. → on a room searches its threads.',
+    kept: '30 Days',
+    onhistory: function () {},
+    note: 'Those you’ve joined first. → on a room searches its threads.',
     placeholder: 'A room or thread, room:#name for its threads',
     results: [
-      { kind: 'room', id: 't1', group: 'Joined', joined: true, thread: true, parts: title('Deploy checklist', 3), detail: 'in Engineering · Today', unread: 2 },
-      { kind: 'room', id: 'r1', group: 'Joined', joined: true, parts: title('Deploy bots', 3), detail: 'CI and release notifications · Today', unread: 4, mentions: 1 },
-      { kind: 'room', id: 't2', group: 'Joined', joined: true, thread: true, parts: title('Deploy freeze, Q3', 3), detail: 'in Ops · Jun 12' },
-      { kind: 'room', id: 't3', group: 'Not joined', joined: false, thread: true, parts: title('Dependency upgrades', 3), detail: 'in Engineering · Oct 14' },
-      { kind: 'room', id: 'r2', group: 'Not joined', joined: false, parts: title('Departures', 3), detail: 'Yesterday' },
-      { kind: 'room', id: 't4', group: 'Not joined', joined: false, private: true, thread: true, parts: title('Deprecated v1 endpoints', 3), detail: 'in Platform · Nov 2, 2025' }
+      { kind: 'room', id: 't1', group: 'Joined', joined: true, thread: true, parts: title('Deploy checklist', 3), parent: 'Engineering', unread: 2 },
+      { kind: 'room', id: 'r1', group: 'Joined', joined: true, parts: title('Deploy bots', 3), description: 'CI and release notifications', unread: 4, mentions: 1 },
+      { kind: 'room', id: 't2', group: 'Joined', joined: true, thread: true, muted: true, parts: title('Deploy freeze, Q3', 3), parent: 'Ops', description: 'No deploys until the audit closes' },
+      { kind: 'room', id: 't3', group: 'Not joined', joined: false, thread: true, parts: title('Dependency upgrades', 3), parent: 'Engineering', ago: { text: '3w', title: 'Last active Oct 14' } },
+      { kind: 'room', id: 'r2', group: 'Not joined', joined: false, parts: title('Departures', 3), description: '14 members' },
+      { kind: 'room', id: 't4', group: 'Not joined', joined: false, private: true, thread: true, parts: title('Deprecated v1 endpoints', 3), parent: 'Platform', ago: { text: '1y', title: 'Last active Nov 2, 2025' } }
     ],
-    action: { label: 'Search the Server', note: 'Searched 1,412 rooms and threads this page knows of.', onclick: function () {} },
     onpick: function () {}
   });
 </script>

@@ -43,7 +43,7 @@
 		"switch-room-busy": {
 			"layouts": 2,
 			"styleRecalcs": 12,
-			"calls": 90041
+			"calls": 90491
 		},
 		"send-message-busy": {
 			"layouts": 38,
