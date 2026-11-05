@@ -75,8 +75,9 @@ connects at once, and starts the backoff over. An explicit server retry window t
 `retry_after` error about the connection as a whole (`data.retry_after`
 seconds); after such a `denied` error the client stops reconnecting, shows
 **Signed out** with the server's message, and waits for **Sign in**.
-When a newer version of the client is deployed (SvelteKit's version poll, or a
-lazily loaded file the deploy removed), a notice at the top offers **Reload**
+When a newer version of the client is deployed (SvelteKit's version poll every
+5 minutes, at once on coming back after 5 minutes or more away, or a lazily
+loaded file the deploy removed), a notice at the top offers **Reload**
 or **Later**; it never reloads by itself. Drafts live only in memory, so while
 any room or thread has unsent text or files it adds that reloading clears your
 unsent message.
