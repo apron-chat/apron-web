@@ -240,3 +240,36 @@ test.describe('Enter on a handheld device', () => {
 		await preview.waitForSent('message', (p) => p.body?.text === 'first line\nsecond line');
 	});
 });
+
+test.describe('files pasted outside the composer', () => {
+	test.use({ ...DEVICES.desktop, knobs: { capabilities: ['embed:upload'] } });
+
+	test('attach to the draft from the timeline, but not from a field in the emoji picker', async ({ preview, page }) => {
+		await preview.open();
+		/**
+		 * Pastes a file, as a paste of a copied file would, in the emoji picker's search field (in emoji-mart's shadow
+		 * root: the event leaves it addressed to the picker's element), or on the timeline.
+		 */
+		const paste = (inPicker: boolean) => page.evaluate((inPicker) => {
+			const data = new DataTransfer();
+			data.items.add(new File(['hello'], 'notes.txt', { type: 'text/plain' }));
+			const target = inPicker ? document.querySelector('em-emoji-picker')!.shadowRoot!.querySelector('input[type="search"]')! : document.querySelector('[data-testid="message-list"]')!;
+			target.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, composed: true, cancelable: true }));
+		}, inPicker);
+		const message = page.locator('article[data-message-id]').last();
+		const react = message.getByRole('button', { name: 'React', exact: true });
+		await expect(async () => {
+			await message.hover();
+			await expect(react).toBeVisible({ timeout: 1000 });
+		}).toPass();
+		await react.click();
+		const emoji = page.getByRole('dialog', { name: 'Emoji picker', exact: true });
+		await expect(emoji).toHaveAttribute('data-state', 'ready');
+		await paste(true);
+		await page.keyboard.press('Escape');
+		await expect(emoji).toHaveCount(0);
+		await expect(page.getByTestId('staged-files')).toHaveCount(0);
+		await paste(false);
+		await expect(page.getByTestId('staged-files')).toBeVisible();
+	});
+});

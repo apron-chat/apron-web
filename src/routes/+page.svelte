@@ -3392,7 +3392,7 @@
 	 */
 	function windowPaste(event: ClipboardEvent): void {
 		if (event.defaultPrevented || !canAttach) return;
-		if (inField(event.target)) return;
+		if (inField(keyOrigin(event))) return;
 		const files = pastedFiles(event.clipboardData);
 		if (!files.length) return;
 		event.preventDefault();
@@ -3416,6 +3416,14 @@
 		}
 	}
 
+	/**
+	 * What an event happened on: inside a shadow root (emoji-mart's picker), the element there, not its host, which
+	 * the event's `target` names once it is out of the shadow root, and which is no field.
+	 */
+	function keyOrigin(event: Event): EventTarget | null {
+		return event.composedPath()[0] ?? event.target;
+	}
+
 	/** Where text is written, whose keys are its own: `?` there is a character. */
 	function inField(target: EventTarget | null): boolean {
 		return target instanceof HTMLElement && (target.isContentEditable || target.closest('input, textarea, select') !== null);
@@ -3426,7 +3434,7 @@
 		if (event.altKey || event.isComposing) return false;
 		// With Shift too: on many layouts (German, Nordic, Spanish) `/` is Shift+7.
 		if (event.ctrlKey || event.metaKey) return event.key === '/';
-		return event.key === '?' && !inField(event.target);
+		return event.key === '?' && !inField(keyOrigin(event));
 	}
 
 	function windowKeydown(event: KeyboardEvent): void {
@@ -3449,7 +3457,8 @@
 		// moves it instead: the Sidebar's reorderKey takes it first. A room listed to join opens to read, as a click does.
 		// With nowhere to go (an end of the list), the key is the field's or the page's as usual.
 		if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown') && !event.ctrlKey && !event.metaKey && !event.defaultPrevented && client && !connectOpen && !modalOpen()) {
-			if (inField(event.target) && !(event.target as HTMLElement).closest('#message-input')) return;
+			const origin = keyOrigin(event);
+			if (inField(origin) && !(origin as HTMLElement).closest('#message-input')) return;
 			const row = nextRoomRow(document.querySelector('.ap-shell-side') ?? document, event.key === 'ArrowDown' ? 1 : -1, event.shiftKey);
 			if (!row) return;
 			event.preventDefault();
