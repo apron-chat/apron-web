@@ -38,6 +38,19 @@ function message(id: string, fields: Record<string, unknown> = {}, log = id): Re
 
 const room = (id: string) => snapshot.rooms.find((entry) => entry.id === id)!;
 
+describe('history added by a replacing server frame', () => {
+	it('recovers each room shown, as if it had been there at sign-in', async () => {
+		await socket.greet(['rooms'], { room: { room_id: 'general', log_id: '10', title: 'General', latest_log_id: '12', history_log_id: '10' } });
+		socket.receive({ method: 'message', params: message('13') });
+		expect(socket.sent.some((frame) => frame.method === 'history')).toBe(false);
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['rooms', 'history'] } });
+		expect(socket.request('history').params).toEqual({ room_id: 'general', before: '13', limit: 50 });
+		await socket.reply('history', { messages: [message('11'), message('12'), message('13')], more: false, latest_log_id: '13', history_log_id: '10' });
+		expect(room('general')).toMatchObject({ recovering: false, loaded: true });
+		expect(room('general').timeline.order).toEqual(['11', '12', '13']);
+	});
+});
+
 describe('history per room', () => {
 	beforeEach(async () => {
 		await socket.greet(['history', 'rooms'], { room: { room_id: 'general', log_id: '10', title: 'General', latest_log_id: '12', history_log_id: '10' } });

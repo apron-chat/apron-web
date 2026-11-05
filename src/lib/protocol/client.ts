@@ -3230,6 +3230,7 @@ export class ChatClient {
 		// Greeted: the socket is open and the server on it. From here pings (§1) and request timeouts watch it.
 		this.clearOpening();
 		const previousPing = this.server?.ping;
+		const previousCapabilities = this.server?.capabilities ?? [];
 		this.server = {
 			apron: params.apron,
 			...(typeof params.agent === 'string' ? { agent: params.agent } : {}),
@@ -3251,6 +3252,7 @@ export class ChatClient {
 		// Each frame fully replaces the last (§3.1): features are worth trying again.
 		this.memberChangesUnsupported = false;
 		if (this.authenticated || this.authRequested) {
+			if (this.authenticated) this.startAddedCapabilities(previousCapabilities);
 			// A replacing frame may add capability `status`: attendance goes once signed in (§4.5).
 			this.syncIdle();
 			this.syncPush();
@@ -3267,6 +3269,21 @@ export class ChatClient {
 			return;
 		}
 		this.authenticate(auth);
+	}
+
+	/**
+	 * A replacing `server` frame after sign-in added capability `rooms` or `history` (§3.1): what signing in would
+	 * have started for it starts now. With `rooms`, the joined rooms are listed, in place of the default room
+	 * (§3.4), each recovering as it is shown; with `history` alone, each room shown recovers.
+	 */
+	private startAddedCapabilities(before: string[]): void {
+		if (this.hasCap('rooms') && !before.includes('rooms')) {
+			this.defaultRoom = undefined;
+			this.hideRoom(DEFAULT_ROOM_ID);
+			if (!this.joinedListing) this.listJoinedRooms();
+		} else if (this.hasCap('history') && !before.includes('history')) {
+			for (const room of this.rooms.values()) this.recoverIfBehind(room, false);
+		}
 	}
 
 	/**

@@ -375,6 +375,19 @@ describe('the default room (no cap rooms)', () => {
 		expect(snapshot.rooms.map((room) => room.id)).toEqual(['lobby', 'side']);
 		await settle();
 	});
+
+	it('lists the joined rooms in its place once a replacing server frame adds cap rooms', async () => {
+		await socket.greet([], { rooms: false });
+		expect(ids()).toEqual([DEFAULT_ROOM_ID]);
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['rooms'] } });
+		expect(socket.request('room_list').params).toEqual({ filter: 'joined', members: true });
+		await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General' }] });
+		expect(ids()).toEqual(['general']);
+		expect(snapshot.activeRoom).toBe('general');
+		// Frames that add nothing ask nothing again.
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['rooms'] } });
+		expect(socket.sent.filter((frame) => frame.method === 'room_list')).toHaveLength(1);
+	});
 });
 
 describe('listing rooms to join', () => {
