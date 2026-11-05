@@ -2473,9 +2473,10 @@ export class ChatClient {
 	 * appears, and `room_update` keeps it current from then on. It may go
 	 * right behind `auth`, which finishes first (§3.2). With `since`, the
 	 * server lists only rooms whose log moved past it, plus the ones left in
-	 * `left`; rooms it leaves out are unchanged.
+	 * `left`; rooms it leaves out are unchanged. `failures`: how many times in a
+	 * row it went unanswered or failed on the server's side on this connection.
 	 */
-	private listJoinedRooms(since?: string): void {
+	private listJoinedRooms(since?: string, failures = 0): void {
 		const socket = this.socket;
 		const params: JsonObject = { filter: 'joined', members: true, ...(since !== undefined ? { latest_log_id: since } : {}) };
 		const request = this.enqueueRequest('room_list', params, { visible: false, allowBeforeAuth: true });
@@ -2509,15 +2510,19 @@ export class ChatClient {
 		}, (cause: Error) => {
 			if (socket !== this.socket || this.joinedListing !== listing) return;
 			this.joinedListing = undefined;
-			if (cause instanceof RateLimitError && this.authenticated) {
-				// Refused for a while (§1.1): rather than leave the connection with no rooms, list them again
-				// once the wait is over, as long as it lasts. Meanwhile this stands as the listing under way.
+			// Unanswered, or failed on the server's side: likely gone by the next try, with a wait that doubles each time.
+			const transient = cause instanceof RequestTimeout || (cause as Error & { code?: number }).code === -32603;
+			const wait = cause instanceof RateLimitError ? Math.max(0, cause.retryAt - Date.now())
+				: transient ? Math.min(IDLE_RETRY_MS * 2 ** failures, IDLE_RETRY_MAX_MS) : undefined;
+			if (wait !== undefined && this.authenticated) {
+				// Refused for a while (§1.1), or failed for the moment: rather than leave the connection with no rooms,
+				// list them again once the wait is over, as long as it lasts. Meanwhile this stands as the listing under way.
 				this.joinedListing = listing;
 				setTimeout(() => {
 					if (socket !== this.socket || this.joinedListing !== listing) return;
-					this.listJoinedRooms(since);
+					this.listJoinedRooms(since, transient ? failures + 1 : failures);
 					this.emit();
-				}, Math.max(0, cause.retryAt - Date.now()));
+				}, wait);
 				this.emit();
 				return;
 			}

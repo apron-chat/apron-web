@@ -165,6 +165,26 @@ describe('the joined set (cap rooms)', () => {
 		expect(snapshot.rooms).toEqual([]);
 	});
 
+	it('lists the joined rooms again after a listing that failed for the moment, waiting longer each time', async () => {
+		await authenticate(['rooms']);
+		const listings = () => socket.sent.filter((frame) => frame.method === 'room_list');
+		socket.receive({ id: socket.request('room_list').id, error: { code: -32603, message: 'Internal error' } });
+		await settle();
+		await vi.advanceTimersByTimeAsync(4_999);
+		expect(listings()).toHaveLength(1);
+		await vi.advanceTimersByTimeAsync(1);
+		expect(listings()).toHaveLength(2);
+		expect(socket.request('room_list').params).toEqual({ filter: 'joined', members: true });
+		// This one goes unanswered: the next waits twice as long once it times out.
+		await vi.advanceTimersByTimeAsync(20_000 + 9_999);
+		expect(listings()).toHaveLength(2);
+		await vi.advanceTimersByTimeAsync(1);
+		expect(listings()).toHaveLength(3);
+		await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General' }] });
+		expect(ids()).toEqual(['general']);
+		expect(snapshot.error).toBeUndefined();
+	});
+
 	it('lists the joined rooms again when the connection becomes another user', async () => {
 		await socket.greet([], { room: { room_id: 'general', title: 'General' } });
 		socket.receive({ method: 'user', params: { you: { user_id: 'guest_1', name: 'Renamed' } } });

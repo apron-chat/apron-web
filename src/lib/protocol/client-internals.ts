@@ -175,7 +175,10 @@ export function muteEnd(mute: number | boolean | undefined, now = Date.now()): n
 	return typeof mute === 'number' && mute > 0 ? now + mute * 1000 : undefined;
 }
 
-/** The first wait before an `idle` request that failed goes again; it doubles with each failure, to IDLE_RETRY_MAX_MS. */
+/**
+ * The first wait before an `idle` request that failed goes again, or the joined listing one that went unanswered or
+ * failed on the server's side; it doubles with each failure, to IDLE_RETRY_MAX_MS.
+ */
 export const IDLE_RETRY_MS = 5_000;
 export const IDLE_RETRY_MAX_MS = 5 * 60_000;
 /** The longest `setTimeout` delay browsers keep. */
