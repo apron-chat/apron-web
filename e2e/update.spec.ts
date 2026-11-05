@@ -48,8 +48,10 @@ test('not checked for three days, with a newer deploy out: reloads before it eve
 	await page.route('**/_app/version.json', (route) => route.fulfill({ json: { version: NEWER } }));
 	await page.goto(`${base}/`);
 	await expect(page.getByTestId('connection-status')).toHaveText('Connected');
-	// The first load opens no connection. The page loaded again is (here) the same old copy: it doesn't reload once
-	// more, but connects, and offers the reload (which checks again, as the notice does).
-	expect(await page.evaluate(() => JSON.parse(sessionStorage.getItem('e2e.log') ?? '[]'))).toEqual(['load', 'check', 'load', 'check', 'check', 'ws']);
+	// The first load checks, and opens no connection before reloading. The page loaded again is (here) the same old
+	// copy: it doesn't reload once more, but connects, and offers the reload.
+	const log: string[] = await page.evaluate(() => JSON.parse(sessionStorage.getItem('e2e.log') ?? '[]'));
+	expect(log.slice(0, 2)).toEqual(['load', 'check']);
+	expect(log.filter((what) => what !== 'check')).toEqual(['load', 'load', 'ws']);
 	await expect(page.getByText('Apron has been updated')).toBeVisible();
 });

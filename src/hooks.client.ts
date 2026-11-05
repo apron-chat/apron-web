@@ -21,7 +21,7 @@ export function init(): void {
 		startKeeping();
 		// A copy not checked for a while first checks it's the latest deploy (`$lib/ui/version-check`): if not, it
 		// reloads into that one before connecting. The page's client waits on the same check.
-		const checking = beforeConnect();
+		const checking = beforeConnect(() => true);
 		if (checking) void checking.then(connectEarly);
 		else connectEarly();
 	} else if (__APRON_PREVIEW__ && path === '/__preview') {

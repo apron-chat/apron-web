@@ -95,7 +95,7 @@ import {
 	ROOM_LIST_REUSE_MS,
 	STABLE_CONNECTION_MS,
 	STANDBY_AFTER_HIDDEN_MS,
-	RELOADABLE_AFTER_RETURN_MS,
+	RELOADABLE_FOR_MS,
 	STANDBY_AFTER_MS,
 	THREAD_PAGE_SIZE,
 	FRESH_HOOK_MS,
@@ -385,10 +385,9 @@ export class ChatClient {
 	private earlyConnection?: ChatClientOptions['earlyConnection'];
 	/** What each connection waits on before it opens (`ChatClientOptions.beforeConnect`). */
 	private readonly beforeConnect?: ChatClientOptions['beforeConnect'];
-	/** A socket has opened on this client: connections from then on may find the page in use. */
-	private openedOnce = false;
-	/** When the page last came back from `STANDBY_AFTER_HIDDEN_MS` or more away. */
-	private returnedAt?: number;
+	/** When a connection may reload the page (`reloadable`): `RELOADABLE_FOR_MS` from the start, or a long absence's end. */
+	private reloadableFrom: number;
+	private reloadableUntil: number;
 	/** The wait under way for `beforeConnect`, while a connection waits on it. */
 	private connectGate?: Promise<void>;
 	private reconnectTimer?: ReturnType<typeof setTimeout>;
@@ -530,7 +529,10 @@ export class ChatClient {
 		} else {
 			const away = this.hiddenAt === undefined ? 0 : this.now() - this.hiddenAt;
 			this.hiddenAt = undefined;
-			if (away >= STANDBY_AFTER_HIDDEN_MS) this.returnedAt = this.now();
+			if (away >= STANDBY_AFTER_HIDDEN_MS) {
+				this.reloadableFrom = this.now();
+				this.reloadableUntil = this.reloadableFrom + RELOADABLE_FOR_MS;
+			}
 			// One still opening may have outrun its wait while hidden pages' timers were held back: the next goes now,
 			// as it would have once shown, had its timer run.
 			if (this.openingUntil !== undefined && this.now() >= this.openingUntil) this.replaceOpening('opening timed out', false);
@@ -570,6 +572,8 @@ export class ChatClient {
 		this.webSocketFactory = webSocketFactory;
 		this.earlyConnection = earlyConnection;
 		this.beforeConnect = beforeConnect;
+		this.reloadableFrom = this.now();
+		this.reloadableUntil = this.reloadableFrom + RELOADABLE_FOR_MS;
 		this.displayName = displayName.trim();
 		this.loadStoredSession();
 	}
@@ -588,6 +592,8 @@ export class ChatClient {
 		const nextUrl = addressOf(serverUrl.trim());
 		if (!nextUrl || nextUrl === this.serverUrl) return;
 		this.switchServer(nextUrl);
+		// Asked for: a reload would undo it (as for `restart`).
+		this.reloadableUntil = 0;
 		if (this.running) this.restart();
 		else if (this.disconnected) this.start();
 	}
@@ -723,6 +729,8 @@ export class ChatClient {
 	 * `beforeFreshSession` brings back. A disconnected client starts again the same way.
 	 */
 	restart(): void {
+		// Asked for (another server, signing out): a reload would undo it.
+		this.reloadableUntil = 0;
 		if (!this.running) {
 			if (this.disconnected) {
 				// What `stop` kept to resume from belongs to the session disconnected: a restart is a new one.
@@ -2973,10 +2981,13 @@ export class ChatClient {
 			return;
 		}
 		this.stopWaitingForPresence();
-		const gate = gated ? undefined : this.beforeConnect?.(this.reloadable());
+		const gate = gated ? undefined : this.beforeConnect?.(() => this.reloadable());
 		if (gate) {
-			// A standby waits for nothing: it closes, and the connection after the wait opens its own.
+			// A standby waits for nothing: it closes, and the connection after the wait opens its own. A connection
+			// diagnosis still running is for the attempt before: it neither shows its error nor schedules another.
 			if (handover) closeUnused(handover.socket);
+			this.connectionProbe?.abort();
+			this.connectionId += 1;
 			// Connecting as far as anyone can tell: it opens once the gate lets it (or the page reloads instead), and
 			// once the page is shown and online again if it went hidden or offline meanwhile.
 			const waiting: Promise<void> = gate.catch(() => undefined).then(() => {
@@ -3033,17 +3044,17 @@ export class ChatClient {
 	}
 
 	/**
-	 * Whether reloading into a newer deploy before this connection would cut short nothing in use
-	 * (`ChatClientOptions.beforeConnect`): the client's first, or one within `RELOADABLE_AFTER_RETURN_MS` of coming back
-	 * after a long absence. Otherwise an upload, a recording or a half-typed sign-in code may be under way.
+	 * Whether reloading into a newer deploy would cut nothing short (`ChatClientOptions.beforeConnect`): running, within
+	 * `RELOADABLE_FOR_MS` of starting or of coming back after a long absence, and no restart asked for since. Otherwise
+	 * an upload, a recording or a half-typed sign-in code may be under way. A clock set back falls outside.
 	 */
 	private reloadable(): boolean {
-		return !this.openedOnce || (this.returnedAt !== undefined && this.now() - this.returnedAt < RELOADABLE_AFTER_RETURN_MS);
+		const now = this.now();
+		return this.running && now >= this.reloadableFrom && now < this.reloadableUntil;
 	}
 
 	/** The current socket has opened. */
 	private socketOpened(): void {
-		this.openedOnce = true;
 		startupMark('socket-open');
 		this.status = 'connected';
 		this.error = undefined;

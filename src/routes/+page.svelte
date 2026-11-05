@@ -1336,8 +1336,12 @@
 			webSocketFactory,
 			undefined,
 			// The connection opened as the app started, to this server (`hooks.client.ts`), if it's still there. Each
-			// connection, the first and every reconnect, first checks for a newer deploy if it's been a while.
-			{ earlyConnection: takeEarlyConnection, beforeConnect: previewMode ? undefined : beforeConnect }
+			// connection first checks for a newer deploy if it's been a while, reloading into it only if that loses
+			// nothing: no unsent draft, push notification's room still to open, or sign-in link under way.
+			{
+				earlyConnection: takeEarlyConnection,
+				beforeConnect: previewMode ? undefined : (reloadable) => beforeConnect(() => reloadable() && !drafts.unsent && !pushRoom && !links.busy && !links.asked)
+			}
 		);
 		if (!previewMode) {
 			// Made as the app started, and reading what it restores since (`$lib/history/startup`).

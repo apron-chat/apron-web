@@ -31,7 +31,7 @@ export interface ClientOptions {
 	/** How many history requests may be out at once. Default the client's, one; only the wire fixtures set it. */
 	historyConcurrency?: number;
 	/** What each connection waits on before it opens (`ChatClientOptions.beforeConnect`): none by default. */
-	beforeConnect?: (reloadable: boolean) => Promise<void> | undefined;
+	beforeConnect?: (reloadable: () => boolean) => Promise<void> | undefined;
 }
 
 export interface ClientHarness {

@@ -80,16 +80,11 @@ lazily loaded file the deploy removed), a notice at the top offers **Reload**
 or **Later**; the notice never reloads by itself. Drafts live only in memory, so while
 any room or thread has unsent text or files it adds that reloading clears your
 unsent message.
-A copy of the app that hasn't confirmed in 3 days that it is the latest (a tab or
-installed app resumed after days, or the page kept for offline) checks first,
-before it connects or reconnects (`version.json`, waiting up to 5 seconds).
-Finding a newer version as it starts, or reconnecting within a minute of coming
-back from a minute or more away, it reloads into that version rather than
-connecting with the old one. A reconnect while the page is in use only shows
-the notice, since a reload would cut short an upload, a recording or a sign-in;
-so do an unsent draft, and a reload that brought back the same old page. A page loaded from the network is the latest already,
-and the time of the last check is shared by the device's tabs, so this rarely
-costs a request; a check that can't be made lets the connection go ahead.
+Before connecting, a copy not confirmed the latest for 3 days (a tab or app
+resumed after days) checks `version.json`, waiting up to 5 seconds. If a newer
+version is out, it reloads into it within a minute of starting or of coming
+back from a minute or more away, unless that would lose an unsent draft, a
+notification's room or a sign-in link; otherwise it connects and shows the notice.
 
 A reload, or opening the app again, picks up where you were. With a session
 saved on this device (a passkey or email account; a guest's isn't kept), the
