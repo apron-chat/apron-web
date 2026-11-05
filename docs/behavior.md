@@ -1307,7 +1307,14 @@ and notices, which have nothing to act on, and thread cards. ↑ at the oldest d
 loads older messages, as scrolling back does. ↓ at the newest, or Escape, gives the keyboard back to the composer
 (in select mode Escape ends it instead); without a composer, Escape takes the keyboard off the messages. On a message, `r` replies to it and `e` edits it when it is yours, as their
 toolbar buttons do, and Enter goes into its toolbar, where Escape comes back to the row; an edit opened on the message
-(`e`, or its **Edit**) gives the keyboard back to its row when it ends. Neither `r` nor `e` does anything in select
+(`e`, or its **Edit**) gives the keyboard back to its row when it ends. → goes into its links and buttons (its
+toolbar's among them, the letter of each one's key, R in Reply and E in Edit, boxed while the keyboard is there), ← →
+go through them and Escape comes back to the row. Shift+↑ and Shift+↓ start select mode with the message, or go on
+with it, picking every message from where the run began to the one the keyboard moves to (stepping back gives them up
+again), as a shift-click fills a range. The timeline is a single Tab stop: Tab into it (from the header, or Shift+Tab
+from the composer) lands on the item the keyboard was last on, else the newest message, and Tab on it goes past the
+whole timeline; a thread's card, or anything else between the messages that takes the keyboard, is an item ↑ ↓ stop
+at. Neither `r` nor `e` does anything in select
 mode, while it is being edited, or in a field (where they are letters), nor with Ctrl, Alt or ⌘. Clicking a message
 puts the keyboard on it too. Messages arriving leave the keyboard where it is, and opening another room or thread
 gives it back to the composer.

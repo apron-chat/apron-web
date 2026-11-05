@@ -93,6 +93,16 @@ export class MessageSelection {
 		this.current = { ...current, ids, last: picked ? current.last : id, denied: undefined };
 	}
 
+	/**
+	 * Shift+↑ or Shift+↓ from the keyboard: the picked messages become those from `anchor` (where the run of keys
+	 * began) to `id`, both included, so stepping back the other way gives them up again.
+	 */
+	extend(anchor: string, id: string, order: string[]): void {
+		const current = this.current;
+		if (!current || current.saving) return;
+		this.current = { ...current, ids: rangeBetween(order, anchor, id), last: id, denied: undefined };
+	}
+
 	/** "Select between": fills the gap between the outermost messages already picked. */
 	fillBetween(order: string[]): void {
 		const current = this.current;
