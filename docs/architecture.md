@@ -317,7 +317,11 @@ Protocol types, replay reduction, and the WebSocket session live under
 `ChatClient`, and re-exports the rest of its API: `client-types.ts` has the
 snapshot and option types, `client-views.ts` the pure helpers over snapshots,
 capabilities and server URLs, and `client-internals.ts` the per-room state,
-tuning constants and helpers only `ChatClient` uses, `signin-connection.ts`
+tuning constants and helpers only `ChatClient` uses, `transport.ts` the
+sockets under the session (`Transport`: opening each, pinging and probing it,
+a probe's standby, reconnecting with backoff, waiting for the page to be
+shown and online), which reaches the session only through its hooks,
+`signin-connection.ts`
 the connection an email or external sign-in proposes and approves on, and
 `proposals.ts` the proposals this browser made, kept by their `state`.
 `plain-text.ts` cleans text that people write and others see as plain text,
@@ -505,8 +509,8 @@ approves on it (`auth` with `token`, the proposal's scheme); a `denied` code
 leaves it open to try again. On success the client
 adopts that connection as its own: `beforeSwitch` runs, it moves to that
 server if another (`switchServer`, as `setUrl` without connecting), closes its
-connection as `restart` would, attaches the socket (`attachSocket`, shared
-with `connectNow`), takes the `server` frame in without answering it, handles
+connection as `restart` would, attaches the socket (`Transport.adopt`, through
+`attachSocket` as `connectNow` does), takes the `server` frame in without answering it, handles
 the result as a sign-in, and then processes the frames that arrived after the
 result. `signInWithLink(token, url?, { scheme?, state?, beforeSwitch? })` does
 the same with a link's token on a fresh connection, with the proposal's
