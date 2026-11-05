@@ -5178,7 +5178,10 @@ export class ChatClient {
 				return;
 			}
 			this.requests.delete(id);
-			request.reject(new RequestTimeout(request.method));
+			// One that never went out (no connection ready for it) is not out at all, nor can it have been applied.
+			request.reject(request.sentConnection === undefined
+				? new Error(`Not connected in time; ${request.method} request not sent. Please retry`)
+				: new RequestTimeout(request.method));
 			this.emit();
 		}, REQUEST_TIMEOUT_MS);
 	}
@@ -5212,13 +5215,14 @@ export class ChatClient {
 	/**
 	 * Ends the current connection, however it ends: every way out (`stop`, `restart`, `retryNow`, a sign-in on
 	 * another connection, the socket closing or going quiet) comes through here, so nothing scoped to the
-	 * connection outlives it. Its requests fail with `requests` (their delivery uncertain, by default), and its
+	 * connection outlives it. Its requests fail with `requests` (by default, those sent as their delivery
+	 * uncertain, and those that never went out as not sent), and its
 	 * typing, pings and passkey ceremony go. Its protocol view is either kept to resume from (`suspend`: each
 	 * room hidden with its records, floor and checkpoint) or forgotten (`discard`), and never left shown as it
 	 * was: a room shown with no connection under it has nothing to recover or load it. The socket, unless it is
 	 * closing already, closes with `close`.
 	 */
-	private endConnection({ view, reason, requests = 'Connection closed; delivery is uncertain. Please retry', close }: {
+	private endConnection({ view, reason, requests, close }: {
 		view: 'suspend' | 'discard';
 		reason: string;
 		requests?: string;
@@ -5233,7 +5237,8 @@ export class ChatClient {
 		this.cancelPasskey();
 		for (const request of this.requests.values()) {
 			clearTimeout(request.timer);
-			request.reject(new Error(requests));
+			request.reject(new Error(requests ?? (request.sentConnection === undefined
+				? 'Connection closed; not sent. Please retry' : 'Connection closed; delivery is uncertain. Please retry')));
 		}
 		this.requests.clear();
 		this.historyQueue.dropHeld(reason);

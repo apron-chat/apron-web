@@ -110,6 +110,31 @@ describe('posts and commands', () => {
 	});
 });
 
+describe('a request the connection ends under', () => {
+	it('says one that never went out was not sent, and one that did may have been', async () => {
+		await connect();
+		const sent = client.send('general', 'out');
+		socket.drop();
+		// Asked while away: it waits for the next connection, which goes before it is signed in.
+		const unsent = client.send('general', 'waiting');
+		vi.advanceTimersByTime(5_000);
+		FakeSocket.latest().drop();
+		await expect(sent.promise).rejects.toThrow('Connection closed; delivery is uncertain. Please retry');
+		await expect(unsent.promise).rejects.toThrow('Connection closed; not sent. Please retry');
+	});
+
+	it('says one that never went out before it timed out was not sent', async () => {
+		// A server that signs in only with a passkey: the connection stays up, waiting for a tap.
+		socket.open();
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['webauthn'], capabilities: ['rooms'] } });
+		const unsent = client.send('general', 'early');
+		quiet(unsent);
+		await vi.advanceTimersByTimeAsync(20_000);
+		expect(socket.sent.some((frame) => frame.method === 'message')).toBe(false);
+		await expect(unsent.promise).rejects.toThrow('Not connected in time; message request not sent. Please retry');
+	});
+});
+
 describe('saves', () => {
 	it('resubmits reply_to bare and the rest of the body on edits, but never ext, which the server merges', async () => {
 		await connect();
