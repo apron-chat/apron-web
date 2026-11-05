@@ -136,6 +136,19 @@ describe('one explicit ceremony per tap', () => {
 		expect(storage.get('apron.signin:ws://fake.test/')).toBe('token');
 	});
 
+	it('rejects with a refusal’s wait without holding back the next connection', async () => {
+		const { client, socket, snap } = await connect([], { auth: ['webauthn', 'guest'], storage });
+		const pending = client.usePasskey('login');
+		await settle();
+		socket.receive({ id: socket.request('auth').id, error: { code: -32002, message: 'Slow down', data: { retry_after: 600 } } });
+		await expect(pending).rejects.toThrow('Slow down. Try again in 10m.');
+		// The wait is the ceremony's: the connection, signed in as before, owes the server none.
+		socket.drop();
+		expect(snap().retryAfterMs).toBeUndefined();
+		await vi.advanceTimersByTimeAsync(5_000);
+		expect(FakeSocket.instances).toHaveLength(2);
+	});
+
 	it('is busy from the tap on, before the server is asked for a challenge', async () => {
 		vi.mocked(requestPasskey).mockResolvedValue({ id: 'credential' });
 		const { client, socket } = await connected();

@@ -2481,9 +2481,10 @@ export class ChatClient {
 	 * appears, and `room_update` keeps it current from then on. It may go
 	 * right behind `auth`, which finishes first (§3.2). With `since`, the
 	 * server lists only rooms whose log moved past it, plus the ones left in
-	 * `left`; rooms it leaves out are unchanged.
+	 * `left`; rooms it leaves out are unchanged. `failures`: how many times in a
+	 * row it went unanswered or failed on the server's side on this connection.
 	 */
-	private listJoinedRooms(since?: string): void {
+	private listJoinedRooms(since?: string, failures = 0): void {
 		const socket = this.socket;
 		const params: JsonObject = { filter: 'joined', members: true, ...(since !== undefined ? { latest_log_id: since } : {}) };
 		const request = this.enqueueRequest('room_list', params, { visible: false, allowBeforeAuth: true });
@@ -2517,15 +2518,19 @@ export class ChatClient {
 		}, (cause: Error) => {
 			if (socket !== this.socket || this.joinedListing !== listing) return;
 			this.joinedListing = undefined;
-			if (cause instanceof RateLimitError && this.authenticated) {
-				// Refused for a while (§1.1): rather than leave the connection with no rooms, list them again
-				// once the wait is over, as long as it lasts. Meanwhile this stands as the listing under way.
+			// Unanswered, or failed on the server's side: likely gone by the next try, with a wait that doubles each time.
+			const transient = cause instanceof RequestTimeout || (cause as Error & { code?: number }).code === -32603;
+			const wait = cause instanceof RateLimitError ? Math.max(0, cause.retryAt - Date.now())
+				: transient ? Math.min(IDLE_RETRY_MS * 2 ** failures, IDLE_RETRY_MAX_MS) : undefined;
+			if (wait !== undefined && this.authenticated) {
+				// Refused for a while (§1.1), or failed for the moment: rather than leave the connection with no rooms,
+				// list them again once the wait is over, as long as it lasts. Meanwhile this stands as the listing under way.
 				this.joinedListing = listing;
 				setTimeout(() => {
 					if (socket !== this.socket || this.joinedListing !== listing) return;
-					this.listJoinedRooms(since);
+					this.listJoinedRooms(since, transient ? failures + 1 : failures);
 					this.emit();
-				}, Math.max(0, cause.retryAt - Date.now()));
+				}, wait);
 				this.emit();
 				return;
 			}
@@ -2592,6 +2597,15 @@ export class ChatClient {
 					this.markJoined(room);
 					// Left out: nothing in it moved past its checkpoint, so its resume, if still queued, needn't go.
 					this.settleQueuedResume(room, room.checkpoint);
+					// Nor, with none under way (the changed rooms catching up together), is anything missing: it is complete
+					// up to where it was, and live from here, so what arrives now moves its checkpoint (`noteLive`), or a
+					// thread's last load where that reached its head.
+					if (this.isThread(room.id)) {
+						if (!room.loading && room.loadCheckpoint !== undefined && room.latestLogId !== undefined &&
+							compareLogIds(room.loadCheckpoint, room.latestLogId) >= 0) room.resumed = false;
+					} else if (!room.recovery && !room.recoveryError && room.checkpoint !== undefined) {
+						room.synced = true;
+					}
 				}
 			} else {
 				// A full listing: `joined` is the whole set; anything else joined was left meanwhile.
@@ -2733,11 +2747,6 @@ export class ChatClient {
 		if (failures.length) throw new Error(failures[0]);
 	}
 
-	/** Forget a failed upload's state once the UI has shown it. */
-	dismissUpload(embedId: string): void {
-		if (this.uploads.delete(embedId)) this.emit();
-	}
-
 	/**
 	 * Loads a room's history (§4.3). Threads and rooms opened without joining
 	 * never recover automatically: call this when one is opened (a joined
@@ -2821,15 +2830,15 @@ export class ChatClient {
 				if (!validHistoryMetadata(result)) throw new Error('Invalid history response');
 				this.observeHistoryResponse(room, result);
 				if (stale()) return;
-				this.applyPage(room, result);
+				this.installPage(result, room);
 				this.noteOlderPage(room, result);
 				room.loadCheckpoint = head;
 				room.resumed = false;
 				return;
 			}
 			let checkpoint: string | undefined = room.loadCheckpoint;
-			let after: string | undefined = maxDefined(checkpoint === undefined ? undefined : increment(checkpoint), room.floor) ?? FIRST_LOG_ID;
-			while (after === undefined || compareLogIds(after, head) <= 0) {
+			let after = maxDefined(increment(checkpoint), room.floor)!;
+			while (compareLogIds(after, head) <= 0) {
 				const request = this.historyQueue.request(room.id, historyParams(room.id, after, head), { retry: !background() });
 				if (run) run.requestId = request.id;
 				const result = await request.promise;
@@ -2837,12 +2846,12 @@ export class ChatClient {
 				if (!validHistoryMetadata(result)) throw new Error('Invalid history response');
 				this.observeHistoryResponse(room, result);
 				if (stale()) return;
-				if (after !== undefined && room.floor !== undefined && compareLogIds(room.floor, after) > 0) {
+				if (room.floor !== undefined && compareLogIds(room.floor, after) > 0) {
 					// History was discarded underneath this load: continue from the bound.
 					after = room.floor;
 					continue;
 				}
-				this.applyPage(room, result);
+				this.installPage(result, room);
 				if (!result.more) {
 					checkpoint = maxDefined(checkpoint, head);
 					room.loadCheckpoint = checkpoint;
@@ -2850,7 +2859,7 @@ export class ChatClient {
 					return;
 				}
 				const lastId = result.last_log_id;
-				if (!isLogId(lastId) || (after !== undefined && compareLogIds(lastId, after) < 0) || compareLogIds(lastId, head) >= 0) {
+				if (!isLogId(lastId) || compareLogIds(lastId, after) < 0 || compareLogIds(lastId, head) >= 0) {
 					throw new Error('Invalid history continuation');
 				}
 				after = increment(lastId);
@@ -2889,7 +2898,7 @@ export class ChatClient {
 			const kept = this.olderSource ? await this.olderSource(room.id, before, THREAD_PAGE_SIZE).catch(() => undefined) : undefined;
 			if (stale()) return;
 			if (kept && validHistoryMetadata(kept)) {
-				this.applyPage(room, kept);
+				this.installPage(kept, room);
 				this.noteOlderPage(room, kept);
 				return;
 			}
@@ -2898,7 +2907,7 @@ export class ChatClient {
 			if (!validHistoryMetadata(result)) throw new Error('Invalid history response');
 			this.observeHistoryResponse(room, result);
 			if (stale()) return;
-			this.applyPage(room, result);
+			this.installPage(result, room);
 			this.noteOlderPage(room, result);
 		} finally {
 			if (!stale()) room.loadingOlder = false;
@@ -3110,7 +3119,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * After a handshake that failed, asks the server why (EXT.md §7): `GET`
+	 * After a handshake that failed, asks the server why (EXT.md §5): `GET`
 	 * its URL over HTTP with `?apron_connection_status=1`. A reply marked
 	 * `Apron-Connection-Status: 1`, with status 403, 429 or 503 and a JSON
 	 * `{error}`, shows as the error and holds reconnects for its
@@ -3224,6 +3233,7 @@ export class ChatClient {
 		// Greeted: the socket is open and the server on it. From here pings (§1) and request timeouts watch it.
 		this.clearOpening();
 		const previousPing = this.server?.ping;
+		const previousCapabilities = this.server?.capabilities ?? [];
 		this.server = {
 			apron: params.apron,
 			...(typeof params.agent === 'string' ? { agent: params.agent } : {}),
@@ -3245,6 +3255,7 @@ export class ChatClient {
 		// Each frame fully replaces the last (§3.1): features are worth trying again.
 		this.memberChangesUnsupported = false;
 		if (this.authenticated || this.authRequested) {
+			if (this.authenticated) this.startAddedCapabilities(previousCapabilities);
 			// A replacing frame may add capability `status`: attendance goes once signed in (§4.5).
 			this.syncIdle();
 			this.syncPush();
@@ -3261,6 +3272,21 @@ export class ChatClient {
 			return;
 		}
 		this.authenticate(auth);
+	}
+
+	/**
+	 * A replacing `server` frame after sign-in added capability `rooms` or `history` (§3.1): what signing in would
+	 * have started for it starts now. With `rooms`, the joined rooms are listed, in place of the default room
+	 * (§3.4), each recovering as it is shown; with `history` alone, each room shown recovers.
+	 */
+	private startAddedCapabilities(before: string[]): void {
+		if (this.hasCap('rooms') && !before.includes('rooms')) {
+			this.defaultRoom = undefined;
+			this.hideRoom(DEFAULT_ROOM_ID);
+			if (!this.joinedListing) this.listJoinedRooms();
+		} else if (this.hasCap('history') && !before.includes('history')) {
+			for (const room of this.rooms.values()) this.recoverIfBehind(room, false);
+		}
 	}
 
 	/**
@@ -3326,6 +3352,8 @@ export class ChatClient {
 			console.warn(`[apron] sign-in ${resume ? 'by saved session' : 'as a guest'} failed: ${cause.message}`, { server: this.serverUrl, error: describeError(cause) });
 			this.authRequested = false;
 			this.error = cause.message;
+			// The connection's own sign-in put off: the next connection waits it out (`scheduleReconnect`).
+			if (cause instanceof RateLimitError) this.retryAfterUntil = Math.max(this.retryAfterUntil, cause.retryAt);
 			// Never silently downgrade a passkey session to a different guest identity.
 			if (resume) {
 				const code = (cause as Error & { code?: number }).code;
@@ -3345,11 +3373,13 @@ export class ChatClient {
 				}
 				// A limit or timeout keeps the token: reconnect, after any retry_after, and resume again.
 				socket?.close(1000, 'resume failed');
-			} else if (cause instanceof RateLimitError) {
-				// A guest sign-in the server put off (`retry_after`, §1.1): left as it is, the connection
-				// would sit signed in as no one until the server drops it. Reconnect once the wait is
-				// over (`scheduleReconnect` honours it) and sign in as a guest again.
-				socket?.close(1000, 'guest sign-in limited');
+			} else if ((cause as Error & { code?: number }).code !== -32001) {
+				// A guest sign-in the server put off (`retry_after`, §1.1), that went unanswered, or that failed
+				// for a reason of the moment: left as it is, the connection would sit signed in as no one until
+				// the server drops it, and a late result is ignored. Reconnect, once any wait is over
+				// (`scheduleReconnect` honours it), and sign in as a guest again. Only `denied` stands: a server
+				// that will not have guests would refuse every attempt.
+				socket?.close(1000, cause instanceof RateLimitError ? 'guest sign-in limited' : 'guest sign-in failed');
 			}
 			this.emit();
 		});
@@ -3364,7 +3394,7 @@ export class ChatClient {
 	 */
 	private handleAuth(result: JsonObject, signedIn?: SignInMethod, added = false): boolean {
 		const identity = result.you;
-		if (!isJsonObject(identity) || typeof identity.user_id !== 'string') {
+		if (!isIdentity(identity)) {
 			this.error = 'Server authentication response did not include an identity';
 			this.emit();
 			return false;
@@ -3595,10 +3625,8 @@ export class ChatClient {
 	}
 
 	private requestJoinedPage(run: NonNullable<ChatClient['joinedCatchUp']>, after: string): void {
-		// Right behind `auth`, as the resumes it stands for would have gone (§3.2).
-		const pipelined = !this.authenticated && this.authRequested;
 		const params: JsonObject = { after, ...(run.head !== undefined ? { before: run.head } : {}), limit: HISTORY_PAGE_SIZE };
-		this.historyQueue.request(JOINED_LOG, params, { allowBeforeAuth: pipelined }).promise.then((result) => {
+		this.historyQueue.request(JOINED_LOG, params).promise.then((result) => {
 			if (this.joinedCatchUp !== run) return;
 			this.applyJoinedPage(run, after, result);
 		}, (cause: Error & { code?: number }) => {
@@ -4032,13 +4060,6 @@ export class ChatClient {
 	}
 
 	/**
-	 * A room's members under their current `user_id`s (§3.3): a membership of
-	 * an ID retired by a `user_id` change (a guest that became an account) stays
-	 * in the store until the room is listed again, beside the new ID's own, so
-	 * it shows as the identity that replaced it, once. The same array when no
-	 * member's ID is retired.
-	 */
-	/**
 	 * An untitled private room's title (`peopleTitle`): its members other than
 	 * you, each by the name kept for them, else the one listed, else their
 	 * `user_id`. "Private room" while its members aren't known.
@@ -4049,6 +4070,13 @@ export class ChatClient {
 		return peopleTitle(members.filter((member) => member.user_id !== you).map((member) => this.users.get(member.user_id)?.name || member.name || member.user_id));
 	}
 
+	/**
+	 * A room's members under their current `user_id`s (§3.3): a membership of
+	 * an ID retired by a `user_id` change (a guest that became an account) stays
+	 * in the store until the room is listed again, beside the new ID's own, so
+	 * it shows as the identity that replaced it, once. The same array when no
+	 * member's ID is retired.
+	 */
 	private currentMembers(members: Identity[] | undefined): Identity[] | undefined {
 		if (!members || !members.some((member) => this.userAliases.has(member.user_id))) return members;
 		// The new ID's own membership, where it has one, is the one listed.
@@ -4622,7 +4650,7 @@ export class ChatClient {
 		this.observeHistoryResponse(room, result);
 		if (room.recovery !== recovery || recovery.generation !== generation) return;
 		this.clearForRebuild(room);
-		this.applyPage(room, result);
+		this.installPage(result, room);
 		if (recovery.newest) {
 			// Everything up to H is covered for live delivery; what is older loads as the reader scrolls back.
 			this.noteOlderPage(room, result);
@@ -4647,18 +4675,10 @@ export class ChatClient {
 	}
 
 	/**
-	 * Install a page's records, skipping message and reaction records below
-	 * the room's bound. Memberships keep the room's member list current; a
-	 * listing's members already cover the ones at or below its head.
-	 */
-	private applyPage(room: RoomState, result: JsonObject): void {
-		this.installPage(result, room);
-	}
-
-	/**
 	 * Installs a page's records, message and reaction records only at or above their room's bound: `room`'s for a
 	 * page of its log, else (a page of every joined room's log, `history` without `room_id`) each record's own
-	 * room's, whose head the record moves as a live one does.
+	 * room's, whose head the record moves as a live one does. Memberships keep a room's member list current; a
+	 * listing's members already cover the ones at or below its head.
 	 */
 	private installPage(result: JsonObject, room?: RoomState): void {
 		// `~private` messages are never installed (Appendix A.1), from history either.
@@ -4762,7 +4782,7 @@ export class ChatClient {
 		recovery.buffer = recovery.buffer.filter((live) => isEmbedded(live) || compareLogIds(live.record.log_id, effective) >= 0);
 		recovery.bufferBytes = recovery.buffer.reduce((bytes, live) => bytes + recordBytes(live.record), 0);
 		// The newest page needs no position the bound could pass: the server keeps it to what is retained, and
-		// what it sends below the bound is skipped (`applyPage`).
+		// what it sends below the bound is skipped (`installPage`).
 		if (recovery.newest) return;
 		// `nextAfter` is the first unprocessed position. Equality is safe; a
 		// strictly larger bound means a retained gap was discarded underneath us.
@@ -4998,7 +5018,8 @@ export class ChatClient {
 
 	/**
 	 * The error a refused `request` rejects with. `retry_after` makes it a
-	 * `RateLimitError`: on `auth` it holds back reconnecting; on any other
+	 * `RateLimitError`: on `auth` it is that sign-in's wait, which holds back
+	 * reconnecting only for the connection's own (`authenticate`); on any other
 	 * request it is that request's wait, and it holds back what `limitScope`
 	 * says until the wait is over (`limits`): the category in `data.ext.limits`
 	 * counts only while the server advertises `ext:limits`.
@@ -5012,7 +5033,6 @@ export class ChatClient {
 		}
 		const until = Date.now() + retryAfter;
 		if (request.method === 'auth') {
-			this.retryAfterUntil = Math.max(this.retryAfterUntil, until);
 			return new RateLimitError(userFacingRpcError(rpcError), rpcError.message ?? '', until);
 		}
 		const scope = limitScope(request.method, request.params, this.hasCap('ext:limits') ? limitCategory(rpcError) : undefined);
@@ -5151,7 +5171,10 @@ export class ChatClient {
 				return;
 			}
 			this.requests.delete(id);
-			request.reject(new RequestTimeout(request.method));
+			// One that never went out (no connection ready for it) is not out at all, nor can it have been applied.
+			request.reject(request.sentConnection === undefined
+				? new Error(`Not connected in time; ${request.method} request not sent. Please retry`)
+				: new RequestTimeout(request.method));
 			this.emit();
 		}, REQUEST_TIMEOUT_MS);
 	}
@@ -5185,13 +5208,14 @@ export class ChatClient {
 	/**
 	 * Ends the current connection, however it ends: every way out (`stop`, `restart`, `retryNow`, a sign-in on
 	 * another connection, the socket closing or going quiet) comes through here, so nothing scoped to the
-	 * connection outlives it. Its requests fail with `requests` (their delivery uncertain, by default), and its
+	 * connection outlives it. Its requests fail with `requests` (by default, those sent as their delivery
+	 * uncertain, and those that never went out as not sent), and its
 	 * typing, pings and passkey ceremony go. Its protocol view is either kept to resume from (`suspend`: each
 	 * room hidden with its records, floor and checkpoint) or forgotten (`discard`), and never left shown as it
 	 * was: a room shown with no connection under it has nothing to recover or load it. The socket, unless it is
 	 * closing already, closes with `close`.
 	 */
-	private endConnection({ view, reason, requests = 'Connection closed; delivery is uncertain. Please retry', close }: {
+	private endConnection({ view, reason, requests, close }: {
 		view: 'suspend' | 'discard';
 		reason: string;
 		requests?: string;
@@ -5206,7 +5230,8 @@ export class ChatClient {
 		this.cancelPasskey();
 		for (const request of this.requests.values()) {
 			clearTimeout(request.timer);
-			request.reject(new Error(requests));
+			request.reject(new Error(requests ?? (request.sentConnection === undefined
+				? 'Connection closed; not sent. Please retry' : 'Connection closed; delivery is uncertain. Please retry')));
 		}
 		this.requests.clear();
 		this.historyQueue.dropHeld(reason);
@@ -5467,10 +5492,10 @@ function isSignInMethod(method: string | null): method is SignInMethod {
 	return method === 'webauthn' || method === 'email' || method === 'external' || method === 'link' || method === 'token';
 }
 
-/** The proposals a sign-in link can approve, either of which a server's approval takes (§4.11.3). */
 /** The history queue's key for the joined rooms' log (`history` without `room_id`, §4.3), which no room's id is. */
 const JOINED_LOG = '';
 
+/** The proposals a sign-in link can approve, either of which a server's approval takes (§4.11.3). */
 const PROPOSAL_SCHEMES: ProposalScheme[] = ['email', 'external'];
 
 /**

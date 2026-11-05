@@ -393,7 +393,10 @@ export class ProtocolStore {
 		return true;
 	}
 
-	/** Drop the room's messages whose latest snapshot is below `floor` (retention eviction), and memberships logged below it. */
+	/**
+	 * Drop the room's messages whose latest snapshot is below `floor` (retention eviction), with their reaction sets,
+	 * and memberships logged below it.
+	 */
 	evictBefore(roomId: string, floor: string): void {
 		this.changed({ kind: 'evict', room: roomId, floor });
 		const log = this.membershipLogs.get(roomId);
@@ -406,6 +409,7 @@ export class ProtocolStore {
 			const message = this.messageRecords.get(id)!;
 			if (compareLogIds(message.log_id, floor) >= 0) continue;
 			this.messageRecords.delete(id);
+			this.reactionSets.delete(id);
 			this.unhome(roomId, id);
 		}
 	}
