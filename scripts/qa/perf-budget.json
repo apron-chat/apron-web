@@ -10,14 +10,14 @@
 			"domNodes": 537,
 			"layouts": 10,
 			"styleRecalcs": 18,
-			"calls": 226783,
+			"calls": 209590,
 			"heapMB": 8.4
 		},
 		"load-busy": {
 			"requests": 20,
 			"startupJsKB": 870.8,
 			"domNodes": 1149,
-			"layouts": 9,
+			"layouts": 13,
 			"styleRecalcs": 16,
 			"calls": 1507671,
 			"heapMB": 10.9
