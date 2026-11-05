@@ -737,6 +737,72 @@ describe('HistoryKeeper, when things go wrong', () => {
 	});
 });
 
+describe('HistoryKeeper, when a write fails', () => {
+	/**
+	 * A keeper writing the memory server's session, its first write done, whose writes then fail as `abort` says:
+	 * with the error the transaction gives (undefined, an `AbortError` of its own), or not at all (false).
+	 */
+	async function failing(abort: () => DOMException | undefined | false) {
+		const server = new MemoryProtocolServer({ account: true });
+		const indexedDB = new IDBFactory();
+		const client = new ChatClient(URL, 'Ada', server.factory);
+		clients.push(client);
+		const failures: string[] = [];
+		const keeper = new HistoryKeeper({ indexedDB, locks: null, retryMs: [5, 5], onfailure: (message) => failures.push(message) });
+		keeper.watch(saved(client));
+		client.start();
+		await waitFor(() => Boolean(room(client.snapshot(), 'general')?.loaded));
+		await keeper.flush();
+		const db = await [...(keeper as unknown as { dbs: Map<string, Promise<IDBDatabase>> }).dbs.values()][0];
+		const transaction = db.transaction.bind(db);
+		let attempts = 0;
+		db.transaction = ((...args: Parameters<IDBDatabase['transaction']>) => {
+			const begun = transaction(...args);
+			const error = args[1] === 'readwrite' ? abort() : false;
+			if (error === false) return begun;
+			attempts++;
+			if (error) Object.defineProperty(begun, 'error', { get: () => error, set: () => undefined });
+			queueMicrotask(() => begun.abort());
+			return begun;
+		}) as IDBDatabase['transaction'];
+		const post = async (text: string) => {
+			const id = server.post('general', 'grace', text);
+			await waitFor(() => ids(client.snapshot(), 'general').includes(id));
+			await keeper.flush();
+			return id;
+		};
+		return { keeper, db, failures, post, attempts: () => attempts };
+	}
+
+	it('tries a write the browser gave up on again, a few times, then stops keeping', async () => {
+		let remaining = 2;
+		const { keeper, db, failures, post, attempts } = await failing(() => (remaining-- > 0 ? undefined : false));
+		const id = await post('Kept once tried again');
+		for (let i = 0; !(await readKept(db))?.messages.some((message) => message.message_id === id); i++) {
+			if (i > 400) throw new Error('Not kept');
+			await new Promise((resolve) => setTimeout(resolve, 5));
+		}
+		expect(attempts()).toBe(2);
+		expect(failures).toEqual([]);
+		// Failing every time: after the last try, keeping stops.
+		remaining = Infinity;
+		await post('Not kept');
+		await waitFor(() => failures.length > 0);
+		expect(attempts()).toBe(2 + 3);
+		expect(failures).toEqual(['History couldn’t be saved on this device.']);
+		await keeper.stop();
+	});
+
+	it('stops at once on a full disk, and says so, even when the write fails as aborted', async () => {
+		const { keeper, failures, post, attempts } = await failing(() => new DOMException('The disk is full', 'QuotaExceededError'));
+		await post('Not kept');
+		await waitFor(() => failures.length > 0);
+		expect(attempts()).toBe(1);
+		expect(failures).toEqual(['There isn’t enough space on this device to keep more history.']);
+		await keeper.stop();
+	});
+});
+
 describe('mergeOf', () => {
 	const held = { id: 'general', checkpoint: '900', olderBefore: '500', hasOlder: true };
 	it('writes a room over all of what is kept when nothing deeper is', () => {

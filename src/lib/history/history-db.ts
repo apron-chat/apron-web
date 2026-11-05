@@ -184,12 +184,19 @@ function done<T>(request: IDBRequest<T>): Promise<T> {
 	});
 }
 
+/**
+ * Settles as `transaction` commits, or rejects with what aborted it (a full disk's `QuotaExceededError`, a request's
+ * error), else as an `AbortError`. Heard from the start, so a write that fails before it waits for this never leaves
+ * it rejected unheard.
+ */
 function committed(transaction: IDBTransaction): Promise<void> {
-	return new Promise((resolve, reject) => {
+	const finished = new Promise<void>((resolve, reject) => {
 		transaction.oncomplete = () => resolve();
-		transaction.onerror = () => reject(transaction.error);
-		transaction.onabort = () => reject(transaction.error ?? new Error('History write aborted'));
+		// A request's error aborts the transaction, which then says why (`error`, null while the error event runs).
+		transaction.onabort = () => reject(transaction.error ?? new DOMException('History write aborted', 'AbortError'));
 	});
+	finished.catch(() => undefined);
+	return finished;
 }
 
 /** Every key of `room`'s records, or those below `below`: arrays order after numbers and strings, so `[room, []]` is past them all. */
@@ -354,6 +361,16 @@ export interface HistoryWrite {
  */
 export async function writeHistory(db: IDBDatabase, write: HistoryWrite, kept: ReadonlySet<string>): Promise<number> {
 	const transaction = db.transaction(['meta', 'rooms', 'records'], 'readwrite', { durability: 'relaxed' });
+	try {
+		return await writeIn(transaction, write, kept);
+	} catch (cause) {
+		// A request failed as the transaction aborted: what aborted it says why (a full disk), not the `AbortError` each
+		// request still pending was failed with.
+		throw transaction.error ?? cause;
+	}
+}
+
+async function writeIn(transaction: IDBTransaction, write: HistoryWrite, kept: ReadonlySet<string>): Promise<number> {
 	const finished = committed(transaction);
 	const meta = transaction.objectStore('meta');
 	const rooms = transaction.objectStore('rooms');
@@ -362,7 +379,6 @@ export async function writeHistory(db: IDBDatabase, write: HistoryWrite, kept: R
 	const previous = await done(meta.get(META)) as MetaRow | undefined;
 	if (write.continues && !previous) {
 		// Written over what is kept, and nothing is: another tab forgot it (signed out, or chose not to keep).
-		finished.catch(() => undefined);
 		transaction.abort();
 		throw new HistoryGone();
 	}

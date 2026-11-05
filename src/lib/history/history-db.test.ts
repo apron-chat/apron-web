@@ -91,6 +91,23 @@ describe('writeHistory', () => {
 		expect(await readKept(db)).toBeUndefined();
 	});
 
+	it('fails with what aborted it, a full disk rather than its requests’ AbortError, leaving no rejection unheard', async () => {
+		// An unhandled rejection (the commit's, once the write failed before waiting for it) fails the run.
+		const db = await opened();
+		const transaction = db.transaction.bind(db);
+		const full = new DOMException('The disk is full', 'QuotaExceededError');
+		// The browser aborts the write as the disk fills: each request still pending fails with `AbortError`.
+		db.transaction = ((...args: Parameters<IDBDatabase['transaction']>) => {
+			const begun = transaction(...args);
+			Object.defineProperty(begun, 'error', { get: () => full, set: () => undefined });
+			queueMicrotask(() => begun.abort());
+			return begun;
+		}) as IDBDatabase['transaction'];
+		await expect(writeHistory(db, write({ rooms: [{ room: 'general', sync: { id: 'general', checkpoint: at(1) } }] }), new Set())).rejects.toBe(full);
+		await expect(pruneHistory(db, now)).rejects.toBeDefined();
+		await new Promise((resolve) => setTimeout(resolve, 20));
+	});
+
 	it('keeps the users as they are when a write leaves them out', async () => {
 		const db = await opened();
 		await writeHistory(db, write({ meta: { ...meta, users: [ada], aliases: { guest_1: 'ada' } } }), new Set());
