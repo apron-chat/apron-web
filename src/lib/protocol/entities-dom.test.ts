@@ -50,8 +50,16 @@ describe('the entities stand-in', () => {
 		expect(md.render('[x](https://example.com/?a=1&amp;b=&frac12; "&quot;t&quot;")')).toBe('<p><a href="https://example.com/?a=1&amp;b=%C2%BD" title="&quot;t&quot;">x</a></p>\n');
 	});
 
+	it('reads each name once, keeping only those that matched', () => {
+		const parse = vi.spyOn(Element.prototype, 'innerHTML', 'set');
+		expect(decodeHTMLStrict('&lArr;&lArr;&lArr;')).toBe('⇐⇐⇐');
+		expect(decodeHTMLStrict('&nosuchname;&nosuchname;')).toBe('&nosuchname;&nosuchname;');
+		expect(parse).toHaveBeenCalledTimes(3);
+		parse.mockRestore();
+	});
+
 	it('leaves named references as written without a DOM, where nothing shows Markdown', () => {
 		vi.stubGlobal('document', undefined);
-		expect(decodeHTMLStrict('&copy; &#169;')).toBe('&copy; ©');
+		expect(decodeHTMLStrict('&NotSucceeds; &#169;')).toBe('&NotSucceeds; ©');
 	});
 });
