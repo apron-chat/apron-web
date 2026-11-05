@@ -116,8 +116,11 @@ describe('the service worker', () => {
 		expect(shown.map((entry) => entry.title)).toEqual([QUIET_PUSH.title]);
 	});
 
-	/** A tab of the app, signed in to the account with this `push_id` (none: a guest's). */
-	const signedIn = (pushId?: string) => ({ visibilityState: 'hidden', postMessage: vi.fn((_message: unknown, ports?: MessagePort[]) => ports?.[0]?.postMessage({ pushId })), focus: vi.fn(async () => undefined) });
+	/**
+	 * A tab of the app, signed in to the account with this `push_id` (none: a guest's), with its own id (none: a tab
+	 * from before a deploy, which answers with its `push_id` only).
+	 */
+	const signedIn = (pushId?: string, tab?: string) => ({ visibilityState: 'hidden', postMessage: vi.fn((_message: unknown, ports?: MessagePort[]) => ports?.[0]?.postMessage({ pushId, ...(tab ? { tab } : {}) })), focus: vi.fn(async () => undefined) });
 
 	it('closes a clicked notification and opens its room at the app’s page when no tab is signed in to its account', async () => {
 		const close = vi.fn();
@@ -146,18 +149,41 @@ describe('the service worker', () => {
 		expect(matchAll).toHaveBeenCalledWith({ type: 'window', includeUncontrolled: true });
 	});
 
-	it('tells every tab about a clicked page notification, so the one that raised it opens the room, or opens the room once its tab has gone', async () => {
-		const first = signedIn();
-		const second = signedIn();
+	it('hands a clicked page notification to the tab that raised it, and brings that one forward, or opens the room once its tab has gone', async () => {
+		const first = signedIn(undefined, 't0');
+		const second = signedIn(undefined, 't1');
 		tabs = [first, second];
 		const data = { tab: 't1', server: 'wss://a/', roomId: 'general', threadId: 'th1', messageId: '5' };
 		await dispatch('notificationclick', { notification: { close: vi.fn(), data } });
 		expect(second.postMessage).toHaveBeenCalledWith({ type: NOTIFICATION_CLICK, target: data });
-		expect(first.focus).toHaveBeenCalled();
+		expect(second.focus).toHaveBeenCalled();
+		expect(first.focus).not.toHaveBeenCalled();
+		expect(first.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: NOTIFICATION_CLICK }));
 		expect(openWindow).not.toHaveBeenCalled();
 		tabs = [];
 		await dispatch('notificationclick', { notification: { close: vi.fn(), data } });
 		expect(openWindow).toHaveBeenCalledWith('/app/#push_room=th1&push_message=5');
+	});
+
+	it('hands a page notification with a push_id to the tab that raised it, before another of its account', async () => {
+		const other = signedIn('a1', 't0');
+		const raiser = signedIn('a1', 't1');
+		tabs = [other, raiser];
+		const data = { tab: 't1', server: 'wss://a/', roomId: 'general', messageId: '5', pushId: 'a1', group: 'a1:general' };
+		await dispatch('notificationclick', { notification: { close: vi.fn(), data } });
+		expect(raiser.postMessage).toHaveBeenLastCalledWith({ type: NOTIFICATION_CLICK, target: data });
+		expect(raiser.focus).toHaveBeenCalled();
+		expect(other.focus).not.toHaveBeenCalled();
+	});
+
+	it('tells every tab about a clicked page notification when none says which it is, so the one that raised it opens the room', async () => {
+		const first = signedIn();
+		const second = signedIn();
+		tabs = [first, second];
+		const data = { tab: 't1', server: 'wss://a/', roomId: 'general' };
+		await dispatch('notificationclick', { notification: { close: vi.fn(), data } });
+		expect(second.postMessage).toHaveBeenCalledWith({ type: NOTIFICATION_CLICK, target: data });
+		expect(first.focus).toHaveBeenCalled();
 	});
 
 	it('installs the app’s files but not the themes’ fonts, and keeps a font once a theme loads it', async () => {

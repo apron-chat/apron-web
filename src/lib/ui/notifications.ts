@@ -230,8 +230,14 @@ export interface PushTarget extends MessageNotificationData {
 /** What the service worker posts to the tab it picks when one of its push notifications is clicked. */
 export const PUSH_CLICK = 'apron:push-click';
 
-/** What the service worker asks each tab, with a port to answer on: `{pushId}` of the account it is signed in to. */
+/** What the service worker asks each tab, with a port to answer on: which it is (`TabAnswer`). */
 export const PUSH_ID_QUERY = 'apron:push-id';
+
+/** What a tab answers `PUSH_ID_QUERY` with: the `push_id` of the account it is signed in to, and its own id (`NotificationTarget.tab`). */
+export interface TabAnswer {
+	pushId?: string;
+	tab?: string;
+}
 
 /** The fragment parameters that carry a push notification's room, its `push_id` and its message into a window opened for it. */
 export const PUSH_ROOM_PARAM = 'push_room';
@@ -413,11 +419,14 @@ export function pushClickTarget(message: unknown): PushTarget | undefined {
 }
 
 /**
- * The first of `tabs` (in order) whose account has this `push_id`, asking
- * them all at once with `ask`, which resolves undefined for a tab that
- * doesn't answer in time.
+ * The tab a click on a notification goes to, asking all of `tabs` at once with `ask`, which resolves undefined for a
+ * tab that doesn't answer in time: the one that raised it (`raisedBy`, a page notification's `tab`), else the first
+ * of them (in order) whose account has `pushId`. `raised` says which.
  */
-export async function tabWithPushId<T>(tabs: readonly T[], pushId: string, ask: (tab: T) => Promise<string | undefined>): Promise<T | undefined> {
+export async function clickedTab<T>(tabs: readonly T[], ask: (tab: T) => Promise<TabAnswer | undefined>, want: { raisedBy?: string; pushId?: string }): Promise<{ tab: T; raised: boolean } | undefined> {
 	const answers = await Promise.all(tabs.map((tab) => ask(tab).catch(() => undefined)));
-	return tabs.find((_, index) => answers[index] === pushId);
+	const index = want.raisedBy === undefined ? -1 : answers.findIndex((answer) => answer?.tab === want.raisedBy);
+	if (index >= 0) return { tab: tabs[index], raised: true };
+	const signedIn = want.pushId === undefined ? -1 : answers.findIndex((answer) => answer?.pushId === want.pushId);
+	return signedIn >= 0 ? { tab: tabs[signedIn], raised: false } : undefined;
 }

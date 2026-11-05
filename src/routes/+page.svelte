@@ -1563,7 +1563,7 @@
 	 */
 	function notificationClicked(event: MessageEvent): void {
 		if (isJsonObject(event.data) && event.data.type === PUSH_ID_QUERY) {
-			event.ports[0]?.postMessage({ pushId: accountPushId });
+			event.ports[0]?.postMessage({ pushId: accountPushId, tab: tabId });
 			return;
 		}
 		const target = notificationClickTarget(event.data);

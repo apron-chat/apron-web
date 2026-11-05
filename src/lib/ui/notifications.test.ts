@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { NOTIFICATION_CLICK, PUSH_CLICK, QUIET_PUSH, closeOlderInGroup, closeReadNotifications, messageNotificationTag, notificationBody, notificationClickTarget, notificationGroup, notificationTitle, offersAtSignIn, offersNotifications, pageTarget, planPush, pushClickTarget, pushNotification, pushRoute, pushTarget, readPush, setAppBadge, showNotification, tabWithPushId, type ShowNotificationOptions } from './notifications';
+import { NOTIFICATION_CLICK, PUSH_CLICK, QUIET_PUSH, closeOlderInGroup, closeReadNotifications, messageNotificationTag, notificationBody, notificationClickTarget, notificationGroup, notificationTitle, offersAtSignIn, offersNotifications, pageTarget, planPush, pushClickTarget, pushNotification, pushRoute, pushTarget, readPush, setAppBadge, showNotification, clickedTab, type ShowNotificationOptions } from './notifications';
 
 /** A service worker registration's notifications: one per tag, a newer one with a tag replacing the older. */
 function fakeRegistration() {
@@ -214,15 +214,17 @@ describe('push notifications', () => {
 		expect(pushRoute({}, 'a1')).toBe('open');
 	});
 
-	it('picks the first tab that answers with the push_id', async () => {
-		const answers: Record<string, string | undefined> = { t1: 'b2', t2: undefined, t3: 'a1', t4: 'a1' };
+	it('picks the tab that raised a notification, else the first that answers with the push_id', async () => {
+		const answers: Record<string, { pushId?: string; tab?: string } | undefined> = { t1: { pushId: 'b2', tab: 'x1' }, t2: undefined, t3: { pushId: 'a1' }, t4: { pushId: 'a1', tab: 'x4' } };
 		const ask = async (tab: string) => {
 			if (tab === 't2') throw new Error('gone');
 			return answers[tab];
 		};
-		expect(await tabWithPushId(['t1', 't2', 't3', 't4'], 'a1', ask)).toBe('t3');
-		expect(await tabWithPushId(['t1', 't2'], 'a1', ask)).toBeUndefined();
-		expect(await tabWithPushId([], 'a1', ask)).toBeUndefined();
+		expect(await clickedTab(['t1', 't2', 't3', 't4'], ask, { pushId: 'a1' })).toEqual({ tab: 't3', raised: false });
+		expect(await clickedTab(['t1', 't2', 't3', 't4'], ask, { raisedBy: 'x4', pushId: 'a1' })).toEqual({ tab: 't4', raised: true });
+		expect(await clickedTab(['t1', 't2', 't3', 't4'], ask, { raisedBy: 'gone', pushId: 'a1' })).toEqual({ tab: 't3', raised: false });
+		expect(await clickedTab(['t1', 't2'], ask, { raisedBy: 'gone', pushId: 'a1' })).toBeUndefined();
+		expect(await clickedTab([], ask, { pushId: 'a1' })).toBeUndefined();
 	});
 
 	it('closes the notifications of a room\'s strictly older messages, and only those', () => {

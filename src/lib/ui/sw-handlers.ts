@@ -1,8 +1,9 @@
 import { compareLogIds } from '$lib/protocol/reducer';
+import { isJsonObject } from '$lib/protocol/types';
 import {
 	NOTIFICATION_CLICK, PUSH_CLICK, PUSH_ID_PARAM, PUSH_ID_QUERY, PUSH_MESSAGE_PARAM, PUSH_ROOM_PARAM,
-	closeOlderInGroup, pageTarget, planPush, pushTarget, readPush, tabWithPushId,
-	type PushPayload, type PushTarget, type ShowNotificationOptions
+	clickedTab, closeOlderInGroup, pageTarget, planPush, pushTarget, readPush,
+	type PushPayload, type PushTarget, type ShowNotificationOptions, type TabAnswer
 } from './notifications';
 
 /**
@@ -75,31 +76,40 @@ export interface Tab {
 interface ClickContext<T extends Tab> {
 	tabs(): Promise<readonly T[]>;
 	openWindow(url: string): Promise<unknown>;
-	/** Asks a tab for its account's `push_id`; undefined when it doesn't answer. */
-	askPushId(tab: T): Promise<string | undefined>;
+	/** Asks a tab which it is (`askTab`); undefined when it doesn't answer. */
+	askTab(tab: T): Promise<TabAnswer | undefined>;
 	/** The app's page, such as `/`. */
 	page: string;
 }
 
 /**
- * Handles a click on a notification shown through the service worker. One for
- * an account (a push, or the page's with a `push_id`) goes to the tab signed
- * in to that account, or a new tab opens at its room. Otherwise the tabs are
- * told, so the one that raised it opens the room, and the first comes
- * forward; with no tab, a new one opens at the room.
+ * Handles a click on a notification shown through the service worker. The
+ * page's own goes to the tab that raised it, which opens its room. One for an
+ * account (a push, or the page's with a `push_id` whose tab has gone) goes to
+ * the tab signed in to that account, or a new tab opens at its room. The tab
+ * comes forward from here: a page may not focus its own window, but the
+ * worker may for a click. Otherwise (a tab that doesn't say which it is) the
+ * tabs are told, so the one that raised it opens the room, and the first
+ * comes forward; with no tab, a new one opens at the room.
  */
 export async function handleClick<T extends Tab>(data: unknown, context: ClickContext<T>): Promise<void> {
 	const target = pushTarget(data) ?? pageTarget(data);
+	const raisedBy = !pushTarget(data) && isJsonObject(data) && typeof data.tab === 'string' ? data.tab : undefined;
 	const tabs = await context.tabs();
 	// A window opened for it starts at its room or thread, and the message (`takePushRoom`).
 	const opening = (place: PushTarget, pushId?: string) => `${context.page}#${new URLSearchParams({
 		[PUSH_ROOM_PARAM]: place.roomId, ...(pushId !== undefined ? { [PUSH_ID_PARAM]: pushId } : {}), ...(place.messageId ? { [PUSH_MESSAGE_PARAM]: place.messageId } : {})
 	})}`;
+	const found = raisedBy !== undefined || target?.pushId !== undefined ? await clickedTab(tabs, context.askTab, { raisedBy, pushId: target?.pushId }) : undefined;
+	if (found?.raised) {
+		found.tab.postMessage({ type: NOTIFICATION_CLICK, target: data });
+		await found.tab.focus();
+		return;
+	}
 	if (target?.pushId !== undefined) {
-		const tab = await tabWithPushId(tabs, target.pushId, context.askPushId);
-		if (tab) {
-			tab.postMessage({ type: PUSH_CLICK, target });
-			await tab.focus();
+		if (found) {
+			found.tab.postMessage({ type: PUSH_CLICK, target });
+			await found.tab.focus();
 		} else {
 			await context.openWindow(opening(target, target.pushId));
 		}
@@ -114,22 +124,25 @@ export async function handleClick<T extends Tab>(data: unknown, context: ClickCo
 	await tabs[0].focus();
 }
 
-/** How long a tab has to say which account it is signed in to. */
+/** How long a tab has to say which it is. */
 const PUSH_ID_ANSWER_MS = 500;
 
-/** Asks a tab for its account's `push_id` over a MessageChannel, closed after the answer or the wait. */
-export function askPushId(tab: Tab): Promise<string | undefined> {
+/**
+ * Asks a tab which it is (`PUSH_ID_QUERY`) over a MessageChannel, closed after the answer or the wait: its account's
+ * `push_id`, and its own id, each undefined when it doesn't say (a tab from before a deploy may say only the first).
+ */
+export function askTab(tab: Tab): Promise<TabAnswer | undefined> {
 	return new Promise((resolve) => {
 		const channel = new MessageChannel();
-		const done = (pushId: string | undefined) => {
+		const done = (answer: TabAnswer | undefined) => {
 			clearTimeout(timer);
 			channel.port1.close();
-			resolve(pushId);
+			resolve(answer);
 		};
 		const timer = setTimeout(() => done(undefined), PUSH_ID_ANSWER_MS);
 		channel.port1.onmessage = (event: MessageEvent) => {
-			const pushId: unknown = event.data?.pushId;
-			done(typeof pushId === 'string' ? pushId : undefined);
+			const { pushId, tab: id } = isJsonObject(event.data) ? event.data : {};
+			done({ ...(typeof pushId === 'string' ? { pushId } : {}), ...(typeof id === 'string' ? { tab: id } : {}) });
 		};
 		tab.postMessage({ type: PUSH_ID_QUERY }, [channel.port2]);
 	});
