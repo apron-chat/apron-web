@@ -3,8 +3,8 @@
 A Svelte 5 / SvelteKit 2 + TypeScript client for the
 [Apron Chat Protocol](https://github.com/shazow/apron/blob/main/PROTOCOL.md),
 deployed at `https://web.apron.chat`. It builds as a static shell with
-`adapter-static`; the browser opens the WebSocket from `onMount`, so any static
-host can serve the generated site, including the
+`adapter-static`; the browser opens the WebSocket itself as the app starts
+(`src/hooks.client.ts`), so any static host can serve the generated site, including the
 [Go reference server](https://github.com/apron-chat/apron-server-go)
 (`aprond --static-dir`).
 
@@ -16,7 +16,8 @@ git submodule update --init   # or clone with --recurse-submodules
 npm ci
 npm run dev       # Vite serves the UI and proxies /ws, /write/, /files/, /live/ to 127.0.0.1:8080
 npm run check     # svelte-check
-npm test          # reducer and replay unit tests
+npm test          # unit tests: protocol, replay fixtures, app logic and components
+npm run e2e       # browser tests against an in-memory server (e2e/); e2e:short for the quick tier
 npm run build     # writes the static site to build/
 npm run design:bundle  # builds the design system's components to dist-design/
 npm run preview
@@ -56,8 +57,9 @@ The unit tests replay the implementation-agnostic protocol fixtures in
 submodule and pinned to a commit. Dependabot opens a pull request when it
 moves, so CI runs the client against new fixtures before they are adopted; to
 update by hand, run `git -C protocol fetch origin main`, check out the commit
-you want, and commit `protocol`. The end-to-end browser tests against the Go
-server are in apron-chat/apron-server-go's `tests/interop`.
+you want, and commit `protocol`. The browser tests in `e2e/` run the app against
+an in-memory server; the ones against the Go server are in
+apron-chat/apron-server-go's `tests/interop`.
 
 The favicon and app icons are generated from the logo in that submodule,
 `protocol/art/apron-logo.svg`: run `npm run icons` after it changes (or
@@ -80,8 +82,9 @@ git submodule update --init && npm run build
 ```
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs `npm run check`,
-`npm test`, `npm run build` and `npm run design:bundle` on every pull request
-and on `main`. Branch protection on `main` requires its `test` check, so only
+`npm test`, `npm run build`, the startup JS budget and `npm run design:bundle`,
+and the perf budget (`scripts/qa/README.md`), on every pull request and on
+`main`. Branch protection on `main` requires its `test` check, so only
 tested changes reach the production build. To deploy by hand, with Wrangler on `PATH`:
 
 ```sh

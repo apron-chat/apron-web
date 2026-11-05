@@ -1,8 +1,8 @@
 # apron-web Extensions
 
-| Protocol Version | 9          |
+| Protocol Version | 10         |
 |------------------|------------|
-| Last Updated     | 2026-10-29 |
+| Last Updated     | 2026-11-05 |
 
 apron-web is a web client for the
 [Apron Chat Protocol](https://github.com/shazow/apron/blob/main/PROTOCOL.md).
@@ -92,12 +92,16 @@ Some features have no capability:
 ## 3. `ext:settings`
 
 Defined in [EXTENSIONS.md](https://github.com/shazow/apron/blob/main/EXTENSIONS.md#extsettings):
-`server.ext.settings`, `{read_cursors?, private_rooms?}`.
+`server.ext.settings`, `{read_cursors?, read_receipts?, private_rooms?}`.
 
 ### 3.1 apron-web
 
 - With `read_cursors: false`, apron-web keeps read cursors in the browser
   only, and sends no `read_message_id`. It still sends `typing`.
+- With `read_receipts: "private"`, apron-web shows in a private room how far
+  each other member has read. Preferences offers Read Receipts, on by default:
+  turned off, the device neither sends the user's read cursor in private rooms
+  nor shows the others'. Without it, apron-web shows no receipts.
 - It ignores a `private_rooms` that is not a non-negative integer.
 - It counts the private rooms that the user joined, without the threads of
   private rooms. When it starts a private room, it shows "N of M", and at the

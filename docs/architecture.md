@@ -610,8 +610,9 @@ under a Web Lock. A tab that takes it over goes on from what it restored when
 `version` is still what it read; otherwise, for the same account, it writes
 each room over only as far down as it holds it, keeping what is kept below when
 that reaches up to it, and leaving a room as it is kept when there is a gap
-between the two (`mergeOf`); another account's database on that server is
-deleted first, so one account's is kept per server, as one session is saved.
+between the two (`mergeOf`). Another account's database on that server stays
+as it is, beside this one: only the signed-in account's is ever restored,
+paged or searched.
 Another tab deleting the database (signing out, or keeping turned off) closes
 it here (`versionchange`), and this tab's writer ends rather than make it again.
 A write that fails (a full disk) stops keeping for the page.

@@ -17,7 +17,7 @@ only. Every link in chat, from
 message text, link cards, uploads and HTML embeds, opens in a new tab.
 
 `/__preview` (in development builds only: `vite dev`, or `APRON_PREVIEW=1 vite build`, which the QA tools and
-`npm run e2e` use; production builds leave it out) mounts this same app against a page-local in-memory WebSocket
+`npm run e2e` use; production builds leave out its page and its server, keeping only a route that answers 404) mounts this same app against a page-local in-memory WebSocket
 server, not the saved, configured, or same-origin backend. It seeds a guest,
 rooms, a thread, people, CommonMark examples, and a message moved into the thread,
 and implements the app's protocol
@@ -816,14 +816,16 @@ cutoff starts over from its newest page rather than paging through everything
 since (a quiet room saved recently counts as caught up then, however old its
 last message). It is kept only for a session saved here (an account, or a token the
 server resumes), never for a guest, and only in a browser that can list its
-databases (so signing out can find it to delete); signing out removes it, as does choosing
-not to keep any, in any tab: the others stop writing it back, and a retention
+databases (so signing out can find it to delete); signing out with Keep local history
+unticked removes it, as does choosing not to keep any, in any tab: the others stop
+writing it back, and a retention
 chosen in one tab holds in the others. Each account's history on each server
 is kept apart, in a database of its own: switching to another server, or
 connecting again from the sign-in screen, goes on from what was kept for that
-server in the same way, and leaves the others' as they are. One account's is
-kept per server, as one session is saved: signing in there as another deletes
-the one before. One tab
+server in the same way, and leaves the others' as they are. Accounts on the
+same server are kept apart too: signing in there as another leaves the one
+before as it is, and only the signed-in account's is restored, paged or
+searched. One tab
 writes at a time; another takes over when it closes. Preferences says how much Apron keeps on this device, and why it stopped
 keeping more if the device ran out of space.
 

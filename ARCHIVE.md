@@ -2,8 +2,8 @@
 
 | Archive Version  | 1          |
 |------------------|------------|
-| Protocol Version | 9          |
-| Last Updated     | 2026-10-30 |
+| Protocol Version | 10         |
+| Last Updated     | 2026-11-05 |
 
 An archive is a chat saved as one file: what a client or a server had of one
 Apron server, as JSON Lines. Each line holds the results of requests that a
