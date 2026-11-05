@@ -25,14 +25,6 @@ const MENTION_MATCHES_MAX = 8;
 /** At most this many of the `@` picker's places go to roles, after anyone named exactly. */
 const ROLE_MATCHES_MAX = 3;
 
-/**
- * A key the input method takes, as part of a composition. Safari sends the Enter that commits one after
- * `compositionend`, so `isComposing` is false then, but its `keyCode` is 229, as during one: it sends nothing.
- */
-function imeKey(event: KeyboardEvent): boolean {
-	return event.isComposing || event.keyCode === 229;
-}
-
 /** A suggestion in the `@` picker: a person, or a role (`@&role`). */
 export type MentionMatch = MentionPerson | RoleSuggestion;
 
@@ -216,7 +208,9 @@ export class DraftField {
 
 	keydown = (event: KeyboardEvent): void => {
 		const completion = this.completion;
-		const composing = imeKey(event);
+		// A key the input method takes, as part of a composition. Safari sends the Enter that commits one after
+		// `compositionend`, so `isComposing` is false then, but its `keyCode` is 229, as during one: it sends nothing.
+		const composing = event.isComposing || event.keyCode === 229;
 		if (completion && !composing) {
 			if (event.key === 'Escape') {
 				event.preventDefault();
