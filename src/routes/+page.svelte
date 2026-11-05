@@ -1428,6 +1428,7 @@
 			if (highlightTimer) clearTimeout(highlightTimer);
 			reveal.stop();
 			floatingDay.dispose();
+			heldTimeline?.release();
 			presence.dispose();
 			worker?.removeEventListener('message', notificationClicked);
 			if (permission) permission.onchange = null;
