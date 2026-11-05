@@ -573,19 +573,38 @@ describe('a connection that doesn’t come up', () => {
 		expect(fourth.readyState).toBe(FakeSocket.CLOSED);
 	});
 
-	it('replaces one still opening at once when the page comes back after its wait ran out while hidden, or the network comes back', async () => {
+	it('replaces one still opening, and connects again, at once when the page comes back after its wait ran out while hidden, or the network comes back', async () => {
 		const { away, online } = page();
 		startClient();
+		const opened = () => FakeSocket.instances.length;
+		// Handshakes failing one after another: the backoff grows to about a minute.
+		for (let failed = 0; failed < 8; failed++) {
+			latest().drop();
+			await nextSocket(latest());
+		}
+		// A glance away: the socket opening goes on. Hidden past its 10 s, with timers held back: on return it goes,
+		// and the next opens now, not after the backoff.
 		const first = latest();
-		// A glance away: the socket opening goes on. Hidden past its 10 s, with timers held back: it goes on return.
+		const before = opened();
 		away(5_000);
 		expect(first.readyState).toBe(FakeSocket.CONNECTING);
 		away(5_000);
 		expect(first.readyState).toBe(FakeSocket.CLOSED);
-		// The network back: one opening was opened on the network that went, however new.
-		const second = await nextSocket(first);
+		expect(opened()).toBe(before + 1);
+		// The network back: one opening was opened on the network that went, however new, and the next opens now.
+		const second = latest();
 		online();
 		expect(second.readyState).toBe(FakeSocket.CLOSED);
+		expect(opened()).toBe(before + 2);
+		// So it does between attempts, and the backoff starts over: a failure now waits a moment, not a minute.
+		latest().drop();
+		await settle();
+		online();
+		expect(opened()).toBe(before + 3);
+		latest().drop();
+		await settle();
+		await vi.advanceTimersByTimeAsync(2_000);
+		expect(opened()).toBe(before + 4);
 	});
 
 	describe('back after a long absence', () => {
@@ -670,7 +689,10 @@ describe('a connection that doesn’t come up', () => {
 			expect(snapshot?.server).toEqual(before.server);
 			expect(snapshot?.rooms.map((room) => room.id)).toEqual(['lobby']);
 
-			// It takes over; the probed socket, closed, answers late, and its close comes late: neither is heard.
+			// Anything but its greeting proves nothing: the probed socket stays.
+			standby.receive({ error: { code: -32002, message: 'Busy' } });
+			expect(socket.readyState).toBe(FakeSocket.OPEN);
+			// Its greeting: it takes over. The probed socket, closed, answers late, and its close comes late: neither is heard.
 			const sentBefore = socket.sent.length;
 			standby.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['rooms'], ping: 30, title: 'Standby' } });
 			socket.receive({ method: 'pong' });
@@ -693,8 +715,8 @@ describe('a connection that doesn’t come up', () => {
 			expect(standby.readyState).toBe(FakeSocket.OPEN);
 		});
 
-		it('drops a standby waiting to open, or opening, when the probed connection ends another way', async () => {
-			const { away } = page();
+		it('drops a standby waiting to open, or opening, when the probed connection ends another way, or the page is hidden again', async () => {
+			const { away, show } = page();
 			const { client, socket } = startClient();
 			await socket.greet([], { ping: 30 });
 			// Closed by the server before the 2 s are out: no standby, and the usual reconnect.
@@ -711,8 +733,35 @@ describe('a connection that doesn’t come up', () => {
 			client.retryNow();
 			expect(standby.readyState).toBe(FakeSocket.CLOSED);
 			expect(latest()).not.toBe(standby);
-			standby.receive(server(30));
-			expect(latest().sent).toEqual([]);
+			// Closed with its handlers gone: nothing it does after reaches the client.
+			expect([standby.onopen, standby.onmessage, standby.onclose, standby.onerror]).toEqual([null, null, null, null]);
+			const third = latest();
+			await third.greet([], { ping: 30 });
+			// Hidden again before the probe runs out: the standby isn't taken, and the reconnect waits to be shown.
+			away(5 * 60_000);
+			vi.advanceTimersByTime(2_000);
+			const unseen = latest();
+			show('hidden');
+			vi.advanceTimersByTime(3_000);
+			expect(third.readyState).toBe(FakeSocket.CLOSED);
+			expect(unseen.readyState).toBe(FakeSocket.CLOSED);
+			vi.advanceTimersByTime(60_000);
+			expect(latest()).toBe(unseen);
+		});
+
+		it('opens none, and takes none, while the server holds reconnecting or asked for a wait', async () => {
+			const { away } = page();
+			let snapshot: ClientSnapshot | undefined;
+			const { socket } = startClient({ onSnapshot: (next) => (snapshot = next) });
+			await socket.greet([], { ping: 30 });
+			// Denied, for 10 minutes, and the socket left open (§1.1).
+			socket.receive({ error: { code: -32001, message: 'Denied', data: { retry_after: 600 } } });
+			away(5 * 60_000);
+			vi.advanceTimersByTime(5_000);
+			expect(socket.readyState).toBe(FakeSocket.CLOSED);
+			vi.advanceTimersByTime(60_000);
+			expect(FakeSocket.instances).toHaveLength(1);
+			expect(snapshot?.held).toBe(true);
 		});
 
 	});

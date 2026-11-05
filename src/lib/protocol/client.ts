@@ -396,8 +396,8 @@ export class ChatClient {
 	private quietDroppedAt?: number;
 	/** The current socket has `openingWait` to open and bring its `server` frame (§3.1), or it is replaced. */
 	private openingTimer?: ReturnType<typeof setTimeout>;
-	/** When the current socket began opening, until its `server` frame came. */
-	private openingSince?: number;
+	/** Until when the current socket may take to open (`openingWait` from its start), until its `server` frame came. */
+	private openingUntil?: number;
 	/**
 	 * A socket opened beside the one a probe checks after a long absence (`probe`), sending nothing, as the app's
 	 * early connection does: `probed` answering first closes it, and its `server` frame coming first, a whole
@@ -521,8 +521,9 @@ export class ChatClient {
 		} else {
 			const away = this.hiddenAt === undefined ? 0 : this.now() - this.hiddenAt;
 			this.hiddenAt = undefined;
-			// One still opening may have outrun its wait while hidden pages' timers were held back.
-			if (this.openingSince !== undefined && this.now() - this.openingSince >= this.openingWait()) this.abandonSocket?.('opening timed out');
+			// One still opening may have outrun its wait while hidden pages' timers were held back: the next goes now,
+			// as it would have once shown, had its timer run.
+			if (this.openingUntil !== undefined && this.now() >= this.openingUntil) this.replaceOpening('opening timed out', false);
 			else if (away >= PROBE_AFTER_HIDDEN_MS) this.probe(away >= STANDBY_AFTER_HIDDEN_MS);
 		}
 		const since = this.retryingNow();
@@ -531,12 +532,13 @@ export class ChatClient {
 		this.emit();
 	};
 	/**
-	 * The network back: the socket may not have survived it. One still opening was opened on the network that went
-	 * (nothing opens while the browser is offline), and goes at once; an open one is probed, with a standby.
+	 * The network back: the socket may not have survived it, and an open one is probed, with a standby. What failed
+	 * or is still opening did so on the network that went (nothing opens while the browser is offline): the next
+	 * connection goes now, its backoff from the start.
 	 */
 	private readonly networkReturned = (): void => {
-		if (this.openingSince !== undefined) this.abandonSocket?.('network changed');
-		else this.probe(true);
+		if (this.socket && this.openingUntil === undefined) this.probe(true);
+		else this.replaceOpening('network changed', true);
 	};
 
 	constructor(
@@ -2974,7 +2976,10 @@ export class ChatClient {
 		// The first connection may be open already, or opening, made as the app started: it goes on from there.
 		const takeEarly = this.earlyConnection;
 		this.earlyConnection = undefined;
-		const early = handover ?? takeEarly?.(this.serverUrl);
+		const taken = takeEarly?.(this.serverUrl);
+		// Handed one: the app's early connection, if still unasked, is nobody's.
+		if (handover && taken) closeUnused(taken.socket);
+		const early = handover ?? taken;
 		if (early) {
 			this.attachSocket(early.socket, id, early.open);
 			if (early.open) this.socketOpened();
@@ -3056,19 +3061,39 @@ export class ChatClient {
 	/** Gives `socket`, the current one, `openingWait` to open and bring its `server` frame, else replaces it. */
 	private watchOpening(socket: WebSocket): void {
 		this.clearOpening();
-		this.openingSince = this.now();
+		const wait = this.openingWait();
+		this.openingUntil = this.now() + wait;
 		this.openingTimer = setTimeout(() => {
 			this.openingTimer = undefined;
 			if (socket !== this.socket) return;
 			this.quietDroppedAt = this.now();
 			this.abandonSocket?.('opening timed out');
-		}, this.openingWait());
+		}, wait);
+	}
+
+	/**
+	 * Drops the socket still opening, if any, as if it had failed, and connects again now rather than after the
+	 * backoff (`fresh`: starting the backoff over), unless the server asked for a wait or holds reconnecting.
+	 */
+	private replaceOpening(reason: string, fresh: boolean): void {
+		if (this.openingUntil !== undefined) this.abandonSocket?.(reason);
+		if (!this.running || this.socket || this.reconnectHeld) return;
+		if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+		this.reconnectTimer = undefined;
+		if (fresh) this.reconnectAttempt = 0;
+		// The server's wait, or the page's return and the network's, go first: through the usual reconnect.
+		if (this.retryAfterRemaining() || absent()) {
+			this.scheduleReconnect(0);
+			return;
+		}
+		this.reconnectAttempt += 1;
+		this.connectNow();
 	}
 
 	private clearOpening(): void {
 		if (this.openingTimer) clearTimeout(this.openingTimer);
 		this.openingTimer = undefined;
-		this.openingSince = undefined;
+		this.openingUntil = undefined;
 	}
 
 	/** How long a socket may take to open: `OPENING_MS`, or longer just after one was replaced for staying quiet (`patientOr`). */
@@ -3729,7 +3754,8 @@ export class ChatClient {
 		const socket = this.socket;
 		if (!this.running || !socket || socket.readyState !== WebSocket.OPEN || this.server?.ping === undefined || this.probeTimer || absent()) return;
 		socket.send(PING_FRAME);
-		if (standby && !this.patient()) {
+		// Not while the server holds reconnecting (`denied`, a sign-in) or asked for a wait: a standby would get around it.
+		if (standby && !this.patient() && !this.reconnectHeld && !this.retryAfterRemaining()) {
 			this.standbyTimer = setTimeout(() => {
 				this.standbyTimer = undefined;
 				if (socket === this.socket && this.probeTimer && !absent()) this.openStandby(socket);
@@ -3759,7 +3785,8 @@ export class ChatClient {
 		this.standby = standby;
 		socket.onmessage = (event: MessageEvent) => {
 			standby.frames.push(event.data);
-			if (this.standby === standby && this.socket === probed && this.probeTimer) this.replaceQuietSocket();
+			// Its greeting, a whole handshake done: anything else (an error before a close) proves nothing.
+			if (this.standby === standby && this.socket === probed && this.probeTimer && isServerFrame(event.data)) this.replaceQuietSocket();
 		};
 		socket.onclose = socket.onerror = () => {
 			if (this.standby === standby) this.standby = undefined;
@@ -3787,7 +3814,9 @@ export class ChatClient {
 		if (!standby) return;
 		const { socket, frames } = standby;
 		const usable = socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN;
-		if (!usable || !this.running || this.socket) {
+		// Taken only where connecting now is: the client running with no other connection, the page shown and online,
+		// and no hold or wait from the server since it opened.
+		if (!usable || !this.running || this.socket || this.reconnectHeld || this.retryAfterRemaining() || absent()) {
 			closeUnused(socket);
 			return;
 		}
@@ -5534,5 +5563,16 @@ function closeUnused(socket: WebSocket): void {
 		if (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN) socket.close(1000, 'not used');
 	} catch {
 		// Closed already.
+	}
+}
+
+/** Whether a frame is the server's greeting (§3.1), cheaply: a standby's first frame, before anything reads it. */
+function isServerFrame(data: unknown): boolean {
+	if (typeof data !== 'string') return false;
+	try {
+		const frame: unknown = JSON.parse(data);
+		return isJsonObject(frame) && frame.method === 'server';
+	} catch {
+		return false;
 	}
 }
