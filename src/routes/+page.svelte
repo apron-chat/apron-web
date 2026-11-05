@@ -3009,6 +3009,8 @@
 			return; // The next scroll back tries again.
 		}
 		await tick();
+		// The pane went on to another room or thread meanwhile, in the same scroller: the place kept was the other's.
+		if (paneRoom?.id !== room.id) return;
 		keepPlace(scroller, top, height);
 	}
 

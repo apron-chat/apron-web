@@ -44,3 +44,30 @@ test('other rooms catching up run a line under the header, and older messages lo
 	await page.screenshot({ path: process.env.SHOTS ? process.env.SHOTS + '/older.png' : undefined });
 	await runUntil(page, HISTORY_DELAY_MS, async () => (await older.count()) === 0);
 });
+
+test.describe('older messages landing after the pane moved on', () => {
+	test.use({ ...DEVICES.desktop, knobs: { historyDelayMs: HISTORY_DELAY_MS, filler: { general: 80, engineering: 80 } } });
+
+	test('leave the room the pane went on to where it was read to', async ({ preview, page }) => {
+		await page.clock.install();
+		await preview.open();
+		const list = page.getByTestId('message-list');
+		await expect(list.getByText('Message 80 of 80')).toBeVisible();
+		await runUntil(page, HISTORY_DELAY_MS, async () => (await page.getByTestId('room-updating').count()) === 0);
+		// engineering read once, so it opens again at its latest, with nothing to load to reach its divider.
+		await preview.openRoom('engineering');
+		await runUntil(page, HISTORY_DELAY_MS, () => list.getByText('Message 80 of 80').isVisible());
+		await preview.openRoom('general');
+		await expect(list.getByText('Message 80 of 80')).toBeVisible();
+		// Reading back in general asks for the page before; the pane goes on to engineering, read back a little, meanwhile.
+		await list.evaluate((node) => node.scrollTo({ top: 0 }));
+		await runUntil(page, 100, () => page.getByRole('status').getByText('Loading earlier messages…').isVisible());
+		await preview.openRoom('engineering');
+		await expect(list.getByText('Message 80 of 80')).toBeVisible();
+		await list.evaluate((node) => node.scrollTo({ top: node.scrollHeight - node.clientHeight - 400 }));
+		const top = await list.evaluate((node) => node.scrollTop);
+		// general's page lands: engineering stays where it was read to.
+		await page.clock.runFor(HISTORY_DELAY_MS * 2);
+		expect(await list.evaluate((node) => node.scrollTop)).toBe(top);
+	});
+});
