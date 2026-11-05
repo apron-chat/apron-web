@@ -12,7 +12,13 @@ import { NOTIFICATION_CLICK, PUSH_CLICK, QUIET_PUSH } from '$lib/ui/notification
  * does with it.
  */
 
-vi.mock('$service-worker', () => ({ base: '/app', build: ['/app/_app/immutable/start.js', '/app/_app/immutable/assets/nunito-latin.abc.woff2'], files: ['/app/icon-192.png'], prerendered: [], version: '1700000000000' }));
+vi.mock('$service-worker', () => ({
+	base: '/app',
+	build: ['/app/_app/immutable/start.js', '/app/_app/immutable/assets/nunito-latin.abc.woff2'],
+	files: ['/app/icon-192.png', '/app/og.png', '/app/robots.txt'],
+	prerendered: ['/app/', '/app/__preview'],
+	version: '1700000000000'
+}));
 
 type Listener = (event: unknown) => void;
 const listeners = new Map<string, Listener>();
@@ -30,10 +36,16 @@ const cache = {
 	match: async (request: unknown) => cached.get(key(request)),
 	put: vi.fn(async (request: unknown, response: unknown) => void cached.set(key(request), response))
 };
+/** An older deploy's cache, still kept for its tabs: made before this deploy's, so `caches.match` looks in it first. */
+const olderCached = new Map<string, unknown>();
 
 beforeAll(async () => {
 	vi.stubGlobal('indexedDB', idb);
-	vi.stubGlobal('caches', { open: async () => cache, match: async () => undefined, keys: async () => [] });
+	vi.stubGlobal('caches', {
+		open: async () => cache,
+		match: async (request: unknown) => olderCached.get(key(request)) ?? cached.get(key(request)),
+		keys: async () => []
+	});
 	vi.stubGlobal('self', {
 		addEventListener: (type: string, listener: Listener) => listeners.set(type, listener),
 		location: { origin: 'https://apron.example' },
@@ -150,7 +162,8 @@ describe('the service worker', () => {
 
 	it('installs the app’s files but not the themes’ fonts, and keeps a font once a theme loads it', async () => {
 		await dispatch('install', {});
-		expect(cache.addAll).toHaveBeenCalledWith(['/app/_app/immutable/start.js', '/app/icon-192.png']);
+		// Nor what the app never loads: the link preview's image, robots.txt, and a preview build's own page.
+		expect(cache.addAll).toHaveBeenCalledWith(['/app/_app/immutable/start.js', '/app/icon-192.png', '/app/']);
 		const font = { method: 'GET', mode: 'cors', url: 'https://apron.example/app/_app/immutable/assets/nunito-latin.abc.woff2' };
 		const fetched = { ok: true, clone: () => 'kept font' };
 		vi.stubGlobal('fetch', vi.fn(async () => fetched));
@@ -162,5 +175,27 @@ describe('the service worker', () => {
 		listeners.get('fetch')!({ request: font, respondWith: (promise: Promise<unknown>) => (responded = promise) });
 		expect(await responded).toBe('kept font');
 		expect(fetch).toHaveBeenCalledTimes(1);
+	});
+
+	it('opens the app offline from this deploy’s page, and leaves other pages on its origin to the browser', async () => {
+		await dispatch('install', {});
+		olderCached.set('/app/', 'an older deploy’s page');
+		vi.stubGlobal('fetch', vi.fn(async () => {
+			throw new TypeError('offline');
+		}));
+		const navigate = (path: string) => {
+			let responded: Promise<unknown> | undefined;
+			listeners.get('fetch')!({ request: { method: 'GET', mode: 'navigate', url: `https://apron.example${path}` }, respondWith: (promise: Promise<unknown>) => (responded = promise) });
+			return responded;
+		};
+		expect(await navigate('/app/?link=abc')).toBe('cached /app/');
+		// A backend's file, or its live text, offline: the browser's own error, not the chat.
+		expect(navigate('/app/files/1/photo.png')).toBeUndefined();
+		expect(navigate('/app/live/x')).toBeUndefined();
+		// The archive reader's page, which wasn't installed: it fails, rather than opening the chat in its place.
+		expect(((await navigate('/app/archive')) as Response).type).toBe('error');
+		olderCached.set('/app/archive', 'the archive reader');
+		expect(await navigate('/app/archive')).toBe('the archive reader');
+		olderCached.clear();
 	});
 });
