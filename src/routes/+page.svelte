@@ -1574,15 +1574,18 @@
 		if (!room || !client) return;
 		const body = notificationBody(plainTextOf(event));
 		const id = accountPushId;
+		// Without a `push_id`, the server's address stands in for it: each tab of this server alerts once for a message.
+		const owner = id ?? client.url;
 		const target: NotificationTarget = {
 			tab: tabId, server: client.url, roomId: room.parentRoomId ?? room.id, ...(room.parentRoomId ? { threadId: room.id } : {}), messageId: event.message_id,
-			...(id ? { pushId: id, group: notificationGroup(id, room.id) } : {})
+			...(id ? { pushId: id } : {}), group: notificationGroup(owner, room.id)
 		};
 		const shown = await showNotification(notificationTitle(senderName(event), room), {
 			body: body || embedsLabel(event.body?.embeds) || 'New message',
-			// One per message, shared with the server's push of it (§4.9), which replaces it quietly;
-			// a newer message in the room closes it. Without a `push_id`, one per room.
-			...(id ? { tag: messageNotificationTag(id, event.message_id), renotify: false } : { tag: `apron:${client.url}:${room.id}`, renotify: true }),
+			// One per message, shared with the server's push of it (§4.9) and with this server's other tabs, the second
+			// replacing the first quietly; a newer message in the room closes it.
+			tag: messageNotificationTag(owner, event.message_id),
+			renotify: false,
 			data: target
 		}, () => openNotificationTarget(target));
 		if (!shown && mention) playPing();
