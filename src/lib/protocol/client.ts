@@ -3349,6 +3349,8 @@ export class ChatClient {
 			console.warn(`[apron] sign-in ${resume ? 'by saved session' : 'as a guest'} failed: ${cause.message}`, { server: this.serverUrl, error: describeError(cause) });
 			this.authRequested = false;
 			this.error = cause.message;
+			// The connection's own sign-in put off: the next connection waits it out (`scheduleReconnect`).
+			if (cause instanceof RateLimitError) this.retryAfterUntil = Math.max(this.retryAfterUntil, cause.retryAt);
 			// Never silently downgrade a passkey session to a different guest identity.
 			if (resume) {
 				const code = (cause as Error & { code?: number }).code;
@@ -5023,7 +5025,8 @@ export class ChatClient {
 
 	/**
 	 * The error a refused `request` rejects with. `retry_after` makes it a
-	 * `RateLimitError`: on `auth` it holds back reconnecting; on any other
+	 * `RateLimitError`: on `auth` it is that sign-in's wait, which holds back
+	 * reconnecting only for the connection's own (`authenticate`); on any other
 	 * request it is that request's wait, and it holds back what `limitScope`
 	 * says until the wait is over (`limits`): the category in `data.ext.limits`
 	 * counts only while the server advertises `ext:limits`.
@@ -5037,7 +5040,6 @@ export class ChatClient {
 		}
 		const until = Date.now() + retryAfter;
 		if (request.method === 'auth') {
-			this.retryAfterUntil = Math.max(this.retryAfterUntil, until);
 			return new RateLimitError(userFacingRpcError(rpcError), rpcError.message ?? '', until);
 		}
 		const scope = limitScope(request.method, request.params, this.hasCap('ext:limits') ? limitCategory(rpcError) : undefined);
