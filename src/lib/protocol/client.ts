@@ -78,24 +78,14 @@ import {
 	muteEnd,
 	pushKey,
 	MAX_TYPING_S,
-	MAX_UNANSWERED_PINGS,
-	OPENING_MS,
-	PROBE_AFTER_HIDDEN_MS,
-	PROBE_MS,
 	READ_CURSOR_SEND_MS,
-	PROBE_PATIENT_FOR_MS,
-	PROBE_PATIENT_MS,
 	NO_NOTICES,
 	PASSKEY_IDLE_POLL_MS,
 	PASSKEY_IDLE_WAIT_MS,
-	PING_FRAME,
 	REQUEST_TIMEOUT_MS,
 	RequestTimeout,
 	RETRY_AFTER_MAX_MS,
 	ROOM_LIST_REUSE_MS,
-	STABLE_CONNECTION_MS,
-	STANDBY_AFTER_HIDDEN_MS,
-	STANDBY_AFTER_MS,
 	THREAD_PAGE_SIZE,
 	FRESH_HOOK_MS,
 	TYPING_REFRESH_MS,
@@ -106,7 +96,6 @@ import {
 	JOINED_CATCH_UP_MS,
 	JOINED_CATCH_UP_PAGES,
 	JOINED_SPREAD_MS,
-	absent,
 	pageHidden,
 	canonicalJson,
 	CountedMap,
@@ -124,7 +113,6 @@ import {
 	replaceIdentity,
 	messageClientFields,
 	newRoomState,
-	reconnectDelay,
 	recordBytes,
 	recoveryBufferFits,
 	rejectedHandle,
@@ -151,6 +139,7 @@ import {
 import { capabilitiesOf, peopleTitle, PRIVATE_ROOM, sameRoomSnapshot, serverAddress, serverSettings, yourPermissions } from './client-views';
 import { reactionKey } from './custom-emoji';
 import { HistoryQueue } from './history-queue';
+import { Transport } from './transport';
 
 export * from './client-types';
 export type { ReactionSummary, RoomRename, StoreChange, StoredRecords, TimelineState } from './reducer';
@@ -380,47 +369,26 @@ export class ChatClient {
 	 * a position, for that identity.
 	 */
 	private joinedListing?: { id: string; since?: string; userId?: string };
-	private socket?: WebSocket;
 	private readonly webSocketFactory: WebSocketFactory;
-	/** Where the first connection may come from, opened before the client was made (`ChatClientOptions.earlyConnection`); asked once. */
-	private earlyConnection?: ChatClientOptions['earlyConnection'];
-	private reconnectTimer?: ReturnType<typeof setTimeout>;
-	private pingTimer?: ReturnType<typeof setInterval>;
-	/** Resets the reconnect backoff once the current connection has stayed up. */
-	private stableTimer?: ReturnType<typeof setTimeout>;
-	/** Resumes connecting when the page is shown or the network returns; set while waiting for either. */
-	private presenceWaiter?: () => void;
-	/** Pings sent on the current socket since its last `pong`. */
-	private unansweredPings = 0;
-	/** A probe's ping waits for an answer (`patientOr(PROBE_MS)`): without one, the socket is dropped. */
-	private probeTimer?: ReturnType<typeof setTimeout>;
-	/** When a socket was last replaced for staying quiet: a probe it didn't answer, or an opening that ran out. */
-	private quietDroppedAt?: number;
-	/** The current socket has `openingWait` to open and bring its `server` frame (§3.1), or it is replaced. */
-	private openingTimer?: ReturnType<typeof setTimeout>;
-	/** Until when the current socket may take to open (`openingWait` from its start), until its `server` frame came. */
-	private openingUntil?: number;
-	/**
-	 * A socket opened beside the one a probe checks after a long absence (`probe`), sending nothing, as the app's
-	 * early connection does: `probed` answering first closes it, and its `server` frame coming first, a whole
-	 * handshake before one ping's answer, means `probed` is gone: it takes over at once, the handshake done.
-	 * It touches nothing of the client's but this until it takes over, through `connectNow` as a new connection.
-	 */
-	private standby?: { socket: WebSocket; probed: WebSocket; frames: unknown[] };
-	/** The probe's wait (`STANDBY_AFTER_MS`) before it opens the standby. */
-	private standbyTimer?: ReturnType<typeof setTimeout>;
-	/** When the page was last hidden, while it still is. */
-	private hiddenAt?: number;
+	/** The sockets, their liveness, and reconnecting (`transport.ts`): the connection under the session. */
+	private readonly transport: Transport;
+	/** The current connection's socket (`Transport.socket`). */
+	private get socket(): WebSocket | undefined {
+		return this.transport.socket;
+	}
+	/** The current connection's number (`Transport.id`), which requests, ceremonies and recoveries are scoped to. */
+	private get connectionId(): number {
+		return this.transport.id;
+	}
+	/** Between `start` and `stop` (`Transport.running`). */
+	private get running(): boolean {
+		return this.transport.running;
+	}
 	/**
 	 * Listings of rooms and threads to join kept from the last connection, not listed again on this one: `''` for
 	 * rooms, a parent's `room_id` for its threads. They show as they were, but don't yet say what this server lists.
 	 */
 	private readonly keptListings = new Set<string>();
-	/** Drops the current socket as if it had closed: for one that stopped answering, `reason` its close's. */
-	private abandonSocket?: (reason: string) => void;
-	private connectionId = 0;
-	private reconnectAttempt = 0;
-	private running = false;
 	/** Disconnected at the viewer's asking (`disconnect`): connecting again starts it, as nothing does after `stop`. */
 	private disconnected = false;
 	private authenticated = false;
@@ -503,7 +471,6 @@ export class ChatClient {
 	private signInNeeded?: Exclude<SignInMethod, 'link'>;
 	/** The current socket carried an error about the connection; its message outlives the close. */
 	private connectionErrored = false;
-	private connectionProbe?: AbortController;
 	private disconnectedAt?: number;
 	/**
 	 * When this reconnect began where someone could see it: the drop, on a page
@@ -511,37 +478,6 @@ export class ChatClient {
 	 * while it's hidden, so time away never counts as a reconnect taking long.
 	 */
 	private retryingSince?: number;
-	/**
-	 * The page shown or hidden, for as long as the client runs: keeps `retryingSince` in step, and a page shown
-	 * again checks that its socket still answers.
-	 */
-	private readonly visibilityChanged = (): void => {
-		if (pageHidden()) {
-			this.hiddenAt ??= this.now();
-			// The page may be closing: what you read goes now.
-			this.flushReadCursors();
-		} else {
-			const away = this.hiddenAt === undefined ? 0 : this.now() - this.hiddenAt;
-			this.hiddenAt = undefined;
-			// One still opening may have outrun its wait while hidden pages' timers were held back: the next goes now,
-			// as it would have once shown, had its timer run.
-			if (this.openingUntil !== undefined && this.now() >= this.openingUntil) this.replaceOpening('opening timed out', false);
-			else if (away >= PROBE_AFTER_HIDDEN_MS) this.probe(away >= STANDBY_AFTER_HIDDEN_MS);
-		}
-		const since = this.retryingNow();
-		if (since === this.retryingSince) return;
-		this.retryingSince = since;
-		this.emit();
-	};
-	/**
-	 * The network back: the socket may not have survived it, and an open one is probed, with a standby. What failed
-	 * or is still opening did so on the network that went (nothing opens while the browser is offline): the next
-	 * connection goes now, its backoff from the start.
-	 */
-	private readonly networkReturned = (): void => {
-		if (this.socket && this.openingUntil === undefined) this.probe(true);
-		else this.replaceOpening('network changed', true);
-	};
 
 	constructor(
 		private serverUrl: string,
@@ -560,7 +496,21 @@ export class ChatClient {
 			emit: () => this.emit()
 		}, historyConcurrency);
 		this.webSocketFactory = webSocketFactory;
-		this.earlyConnection = earlyConnection;
+		this.transport = new Transport({
+			url: () => this.serverUrl,
+			held: () => this.reconnectHeld,
+			retryAfter: () => this.retryAfterRemaining(),
+			ping: () => this.server?.ping,
+			connecting: (reconnecting) => this.connecting(reconnecting),
+			opened: () => this.socketOpened(),
+			frame: (data) => this.handleMessage(data),
+			errored: (current) => this.socketErrored(current),
+			closed: () => this.socketClosed(),
+			failed: (message) => this.handleConnectionFailure(message),
+			refused: (message, until) => this.connectionRefused(message, until),
+			visibilityChanged: () => this.visibilityChanged(),
+			emit: () => this.emit()
+		}, webSocketFactory, now, earlyConnection);
 		this.displayName = displayName.trim();
 		this.loadStoredSession();
 	}
@@ -654,29 +604,20 @@ export class ChatClient {
 	start(): void {
 		if (this.running) return;
 		this.run();
-		if (this.waitForPresence()) return;
-		this.connectNow();
+		this.transport.connect();
 	}
 
 	/** Runs, without connecting yet: what `start` does first, and a sign-in after a `disconnect` before it adopts its connection. */
 	private run(): void {
-		this.running = true;
+		this.transport.run();
 		this.disconnected = false;
 		this.reconnectHeld = false;
 		this.signInNeeded = undefined;
-		this.showReconnectDivider = this.reconnectAttempt > 0;
-		globalThis.document?.addEventListener('visibilitychange', this.visibilityChanged);
-		globalThis.addEventListener?.('online', this.networkReturned);
-		this.hiddenAt = pageHidden() ? this.now() : undefined;
+		this.showReconnectDivider = this.transport.retrying;
 	}
 
 	stop(): void {
-		this.running = false;
-		if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-		this.reconnectTimer = undefined;
-		this.stopWaitingForPresence();
-		globalThis.document?.removeEventListener('visibilitychange', this.visibilityChanged);
-		globalThis.removeEventListener?.('online', this.networkReturned);
+		this.transport.stop();
 		this.clearReadCursors();
 		this.clearIdleRetry();
 		if (this.muteTimer) clearTimeout(this.muteTimer);
@@ -721,16 +662,14 @@ export class ChatClient {
 			}
 			return;
 		}
-		this.connectionId += 1;
+		this.transport.retire();
 		this.reconnectHeld = false;
 		this.signInNeeded = undefined;
-		if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-		this.reconnectTimer = undefined;
 		this.endConnection({ view: 'discard', reason: 'Reconnecting', close: 'reconnecting' });
 		this.disconnectedAt = undefined;
 		this.retryingSince = undefined;
 		this.status = 'reconnecting';
-		this.scheduleReconnect(0);
+		this.transport.scheduleReconnect(0);
 		this.emit();
 	}
 
@@ -751,9 +690,6 @@ export class ChatClient {
 		}
 		this.reconnectHeld = false;
 		this.signInNeeded = undefined;
-		if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-		this.reconnectTimer = undefined;
-		this.reconnectAttempt = 0;
 		// A socket that is open but never authenticated (or still opening) is stuck; drop it and start over, as
 		// if it had closed. Its close handler is ignored because the connection id advances in connectNow.
 		if (this.socket) this.endConnection({ view: 'suspend', reason: 'Connection closed', close: 'retrying' });
@@ -761,7 +697,8 @@ export class ChatClient {
 		// Asked for: the quiet window starts over from here.
 		this.retryingSince = this.now();
 		this.error = undefined;
-		this.connectNow();
+		// The backoff, and any reconnect it had due, start over.
+		this.transport.retryNow();
 	}
 
 	/**
@@ -1339,17 +1276,14 @@ export class ChatClient {
 		if (connection.url !== this.serverUrl) this.switchServer(connection.url);
 		this.reconnectHeld = false;
 		this.signInNeeded = undefined;
-		if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-		this.reconnectTimer = undefined;
 		this.endConnection({ view: 'discard', reason: 'Signed in', close: 'signed in on another connection' });
 		this.connectionErrored = false;
 		this.disconnectedAt = undefined;
 		this.retryingSince = undefined;
-		this.reconnectAttempt = 0;
 		this.status = 'connected';
 		this.error = undefined;
-		const id = ++this.connectionId;
-		this.attachSocket(socket, id, true);
+		// No reconnect is due any more, and the backoff starts over.
+		const id = this.transport.adopt(socket);
 		// Already signed in: the `server` frame is only taken in, not answered with an `auth`.
 		this.authRequested = true;
 		this.handleServer(server);
@@ -2970,10 +2904,11 @@ export class ChatClient {
 		return room.kind === 'joined' || room.latestLogId === undefined || compareLogIds(room.latestLogId, room.loadCheckpoint) <= 0;
 	}
 
-	/** Opens the next connection, or goes on with `handover`, one opened already (a probe's standby). */
-	private connectNow(handover?: { socket: WebSocket; open: boolean; frames: unknown[] }): void {
-		if (!this.running || this.socket) return;
-		this.stopWaitingForPresence();
+	/**
+	 * The next connection starts (`Transport.connectNow`), as a reconnect when `reconnecting`: what runs before a new
+	 * session starts with it.
+	 */
+	private connecting(reconnecting: boolean): void {
 		if (this.fresh && this.freshHook && !this.rooms.size && !this.retainedRooms.size) {
 			// A new session: what was kept for this server goes in before it signs in (`beforeFreshSession`),
 			// while the connection opens.
@@ -2986,34 +2921,10 @@ export class ChatClient {
 			});
 			this.preparing = preparing;
 		}
-		this.connectionProbe?.abort();
-		const id = ++this.connectionId;
-		this.status = this.reconnectAttempt > 0 ? 'reconnecting' : 'connecting';
+		this.status = reconnecting ? 'reconnecting' : 'connecting';
 		this.error = undefined;
 		this.connectionErrored = false;
 		this.emit();
-		// The first connection may be open already, or opening, made as the app started: it goes on from there.
-		const takeEarly = this.earlyConnection;
-		this.earlyConnection = undefined;
-		const taken = takeEarly?.(this.serverUrl);
-		// Handed one: the app's early connection, if still unasked, is nobody's.
-		if (handover && taken) closeUnused(taken.socket);
-		const early = handover ?? taken;
-		if (early) {
-			this.attachSocket(early.socket, id, early.open);
-			if (early.open) this.socketOpened();
-			// What arrived while it waited (its `server` frame, a welcome), in order, as if it arrived now.
-			for (const data of early.frames) if (this.isCurrentSocket(id, early.socket)) early.socket.onmessage?.({ data } as MessageEvent);
-			return;
-		}
-		let socket: WebSocket;
-		try {
-			socket = this.webSocketFactory(this.serverUrl);
-		} catch (cause) {
-			this.handleConnectionFailure(id, cause instanceof Error ? cause.message : 'Unable to open WebSocket');
-			return;
-		}
-		this.attachSocket(socket, id, false);
 	}
 
 	/** The current socket has opened. */
@@ -3025,143 +2936,45 @@ export class ChatClient {
 		this.emit();
 	}
 
-	/** Makes `socket` this client's connection number `id`; `opened`: it is open already. */
-	private attachSocket(socket: WebSocket, id: number, opened: boolean): void {
-		this.socket = socket;
-		socket.onopen = () => {
-			if (!this.isCurrentSocket(id, socket)) return;
-			opened = true;
-			this.socketOpened();
-		};
-		socket.onmessage = (event) => {
-			if (!this.isCurrentSocket(id, socket)) return;
-			// Anything heard answers a probe: the socket is alive, and needs no standby.
-			if (this.probeTimer) clearTimeout(this.probeTimer);
-			this.probeTimer = undefined;
-			this.dropStandby();
-			this.handleMessage(event.data);
-		};
-		socket.onerror = () => {
-			if (this.isCurrentSocket(id, socket) && !this.connectionErrored) this.error = 'WebSocket connection error';
-			this.emit();
-		};
-		const closed = (): void => {
-			if (!this.isCurrentSocket(id, socket)) return;
-			// Only a session-only scrollback (no capability `history`) has a gap to mark; recovery fills any other.
-			this.showReconnectDivider = (this.rooms.size > 0 || this.showReconnectDivider) && !this.hasCap('history');
-			// The protocol view is rebuilt from the next connection's room_list
-			// (PROTOCOL.md §4.2.1; see tests/fixtures/wire/session), but each room's
-			// records and checkpoint are kept so it resumes where it stopped. The
-			// UI keeps the last authenticated view on screen meanwhile, keyed off
-			// disconnectedAt.
-			this.endConnection({ view: 'suspend', reason: 'Connection closed' });
-			if (this.running) {
-				this.disconnectedAt ??= this.now();
-				this.retryingSince = this.retryingNow();
-				this.status = 'reconnecting';
-				if (opened) this.scheduleReconnect();
-				else void this.diagnoseConnection(id);
-			} else {
-				this.status = 'offline';
-			}
-			this.emit();
-		};
-		socket.onclose = closed;
-		// A socket whose peer vanished can stay OPEN here indefinitely, and one
-		// whose handshake went into a vanished network CONNECTING; close it and
-		// carry on as if the close had arrived, without waiting for it.
-		this.abandonSocket = (reason) => {
-			try { socket.close(4000, reason); } catch { /* already closed */ }
-			closed();
-		};
-		this.watchOpening(socket);
+	/** A socket reported an error; `current`: the current one, whose error shows unless the server already said what was wrong. */
+	private socketErrored(current: boolean): void {
+		if (current && !this.connectionErrored) this.error = 'WebSocket connection error';
+		this.emit();
 	}
 
-	/** Gives `socket`, the current one, `openingWait` to open and bring its `server` frame, else replaces it. */
-	private watchOpening(socket: WebSocket): void {
-		this.clearOpening();
-		const wait = this.openingWait();
-		this.openingUntil = this.now() + wait;
-		this.openingTimer = setTimeout(() => {
-			this.openingTimer = undefined;
-			if (socket !== this.socket) return;
-			this.quietDroppedAt = this.now();
-			this.abandonSocket?.('opening timed out');
-		}, wait);
-	}
-
-	/**
-	 * Drops the socket still opening, if any, as if it had failed, and connects again now rather than after the
-	 * backoff (`fresh`: starting the backoff over), unless the server asked for a wait or holds reconnecting.
-	 */
-	private replaceOpening(reason: string, fresh: boolean): void {
-		if (this.openingUntil !== undefined) this.abandonSocket?.(reason);
-		if (!this.running || this.socket || this.reconnectHeld) return;
-		if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-		this.reconnectTimer = undefined;
-		if (fresh) this.reconnectAttempt = 0;
-		// The server's wait, or the page's return and the network's, go first: through the usual reconnect.
-		if (this.retryAfterRemaining() || absent()) {
-			this.scheduleReconnect(0);
-			return;
+	/** The current socket closed, or was dropped as if it had (`Transport`): its connection ends, and a reconnect follows while running. */
+	private socketClosed(): void {
+		// Only a session-only scrollback (no capability `history`) has a gap to mark; recovery fills any other.
+		this.showReconnectDivider = (this.rooms.size > 0 || this.showReconnectDivider) && !this.hasCap('history');
+		// The protocol view is rebuilt from the next connection's room_list
+		// (PROTOCOL.md §4.2.1; see tests/fixtures/wire/session), but each room's
+		// records and checkpoint are kept so it resumes where it stopped. The
+		// UI keeps the last authenticated view on screen meanwhile, keyed off
+		// disconnectedAt.
+		this.endConnection({ view: 'suspend', reason: 'Connection closed' });
+		if (this.running) {
+			this.disconnectedAt ??= this.now();
+			this.retryingSince = this.retryingNow();
+			this.status = 'reconnecting';
+		} else {
+			this.status = 'offline';
 		}
-		this.reconnectAttempt += 1;
-		this.connectNow();
 	}
 
-	private clearOpening(): void {
-		if (this.openingTimer) clearTimeout(this.openingTimer);
-		this.openingTimer = undefined;
-		this.openingUntil = undefined;
+	/** The server said why the handshake failed (EXT.md §5, `Transport.diagnoseConnection`): its words show, and its wait holds reconnects. */
+	private connectionRefused(message: string, until: number | undefined): void {
+		this.error = message;
+		if (until !== undefined) this.retryAfterUntil = Math.max(this.retryAfterUntil, until);
 	}
 
-	/** How long a socket may take to open: `OPENING_MS`, or longer just after one was replaced for staying quiet (`patientOr`). */
-	private openingWait(): number {
-		return this.patientOr(OPENING_MS);
-	}
-
-	/**
-	 * After a handshake that failed, asks the server why (EXT.md §5): `GET`
-	 * its URL over HTTP with `?apron_connection_status=1`. A reply marked
-	 * `Apron-Connection-Status: 1`, with status 403, 429 or 503 and a JSON
-	 * `{error}`, shows as the error and holds reconnects for its
-	 * `Retry-After`. Any other reply is ignored.
-	 */
-	private async diagnoseConnection(id: number): Promise<void> {
-		const controller = new AbortController();
-		this.connectionProbe = controller;
-		const timeout = setTimeout(() => controller.abort(), 4_000);
-		try {
-			const url = new URL(this.serverUrl);
-			url.protocol = url.protocol === 'wss:' ? 'https:' : 'http:';
-			url.searchParams.set('apron_connection_status', '1');
-			const response = await fetch(url, {
-				credentials: 'omit', cache: 'no-store', redirect: 'error', signal: controller.signal
-			});
-			// Any server answers the GET; only the marker says the reply is a connection status.
-			if (response.headers.get('Apron-Connection-Status') !== '1') return;
-			if (![403, 429, 503].includes(response.status) || !response.headers.get('content-type')?.includes('application/json')) return;
-			const body: unknown = await response.json();
-			if (!this.running || id !== this.connectionId || controller.signal.aborted) return;
-			if (!isJsonObject(body) || typeof body.error !== 'string' || !body.error.trim()) return;
-			this.error = body.error.slice(0, 300);
-			const retry = response.headers.get('Retry-After');
-			if (retry) {
-				const delay = /^\d+$/.test(retry) ? Number(retry) * 1_000 : Date.parse(retry) - Date.now();
-				if (Number.isFinite(delay) && delay > 0) {
-					this.retryAfterUntil = Math.max(this.retryAfterUntil, Date.now() + Math.min(delay, RETRY_AFTER_MAX_MS));
-				}
-			}
-		} catch {
-			// Servers without the status probe and network failures expose no HTTP diagnostics.
-		} finally {
-			clearTimeout(timeout);
-			if (this.connectionProbe === controller) this.connectionProbe = undefined;
-			if (this.running && id === this.connectionId) {
-				this.scheduleReconnect();
-				this.emit();
-			}
-		}
+	/** The page shown or hidden, for as long as the client runs: keeps `retryingSince` in step. */
+	private visibilityChanged(): void {
+		// The page may be closing: what you read goes now.
+		if (pageHidden()) this.flushReadCursors();
+		const since = this.retryingNow();
+		if (since === this.retryingSince) return;
+		this.retryingSince = since;
+		this.emit();
 	}
 
 	private handleMessage(raw: unknown): void {
@@ -3195,9 +3008,7 @@ export class ChatClient {
 				this.handleUser(frame.params);
 				return;
 			case 'pong':
-				this.unansweredPings = 0;
-				if (this.probeTimer) clearTimeout(this.probeTimer);
-				this.probeTimer = undefined;
+				this.transport.pong();
 				return;
 			case 'status':
 				this.handleStatus(frame.params);
@@ -3232,8 +3043,6 @@ export class ChatClient {
 		if (!params || typeof params.apron !== 'number' || !Array.isArray(params.auth)) return;
 		const auth = params.auth.filter(isString);
 		if (!auth.length) return;
-		// Greeted: the socket is open and the server on it. From here pings (§1) and request timeouts watch it.
-		this.clearOpening();
 		const previousPing = this.server?.ping;
 		const previousCapabilities = this.server?.capabilities ?? [];
 		this.server = {
@@ -3252,8 +3061,8 @@ export class ChatClient {
 			...(Array.isArray(params.status) ? { status: params.status.filter(isString) } : {}),
 			...(typeof params.ping === 'number' && Number.isFinite(params.ping) && params.ping > 0 ? { ping: params.ping } : {})
 		};
-		// Liveness starts before authentication (§1); a replacing frame may change the interval.
-		if (!this.pingTimer || previousPing !== this.server.ping) this.startPing();
+		// Greeted: the socket is open and the server on it. From here pings (§1) and request timeouts watch it.
+		this.transport.greeted(previousPing !== this.server.ping);
 		// Each frame fully replaces the last (§3.1): features are worth trying again.
 		this.memberChangesUnsupported = false;
 		if (this.authenticated || this.authRequested) {
@@ -3465,12 +3274,7 @@ export class ChatClient {
 		startupMark('signed-in');
 		this.authRequested = false;
 		// The backoff starts over only once this connection has stayed up.
-		this.clearStableTimer();
-		const stableSocket = this.socket;
-		this.stableTimer = setTimeout(() => {
-			this.stableTimer = undefined;
-			if (this.socket === stableSocket && this.authenticated) this.reconnectAttempt = 0;
-		}, STABLE_CONNECTION_MS);
+		this.transport.stayUp(() => this.authenticated);
 		this.disconnectedAt = undefined;
 		this.retryingSince = undefined;
 		// A reconnect keeps each room's records, and a server with capability `history`
@@ -3742,139 +3546,6 @@ export class ChatClient {
 	/** Where a joined room is complete up to: its checkpoint (a room that recovers, unless that failed) or its head (a thread). */
 	private syncedPosition(room: RoomState): string | undefined {
 		return this.isThread(room.id) ? room.latestLogId : room.recoveryError ? undefined : room.checkpoint;
-	}
-
-	/**
-	 * Sends `{"method":"ping"}` every `server.ping` seconds for as long as this
-	 * socket is current (§1), before authentication too; the server answers
-	 * `pong`. When a ping has gone a whole interval without an answer, the
-	 * socket is presumed dead and replaced. Counting pings rather than time
-	 * means a tab whose timers were frozen probes again after it wakes instead
-	 * of dropping a socket that may still work.
-	 */
-	private startPing(): void {
-		this.stopPing();
-		const seconds = this.server?.ping;
-		const socket = this.socket;
-		if (!socket || seconds === undefined) return;
-		const interval = Math.max(1, seconds) * 1_000;
-		this.unansweredPings = 0;
-		const timer = setInterval(() => {
-			if (socket === this.socket && socket.readyState === WebSocket.OPEN) {
-				if (this.unansweredPings < MAX_UNANSWERED_PINGS) {
-					socket.send(PING_FRAME);
-					this.unansweredPings += 1;
-					return;
-				}
-				this.abandonSocket?.('ping unanswered');
-			}
-			clearInterval(timer);
-			if (this.pingTimer === timer) this.pingTimer = undefined;
-		}, interval);
-		this.pingTimer = timer;
-	}
-
-	private stopPing(): void {
-		if (this.pingTimer) clearInterval(this.pingTimer);
-		this.pingTimer = undefined;
-		if (this.probeTimer) clearTimeout(this.probeTimer);
-		this.probeTimer = undefined;
-	}
-
-	/**
-	 * Checks at once that an open socket still answers, on a page someone can see: one ping, and the socket is
-	 * replaced through the usual reconnect if nothing comes back within `PROBE_MS` (`patientOr`). Only where the
-	 * server pings (§1); the regular pings carry on as they were. With `standby` (after a long absence, or the
-	 * network back), a second socket opens alongside if no answer comes within `STANDBY_AFTER_MS`, so a dead one
-	 * is replaced by a connection already made; not while a recent replacement makes the probe patient.
-	 */
-	private probe(standby = false): void {
-		const socket = this.socket;
-		if (!this.running || !socket || socket.readyState !== WebSocket.OPEN || this.server?.ping === undefined || this.probeTimer || absent()) return;
-		socket.send(PING_FRAME);
-		// Not while the server holds reconnecting (`denied`, a sign-in) or asked for a wait: a standby would get around it.
-		if (standby && !this.patient() && !this.reconnectHeld && !this.retryAfterRemaining()) {
-			this.standbyTimer = setTimeout(() => {
-				this.standbyTimer = undefined;
-				if (socket === this.socket && this.probeTimer && !absent()) this.openStandby(socket);
-			}, STANDBY_AFTER_MS);
-		}
-		this.probeTimer = setTimeout(() => {
-			this.probeTimer = undefined;
-			if (socket !== this.socket) return;
-			this.quietDroppedAt = this.now();
-			this.replaceQuietSocket();
-		}, this.patientOr(PROBE_MS));
-	}
-
-	/**
-	 * Opens the standby beside `probed`, sending nothing. Its first frame (the `server` frame, after a whole
-	 * handshake) coming while `probed` has yet to answer one ping replaces `probed` with it at once.
-	 */
-	private openStandby(probed: WebSocket): void {
-		this.dropStandby();
-		let socket: WebSocket;
-		try {
-			socket = this.webSocketFactory(this.serverUrl);
-		} catch {
-			return;
-		}
-		const standby = { socket, probed, frames: [] as unknown[] };
-		this.standby = standby;
-		socket.onmessage = (event: MessageEvent) => {
-			standby.frames.push(event.data);
-			// Its greeting, a whole handshake done: anything else (an error before a close) proves nothing.
-			if (this.standby === standby && this.socket === probed && this.probeTimer && isServerFrame(event.data)) this.replaceQuietSocket();
-		};
-		socket.onclose = socket.onerror = () => {
-			if (this.standby === standby) this.standby = undefined;
-		};
-	}
-
-	/** Closes the standby, if any, or stops it opening: the probed socket answered, or it ended. */
-	private dropStandby(): void {
-		if (this.standbyTimer) clearTimeout(this.standbyTimer);
-		this.standbyTimer = undefined;
-		const standby = this.standby;
-		this.standby = undefined;
-		if (standby) closeUnused(standby.socket);
-	}
-
-	/**
-	 * Drops the current socket, gone quiet, as if it had closed. With a standby still open or opening, connects
-	 * again on it at once, taking it as the app's early connection is taken; otherwise through the usual backoff.
-	 */
-	private replaceQuietSocket(): void {
-		const standby = this.standby;
-		this.standby = undefined;
-		// Ending the probed connection (`endConnection`) drops a standby still waiting to open.
-		this.abandonSocket?.('ping unanswered');
-		if (!standby) return;
-		const { socket, frames } = standby;
-		const usable = socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN;
-		// Taken only where connecting now is: the client running with no other connection, the page shown and online,
-		// and no hold or wait from the server since it opened.
-		if (!usable || !this.running || this.socket || this.reconnectHeld || this.retryAfterRemaining() || absent()) {
-			closeUnused(socket);
-			return;
-		}
-		if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-		this.reconnectTimer = undefined;
-		this.connectNow({ socket, open: socket.readyState === WebSocket.OPEN, frames });
-	}
-
-	/**
-	 * `wait`, or `PROBE_PATIENT_MS` while a socket was replaced for staying quiet within `PROBE_PATIENT_FOR_MS`, so
-	 * a slow network isn't met with one new socket after another.
-	 */
-	private patientOr(wait: number): number {
-		return this.patient() ? PROBE_PATIENT_MS : wait;
-	}
-
-	/** A socket was replaced for staying quiet within `PROBE_PATIENT_FOR_MS`: the network may be slow or flaky. */
-	private patient(): boolean {
-		const dropped = this.quietDroppedAt;
-		return dropped !== undefined && this.now() - dropped < PROBE_PATIENT_FOR_MS;
 	}
 
 	/**
@@ -4799,7 +4470,7 @@ export class ChatClient {
 		const head = room.latestLogId ?? room.recovery!.head;
 		this.startRecovery(room, head, true);
 		this.error = 'History is arriving faster than the client can recover; reconnecting.';
-		this.scheduleReconnect();
+		this.transport.scheduleReconnect();
 		if (this.socket && this.socket.readyState === WebSocket.OPEN) this.socket.close(1008, 'history recovery overflow');
 	}
 
@@ -5223,10 +4894,8 @@ export class ChatClient {
 		requests?: string;
 		close?: string;
 	}): void {
-		const socket = this.socket;
-		this.connectionProbe?.abort();
-		this.abandonSocket = undefined;
-		this.socket = undefined;
+		// Its pings, probe, opening wait and standby go with it.
+		const socket = this.transport.drop();
 		this.authenticated = false;
 		this.authRequested = false;
 		this.cancelPasskey();
@@ -5238,10 +4907,6 @@ export class ChatClient {
 		this.requests.clear();
 		this.historyQueue.dropHeld(reason);
 		this.clearTyping();
-		this.stopPing();
-		this.clearOpening();
-		this.dropStandby();
-		this.clearStableTimer();
 		if (view === 'suspend') this.suspendProtocolView(reason);
 		else this.discardProtocolView(reason);
 		if (close !== undefined && socket && (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN)) socket.close(1000, close);
@@ -5277,30 +4942,14 @@ export class ChatClient {
 		this.typing.clear();
 	}
 
-	private handleConnectionFailure(id: number, message: string): void {
-		if (id !== this.connectionId) return;
+	/** The next socket couldn't be made, for `message` (`Transport.connectNow`); a reconnect follows while running. */
+	private handleConnectionFailure(message: string): void {
 		this.error = message;
 		if (this.running) {
 			this.disconnectedAt ??= this.now();
 			this.retryingSince = this.retryingNow();
 		}
 		this.status = this.running ? 'reconnecting' : 'offline';
-		if (this.running) this.scheduleReconnect();
-		this.emit();
-	}
-
-	private scheduleReconnect(delayOverride?: number): void {
-		if (!this.running || this.reconnectTimer || this.reconnectHeld) return;
-		this.reconnectAttempt += 1;
-		const retryAfter = this.retryAfterRemaining();
-		const delay = delayOverride !== undefined
-			? Math.max(delayOverride, retryAfter ?? 0)
-			: reconnectDelay(this.reconnectAttempt, Math.random(), retryAfter);
-		this.reconnectTimer = setTimeout(() => {
-			this.reconnectTimer = undefined;
-			if (this.waitForPresence()) return;
-			this.connectNow();
-		}, delay);
 	}
 
 	/**
@@ -5311,39 +4960,6 @@ export class ChatClient {
 	private retryingNow(): number | undefined {
 		if (!this.running || this.disconnectedAt === undefined || pageHidden()) return undefined;
 		return this.retryingSince ?? this.now();
-	}
-
-	/**
-	 * Connecting waits while the page is hidden or the browser is offline: a
-	 * background tab needs no socket until it is looked at, and every new
-	 * connection costs the server a session and its history. An open socket is
-	 * kept. Returns whether it is waiting; it connects once both clear.
-	 */
-	private waitForPresence(): boolean {
-		if (!absent()) return false;
-		if (this.presenceWaiter) return true;
-		const resume = (): void => {
-			if (absent()) return;
-			this.stopWaitingForPresence();
-			if (this.running && !this.socket && !this.reconnectTimer) this.connectNow();
-		};
-		this.presenceWaiter = resume;
-		globalThis.document?.addEventListener('visibilitychange', resume);
-		globalThis.addEventListener?.('online', resume);
-		return true;
-	}
-
-	private stopWaitingForPresence(): void {
-		const resume = this.presenceWaiter;
-		if (!resume) return;
-		this.presenceWaiter = undefined;
-		globalThis.document?.removeEventListener('visibilitychange', resume);
-		globalThis.removeEventListener?.('online', resume);
-	}
-
-	private clearStableTimer(): void {
-		if (this.stableTimer) clearTimeout(this.stableTimer);
-		this.stableTimer = undefined;
 	}
 
 	/**
@@ -5590,25 +5206,4 @@ function renamedEmbed(embed: JsonObject, title: string): JsonObject {
 	const og = isJsonObject(embed.og) ? embed.og : undefined;
 	const old = typeof embed.title === 'string' ? embed.title : og?.title;
 	return { ...embed, title, ...(og && og.title !== undefined && og.title === old ? { og: { ...og, title } } : {}) };
-}
-
-/** Closes a socket nobody took (a probe's standby), its handlers first, so nothing it does after reaches the client. */
-function closeUnused(socket: WebSocket): void {
-	socket.onopen = socket.onmessage = socket.onclose = socket.onerror = null;
-	try {
-		if (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN) socket.close(1000, 'not used');
-	} catch {
-		// Closed already.
-	}
-}
-
-/** Whether a frame is the server's greeting (§3.1), cheaply: a standby's first frame, before anything reads it. */
-function isServerFrame(data: unknown): boolean {
-	if (typeof data !== 'string') return false;
-	try {
-		const frame: unknown = JSON.parse(data);
-		return isJsonObject(frame) && frame.method === 'server';
-	} catch {
-		return false;
-	}
 }
