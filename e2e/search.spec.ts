@@ -3,7 +3,7 @@ import { DEVICES, expect, test } from './fixtures';
 
 /**
  * Search local history (`SearchDialog`): Ctrl/⌘F or the room header's ⋯ menu, text, and `user:` and `room:`
- * filters; and Go to a Room or Thread, its other mode, Ctrl/⌘K. On `/__preview`, which keeps nothing on the device, it searches what the page holds; history.spec.ts
+ * filters; and its rooms and threads, the other mode, Ctrl/⌘K. On `/__preview`, which keeps nothing on the device, it searches what the page holds; history.spec.ts
  * searches what a reload kept.
  */
 
@@ -98,7 +98,7 @@ test('Ctrl/⌘F and Ctrl/⌘K open no search over another dialog, the history ke
 		await page.keyboard.press('ControlOrMeta+f');
 		await expect(page.getByRole('dialog', { name: 'Search Local History' })).toHaveCount(0);
 		await page.keyboard.press('ControlOrMeta+k');
-		await expect(page.getByRole('dialog', { name: 'Go to a Room or Thread' })).toHaveCount(0);
+		await expect(page.getByRole('dialog', { name: 'Search Local History' })).toHaveCount(0);
 		await page.keyboard.press('Escape');
 		await expect(page.getByRole('dialog', { name: 'Preferences' })).toHaveCount(0);
 		await page.keyboard.press('ControlOrMeta+f');
@@ -123,22 +123,22 @@ test('Ctrl/⌘F and Ctrl/⌘K open no search over another dialog, the history ke
 	});
 });
 
-test('Ctrl/⌘K goes to a room or thread: joined ones first, → into a room\'s threads, one not joined opens to read, and Ctrl/⌘F searches messages from there', async ({ preview, page }) => {
+test('Ctrl/⌘K searches rooms and threads: joined ones first, → into a room\'s threads, listed from the server, one not joined opens to read, and Ctrl/⌘F searches messages from there', async ({ preview, page }) => {
 	await preview.open();
 	await page.keyboard.press('ControlOrMeta+k');
-	const go = page.getByRole('dialog', { name: 'Go to a Room or Thread' });
-	const field = go.getByRole('combobox');
-	const results = go.getByTestId('search-results').getByRole('option');
+	const search = page.getByRole('dialog', { name: 'Search Local History' });
+	const field = search.getByRole('combobox');
+	const results = search.getByTestId('search-results').getByRole('option');
 
 	await test.step('with nothing typed it lists what you know of, joined first; typing narrows it, in any case', async () => {
-		await expect(go.getByRole('button', { name: 'Rooms and threads' })).toHaveAttribute('aria-pressed', 'true');
+		await expect(search.getByRole('button', { name: 'Rooms and threads' })).toHaveAttribute('aria-pressed', 'true');
 		await expect(results.first()).toBeVisible();
-		await expect(go.locator('.ap-search-group')).toHaveText(['Joined', 'Not joined']);
+		await expect(search.locator('.ap-search-group')).toHaveText(['Joined', 'Not joined']);
 		await field.fill('OFF');
 		await expect(results).toHaveCount(1);
 		await expect(results.first()).toContainText('Offsite planning');
 		await expect(results.first()).toContainText('in general');
-		await expect(results.first()).toContainText('Not joined');
+		await expect(search.locator('.ap-search-group')).toHaveText(['Not joined']);
 		await expect(results.first().locator('mark')).toHaveText('Off');
 	});
 
@@ -148,46 +148,39 @@ test('Ctrl/⌘K goes to a room or thread: joined ones first, → into a room\'s 
 		await field.press('ArrowRight');
 		await expect(field).toHaveValue('room:#general ');
 		await expect(results).toHaveText([/Expired cert on the runner/, /Deploy checklist/, /On-call rotation/, /Logo feedback/, /Offsite planning/]);
-		await expect(go.locator('.ap-search-group')).toHaveText(['Joined', 'Not joined']);
+		await expect(search.locator('.ap-search-group')).toHaveText(['Joined', 'Not joined']);
+		// Its threads you haven't joined are listed from the server, as the rooms list lists the open room's.
+		await expect(search.locator('.ap-search-foot')).toHaveText('Threads you haven’t joined: the 3 the server lists, its most recently active.');
 		await field.press('Backspace');
 		await expect(field).toHaveValue('');
-	});
-
-	await test.step('Search the Server lists more, and says what it listed', async () => {
-		await expect(go.locator('.ap-search-action')).toContainText('rooms and threads this page knows of');
-		await go.getByRole('button', { name: 'Search the Server' }).click();
-		await expect(go.locator('.ap-search-action')).toContainText('The server listed its most active rooms, and general’s threads.');
-		await expect(go.getByRole('button', { name: 'Search the Server' })).toHaveCount(0);
-		await expect(field).toBeFocused();
 	});
 
 	await test.step('Ctrl/⌘F switches to messages, keeping what is typed, and Ctrl/⌘K back', async () => {
 		await field.fill('deploy');
 		await field.press('ControlOrMeta+f');
-		const search = page.getByRole('dialog', { name: 'Search Local History' });
 		await expect(search.getByRole('button', { name: 'Messages' })).toHaveAttribute('aria-pressed', 'true');
 		await expect(search.getByRole('combobox')).toHaveValue('deploy');
 		await expect(search.locator('.ap-search-row').first()).toBeVisible();
 		await search.getByRole('combobox').press('ControlOrMeta+k');
-		await expect(go).toBeVisible();
+		await expect(search.getByRole('button', { name: 'Rooms and threads' })).toHaveAttribute('aria-pressed', 'true');
 		// From the switch itself, and while room: suggestions show, too.
-		await go.getByRole('button', { name: 'Messages' }).focus();
+		await search.getByRole('button', { name: 'Messages' }).focus();
 		await page.keyboard.press('ControlOrMeta+f');
 		await expect(search.getByRole('button', { name: 'Messages' })).toHaveAttribute('aria-pressed', 'true');
 		await page.keyboard.press('ControlOrMeta+k');
 		await field.fill('room:');
-		await expect(go.getByTestId('search-suggestions')).toBeVisible();
-		await expect(go.getByTestId('search-suggestions')).not.toContainText('Deploy checklist');
+		await expect(search.getByTestId('search-suggestions')).toBeVisible();
+		await expect(search.getByTestId('search-suggestions')).not.toContainText('Deploy checklist');
 		await field.press('ControlOrMeta+f');
 		await expect(search.getByRole('button', { name: 'Messages' })).toHaveAttribute('aria-pressed', 'true');
 		await search.getByRole('combobox').press('ControlOrMeta+k');
-		await expect(go).toBeVisible();
+		await expect(search.getByRole('button', { name: 'Rooms and threads' })).toHaveAttribute('aria-pressed', 'true');
 	});
 
 	await test.step('a thread not joined opens to read, under its room, with Join in its header', async () => {
 		await field.fill('logo');
 		await field.press('Enter');
-		await expect(go).toHaveCount(0);
+		await expect(search).toHaveCount(0);
 		await expect(page).toHaveURL(/#room=general&thread=thread_logo/);
 		await expect(page.getByRole('button', { name: 'Join thread' })).toBeVisible();
 	});
@@ -205,14 +198,14 @@ test.describe('with more history than the first page', () => {
 		await field.fill('room:#general Message 1');
 		await expect(results.first()).toContainText('Message 120 of 120');
 		const before = await results.count();
-		await expect(search.locator('.ap-search-action')).toContainText('Older messages in general are on the server.');
+		await expect(search.locator('.ap-search-foot')).toContainText('Older messages in general are on the server.');
 		// Each press pages back once in each room searched, until the server has nothing older.
 		const load = search.getByRole('button', { name: 'Load More from Server' });
 		for (let press = 0; press < 5 && await load.isVisible(); press++) {
 			await load.click();
-			await expect(search.locator('.ap-search-action [aria-busy="true"]')).toHaveCount(0);
+			await expect(search.locator('.ap-search-foot [aria-busy="true"]')).toHaveCount(0);
 		}
-		await expect(search.locator('.ap-search-action')).toContainText('Everything the server has in general is loaded, and searched.');
+		await expect(search.locator('.ap-search-foot')).toContainText('Everything the server has in general is loaded, and searched.');
 		await expect(search.getByRole('button', { name: 'Load More from Server' })).toHaveCount(0);
 		// "Message 1", 10 to 19, and 100 to 120 of 120.
 		await expect(results).toHaveCount(32);

@@ -25,4 +25,4 @@ export { default as ProfileEditor } from '$lib/design/components/ProfileEditor.s
 // Preferences' Export.
 export { exportArchive } from '$lib/archive/archive';
 // Dragging a room in the sidebar (Sidebar's `reorderable`), which waits for this chunk rather than asking for it.
-export { dndzone, DRAGGED_ELEMENT_ID, SHADOW_PLACEHOLDER_ITEM_ID, TRIGGERS } from 'svelte-dnd-action';
+export { dragRooms } from '$lib/ui/room-drag';

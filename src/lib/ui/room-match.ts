@@ -1,6 +1,6 @@
 /**
  * How well a room's name matches what is typed, shared by the composer's `#` and search's `room:` suggestions
- * (`searchRooms`) and Go to a Room or Thread (`$lib/ui/room-search`): kept apart from the rest of that, which loads
+ * (`searchRooms`) and search's rooms and threads (`$lib/ui/room-search`): kept apart from the rest of that, which loads
  * only once search opens.
  */
 import { folded } from './fold';

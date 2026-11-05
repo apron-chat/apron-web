@@ -1,5 +1,5 @@
 /**
- * Finding rooms and threads by name: Go to a Room or Thread (`SearchDialog`'s rooms mode), and the rooms the
+ * Finding rooms and threads by name: search's rooms and threads (`RoomFinder`), and the rooms the
  * composer's `#` and search's `room:` suggest (`searchRooms`). What is searched is what this page knows of
  * (`knownRooms`): the rooms and threads you've joined, which the server lists in full (§4.2.1), those open without
  * joining, those the latest listings offer to join, and those whose records this device holds. Joined ones come

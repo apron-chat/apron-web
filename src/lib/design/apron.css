@@ -597,16 +597,18 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-sect-toggle:hover { color: var(--ink); }
 .ap-sect-body { display: flex; flex-direction: column; gap: var(--space-0_5); }
 /* A list of rooms that can be put in another order, each room with its threads in a block that moves as one; they keep the body's spacing. */
-.ap-roomlist, .ap-roomblock, .ap-roomgrip { display: flex; flex-direction: column; gap: var(--space-0_5); }
-/* svelte-dnd-action listens on each room's block, so a phone would flash its tap highlight over the whole block (threads
-   and all) and the library gives it a grab cursor: the block shows neither, its row and threads keeping their own. */
-.ap-roomblock { -webkit-tap-highlight-color: transparent; cursor: auto !important; }
-.ap-roomblock :is(button, a) { -webkit-tap-highlight-color: initial; }
+.ap-roomlist, .ap-roomblock { display: flex; flex-direction: column; gap: var(--space-0_5); }
+/* The list listens for presses that lift a room (room-drag.ts), so a phone would flash its tap highlight over all of it:
+   it shows none, its rows and threads keeping their own. */
+.ap-roomlist { -webkit-tap-highlight-color: transparent; }
+.ap-roomlist :is(button, a) { -webkit-tap-highlight-color: initial; }
 /* A room's row is held to lift it on a touch screen: no callout or selection while it's held. */
 .ap-roomlist .ap-room { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
-/* The room being carried, lifted off the list (svelte-dnd-action's copy of its block, in <body>). */
-.ap-roomblock-lifted { outline: none; }
-.ap-roomblock-lifted .ap-roomgrip { border-radius: var(--radius-md); background: var(--bg-000); box-shadow: var(--shadow-float); transform: scale(1.02); }
+/* The room being carried: its place in the list, kept empty (and focusable) for the others to make way around, and its
+   copy, lifted off the list (room-drag.ts, in the sidebar). */
+.ap-roomblock-carried { opacity: 0; }
+.ap-roomblock-lifted { border-radius: var(--radius-md); background: var(--bg-000); box-shadow: var(--shadow-float); transform: scale(1.02); }
+.ap-roomblock-lifted, .ap-roomblock-lifted * { cursor: grabbing; }
 .ap-sect-head .ap-sect-add { width: var(--control-md); padding: 0; justify-content: center; }
 /* While the list loads: a few lines where its rows will be. */
 .ap-sect-skel { display: grid; gap: var(--space-3); padding: var(--space-2) var(--space-3); }
@@ -1808,23 +1810,18 @@ a.ap-linkchip-elsewhere:hover { background: var(--hover); }
 .ap-search-text { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; font-size: var(--text-ui); line-height: var(--leading-ui); overflow-wrap: anywhere; }
 .ap-search-text mark { border-radius: var(--radius-sm); background: var(--accent-soft); color: inherit; }
 .ap-search-empty { padding: var(--space-2) var(--space-3); color: var(--ink-muted); font-size: var(--text-ui); line-height: var(--leading-ui); }
-/* Its modes (rooms, messages) above the field, each with its shortcut; and a room's or thread's row: its icon, its title and where it is, and at the end what's new or Not joined. */
+/* Its modes (rooms, messages) above the field, each with its shortcut; a heading over a group of results; and after them a line, and a button. A room's or thread's result is its RoomItem or ThreadItem, as an option. */
 .ap-search-modes { margin: 0 0 var(--space-3); }
 .ap-search-modes .ap-seg-item { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); }
 .ap-search-modekeys { color: var(--ink-muted); font-weight: 400; }
 .ap-search-group { padding: var(--space-2) var(--space-3) var(--space-0_5); color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 600; }
-.ap-search-roomrow { flex-direction: row; align-items: center; gap: var(--space-2); }
-.ap-search-icon { flex: none; width: 16px; height: 16px; color: var(--ink-muted); }
-.ap-search-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.ap-search-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-ui); line-height: var(--leading-ui); font-weight: 600; }
-.ap-search-main:has(.ap-lock) { flex-direction: row; flex-wrap: wrap; align-items: baseline; }
-.ap-search-detail { flex-basis: 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); }
-.ap-search-title mark { border-radius: var(--radius-sm); background: var(--accent-soft); color: inherit; }
-.ap-search-unjoined .ap-search-title { font-weight: 400; }
-.ap-search-tag { flex: none; padding: 0 var(--space-1_5); border: 1px solid var(--line-strong); border-radius: var(--radius-full); color: var(--ink-muted); font-size: var(--text-xs); line-height: var(--leading-xs); font-weight: 600; white-space: nowrap; }
-.ap-search-action { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-top: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px dashed var(--line-strong); border-radius: var(--radius-md); }
-.ap-search-actionnote { margin: 0; color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); }
-.ap-search-action .ap-btn { flex: none; }
+.ap-search-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-top: var(--space-2); }
+.ap-search-footnote { margin: 0; color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); }
+.ap-search-foot .ap-btn { flex: none; margin-inline-start: auto; }
+.ap-room-option { list-style: none; }
+.ap-room-option, .ap-room-option:hover { background: transparent; }
+.ap-room-option[aria-selected="true"] { background: var(--hover); }
+.ap-room-label mark { border-radius: var(--radius-sm); background: var(--accent-soft); color: inherit; }
 /* KeyboardShortcuts: titled groups in as many columns as fit, each row what a shortcut does and, at its end, its keys. */
 .ap-keys { --dialog-w: 760px; }
 .ap-keys-groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: var(--space-6) var(--space-8); }
