@@ -111,11 +111,13 @@ describe('SearchPanel', () => {
 
 	it('switches between its modes, and after its results offers an action, which keeps the keyboard in the field', () => {
 		const onclick = vi.fn();
-		const { state, field } = render({ modes: [{ id: 'rooms', label: 'Rooms and threads', keys: 'Ctrl K' }, { id: 'messages', label: 'Messages', keys: 'Ctrl F' }], mode: 'messages', action: { label: 'Load More from Server', note: 'Older messages are on the server.', onclick } });
-		const radio = (name: RegExp) => [...document.querySelectorAll<HTMLButtonElement>('[role="radio"]')].find((button) => name.test(button.textContent ?? ''))!;
-		expect(radio(/Messages/).getAttribute('aria-checked')).toBe('true');
-		expect(radio(/Rooms/).querySelector('kbd')!.textContent).toBe('Ctrl K');
-		radio(/Rooms/).click();
+		const { state, field } = render({ modes: [{ id: 'rooms', label: 'Rooms and threads', keys: 'Ctrl K', shortcut: 'Control+K' }, { id: 'messages', label: 'Messages', keys: 'Ctrl F', shortcut: 'Control+F' }], mode: 'messages', action: { label: 'Load More from Server', note: 'Older messages are on the server.', onclick } });
+		const toggle = (name: RegExp) => [...document.querySelectorAll<HTMLButtonElement>('[aria-pressed]')].find((button) => name.test(button.textContent ?? ''))!;
+		expect(toggle(/Messages/).getAttribute('aria-pressed')).toBe('true');
+		expect(toggle(/Rooms/).getAttribute('aria-pressed')).toBe('false');
+		expect(toggle(/Rooms/).querySelector('kbd')!.textContent).toBe('Ctrl K');
+		expect(toggle(/Rooms/).querySelector('kbd')!.getAttribute('aria-hidden')).toBe('true');
+		toggle(/Rooms/).click();
 		flushSync();
 		expect(state.mode).toBe('rooms');
 		expect(document.activeElement).toBe(field);
@@ -139,5 +141,27 @@ describe('SearchPanel', () => {
 		dom.press(field, 'ArrowDown');
 		dom.press(field, 'ArrowRight');
 		expect(onfieldkey).toHaveBeenLastCalledWith(expect.objectContaining({ key: 'ArrowRight' }), '1');
+	});
+
+	it('keeps the keyboard on its result while the same query\'s results are redrawn, and goes back to the first for a new query', () => {
+		const { state, field } = render({ query: 'deploy', results: [result('3', 'deploy'), result('2', 'deploy'), result('1', 'deploy')] });
+		const active = () => field.getAttribute('aria-activedescendant');
+		const option = (n: number) => document.querySelectorAll('[role="option"]')[n].id;
+		dom.press(field, 'ArrowDown');
+		flushSync();
+		expect(active()).toBe(option(1));
+		// Redrawn, with one more above it: still on the same result.
+		state.results = [result('4', 'deploy'), result('3', 'deploy'), result('2', 'deploy'), result('1', 'deploy')];
+		flushSync();
+		expect(active()).toBe(option(2));
+		// Gone: back to the first.
+		state.results = [result('4', 'deploy'), result('1', 'deploy')];
+		flushSync();
+		expect(active()).toBe(option(0));
+		dom.press(field, 'ArrowDown');
+		state.query = 'deploys';
+		state.results = [result('4', 'deploy'), result('1', 'deploy')];
+		flushSync();
+		expect(active()).toBe(option(0));
 	});
 });

@@ -131,7 +131,7 @@ test('Ctrl/⌘K goes to a room or thread: joined ones first, → into a room\'s 
 	const results = go.getByTestId('search-results').getByRole('option');
 
 	await test.step('with nothing typed it lists what you know of, joined first; typing narrows it, in any case', async () => {
-		await expect(go.getByRole('radio', { name: /Rooms and threads/ })).toHaveAttribute('aria-checked', 'true');
+		await expect(go.getByRole('button', { name: 'Rooms and threads' })).toHaveAttribute('aria-pressed', 'true');
 		await expect(results.first()).toBeVisible();
 		await expect(go.locator('.ap-search-group')).toHaveText(['Joined', 'Not joined']);
 		await field.fill('OFF');
@@ -165,9 +165,21 @@ test('Ctrl/⌘K goes to a room or thread: joined ones first, → into a room\'s 
 		await field.fill('deploy');
 		await field.press('ControlOrMeta+f');
 		const search = page.getByRole('dialog', { name: 'Search Local History' });
-		await expect(search.getByRole('radio', { name: /Messages/ })).toHaveAttribute('aria-checked', 'true');
+		await expect(search.getByRole('button', { name: 'Messages' })).toHaveAttribute('aria-pressed', 'true');
 		await expect(search.getByRole('combobox')).toHaveValue('deploy');
 		await expect(search.locator('.ap-search-row').first()).toBeVisible();
+		await search.getByRole('combobox').press('ControlOrMeta+k');
+		await expect(go).toBeVisible();
+		// From the switch itself, and while room: suggestions show, too.
+		await go.getByRole('button', { name: 'Messages' }).focus();
+		await page.keyboard.press('ControlOrMeta+f');
+		await expect(search.getByRole('button', { name: 'Messages' })).toHaveAttribute('aria-pressed', 'true');
+		await page.keyboard.press('ControlOrMeta+k');
+		await field.fill('room:');
+		await expect(go.getByTestId('search-suggestions')).toBeVisible();
+		await expect(go.getByTestId('search-suggestions')).not.toContainText('Deploy checklist');
+		await field.press('ControlOrMeta+f');
+		await expect(search.getByRole('button', { name: 'Messages' })).toHaveAttribute('aria-pressed', 'true');
 		await search.getByRole('combobox').press('ControlOrMeta+k');
 		await expect(go).toBeVisible();
 	});

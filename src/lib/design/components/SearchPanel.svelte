@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { tick, type Snippet } from 'svelte';
+	import { tick, untrack, type Snippet } from 'svelte';
 	import type { ClassValue } from 'svelte/elements';
 	import CornerDownRight from '@lucide/svelte/icons/corner-down-right';
 	import Hash from '@lucide/svelte/icons/hash';
@@ -83,10 +83,21 @@
 		void tick().then(() => input?.focus());
 	});
 
-	// New results put the keyboard back on the first.
+	/** The result the keyboard is on, by id, and the query the results last shown were for. */
+	let activeId: string | undefined;
+	let shownFor: string | undefined;
+
+	// Results for a new query put the keyboard back on the first; the same query's, redrawn (what's new in a room
+	// changed, a listing came in), keep it on the result it was on, as long as that is still there.
 	$effect(() => {
-		void results;
-		active = 0;
+		const list = results;
+		const asked = untrack(() => query);
+		const kept = asked === shownFor && activeId !== undefined ? list.findIndex((result) => result.id === activeId) : -1;
+		shownFor = asked;
+		active = kept >= 0 ? kept : 0;
+	});
+	$effect(() => {
+		activeId = results[active]?.id;
 	});
 
 	// The result the keyboard is on stays in view.
@@ -131,10 +142,10 @@
 {#snippet keptButton()}<button type="button" class="ap-dialog-titlebtn" aria-label="{kept} of history kept, in Preferences" title="How long history is kept on this device" onclick={() => { open = false; onhistory?.(); }}>{kept}</button>{/snippet}
 <Dialog class={['ap-search', className]} bind:open size="md" {title} titleEnd={kept && onhistory ? keptButton : undefined} backdropCloses {onclose}>
 	{#if modes?.length}
-		<div class="ap-seg ap-search-modes" role="radiogroup" aria-label="Search for">
+		<div class="ap-seg ap-search-modes" role="group" aria-label="Search for">
 			{#each modes as candidate (candidate.id)}
-				<button class="ap-seg-item" class:ap-seg-on={mode === candidate.id} type="button" role="radio" aria-checked={mode === candidate.id} onclick={() => { mode = candidate.id; input?.focus(); }}>
-					{candidate.label}{#if candidate.keys}<kbd class="ap-keys-key ap-search-modekeys">{candidate.keys}</kbd>{/if}
+				<button class="ap-seg-item" class:ap-seg-on={mode === candidate.id} type="button" aria-pressed={mode === candidate.id} aria-keyshortcuts={candidate.shortcut} onclick={() => { mode = candidate.id; input?.focus(); }}>
+					{candidate.label}{#if candidate.keys}<kbd class="ap-keys-key ap-search-modekeys" aria-hidden="true">{candidate.keys}</kbd>{/if}
 				</button>
 			{/each}
 		</div>

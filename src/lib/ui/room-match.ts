@@ -11,16 +11,25 @@ export type MatchTier = 0 | 1 | 2 | 3 | 4;
 /** What separates the words of a title, for a match at the start of one. */
 const WORD_BREAK = /[\s\-_.,:;/()[\]#@&+|]/;
 
-/** Each room's folded title, `room_id` and description, folded once however many queries it is ranked for. */
-const foldings = new WeakMap<object, { title: string; id: string; description: string }>();
+/**
+ * Text folded once, however many queries it is matched against and however often the rooms are gathered afresh
+ * (each change of the page's state gathers them anew). Bounded: past `FOLDS_KEPT` it starts over.
+ */
+const folds = new Map<string, string>();
+const FOLDS_KEPT = 20_000;
+
+function fold(text: string): string {
+	let fold = folds.get(text);
+	if (fold === undefined) {
+		if (folds.size >= FOLDS_KEPT) folds.clear();
+		fold = folded(text);
+		folds.set(text, fold);
+	}
+	return fold;
+}
 
 function foldingOf(room: { id: string; title: string; description?: string }): { title: string; id: string; description: string } {
-	let folding = foldings.get(room);
-	if (!folding) {
-		folding = { title: folded(room.title.trim()), id: folded(room.id), description: room.description ? folded(room.description) : '' };
-		foldings.set(room, folding);
-	}
-	return folding;
+	return { title: fold(room.title.trim()), id: fold(room.id), description: room.description ? fold(room.description) : '' };
 }
 
 /** How `room` matches `wanted` (folded, trimmed, without a `#`), or undefined when it doesn't; its description counts only with `described`. */

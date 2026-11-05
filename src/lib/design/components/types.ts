@@ -577,6 +577,8 @@ export interface SearchMode {
 	label: string;
 	/** Its shortcut, as the platform writes it ("Ctrl K"), shown after its label. */
 	keys?: string;
+	/** The same, as `aria-keyshortcuts` names it ("Control+K", "Meta+K"). */
+	shortcut?: string;
 }
 
 /** A button after a SearchPanel's results, such as to ask the server for more, and the words beside it. */

@@ -80,10 +80,24 @@
 	// What it starts with stays: the caret goes after it, ready for words.
 	onMount(() => void panel?.place(query.length));
 
+	/** How `aria-keyshortcuts` names the platform's modifier. */
+	const modifier = $derived(keys?.rooms.startsWith('⌘') ? 'Meta' : 'Control');
 	const modes = $derived<SearchMode[]>([
-		{ id: 'rooms', label: 'Rooms and threads', ...(keys ? { keys: keys.rooms } : {}) },
-		{ id: 'messages', label: 'Messages', ...(keys ? { keys: keys.messages } : {}) }
+		{ id: 'rooms', label: 'Rooms and threads', ...(keys ? { keys: keys.rooms, shortcut: `${modifier}+K` } : {}) },
+		{ id: 'messages', label: 'Messages', ...(keys ? { keys: keys.messages, shortcut: `${modifier}+F` } : {}) }
 	]);
+
+	/**
+	 * Ctrl/⌘K and Ctrl/⌘F switch to rooms and to messages, wherever the keyboard is in the dialog: the page's own
+	 * shortcuts stand aside while a dialog is open, and the browser's would open its find bar or search box.
+	 */
+	function switchKey(event: KeyboardEvent): void {
+		if (event.defaultPrevented || !(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) return;
+		const key = event.key.toLowerCase();
+		if (key !== 'k' && key !== 'f') return;
+		event.preventDefault();
+		mode = key === 'k' ? 'rooms' : 'messages';
+	}
 
 	// --- Suggesting a filter's value, as the composer suggests a mention ---
 
@@ -97,7 +111,8 @@
 	onMount(() => client.subscribe((snapshot) => (users = snapshot.users)));
 	/** Everyone met, but the system identities, as the composer's `@` lists them. */
 	let peopleFound = $derived(at?.kind === 'users' ? searchPeople(Object.values(users).filter((user) => !isSystemId(user.user_id)).map((user) => ({ id: user.user_id, name: user.name, avatar: directory.avatar(user) })), at.typed) : []);
-	let roomsFound = $derived(at?.kind === 'rooms' ? searchRooms(roomSuggestions, at.typed) : []);
+	// Finding rooms, `room:` names a room whose threads are searched: a thread has none.
+	let roomsFound = $derived(at?.kind === 'rooms' ? searchRooms(mode === 'rooms' ? roomSuggestions.filter((room) => byId.get(room.id)?.parentRoomId === undefined) : roomSuggestions, at.typed) : []);
 	let suggested = $derived(at?.kind === 'users' ? peopleFound.length : roomsFound.length);
 	/** The query as it was when Escape put the suggestions away: they come back once it changes. */
 	let dismissed = $state<string | undefined>();
@@ -114,9 +129,8 @@
 	});
 
 	/**
-	 * The field's keys. While suggestions show: ↑ ↓ move, Enter or Tab takes one, Escape puts them away. Ctrl/⌘K and
-	 * Ctrl/⌘F switch to rooms and to messages. Finding rooms, → at the end of the field on a room searches its threads
-	 * (`room:#id `), and Backspace there takes that away again.
+	 * The field's keys. While suggestions show: ↑ ↓ move, Enter or Tab takes one, Escape puts them away. Finding rooms,
+	 * → at the end of the field on a room searches its threads (`room:#id `), and Backspace there takes that away again.
 	 */
 	function fieldKey(event: KeyboardEvent, active: string | undefined): boolean {
 		if (suggesting) {
@@ -130,11 +144,6 @@
 				return false;
 			}
 			event.preventDefault();
-			return true;
-		}
-		if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && (event.key.toLowerCase() === 'k' || event.key.toLowerCase() === 'f')) {
-			event.preventDefault();
-			mode = event.key.toLowerCase() === 'k' ? 'rooms' : 'messages';
 			return true;
 		}
 		if (mode !== 'rooms' || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return false;
@@ -336,6 +345,8 @@
 		if (message) onopen(message);
 	}
 </script>
+
+<svelte:window onkeydown={switchKey} />
 
 <SearchPanel
 	bind:this={panel} bind:open bind:query bind:caret bind:mode {modes} kind={mode}
