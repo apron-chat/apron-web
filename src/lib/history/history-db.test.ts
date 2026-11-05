@@ -1,10 +1,10 @@
 import 'fake-indexeddb/auto';
 import { IDBFactory } from 'fake-indexeddb';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { StoreChange } from '$lib/protocol/reducer';
 import type { MessageRecord } from '$lib/protocol/types';
 import { readKept } from '$lib/test/kept-history';
-import { deleteHistory, HistoryGone, HistoryMissing, historyName, listHistories, openHistory, pageHistory, pruneHistory, readHistory, scanMessages, writeHistory, type HistoryWrite } from './history-db';
+import { deleteHistory, HistoryGone, HistoryMissing, historyName, listHistories, openHistory, pageHistory, pruneHistory, readHistory, scanMessages, writeHistory, type Databases, type HistoryWrite } from './history-db';
 
 const SERVER = 'wss://chat.example/';
 const day = 24 * 60 * 60 * 1000;
@@ -228,6 +228,31 @@ describe('history databases', () => {
 		const db = await openHistory(databases, name, undefined, { existing: true });
 		expect(db.objectStoreNames.contains('records')).toBe(true);
 		db.close();
+	});
+
+	it('upgrade from an older version keeping what it has, making only what it lacks', async () => {
+		const databases = new IDBFactory();
+		const name = historyName(SERVER, 'ada');
+		const db = await openHistory(databases, name);
+		await writeHistory(db, write({ whole: [{ room: 'general', messages: [message('1')], reactions: [], memberships: [] }] }), new Set(['general']));
+		db.close();
+		// The next version, as one would be opened: its upgrade meets the stores this one made.
+		const newer: Databases = { open: (named) => databases.open(named, 2), databases: () => databases.databases(), deleteDatabase: (named) => databases.deleteDatabase(named) };
+		const upgraded = await openHistory(newer, name);
+		expect(upgraded.version).toBe(2);
+		expect((await readKept(upgraded))?.messages.map((record) => record.message_id)).toEqual(['1']);
+		upgraded.close();
+	});
+
+	it('close a connection that opens after it was given up on as blocked by an older tab', async () => {
+		const close = vi.fn();
+		const request = { result: { close, objectStoreNames: { contains: () => true } } } as unknown as IDBOpenDBRequest;
+		const opening = openHistory({ open: () => request, databases: async () => [], deleteDatabase: () => request }, historyName(SERVER, 'ada'));
+		request.onblocked!(new Event('blocked') as IDBVersionChangeEvent);
+		await expect(opening).rejects.toThrow();
+		// The older tab lets go: the open goes on, and nobody holds what it opens.
+		request.onsuccess!(new Event('success'));
+		expect(close).toHaveBeenCalled();
 	});
 
 	it('are one per account on each server, named for both, and listed by them', async () => {

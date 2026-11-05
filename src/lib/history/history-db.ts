@@ -137,6 +137,7 @@ function openOnce(databases: Databases, name: string, onclose: (() => void) | un
 	return new Promise((resolve, reject) => {
 		const request = databases.open(name, DB_VERSION);
 		let missing = false;
+		let blocked = false;
 		request.onupgradeneeded = (event) => {
 			if (existing && event.oldVersion === 0) {
 				// Aborting the upgrade that would make it leaves no database behind (where a browser keeps one anyway,
@@ -145,13 +146,19 @@ function openOnce(databases: Databases, name: string, onclose: (() => void) | un
 				request.transaction?.abort();
 				return;
 			}
+			// Only what isn't there yet: an upgrade from an older version has its stores, and making one again would
+			// throw, failing the upgrade.
 			const db = request.result;
-			db.createObjectStore('meta');
-			db.createObjectStore('rooms', { keyPath: 'room' });
-			db.createObjectStore('records', { keyPath: ['room', 'log', 'kind', 'id'] }).createIndex('key', ['kind', 'id']);
+			if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta');
+			if (!db.objectStoreNames.contains('rooms')) db.createObjectStore('rooms', { keyPath: 'room' });
+			const records = db.objectStoreNames.contains('records') ? request.transaction!.objectStore('records') : db.createObjectStore('records', { keyPath: ['room', 'log', 'kind', 'id'] });
+			if (!records.indexNames.contains('key')) records.createIndex('key', ['kind', 'id']);
 		};
 		request.onsuccess = () => {
 			const db = request.result;
+			// Given up on as blocked, it opened once the older tab let go: nobody would close it, and it would block the
+			// next upgrade or deletion in turn.
+			if (blocked) return db.close();
 			// Deleted, or a newer version, in another tab: this one steps aside rather than block it.
 			db.onversionchange = () => {
 				db.close();
@@ -163,7 +170,10 @@ function openOnce(databases: Databases, name: string, onclose: (() => void) | un
 			if (missing) event.preventDefault();
 			reject(missing ? new HistoryMissing() : request.error);
 		};
-		request.onblocked = () => reject(new Error('History is open in an older tab'));
+		request.onblocked = () => {
+			blocked = true;
+			reject(new Error('History is open in an older tab'));
+		};
 	});
 }
 
