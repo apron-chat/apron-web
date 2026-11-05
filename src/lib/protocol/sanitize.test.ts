@@ -98,4 +98,12 @@ describe('sanitizeHtml: media in an HTML embed (§4.8)', () => {
 		expect(embed(html, NOWHERE)).not.toContain('<img');
 		expect(embed(html)).toContain('<img');
 	});
+
+	it('never takes one gate and markup for another whose key runs into the markup', () => {
+		// A gate's key holds line breaks of its own, between the URLs clicked to load.
+		const loads: MediaCheck = { key: 'chat.example', src: fromServer.src };
+		const none: MediaCheck = { key: 'chat.example\nhttps://clicked.example/a.png', src: () => undefined };
+		expect(embed('https://clicked.example/a.png\n<img src="https://chat.example/a.png" alt="A">', loads)).toContain('<img');
+		expect(embed('<img src="https://chat.example/a.png" alt="A">', none)).toBe('<a href="https://chat.example/a.png" target="_blank" rel="noreferrer noopener">A</a>');
+	});
 });

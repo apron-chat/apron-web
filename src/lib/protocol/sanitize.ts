@@ -86,7 +86,8 @@ const sanitized = new Map<string, string>();
  * is kept.
  */
 export function sanitizeHtml(html: string, kind: SanitizeKind, media: MediaCheck): string {
-	const key = `${kind}\n${media.key}\n${html}`;
+	// The gate's key by its length: it holds line breaks of its own (the URLs clicked to load), so no separator tells where it ends.
+	const key = `${kind} ${media.key.length} ${media.key}${html}`;
 	let clean = sanitized.get(key);
 	if (clean !== undefined) {
 		sanitized.delete(key);
