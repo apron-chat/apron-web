@@ -2066,6 +2066,7 @@
 		mentions.clearUnseen();
 		mentions.clearRoom(roomId);
 		if (thread) mentions.clearRoom(thread);
+		floatingDay.hide();
 		stickToBottom = true;
 		reveal.from(timeline.length - FIRST_PAINT_ITEMS);
 		arriving = messages.length === 0;
@@ -2892,6 +2893,7 @@
 	function jumpToLatest(): void {
 		stickToBottom = true;
 		pins++;
+		floatingDay.hide();
 		mentions.clearUnseen();
 		scrollToLatest();
 	}
