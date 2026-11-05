@@ -332,7 +332,9 @@ export function planPush(push: PushPayload | undefined, visible: readonly Visibl
  * (`namedForMembers`), where "Bob · Bob" would say it twice.
  */
 export function notificationTitle(sender: string, room: { title: string; namedForMembers?: true }): string {
-	return room.namedForMembers && room.title === sender ? sender : `${sender} · ${room.title}`;
+	// As shown (§3.5.2): a title that is a `room_id`, or a sender that is a `user_id`, may carry overrides too.
+	const who = withoutBidiOverrides(sender), where = withoutBidiOverrides(room.title);
+	return room.namedForMembers && where === who ? who : `${who} · ${where}`;
 }
 
 /**
@@ -349,12 +351,13 @@ export function pushNotification(message: unknown, pushId: string | undefined): 
 	if (pushId === undefined || messageId === undefined) return undefined;
 	const roomId = message.room_id;
 	const from = isJsonObject(message.from) ? message.from : {};
-	const name = typeof from.name === 'string' ? withoutBidiOverrides(from.name) : undefined;
-	const sender = [name, from.user_id].find((value): value is string => typeof value === 'string' && value.trim() !== '') ?? 'Someone';
+	// Each as shown (§3.5.2): a name, or a `user_id` or `room_id` standing in for one, can't reorder the title.
+	const shown = (value: unknown) => (typeof value === 'string' ? withoutBidiOverrides(value) : undefined);
+	const sender = [shown(from.name), shown(from.user_id)].find((value): value is string => value !== undefined && value.trim() !== '') ?? 'Someone';
 	const text = isJsonObject(message.body) && typeof message.body.text === 'string' ? message.body.text : undefined;
 	const body = notificationBody(text) || embedsLabel(isJsonObject(message.body) ? message.body.embeds : undefined) || 'New message';
 	const target: PushTarget = { push: true, roomId, pushId, messageId, group: notificationGroup(pushId, roomId) };
-	return { title: `${sender} · ${roomId}`, options: { body, tag: messageNotificationTag(pushId, messageId), renotify: false, data: target } };
+	return { title: `${sender} · ${shown(roomId)}`, options: { body, tag: messageNotificationTag(pushId, messageId), renotify: false, data: target } };
 }
 
 /** The app badge API, where the browser has it (`navigator` in a page or a service worker). */

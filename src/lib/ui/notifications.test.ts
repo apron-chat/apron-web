@@ -161,6 +161,11 @@ describe('push notifications', () => {
 		const shown = pushNotification({ message_id: '1', room_id: 'ops', from: { user_id: 'mallory', name: 'Mal\u202Elory' }, body: { text: 'see\u202A this' } }, 'a1');
 		expect(shown?.title).toBe('Mallory · ops');
 		expect(shown?.options.body).toBe('see this');
+		// Nor the user_id standing in for a name, nor the room_id, though the click still opens the room as named.
+		const unnamed = pushNotification({ message_id: '1', room_id: 'o\u202Eps', from: { user_id: 'mal\u202Dlory' } }, 'a1');
+		expect(unnamed?.title).toBe('mallory · ops');
+		expect(pushTarget(unnamed?.options.data)?.roomId).toBe('o\u202Eps');
+		expect(pushNotification({ message_id: '1', room_id: 'ops', from: { user_id: 'bob', name: '\u202E' } }, 'a1')?.title).toBe('bob · ops');
 	});
 
 	it('shortens a long body', () => {
@@ -355,6 +360,7 @@ describe('notificationTitle', () => {
 		expect(notificationTitle('Ada', { title: 'general' })).toBe('Ada · general');
 		expect(notificationTitle('Bob', { title: 'Bob', namedForMembers: true })).toBe('Bob');
 		expect(notificationTitle('Bob', { title: 'Bob, Carol', namedForMembers: true })).toBe('Bob · Bob, Carol');
+		expect(notificationTitle('mal\u202Elory', { title: 'gen\u202Beral' })).toBe('mallory · general');
 	});
 });
 
