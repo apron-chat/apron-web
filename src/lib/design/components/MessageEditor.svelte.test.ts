@@ -28,6 +28,17 @@ describe('MessageEditor', () => {
 		expect(onsave).toHaveBeenCalledOnce();
 	});
 
+	it('neither saves nor cancels on a key an input method is using, as Safari sends the Enter that commits one (keyCode 229)', () => {
+		const onsave = vi.fn();
+		const oncancel = vi.fn();
+		const field = render({ onsave, oncancel }).querySelector('textarea')!;
+		expect(key(field, { key: 'Enter', isComposing: true }).defaultPrevented).toBe(false);
+		expect(key(field, { key: 'Enter', keyCode: 229 }).defaultPrevented).toBe(false);
+		expect(key(field, { key: 'Escape', keyCode: 229 }).defaultPrevented).toBe(false);
+		expect(onsave).not.toHaveBeenCalled();
+		expect(oncancel).not.toHaveBeenCalled();
+	});
+
 	it('takes a class and a test id on its root, and Escape anywhere in it cancels', () => {
 		const oncancel = vi.fn();
 		const root = render({ oncancel, class: 'mine' });

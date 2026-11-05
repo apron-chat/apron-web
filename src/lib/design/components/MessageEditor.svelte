@@ -53,14 +53,20 @@
 		field.style.height = `${field.scrollHeight}px`;
 	});
 
+	/**
+	 * A key an input method is still using. Safari fires the Enter that commits a composition after `compositionend`,
+	 * so `isComposing` is false then, but its `keyCode` is 229, as during one.
+	 */
+	const composing = (event: KeyboardEvent) => event.isComposing || event.keyCode === 229;
+
 	function keydown(event: KeyboardEvent): void {
-		if (event.key !== 'Escape' || event.isComposing || event.defaultPrevented) return;
+		if (event.key !== 'Escape' || composing(event) || event.defaultPrevented) return;
 		event.preventDefault();
 		oncancel?.();
 	}
 
 	function fieldKeydown(event: KeyboardEvent): void {
-		if (event.key !== 'Enter' || event.isComposing || enterAction(event, handheld) !== 'send') return;
+		if (event.key !== 'Enter' || composing(event) || enterAction(event, handheld) !== 'send') return;
 		event.preventDefault();
 		onsave?.();
 	}
