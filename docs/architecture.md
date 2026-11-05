@@ -223,7 +223,11 @@ it began trying where someone could see it, not from the drop), `MentionTracker`
 kept on this device: where the New divider goes and the pane opens), `MessageSelection`, `FeedbackState`, `SidebarLayout`,
 `PaneDrafts` (the composer's text and reply per room and thread),
 `PagePresence` (whether the tab is attended, and the mention alert),
-`ProgressiveReveal` (long timelines paint newest-first) and `FloatingDay` —
+`ProgressiveReveal` (long timelines paint newest-first), `FloatingDay`, and
+`TimelineViewport`, which holds the open pane's two of those and where its list
+is scrolled: pinned to the latest, kept in place as older pages land, opened at
+the New divider, and whether the latest is on screen; the page calls its
+`watch*` methods where their effects go among its own —
 beside pure, unit-tested
 helpers: `timeline.ts` groups threads under their rooms and builds the room and
 thread views, `membership.ts` nets runs of joins and leaves and words their
