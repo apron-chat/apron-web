@@ -183,3 +183,19 @@ describe('MessageSelection.moveToNewThread', () => {
 		expect(new MessageSelection().earliest(['1'])).toBeUndefined();
 	});
 });
+
+describe('extend (Shift+↑ ↓)', () => {
+	it('picks from the anchor to the message the keyboard is on, giving them up again stepping back', () => {
+		const order = ['1', '2', '3', '4', '5'];
+		const selection = new MessageSelection();
+		selection.begin('general', '3');
+		selection.extend('3', '2', order);
+		selection.extend('3', '1', order);
+		expect(selection.current?.ids).toEqual(['1', '2', '3']);
+		selection.extend('3', '2', order);
+		expect(selection.current?.ids).toEqual(['2', '3']);
+		selection.extend('3', '5', order);
+		expect(selection.current?.ids).toEqual(['3', '4', '5']);
+		expect(selection.current?.last).toBe('5');
+	});
+});

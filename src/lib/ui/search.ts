@@ -8,23 +8,15 @@
  */
 import { compareLogIds } from '$lib/protocol/reducer';
 import type { Identity, MessageRecord } from '$lib/protocol/types';
+import { folded } from './fold';
+
+export { folded };
 
 /** The most results a search shows: past them, a narrower query finds the rest. */
 export const SEARCH_LIMIT = 100;
 
-/** Text all in ASCII, which has no accents and which normalizing leaves as it is. */
-const ASCII = /^[\0-\x7f]*$/;
-
 /** Text with a run of spaces, or a space of another kind (a line break, a tab): what `searchable` makes one space. */
 const SPACING = /\s\s|[^\S ]/;
-
-/**
- * Text as a search compares it: lowercase, without accents (`é` is `e`). A search folds every message kept, so
- * ASCII, as most are, only has its case folded: the same, without the cost of normalizing it.
- */
-export function folded(text: string): string {
-	return ASCII.test(text) ? text.toLowerCase() : text.normalize('NFD').replace(/\p{M}+/gu, '').toLowerCase();
-}
 
 /**
  * Text as a search compares it: folded, each run of spaces one space, trimmed. Text whose spaces are already

@@ -140,10 +140,17 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 	.ap-msg :is(input, textarea, [contenteditable]) { -webkit-user-select: text; user-select: text; }
 }
 .ap-msg:hover .ap-msg-actions, .ap-msg:focus-within .ap-msg-actions, .ap-msg-actions:focus-within { visibility: visible; }
-/* A message the keyboard is on (↑ ↓ from the composer): the focus ring, inside the row so its neighbours don't cover it,
-   and room above it when it's scrolled to, for its toolbar, which sits over the row's top edge. */
-.ap-msg:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset-inset); }
+/* A message the keyboard is on (↑ ↓ from the composer): a soft fill and an ink bar at its start, the open room's and a
+   mention's shape but neutral, so it never reads as a mention (a mention keeps its tint, the bar taking ink while the
+   keyboard is there); and room above it when it's scrolled to, for its toolbar, which sits over the row's top edge. */
+.ap-msg:focus-visible { outline: none; }
+.ap-msg:not(.ap-msg-mention, .ap-msg-highlighted, .ap-msg-selected):focus-visible { background: var(--hover-soft); }
+.ap-msg:focus-visible::before { content: ''; position: absolute; inset-inline-start: var(--bar-at, 0); top: var(--bar-inset, var(--space-1)); bottom: var(--bar-inset, var(--space-1)); width: 3px; border-radius: var(--radius-full); background: var(--ink-muted); pointer-events: none; }
 .ap-msg:focus { scroll-margin-top: var(--space-8); }
+/* The letter of a toolbar action's key, the first of its label (R in Reply, E in Edit: Message.svelte's labels, named
+   here so the buttons need no markup of their own), boxed while the keyboard is on the message or in its toolbar; a
+   shadow rather than padding, so the label doesn't move as it shows. */
+:is(.ap-msg:focus-visible, .ap-actions:has(.ap-actions-btn:focus-visible)) .ap-actions-btn:is([aria-label="Reply to message"], [aria-label="Edit message"])::first-letter { background: color-mix(in srgb, var(--ink) 12%, transparent); box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--ink) 12%, transparent); border-radius: var(--radius-sm); color: var(--ink); }
 /* The toolbar stays up while its React button's emoji picker is open. */
 .ap-msg-actions:has([aria-expanded='true']) { visibility: visible; }
 /* While a message's picker or menu is open it keeps its hover look, and the rest don't take it: new messages
@@ -1801,6 +1808,23 @@ a.ap-linkchip-elsewhere:hover { background: var(--hover); }
 .ap-search-text { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; font-size: var(--text-ui); line-height: var(--leading-ui); overflow-wrap: anywhere; }
 .ap-search-text mark { border-radius: var(--radius-sm); background: var(--accent-soft); color: inherit; }
 .ap-search-empty { padding: var(--space-2) var(--space-3); color: var(--ink-muted); font-size: var(--text-ui); line-height: var(--leading-ui); }
+/* Its modes (rooms, messages) above the field, each with its shortcut; and a room's or thread's row: its icon, its title and where it is, and at the end what's new or Not joined. */
+.ap-search-modes { margin: 0 0 var(--space-3); }
+.ap-search-modes .ap-seg-item { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); }
+.ap-search-modekeys { color: var(--ink-muted); font-weight: 400; }
+.ap-search-group { padding: var(--space-2) var(--space-3) var(--space-0_5); color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 600; }
+.ap-search-roomrow { flex-direction: row; align-items: center; gap: var(--space-2); }
+.ap-search-icon { flex: none; width: 16px; height: 16px; color: var(--ink-muted); }
+.ap-search-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ap-search-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-ui); line-height: var(--leading-ui); font-weight: 600; }
+.ap-search-main:has(.ap-lock) { flex-direction: row; flex-wrap: wrap; align-items: baseline; }
+.ap-search-detail { flex-basis: 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); }
+.ap-search-title mark { border-radius: var(--radius-sm); background: var(--accent-soft); color: inherit; }
+.ap-search-unjoined .ap-search-title { font-weight: 400; }
+.ap-search-tag { flex: none; padding: 0 var(--space-1_5); border: 1px solid var(--line-strong); border-radius: var(--radius-full); color: var(--ink-muted); font-size: var(--text-xs); line-height: var(--leading-xs); font-weight: 600; white-space: nowrap; }
+.ap-search-action { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-top: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px dashed var(--line-strong); border-radius: var(--radius-md); }
+.ap-search-actionnote { margin: 0; color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); }
+.ap-search-action .ap-btn { flex: none; }
 /* KeyboardShortcuts: titled groups in as many columns as fit, each row what a shortcut does and, at its end, its keys. */
 .ap-keys { --dialog-w: 760px; }
 .ap-keys-groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: var(--space-6) var(--space-8); }
