@@ -5,12 +5,15 @@
 	import ActionBanner from '$lib/design/components/ActionBanner.svelte';
 	import Button from '$lib/design/components/Button.svelte';
 	import { pageDrafts } from '$lib/ui/pane-drafts.svelte';
+	import { checkOnReturn } from '$lib/ui/update-poll';
 
 	/**
 	 * Offers a reload once a newer deploy is out: SvelteKit polls for it
-	 * (`version.pollInterval`), and a lazily loaded chunk the deploy removed
-	 * means this tab is stale too. It never reloads by itself, and drafts live
-	 * only in memory, so it says when reloading would clear one.
+	 * (`version.pollInterval`), at once too when the page comes back after
+	 * a poll's worth of time away (`checkOnReturn`), and a lazily loaded chunk
+	 * the deploy removed means this tab is stale too. It never reloads by
+	 * itself, and drafts live only in memory, so it says when reloading would
+	 * clear one.
 	 */
 	let chunkMissing = $state(false);
 	let dismissed = $state(false);
@@ -19,7 +22,14 @@
 	onMount(() => {
 		const stale = () => (chunkMissing = true);
 		window.addEventListener('vite:preloadError', stale);
-		return () => window.removeEventListener('vite:preloadError', stale);
+		// `check` also starts the poll's next wait over: no second request soon after.
+		const stopChecking = checkOnReturn(() => {
+			if (!updated.current) void updated.check();
+		});
+		return () => {
+			window.removeEventListener('vite:preloadError', stale);
+			stopChecking();
+		};
 	});
 </script>
 

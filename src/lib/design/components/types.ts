@@ -532,8 +532,11 @@ export interface PickPerson extends Face {
 
 /** A message a SearchPanel found: where and when, by whom, and a line of it with the words searched for marked. */
 export interface SearchResult {
+	kind?: 'message';
 	/** Its `message_id`. */
 	id: string;
+	/** A heading over it where it differs from the result before's. */
+	group?: string;
 	/** The room it is in, or "Thread title · Room" for a thread's. */
 	room: string;
 	/** The sender's display name. */
@@ -544,6 +547,50 @@ export interface SearchResult {
 	exact?: string;
 	/** Its text around a match, in runs, each match marked. */
 	parts: { text: string; match: boolean }[];
+}
+
+/** A room or thread a SearchPanel found: its title with what matched marked, where it is, and whether you're in it. */
+export interface RoomResult {
+	kind: 'room';
+	/** Its `room_id`. */
+	id: string;
+	/** A heading over it where it differs from the result before's, such as "Joined" or "Not joined". */
+	group?: string;
+	/** Its title, in runs, each match marked. */
+	parts: { text: string; match: boolean }[];
+	/** It is a thread (a hooked arrow), not a room (a #). */
+	thread?: boolean;
+	/** The line under its title, such as "in Engineering · Today" or what it's about. */
+	detail?: string;
+	/** You joined it: one you haven't says so at the row's end, where one you have shows what's new. */
+	joined: boolean;
+	private?: boolean;
+	/** What's new in it, as the rooms list counts it. */
+	unread?: number;
+	mentions?: number;
+	muted?: boolean;
+}
+
+/** What a SearchPanel can be switched between, such as rooms and messages: a name, and its shortcut. */
+export interface SearchMode {
+	id: string;
+	label: string;
+	/** Its shortcut, as the platform writes it ("Ctrl K"), shown after its label. */
+	keys?: string;
+	/** The same, as `aria-keyshortcuts` names it ("Control+K", "Meta+K"). */
+	shortcut?: string;
+}
+
+/** A button after a SearchPanel's results, such as to ask the server for more, and the words beside it. */
+export interface SearchAction {
+	label: string;
+	/** Beside it: what was searched, and what the button does. */
+	note?: string;
+	/** Under way: the button waits, and says so. */
+	busy?: boolean;
+	/** Nothing more to do: the note stands, without the button. */
+	done?: boolean;
+	onclick: () => void;
 }
 
 /** One of your private rooms, offered to leave in a PrivateRoomForm at the limit. */

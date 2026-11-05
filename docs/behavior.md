@@ -75,8 +75,9 @@ connects at once, and starts the backoff over. An explicit server retry window t
 `retry_after` error about the connection as a whole (`data.retry_after`
 seconds); after such a `denied` error the client stops reconnecting, shows
 **Signed out** with the server's message, and waits for **Sign in**.
-When a newer version of the client is deployed (SvelteKit's version poll, or a
-lazily loaded file the deploy removed), a notice at the top offers **Reload**
+When a newer version of the client is deployed (SvelteKit's version poll every
+5 minutes, at once on coming back after 5 minutes or more away, or a lazily
+loaded file the deploy removed), a notice at the top offers **Reload**
 or **Later**; it never reloads by itself. Drafts live only in memory, so while
 any room or thread has unsent text or files it adds that reloading clears your
 unsent message.
@@ -827,7 +828,7 @@ the one before. One tab
 writes at a time; another takes over when it closes. Preferences says how much Apron keeps on this device, and why it stopped
 keeping more if the device ran out of space.
 
-**Search local history** (first in the room header's ⋯ menu, or Ctrl+F, ⌘F on a Mac, in place of the browser's find while signed in and no other dialog is open)
+**Search local history** (first in the room header's ⋯ menu, or Ctrl+F, ⌘F on a Mac, in place of the browser's find while signed in and no other dialog is open, or its Messages switch in Go to a Room or Thread)
 starts narrowed to the open room or thread (`room:#general `, the caret after
 it; Backspace widens it to everywhere), and looks through this server's history kept on this device for the
 account signed in (none as a guest, or while keeping is off) and what the page has
@@ -849,7 +850,40 @@ searched: what is kept here, and for how long, or only what is loaded, for a
 session that keeps nothing (a guest, "Don't keep", `/__preview`, `/archive`).
 Its title's "history" links to Preferences at History (over the rooms list,
 on a phone), where what this device keeps is chosen. There is no server search
-in the protocol, so nothing is asked of the server.
+in the protocol, so nothing is asked of the server until **Load More from
+Server**, after the results: it loads a page of older history in each of the ten
+most recently active rooms searched that have one (those `room:` names, with
+their threads, else every room and thread you've joined; a thread not opened
+yet loads its newest page), and searches again, now with them. Pressed again it
+goes a page further back. Once none has more, it says everything the server has
+there is loaded.
+
+**Go to a Room or Thread** (Ctrl+K, ⌘K on a Mac, as Search local history opens,
+or its Rooms and Threads switch; Ctrl/⌘F and Ctrl/⌘K switch between the two in
+it, keeping what's typed) finds rooms and threads by name among those the page
+knows of: the ones you've joined, which the server lists in full, threads
+included (§4.2.1), however long ago they were active and whether or not the rooms
+list shows them; those open without joining; those Other Rooms and each room's
+Other Threads last listed; and those whose records this device keeps (a private
+room you left isn't, since it can't be read). A name matches in any case and
+with or without accents: the whole title or `room_id` first, then the start of
+one, the start of a word in the title, anywhere in it, and then the
+description. The ones you've joined come first, under Joined, then those you
+haven't, under Not joined, each then by how well it matches and then by when it
+was last active; with nothing typed it lists them all that way, at most fifty.
+Each row has a # for a room or a hooked arrow for a thread, its title with what
+matched marked (a lock if private), a thread's room or else what the room is
+about, the day it was last active, and what's new in it as the rooms list counts
+it, or Not joined. `room:` (suggested as in Search local history) narrows it to
+the threads of that room, and → at the end of the field on a room does the
+same, putting in `room:#room_id `; Backspace there takes the filter away again.
+Enter or a click opens it: one you've joined, or open, as a mention of it does;
+any other read without joining, under its room if it's a thread, as a link to it
+does, with Join in its header. **Search the Server**, after the results, lists
+the rooms to join again, and the threads of the room `room:` names or else the
+open room's, fresh (`room_list`, two requests); a server lists only its most
+recently active rooms to join, so the note says those it didn't list aren't
+found. The protocol has no way to ask for older ones or to search by name.
 
 **Export** saves what this page has loaded from the server as a `.jsonl` file
 (`apron-<host>-<day>.jsonl`, in the format [ARCHIVE.md](../ARCHIVE.md)
@@ -1307,7 +1341,14 @@ and notices, which have nothing to act on, and thread cards. ↑ at the oldest d
 loads older messages, as scrolling back does. ↓ at the newest, or Escape, gives the keyboard back to the composer
 (in select mode Escape ends it instead); without a composer, Escape takes the keyboard off the messages. On a message, `r` replies to it and `e` edits it when it is yours, as their
 toolbar buttons do, and Enter goes into its toolbar, where Escape comes back to the row; an edit opened on the message
-(`e`, or its **Edit**) gives the keyboard back to its row when it ends. Neither `r` nor `e` does anything in select
+(`e`, or its **Edit**) gives the keyboard back to its row when it ends. → goes into its links and buttons (its
+toolbar's among them, the letter of each one's key, R in Reply and E in Edit, boxed while the keyboard is there), ← →
+go through them and Escape comes back to the row. Shift+↑ and Shift+↓ start select mode with the message, or go on
+with it, picking every message from where the run began to the one the keyboard moves to (stepping back gives them up
+again), as a shift-click fills a range. The timeline is a single Tab stop: Tab into it (from the header, or Shift+Tab
+from the composer) lands on the item the keyboard was last on, else the newest message, and Tab on it goes past the
+whole timeline; a thread's card, or anything else between the messages that takes the keyboard, is an item ↑ ↓ stop
+at. Neither `r` nor `e` does anything in select
 mode, while it is being edited, or in a field (where they are letters), nor with Ctrl, Alt or ⌘. Clicking a message
 puts the keyboard on it too. Messages arriving leave the keyboard where it is, and opening another room or thread
 gives it back to the composer.

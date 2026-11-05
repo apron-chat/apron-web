@@ -2,7 +2,7 @@
 import { flushSync } from 'svelte';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import SearchPanel from './SearchPanel.svelte';
-import type { SearchResult } from './types';
+import type { RoomResult, SearchResult } from './types';
 import * as dom from '$lib/test/dom';
 import { byLabel, queryByText } from '$lib/test/queries';
 
@@ -83,5 +83,85 @@ describe('SearchPanel', () => {
 		dom.unmount();
 		render({ kept: '30 Days' });
 		expect(document.querySelector('.ap-dialog-titlebtn')).toBeNull();
+	});
+
+	it('finds rooms: each with its kind, its title marked, where it is, and Not joined or what is new, under headings', () => {
+		const rooms: RoomResult[] = [
+			{ kind: 'room', id: 't1', group: 'Joined', joined: true, thread: true, parts: [{ text: 'Dep', match: true }, { text: 'loy checklist', match: false }], detail: 'in Engineering · Today', unread: 2 },
+			{ kind: 'room', id: 'r1', group: 'Not joined', joined: false, private: true, parts: [{ text: 'Dep', match: true }, { text: 'artures', match: false }] }
+		];
+		const state = $state<Record<string, unknown>>({ open: true, kind: 'rooms', title: 'Go to a Room or Thread', query: 'dep', results: rooms, onpick: vi.fn() });
+		dom.render(SearchPanel, state as never);
+		flushSync();
+		const list = dom.queryByRole('listbox', 'Rooms and threads found')!;
+		expect([...list.querySelectorAll('.ap-search-group')].map((group) => group.textContent)).toEqual(['Joined', 'Not joined']);
+		const [thread, room] = [...list.querySelectorAll('[role="option"]')];
+		expect(thread.querySelector('[aria-label="Thread"]')).not.toBeNull();
+		expect(thread.querySelector('mark')!.textContent).toBe('Dep');
+		expect(thread.querySelector('.ap-search-detail')!.textContent).toBe('in Engineering · Today');
+		expect(thread.querySelector('.ap-count')!.getAttribute('aria-label')).toBe('2 unread replies');
+		expect(room.querySelector('[aria-label="Room"]')).not.toBeNull();
+		expect(room.querySelector('[aria-label="Private"]')).not.toBeNull();
+		expect(room.querySelector('.ap-search-tag')!.textContent).toBe('Not joined');
+		expect(document.querySelector('[role="status"]')!.textContent).toBe('2 rooms found.');
+		state.results = [];
+		flushSync();
+		expect(queryByText('No rooms or threads match “dep”.')).not.toBeNull();
+	});
+
+	it('switches between its modes, and after its results offers an action, which keeps the keyboard in the field', () => {
+		const onclick = vi.fn();
+		const { state, field } = render({ modes: [{ id: 'rooms', label: 'Rooms and threads', keys: 'Ctrl K', shortcut: 'Control+K' }, { id: 'messages', label: 'Messages', keys: 'Ctrl F', shortcut: 'Control+F' }], mode: 'messages', action: { label: 'Load More from Server', note: 'Older messages are on the server.', onclick } });
+		const toggle = (name: RegExp) => [...document.querySelectorAll<HTMLButtonElement>('[aria-pressed]')].find((button) => name.test(button.textContent ?? ''))!;
+		expect(toggle(/Messages/).getAttribute('aria-pressed')).toBe('true');
+		expect(toggle(/Rooms/).getAttribute('aria-pressed')).toBe('false');
+		expect(toggle(/Rooms/).querySelector('kbd')!.textContent).toBe('Ctrl K');
+		expect(toggle(/Rooms/).querySelector('kbd')!.getAttribute('aria-hidden')).toBe('true');
+		toggle(/Rooms/).click();
+		flushSync();
+		expect(state.mode).toBe('rooms');
+		expect(document.activeElement).toBe(field);
+		expect(queryByText('Older messages are on the server.')).not.toBeNull();
+		dom.button('Load More from Server').click();
+		flushSync();
+		expect(onclick).toHaveBeenCalledOnce();
+		expect(document.activeElement).toBe(field);
+		state.action = { label: 'Load More from Server', busy: true, onclick };
+		flushSync();
+		expect(dom.button('Loading…').disabled).toBe(true);
+		state.action = { label: 'Load More from Server', note: 'Everything is loaded.', done: true, onclick };
+		flushSync();
+		expect(document.querySelector('.ap-search-action button')).toBeNull();
+		expect(queryByText('Everything is loaded.')).not.toBeNull();
+	});
+
+	it('hands the field\'s keys to `onfieldkey` first, with the result the keyboard is on', () => {
+		const onfieldkey = vi.fn((event: KeyboardEvent) => event.key === 'ArrowRight');
+		const { field } = render({ query: 'deploy', results: [result('2', 'deploy'), result('1', 'deploys')], onfieldkey });
+		dom.press(field, 'ArrowDown');
+		dom.press(field, 'ArrowRight');
+		expect(onfieldkey).toHaveBeenLastCalledWith(expect.objectContaining({ key: 'ArrowRight' }), '1');
+	});
+
+	it('keeps the keyboard on its result while the same query\'s results are redrawn, and goes back to the first for a new query', () => {
+		const { state, field } = render({ query: 'deploy', results: [result('3', 'deploy'), result('2', 'deploy'), result('1', 'deploy')] });
+		const active = () => field.getAttribute('aria-activedescendant');
+		const option = (n: number) => document.querySelectorAll('[role="option"]')[n].id;
+		dom.press(field, 'ArrowDown');
+		flushSync();
+		expect(active()).toBe(option(1));
+		// Redrawn, with one more above it: still on the same result.
+		state.results = [result('4', 'deploy'), result('3', 'deploy'), result('2', 'deploy'), result('1', 'deploy')];
+		flushSync();
+		expect(active()).toBe(option(2));
+		// Gone: back to the first.
+		state.results = [result('4', 'deploy'), result('1', 'deploy')];
+		flushSync();
+		expect(active()).toBe(option(0));
+		dom.press(field, 'ArrowDown');
+		state.query = 'deploys';
+		state.results = [result('4', 'deploy'), result('1', 'deploy')];
+		flushSync();
+		expect(active()).toBe(option(0));
 	});
 });

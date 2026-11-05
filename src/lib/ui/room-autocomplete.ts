@@ -1,4 +1,5 @@
 import { tokenAtCaret, type CaretToken, type DraftPart } from './draft';
+import { matchTier, wantedOf } from './room-match';
 
 export interface RoomSuggestion {
 	id: string;
@@ -15,15 +16,16 @@ export function roomQuery(parts: DraftPart[], caret: number): RoomQuery | undefi
 	return tokenAtCaret(parts, caret, '#', ROOM_CHAR);
 }
 
-/** Finds rooms by ID or title, preferring exact and then prefix matches. */
+/**
+ * Finds rooms by ID or title, in any case and with or without accents (`matchTier`, as Go to a Room or Thread
+ * matches them): one named exactly first, then those it starts, then a word in their title, then any holding it.
+ */
 export function searchRooms(rooms: RoomSuggestion[], query: string): RoomSuggestion[] {
-	const needle = query.trim().replace(/^#/, '').toLowerCase();
+	const wanted = wantedOf(query);
 	return rooms
 		.map((room) => {
-			const id = room.id.toLowerCase();
-			const title = room.title.toLowerCase();
-			const rank = !needle ? 0 : id === needle || title === needle ? 0 : id.startsWith(needle) || title.startsWith(needle) ? 1 : id.includes(needle) || title.includes(needle) ? 2 : -1;
-			return rank < 0 ? undefined : { room, rank };
+			const rank = matchTier(room, wanted);
+			return rank === undefined ? undefined : { room, rank };
 		})
 		.filter((entry) => entry !== undefined)
 		.sort((a, b) => a.rank - b.rank || a.room.title.localeCompare(b.room.title) || a.room.id.localeCompare(b.room.id))
