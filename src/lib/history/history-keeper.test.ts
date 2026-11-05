@@ -5,7 +5,7 @@ import { ChatClient, timelineMessages, type ClientSnapshot } from '$lib/protocol
 import { MemoryProtocolServer } from '$lib/preview/memory-server';
 import { readKept } from '$lib/test/kept-history';
 import { deleteHistory, historyName, listHistories, openHistory, writeHistory, type Databases } from './history-db';
-import { HistoryKeeper, mergeOf, plannedRoom, RESTORE_WINDOW, restoredState, type HistoryClient } from './history-keeper';
+import { HistoryKeeper, mergeOf, plannedRoom, PRUNE_MS, RESTORE_WINDOW, restoredState, type HistoryClient } from './history-keeper';
 import type { RoomSync } from '$lib/protocol/client';
 import type { RestoredState } from '$lib/protocol/client-types';
 import { loadView, saveView } from '$lib/ui/session-cache';
@@ -568,6 +568,38 @@ describe('HistoryKeeper', () => {
 		await keeper.flush();
 		expect(await listHistories(indexedDB)).toEqual([]);
 		await keeper.stop();
+	});
+
+	it('prunes as it goes while the page stays open, not only as it starts, until it stops', async () => {
+		vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+		try {
+			const day = 24 * 60 * 60 * 1000;
+			let clock = Date.now();
+			const indexedDB = new IDBFactory();
+			const db = await accountDb(indexedDB, URL, 'ada');
+			const log = String(clock - day);
+			await writeHistory(db, {
+				changes: [], dropped: [],
+				whole: [{ room: 'general', messages: [{ message_id: log, log_id: log, room_id: 'general', from: { user_id: 'ada' } }], reactions: [], memberships: [] }],
+				rooms: [{ room: 'general', sync: { id: 'general', checkpoint: log } }],
+				meta: { server: URL, userId: 'ada', complete: true, users: [] }
+			}, new Set());
+			const keeper = new HistoryKeeper({ indexedDB, locks: null, retentionMs: 30 * day, now: () => clock });
+			keeper.watch(stub());
+			await keeper.restore(stub());
+			expect((await readKept(db))?.messages).toHaveLength(1);
+			// A month on, the page still open.
+			clock += 30 * day;
+			vi.advanceTimersByTime(PRUNE_MS);
+			for (let i = 0; (await readKept(db))?.messages.length; i++) {
+				if (i > 400) throw new Error('Did not prune');
+				await new Promise((resolve) => setTimeout(resolve, 5));
+			}
+			await keeper.stop();
+			expect(vi.getTimerCount()).toBe(0);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 
 	it('removes the view kept to paint the next visit with the history it shows', async () => {

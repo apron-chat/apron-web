@@ -42,6 +42,9 @@ export interface HistoryClient {
 /** The longest a batch of changes waits to be written. */
 export const FLUSH_MS = 2000;
 
+/** How often a page left open (an installed app, a tab kept for days) prunes what has aged past the retention. */
+export const PRUNE_MS = 6 * 60 * 60 * 1000;
+
 /** About how many records one write puts down for rooms written whole. */
 export const WHOLE_BUDGET = 1000;
 
@@ -382,6 +385,9 @@ export class HistoryKeeper {
 		this.unwatch.push(client.observeStore((change) => this.changed(change)));
 		this.unwatch.push(client.subscribe((snapshot) => this.consider(snapshot)));
 		void this.prune();
+		// Not only as the page starts: one left open would otherwise keep everything until it reloads.
+		const pruning = setInterval(() => void this.prune(), PRUNE_MS);
+		this.unwatch.push(() => clearInterval(pruning));
 	}
 
 	/**
