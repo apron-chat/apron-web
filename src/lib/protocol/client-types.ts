@@ -568,12 +568,6 @@ export interface ChatClientOptions {
 	 * (`$lib/protocol/early-connection`): asked once, with the client's server, as it first connects.
 	 */
 	earlyConnection?: (url: string) => { socket: WebSocket; open: boolean; frames: unknown[] } | undefined;
-	/**
-	 * Asked before each connection opens: undefined to open it now, or a promise it waits on first, as the app checks
-	 * it is the latest deploy (`$lib/ui/version-check`). Asked again only for the connection after. `reloadable`, asked
-	 * when the wait ends: whether a reload then would cut nothing short (`RELOADABLE_FOR_MS`).
-	 */
-	beforeConnect?: (reloadable: () => boolean) => Promise<void> | undefined;
 }
 
 /**

@@ -83,7 +83,6 @@
 	import type { HistoryKeeper } from '$lib/history/history-keeper';
 	import { takeKeeper } from '$lib/history/startup';
 	import { takeEarlyConnection } from '$lib/protocol/early-connection';
-	import { beforeConnect } from '$lib/ui/version-check';
 	import { startServer } from '$lib/ui/start-server';
 	import { PREVIEW_SERVER } from '$lib/preview/preview-server';
 	import { historySettings } from '$lib/history/settings.svelte';
@@ -1336,13 +1335,8 @@
 			displayName,
 			webSocketFactory,
 			undefined,
-			// The connection opened as the app started, to this server (`hooks.client.ts`), if it's still there. Each
-			// connection first checks for a newer deploy if it's been a while, reloading into it only if that loses
-			// nothing: no unsent draft, push notification's room still to open, or sign-in link under way.
-			{
-				earlyConnection: takeEarlyConnection,
-				beforeConnect: previewMode ? undefined : (reloadable) => beforeConnect(() => reloadable() && !drafts.unsent && !pushRoom && !links.busy && !links.asked)
-			}
+			// The connection opened as the app started, to this server (`hooks.client.ts`), if it's still there.
+			{ earlyConnection: takeEarlyConnection }
 		);
 		if (!previewMode) {
 			// Made as the app started, and reading what it restores since (`$lib/history/startup`).

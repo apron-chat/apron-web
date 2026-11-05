@@ -276,21 +276,6 @@ describe('failed handshake diagnostics', () => {
 		expect(snapshot.retryAfterMs).toBeUndefined();
 	});
 
-	it('ignores diagnostics for the attempt before a Try Again that waits on `beforeConnect`', async () => {
-		client.stop();
-		let gate: Promise<void> | undefined;
-		({ client } = startClient({ url: 'wss://server.test/ws', onSnapshot: (next) => (snapshot = next), beforeConnect: () => gate }));
-		let resolve!: (response: Response) => void;
-		fetchStatus.mockReturnValue(new Promise(done => { resolve = done; }));
-		latest().drop();
-		gate = new Promise<void>(() => undefined);
-		client.retryNow();
-		resolve(Response.json({ error: 'Old capacity error' }, { status: 429, headers: { 'Retry-After': '86400', 'Apron-Connection-Status': '1' } }));
-		await vi.advanceTimersByTimeAsync(0);
-		expect(snapshot.error).toBeUndefined();
-		expect(snapshot.retryAfterMs).toBeUndefined();
-	});
-
 	it('times out an unavailable diagnostic service and resumes retries', async () => {
 		fetchStatus.mockImplementation((_url, options) => new Promise((_resolve, reject) => {
 			options?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
@@ -622,111 +607,6 @@ describe('a connection that doesn’t come up', () => {
 		expect(opened()).toBe(before + 4);
 	});
 
-	describe('waiting on `beforeConnect` (the check for a newer deploy)', () => {
-		/** A client made here, not with `startClient`, which expects its first socket to be open already. */
-		function gated(beforeConnect: (reloadable: () => boolean) => Promise<void> | undefined) {
-			FakeSocket.instances = [];
-			vi.stubGlobal('WebSocket', FakeSocket);
-			let snapshot: ClientSnapshot | undefined;
-			const client = new ChatClient('ws://fake.test/', undefined, undefined, undefined, { beforeConnect });
-			client.subscribe((next) => (snapshot = next));
-			client.start();
-			onTestFinished(() => client.stop());
-			return { client, snap: () => snapshot! };
-		}
-
-		it('opens the connection once let through, connecting meanwhile, and once the page is shown again if it was hidden by then', async () => {
-			const { show } = page();
-			let release!: () => void;
-			let asked = 0;
-			const { snap } = gated(() => (asked++ ? undefined : new Promise<void>((resolve) => (release = resolve))));
-			expect(FakeSocket.instances).toHaveLength(0);
-			expect(snap().status).toBe('connecting');
-			show('hidden');
-			release();
-			await settle();
-			expect(FakeSocket.instances).toHaveLength(0);
-			// Shown: it connects as any connection waiting for the page does, asking again (let through at once).
-			show('visible');
-			expect(FakeSocket.instances).toHaveLength(1);
-			expect(asked).toBe(2);
-		});
-
-		it('waits on a reconnect too, never connecting while the page reloads instead, and opens nothing once stopped', async () => {
-			let waiting: Promise<void> | undefined;
-			const { client, snap } = gated(() => waiting);
-			const first = latest();
-			await first.greet([]);
-			// A wait that never ends, as for a reload into a newer deploy.
-			waiting = new Promise<void>(() => undefined);
-			first.drop();
-			await vi.advanceTimersByTimeAsync(60_000);
-			expect(FakeSocket.instances).toEqual([first]);
-			expect(snap().status).toBe('reconnecting');
-			// Stopped while waiting on one that ends: nothing opens.
-			let release!: () => void;
-			waiting = new Promise<void>((resolve) => (release = resolve));
-			client.stop();
-			client.start();
-			client.stop();
-			release();
-			await settle();
-			expect(FakeSocket.instances).toEqual([first]);
-		});
-
-		it('says a reload cuts nothing short only within a minute of starting or of coming back from a minute or more away, while running, with no restart since', async () => {
-			const { away } = page();
-			const asked: Array<() => boolean> = [];
-			const { client, socket } = startClient({ beforeConnect: (reloadable) => void asked.push(reloadable) });
-			const now = () => asked.at(-1)!();
-			expect(now()).toBe(true);
-			await socket.greet([]);
-			// A minute on, dropped while in use: no.
-			vi.advanceTimersByTime(60_000);
-			socket.drop();
-			const second = await nextSocket(socket);
-			expect(now()).toBe(false);
-			await second.greet([]);
-			// Back after five minutes away: yes, and no longer once stopped.
-			away(5 * 60_000);
-			second.drop();
-			await nextSocket(second);
-			expect(now()).toBe(true);
-			client.stop();
-			expect(now()).toBe(false);
-			client.start();
-			const restarted = latest();
-			expect(now()).toBe(true);
-			// Restarted on purpose (signing out, another server): no.
-			client.restart();
-			await (await nextSocket(restarted)).greet([]);
-			expect(now()).toBe(false);
-			// Back after under a minute away: no; a clock set back from a return: no.
-			away(59_000);
-			latest().drop();
-			await nextSocket(latest());
-			expect(now()).toBe(false);
-			away(5 * 60_000);
-			const asking = asked.at(-1)!;
-			vi.setSystemTime(Date.now() - 60 * 60_000);
-			expect(asking()).toBe(false);
-		});
-
-		it('says it cuts something short for attempts a minute after starting, though none has opened yet', async () => {
-			const asked: Array<() => boolean> = [];
-			startClient({ beforeConnect: (reloadable) => void asked.push(reloadable) });
-			const started = Date.now();
-			while (Date.now() - started < 60_000) {
-				const previous = latest();
-				previous.drop();
-				await nextSocket(previous);
-			}
-			expect(asked[0]()).toBe(false);
-			expect(asked.at(-1)!()).toBe(false);
-			expect(asked.length).toBeGreaterThan(2);
-		});
-	});
-
 	describe('back after a long absence', () => {
 		it('opens a standby only when the probed socket hasn’t answered in 2 s, after a minute away or the network back, and closes it unused once it does', async () => {
 			const { away, online } = page();
@@ -833,30 +713,6 @@ describe('a connection that doesn’t come up', () => {
 			standby.receive({ method: 'pong' });
 			expect(FakeSocket.instances).toHaveLength(2);
 			expect(standby.readyState).toBe(FakeSocket.OPEN);
-		});
-
-		it('closes a standby about to take over when the connection waits on `beforeConnect` (a check for a newer deploy), and connects once it lets it', async () => {
-			const { away } = page();
-			let gate: Promise<void> | undefined;
-			const { socket } = startClient({ beforeConnect: () => gate });
-			await socket.greet([], { ping: 30 });
-			away(5 * 60_000);
-			vi.advanceTimersByTime(2_000);
-			const standby = latest();
-			standby.open();
-			let release!: () => void;
-			gate = new Promise<void>((resolve) => (release = resolve));
-			// Its greeting comes first: the probed socket is gone, and the standby closes unused, having sent nothing.
-			standby.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: [], ping: 30 } });
-			expect(socket.readyState).toBe(FakeSocket.CLOSED);
-			expect(standby.readyState).toBe(FakeSocket.CLOSED);
-			expect(standby.sent).toEqual([]);
-			expect(FakeSocket.instances).toHaveLength(2);
-			// Let through: the next connection opens, its own.
-			release();
-			await settle();
-			expect(FakeSocket.instances).toHaveLength(3);
-			expect(latest().readyState).toBe(FakeSocket.CONNECTING);
 		});
 
 		it('drops a standby waiting to open, or opening, when the probed connection ends another way, or the page is hidden again', async () => {

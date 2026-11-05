@@ -259,11 +259,6 @@ export const OPENING_MS = 10_000;
  */
 export const STANDBY_AFTER_HIDDEN_MS = 60_000;
 /**
- * For how long after the client starts, or the page comes back from `STANDBY_AFTER_HIDDEN_MS` or more away, a connection
- * may reload the page into a newer deploy (`ChatClientOptions.beforeConnect`): before anything is in use again.
- */
-export const RELOADABLE_FOR_MS = 60_000;
-/**
  * How long such a probe waits for its answer before it opens the standby: a socket that is alive answers well within
  * it, and opens none. Nor does a probe within `PROBE_PATIENT_FOR_MS` of a socket replaced for staying quiet: a flaky
  * network gets one socket at a time.

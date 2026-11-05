@@ -46,9 +46,7 @@ const KEY = {
 	/** Read Receipts (`ext.settings.read_receipts`) turned off on this device: `'off'`, else absent. */
 	readReceipts: 'apron.readReceipts',
 	/** app.html reads this one too, to apply the theme before the app loads. */
-	appearance: 'apron.appearance',
-	/** The newest deploy known to be the latest, and when (`$lib/ui/version-check`): `{version, at}`. */
-	versionChecked: 'apron.versionChecked'
+	appearance: 'apron.appearance'
 } as const;
 
 /**
@@ -99,23 +97,6 @@ export function loadServerUrl(): string | undefined {
 
 export function saveServerUrl(url: string): void {
 	write(KEY.serverUrl, url);
-}
-
-/** A deploy's `version` (SvelteKit's, a build's timestamp) found to be the latest at `at`. */
-export type VersionChecked = { version: string; at: number };
-
-export function loadVersionChecked(): VersionChecked | undefined {
-	try {
-		const value: unknown = JSON.parse(read(KEY.versionChecked) ?? 'null');
-		if (!isJsonObject(value) || typeof value.version !== 'string' || typeof value.at !== 'number') return undefined;
-		return { version: value.version, at: value.at };
-	} catch {
-		return undefined;
-	}
-}
-
-export function saveVersionChecked(checked: VersionChecked): void {
-	write(KEY.versionChecked, JSON.stringify(checked));
 }
 
 export function loadDisplayName(): string {
