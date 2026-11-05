@@ -2589,6 +2589,15 @@ export class ChatClient {
 					this.markJoined(room);
 					// Left out: nothing in it moved past its checkpoint, so its resume, if still queued, needn't go.
 					this.settleQueuedResume(room, room.checkpoint);
+					// Nor, with none under way (the changed rooms catching up together), is anything missing: it is complete
+					// up to where it was, and live from here, so what arrives now moves its checkpoint (`noteLive`), or a
+					// thread's last load where that reached its head.
+					if (this.isThread(room.id)) {
+						if (!room.loading && room.loadCheckpoint !== undefined && room.latestLogId !== undefined &&
+							compareLogIds(room.loadCheckpoint, room.latestLogId) >= 0) room.resumed = false;
+					} else if (!room.recovery && !room.recoveryError && room.checkpoint !== undefined) {
+						room.synced = true;
+					}
 				}
 			} else {
 				// A full listing: `joined` is the whole set; anything else joined was left meanwhile.

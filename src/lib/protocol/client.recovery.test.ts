@@ -958,6 +958,42 @@ describe('catching up every joined room together (`history` without `room_id`)',
 		expect(histories(next)).toHaveLength(1);
 	});
 
+	it('keeps the rooms the listing leaves out current from what comes live, as those it lists', async () => {
+		const next = await reconnected();
+		await next.reply('auth', { you: { user_id: 'ada', name: 'Ada' } });
+		// Only general changed: the thread is left out, complete up to its head as it was.
+		await next.reply('room_list', { joined: [{ ...general, latest_log_id: at(14) }], left: [], users: [] });
+		await next.reply('history', { messages: [entry(13), entry(14)], more: false, latest_log_id: at(14), history_log_id: at(10) });
+		await settle();
+		expect(room(side.room_id).resumed).toBeUndefined();
+		next.receive({ method: 'message', params: entry(23, side.room_id) });
+		next.drop();
+		vi.advanceTimersByTime(5_000);
+		const again = latest();
+		again.open();
+		again.receive({ method: 'server', params: { apron: 10, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
+		await again.reply('auth', { you: { user_id: 'ada', name: 'Ada' } });
+		await again.reply('room_list', { joined: [{ ...side, latest_log_id: at(24) }], left: [], users: [] });
+		expect(histories(again)).toEqual([{ after: at(24) }]);
+		await again.reply('history', { messages: [entry(24, side.room_id)], more: false, latest_log_id: at(24), history_log_id: at(10) });
+		await settle();
+		// Its last load moved with the reply that came live: the catch-up vouches for it, and it needs no load of its own.
+		expect(histories(again)).toHaveLength(1);
+		expect(room(side.room_id).timeline.order).toEqual([at(21), at(22), at(23), at(24)]);
+
+		// The same for a top-level room left out: its checkpoint moves with what comes live.
+		again.receive({ method: 'message', params: entry(25) });
+		again.drop();
+		vi.advanceTimersByTime(5_000);
+		const third = latest();
+		third.open();
+		third.receive({ method: 'server', params: { apron: 10, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
+		expect(third.request('room_list').params).toMatchObject({ latest_log_id: at(24) });
+		await third.reply('auth', { you: { user_id: 'ada', name: 'Ada' } });
+		await third.reply('room_list', { joined: [{ ...general, latest_log_id: at(26) }, { ...side, latest_log_id: at(27) }], left: [], users: [] });
+		expect(histories(third)).toEqual([{ after: at(25) }]);
+	});
+
 	it('starts after what came live, which moved every room\u2019s checkpoint', async () => {
 		const next = await reconnected();
 		await next.reply('auth', { you: { user_id: 'ada', name: 'Ada' } });
