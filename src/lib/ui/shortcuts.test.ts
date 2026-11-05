@@ -5,10 +5,10 @@ const keysOf = (mac: boolean, label: string) => shortcutGroups(mac).flatMap((gro
 
 describe('shortcutGroups', () => {
 	it('writes a Mac\'s modifiers as its keyboard marks them, and others\' by name', () => {
-		expect(keysOf(true, 'Search local history')).toEqual([['⌘', 'F']]);
-		expect(keysOf(false, 'Search local history')).toEqual([['Ctrl', 'F']]);
-		expect(keysOf(true, 'Go to a room or thread')).toEqual([['⌘', 'K']]);
-		expect(keysOf(false, 'Go to a room or thread')).toEqual([['Ctrl', 'K']]);
+		expect(keysOf(true, 'Search messages')).toEqual([['⌘', 'F']]);
+		expect(keysOf(false, 'Search messages')).toEqual([['Ctrl', 'F']]);
+		expect(keysOf(true, 'Search rooms and threads')).toEqual([['⌘', 'K']]);
+		expect(keysOf(false, 'Search rooms and threads')).toEqual([['Ctrl', 'K']]);
 		expect(keysOf(true, 'Move a room up or down')).toEqual([['⌥', '↑'], ['⌥', '↓']]);
 		expect(keysOf(false, 'New line')).toEqual([['Shift', 'Enter']]);
 	});

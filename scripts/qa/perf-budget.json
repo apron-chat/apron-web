@@ -43,7 +43,7 @@
 		"switch-room-busy": {
 			"layouts": 2,
 			"styleRecalcs": 12,
-			"calls": 90041
+			"calls": 90491
 		},
 		"send-message-busy": {
 			"layouts": 38,
@@ -92,7 +92,7 @@
 		}
 	},
 	"bundle": {
-		"jsGzipKB": 615.7,
+		"jsGzipKB": 622.5,
 		"cssGzipKB": 26.4
 	},
 	"production": {

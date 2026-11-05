@@ -324,7 +324,7 @@
 	let editFrom: 'row' | undefined;
 	/** The Edit form for the open room or thread (its title and description). */
 	let roomEditorOpen = $state(false);
-	/** Search is open (`SearchDialog`), at Go to a Room or Thread or at Search Local History. */
+	/** Search is open (`SearchDialog`), at its rooms and threads or at its messages. */
 	let searchMode = $state<'rooms' | 'messages' | undefined>();
 	/** The keyboard shortcuts' overlay (`?`) is open. */
 	let shortcutsOpen = $state(false);
@@ -1811,7 +1811,7 @@
 	}
 
 	/**
-	 * A room or thread picked in Go to a Room or Thread: one shown opens as a mention of it would; any other as a
+	 * A room or thread picked in search: one shown opens as a mention of it would; any other as a
 	 * link to it does, read without joining, under its room if it's a thread (`openLinked`).
 	 */
 	function openSwitched(roomId: string): void {
@@ -1823,7 +1823,7 @@
 
 	/** Part of a link isn't here: the URL says where the page is instead, and a toast says what wasn't found. */
 	function abandonLink(missing: 'room' | 'thread' | 'message', searched = linked?.searched): void {
-		// A room or thread picked in Go to a Room or Thread is searched for with no message.
+		// A room or thread picked in search is searched for with no message.
 		const found = linked?.message !== undefined;
 		linked = undefined;
 		feedback.error(!searched ? `The linked ${missing} isn’t available here.` : missing === 'message' ? 'That message is too far back to open here.' : found ? `That message’s ${missing} isn’t available here.` : `That ${missing} isn’t available here.`);
@@ -3524,7 +3524,7 @@
 			row.click();
 			return;
 		}
-		// Ctrl+F (⌘F on a Mac) searches local history, and Ctrl+K (⌘K) goes to a room or thread, from anywhere on the
+		// Ctrl+F (⌘F on a Mac) searches local history's messages, and Ctrl+K (⌘K) its rooms and threads, from anywhere on the
 		// page but another dialog; there, and before signing in, the browser's keys are its own as usual. In search,
 		// either switches to its mode (SearchDialog).
 		if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && (event.key.toLowerCase() === 'f' || event.key.toLowerCase() === 'k') && canSearch && !modalOpen()) {
@@ -3835,7 +3835,7 @@
 		{@const SearchDialog = searchDialog.component}
 		<SearchDialog
 			{client} mode={searchMode} keeper={sessionKeeper()} rooms={session.rooms} listed={snapshot.directory} threadsListed={snapshot.threadDirectory} unread={unread.byRoom} mentions={mentions.byRoom}
-			openRoomId={activeRoom?.id} canList={session.canManageRooms} {roomSuggestions} initial={paneRoom ? `room:#${paneRoom.id} ` : ''} note={searchNote()} keys={searchKeys}
+			canList={session.canManageRooms} {roomSuggestions} initial={paneRoom ? `room:#${paneRoom.id} ` : ''} note={searchNote()} keys={searchKeys}
 			onopen={openFound} onopenroom={openSwitched} kept={historySettings.title} onhistory={showHistoryPreferences} onclose={() => (searchMode = undefined)}
 		/>
 	{/if}

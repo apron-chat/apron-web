@@ -10,7 +10,8 @@
 	 * The row RoomItem and ThreadItem share (not exported): the button with the name, a lock when private, what goes
 	 * under the name and what ends the row, and the door out or in beside it. The button names its room: a room's in
 	 * `data-room`, or `data-join` while `listed`; a thread's in `data-thread`, or `data-other-thread` while `listed`
-	 * (with `data-thread` too while it's open).
+	 * (with `data-thread` too while it's open). As an `option` it is instead one of a listbox's options, such as a
+	 * search's result, which the listbox's field moves through (`aria-activedescendant`): no door, and no `data-`.
 	 */
 	interface Props {
 		/** Its `room_id`, which its button names, and its door in `data-leave` or `data-join`. */
@@ -49,8 +50,14 @@
 		start?: Snippet;
 		/** The keys that act on the row besides picking it, for assistive tech (`aria-keyshortcuts`), such as moving it. */
 		keyshortcuts?: string;
+		/** One of a listbox's options rather than a button: its `id`, and whether the keyboard is on it. */
+		option?: { id: string; selected: boolean };
+		/** The pointer came onto it, as an option: the listbox's keyboard follows it. */
+		onhover?: () => void;
+		/** The name as shown, in runs, each one `match`ed marked, such as what a search found in it. */
+		parts?: { text: string; match: boolean }[];
 	}
-	let { room, noun, label, tip, private: isPrivate, muted, active, nested, framed, listed = false, title, onselect, onleave, onjoin, lead, lines, children, start, keyshortcuts, class: className }: Props = $props();
+	let { room, noun, label, tip, private: isPrivate, muted, active, nested, framed, listed = false, title, onselect, onleave, onjoin, lead, lines, children, start, keyshortcuts, option, onhover, parts, class: className }: Props = $props();
 	const thread = $derived(noun === 'thread');
 </script>
 
@@ -68,7 +75,20 @@
 	</button>
 {/snippet}
 
-{#if framed || onjoin || onleave}
+{#if option}
+	<!-- The listbox's field takes the keys for its options (↑ ↓, Enter), and a press keeps the focus there. -->
+	<!-- svelte-ignore a11y_click_events_have_key_events -->
+	<li
+		id={option.id} role="option" aria-selected={option.selected} {title} class={['ap-room', 'ap-room-option', className]}
+		onmousedown={(event) => event.preventDefault()} onclick={onselect} onmouseenter={onhover}
+	>
+		<!-- The same as the button's, with what matched in its name marked. -->
+		{@render lead?.()}
+		<span class="ap-room-text"><span class="ap-room-name"><span class="ap-room-label" title={tip}>{#if parts}{#each parts as part, p (p)}{#if part.match}<mark>{part.text}</mark>{:else}{part.text}{/if}{/each}{:else}{label}{/if}</span>{#if isPrivate}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}</span>{@render lines?.()}</span>
+		{#if muted}<BellOff class="ap-muted" role="img" aria-label="Muted" />{/if}
+		{@render children?.()}
+	</li>
+{:else if framed || onjoin || onleave}
 	<div class={['ap-roomrow', nested && 'ap-roomrow-nested', active && 'ap-roomrow-active']}>
 		{@render row()}
 		{#if onleave}

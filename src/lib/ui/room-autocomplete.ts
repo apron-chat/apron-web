@@ -17,7 +17,7 @@ export function roomQuery(parts: DraftPart[], caret: number): RoomQuery | undefi
 }
 
 /**
- * Finds rooms by ID or title, in any case and with or without accents (`matchTier`, as Go to a Room or Thread
+ * Finds rooms by ID or title, in any case and with or without accents (`matchTier`, as search's rooms and threads
  * matches them): one named exactly first, then those it starts, then a word in their title, then any holding it.
  */
 export function searchRooms(rooms: RoomSuggestion[], query: string): RoomSuggestion[] {
