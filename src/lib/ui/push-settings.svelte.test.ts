@@ -53,6 +53,70 @@ function tab(browser: PushBrowser, badge = vi.fn(), ids = vi.fn(async () => unde
 
 const ada = 'wss://a.example/\nada';
 
+describe('a subscription the push service replaced', () => {
+	/** A browser whose subscription the push service can replace, as the service worker subscribes again. */
+	function replaceable() {
+		let endpoint = 'https://push.example/1';
+		const browser: PushBrowser = {
+			subscribe: async () => ({ endpoint, keys: { p256dh: 'BPk', auth: 'c2Vj' } }),
+			unsubscribe: async () => undefined,
+			endpoint: async () => endpoint
+		};
+		return { browser, replace: (next: string) => (endpoint = next) };
+	}
+	const note = (replaced: boolean) => {
+		const state = { replaced };
+		return { state, registerAgain: { load: async () => state.replaced, clear: vi.fn(async () => void (state.replaced = false)) } };
+	};
+	const settingsFor = (browser: PushBrowser, registerAgain: { load(): Promise<boolean>; clear(): Promise<void> }) => {
+		const pushIdOf = (account: string) => `id-${account.split('\n')[1]}`;
+		const settings = new PushSettings({ sync: new WebPushSync(browser, pushIdOf), saveEnabledIds: async () => undefined, pushIdOf, registerAgain });
+		settings.load();
+		return settings;
+	};
+
+	it('registers the new one from a tab already open, and forgets the worker’s note once it has', async () => {
+		const { browser, replace } = replaceable();
+		const { state, registerAgain } = note(false);
+		const settings = settingsFor(browser, registerAgain);
+		const client = fakeClient();
+		await settings.turnOn(client, 'ada', 'K1', undefined, true);
+		expect(client.registrations.at(-1)?.url).toBe('https://push.example/1');
+		replace('https://push.example/2');
+		state.replaced = true;
+		await settings.registerAgain();
+		expect(client.registrations.at(-1)).toMatchObject({ url: 'https://push.example/2', push_id: 'id-ada' });
+		expect(state.replaced).toBe(false);
+	});
+
+	it('leaves it to the next start’s registering when the worker noted it while no tab was open, then forgets the note', async () => {
+		const { browser } = replaceable();
+		values.set('apron.webPushAccounts', JSON.stringify([ada]));
+		const { state, registerAgain } = note(true);
+		const settings = settingsFor(browser, registerAgain);
+		// Read on load, before any account has registered here: nothing to register yet, and the note stays.
+		await new Promise((settle) => setTimeout(settle, 0));
+		expect(registerAgain.clear).not.toHaveBeenCalled();
+		const client = fakeClient();
+		await settings.enable(client, 'K1', 'ada', undefined);
+		await vi.waitFor(() => expect(state.replaced).toBe(false));
+		expect(client.registrations.at(-1)?.url).toBe('https://push.example/1');
+	});
+
+	it('registers nothing while push is kept off here', async () => {
+		const { browser, replace } = replaceable();
+		const { registerAgain } = note(false);
+		const settings = settingsFor(browser, registerAgain);
+		const client = fakeClient();
+		await settings.turnOn(client, 'ada', 'K1', undefined, true);
+		await settings.keepOff(client);
+		const before = client.registrations.length;
+		replace('https://push.example/2');
+		await settings.registerAgain();
+		expect(client.registrations).toHaveLength(before);
+	});
+});
+
 describe('push settings', () => {
 	it('turns push on for an account, subscribing and registering with its push_id, and mirrors the enabled ids', async () => {
 		const { browser, state } = fakeBrowser();

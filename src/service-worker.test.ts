@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { memoryIdb } from '$lib/test/idb';
-import { saveEnabledPushIds } from '$lib/ui/push-store';
+import { loadRegisterAgain, PUSH_RESUBSCRIBED, saveEnabledPushIds } from '$lib/ui/push-store';
 import { NOTIFICATION_CLICK, PUSH_CLICK, QUIET_PUSH } from '$lib/ui/notifications';
 
 /**
@@ -12,7 +12,13 @@ import { NOTIFICATION_CLICK, PUSH_CLICK, QUIET_PUSH } from '$lib/ui/notification
  * does with it.
  */
 
-vi.mock('$service-worker', () => ({ base: '/app', build: ['/app/_app/immutable/start.js', '/app/_app/immutable/assets/nunito-latin.abc.woff2'], files: ['/app/icon-192.png'], prerendered: [], version: '1700000000000' }));
+vi.mock('$service-worker', () => ({
+	base: '/app',
+	build: ['/app/_app/immutable/start.js', '/app/_app/immutable/assets/nunito-latin.abc.woff2'],
+	files: ['/app/icon-192.png', '/app/og.png', '/app/robots.txt'],
+	prerendered: ['/app/', '/app/__preview'],
+	version: '1700000000000'
+}));
 
 type Listener = (event: unknown) => void;
 const listeners = new Map<string, Listener>();
@@ -22,6 +28,7 @@ let tabs: Array<{ visibilityState: string; postMessage: ReturnType<typeof vi.fn>
 const setAppBadge = vi.fn(async () => undefined);
 const openWindow = vi.fn(async () => undefined);
 const matchAll = vi.fn(async () => tabs);
+const subscribe = vi.fn(async () => ({}));
 /** The worker's cache, by URL or path. */
 const cached = new Map<string, unknown>();
 const key = (request: unknown) => (typeof request === 'string' ? request : (request as { url: string }).url);
@@ -30,10 +37,16 @@ const cache = {
 	match: async (request: unknown) => cached.get(key(request)),
 	put: vi.fn(async (request: unknown, response: unknown) => void cached.set(key(request), response))
 };
+/** An older deploy's cache, still kept for its tabs: made before this deploy's, so `caches.match` looks in it first. */
+const olderCached = new Map<string, unknown>();
 
 beforeAll(async () => {
 	vi.stubGlobal('indexedDB', idb);
-	vi.stubGlobal('caches', { open: async () => cache, match: async () => undefined, keys: async () => [] });
+	vi.stubGlobal('caches', {
+		open: async () => cache,
+		match: async (request: unknown) => olderCached.get(key(request)) ?? cached.get(key(request)),
+		keys: async () => []
+	});
 	vi.stubGlobal('self', {
 		addEventListener: (type: string, listener: Listener) => listeners.set(type, listener),
 		location: { origin: 'https://apron.example' },
@@ -41,7 +54,8 @@ beforeAll(async () => {
 		navigator: { setAppBadge, clearAppBadge: vi.fn(async () => undefined) },
 		registration: {
 			showNotification: vi.fn(async (title: string, options: NotificationOptions) => void shown.push({ title, options })),
-			getNotifications: async () => shown.map((entry) => ({ ...entry.options, title: entry.title, close: () => shown.splice(shown.indexOf(entry), 1) }))
+			getNotifications: async () => shown.map((entry) => ({ ...entry.options, title: entry.title, close: () => shown.splice(shown.indexOf(entry), 1) })),
+			pushManager: { subscribe }
 		},
 		clients: { matchAll, openWindow }
 	});
@@ -104,8 +118,11 @@ describe('the service worker', () => {
 		expect(shown.map((entry) => entry.title)).toEqual([QUIET_PUSH.title]);
 	});
 
-	/** A tab of the app, signed in to the account with this `push_id` (none: a guest's). */
-	const signedIn = (pushId?: string) => ({ visibilityState: 'hidden', postMessage: vi.fn((_message: unknown, ports?: MessagePort[]) => ports?.[0]?.postMessage({ pushId })), focus: vi.fn(async () => undefined) });
+	/**
+	 * A tab of the app, signed in to the account with this `push_id` (none: a guest's), with its own id (none: a tab
+	 * from before a deploy, which answers with its `push_id` only).
+	 */
+	const signedIn = (pushId?: string, tab?: string) => ({ visibilityState: 'hidden', postMessage: vi.fn((_message: unknown, ports?: MessagePort[]) => ports?.[0]?.postMessage({ pushId, ...(tab ? { tab } : {}) })), focus: vi.fn(async () => undefined) });
 
 	it('closes a clicked notification and opens its room at the app’s page when no tab is signed in to its account', async () => {
 		const close = vi.fn();
@@ -134,23 +151,61 @@ describe('the service worker', () => {
 		expect(matchAll).toHaveBeenCalledWith({ type: 'window', includeUncontrolled: true });
 	});
 
-	it('tells every tab about a clicked page notification, so the one that raised it opens the room, or opens the room once its tab has gone', async () => {
-		const first = signedIn();
-		const second = signedIn();
+	it('hands a clicked page notification to the tab that raised it, and brings that one forward, or opens the room once its tab has gone', async () => {
+		const first = signedIn(undefined, 't0');
+		const second = signedIn(undefined, 't1');
 		tabs = [first, second];
 		const data = { tab: 't1', server: 'wss://a/', roomId: 'general', threadId: 'th1', messageId: '5' };
 		await dispatch('notificationclick', { notification: { close: vi.fn(), data } });
 		expect(second.postMessage).toHaveBeenCalledWith({ type: NOTIFICATION_CLICK, target: data });
-		expect(first.focus).toHaveBeenCalled();
+		expect(second.focus).toHaveBeenCalled();
+		expect(first.focus).not.toHaveBeenCalled();
+		expect(first.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: NOTIFICATION_CLICK }));
 		expect(openWindow).not.toHaveBeenCalled();
 		tabs = [];
 		await dispatch('notificationclick', { notification: { close: vi.fn(), data } });
 		expect(openWindow).toHaveBeenCalledWith('/app/#push_room=th1&push_message=5');
 	});
 
+	it('hands a page notification with a push_id to the tab that raised it, before another of its account', async () => {
+		const other = signedIn('a1', 't0');
+		const raiser = signedIn('a1', 't1');
+		tabs = [other, raiser];
+		const data = { tab: 't1', server: 'wss://a/', roomId: 'general', messageId: '5', pushId: 'a1', group: 'a1:general' };
+		await dispatch('notificationclick', { notification: { close: vi.fn(), data } });
+		expect(raiser.postMessage).toHaveBeenLastCalledWith({ type: NOTIFICATION_CLICK, target: data });
+		expect(raiser.focus).toHaveBeenCalled();
+		expect(other.focus).not.toHaveBeenCalled();
+	});
+
+	it('tells every tab about a clicked page notification when none says which it is, so the one that raised it opens the room', async () => {
+		const first = signedIn();
+		const second = signedIn();
+		tabs = [first, second];
+		const data = { tab: 't1', server: 'wss://a/', roomId: 'general' };
+		await dispatch('notificationclick', { notification: { close: vi.fn(), data } });
+		expect(second.postMessage).toHaveBeenCalledWith({ type: NOTIFICATION_CLICK, target: data });
+		expect(first.focus).toHaveBeenCalled();
+	});
+
+	it('subscribes again with the old key when the push service replaces the subscription, and has the open tabs register it', async () => {
+		const key = new Uint8Array([4, 1, 2]).buffer;
+		const tab = signedIn('a1', 't1');
+		tabs = [tab];
+		await dispatch('pushsubscriptionchange', { oldSubscription: { options: { applicationServerKey: key, userVisibleOnly: true } }, newSubscription: null });
+		expect(subscribe).toHaveBeenCalledWith({ userVisibleOnly: true, applicationServerKey: key });
+		expect(tab.postMessage).toHaveBeenCalledWith({ type: PUSH_RESUBSCRIBED });
+		// Noted for a page that isn't open: the next to start registers it.
+		expect(await loadRegisterAgain()).toBe(true);
+		// One the browser made already is kept: it only needs registering.
+		await dispatch('pushsubscriptionchange', { oldSubscription: { options: { applicationServerKey: key } }, newSubscription: { endpoint: 'https://push.example/2' } });
+		expect(subscribe).toHaveBeenCalledTimes(1);
+	});
+
 	it('installs the app’s files but not the themes’ fonts, and keeps a font once a theme loads it', async () => {
 		await dispatch('install', {});
-		expect(cache.addAll).toHaveBeenCalledWith(['/app/_app/immutable/start.js', '/app/icon-192.png']);
+		// Nor what the app never loads: the link preview's image, robots.txt, and a preview build's own page.
+		expect(cache.addAll).toHaveBeenCalledWith(['/app/_app/immutable/start.js', '/app/icon-192.png', '/app/']);
 		const font = { method: 'GET', mode: 'cors', url: 'https://apron.example/app/_app/immutable/assets/nunito-latin.abc.woff2' };
 		const fetched = { ok: true, clone: () => 'kept font' };
 		vi.stubGlobal('fetch', vi.fn(async () => fetched));
@@ -162,5 +217,27 @@ describe('the service worker', () => {
 		listeners.get('fetch')!({ request: font, respondWith: (promise: Promise<unknown>) => (responded = promise) });
 		expect(await responded).toBe('kept font');
 		expect(fetch).toHaveBeenCalledTimes(1);
+	});
+
+	it('opens the app offline from this deploy’s page, and leaves other pages on its origin to the browser', async () => {
+		await dispatch('install', {});
+		olderCached.set('/app/', 'an older deploy’s page');
+		vi.stubGlobal('fetch', vi.fn(async () => {
+			throw new TypeError('offline');
+		}));
+		const navigate = (path: string) => {
+			let responded: Promise<unknown> | undefined;
+			listeners.get('fetch')!({ request: { method: 'GET', mode: 'navigate', url: `https://apron.example${path}` }, respondWith: (promise: Promise<unknown>) => (responded = promise) });
+			return responded;
+		};
+		expect(await navigate('/app/?link=abc')).toBe('cached /app/');
+		// A backend's file, or its live text, offline: the browser's own error, not the chat.
+		expect(navigate('/app/files/1/photo.png')).toBeUndefined();
+		expect(navigate('/app/live/x')).toBeUndefined();
+		// The archive reader's page, which wasn't installed: it fails, rather than opening the chat in its place.
+		expect(((await navigate('/app/archive')) as Response).type).toBe('error');
+		olderCached.set('/app/archive', 'the archive reader');
+		expect(await navigate('/app/archive')).toBe('the archive reader');
+		olderCached.clear();
 	});
 });
