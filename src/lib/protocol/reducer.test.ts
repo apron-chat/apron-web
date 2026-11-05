@@ -77,6 +77,17 @@ describe('message store', () => {
 		expect(store.message('3')).toBeUndefined();
 	});
 
+	it('evicts a message’s reaction sets with it, and keeps those of a message kept', () => {
+		const store = new ProtocolStore();
+		install(store, snapshot(2, 1), snapshot(8, 1, { body: { text: 'edited recently' } }), snapshot(3, 3));
+		for (const message of ['1', '3']) {
+			for (const set of decodeReactions({ log_id: '4', message_id: message, room_id: 'general', reactions: [{ from: { user_id: 'bob' }, emojis: ['👍'] }] })) store.putReaction(set);
+		}
+		store.evictBefore('general', '8');
+		expect(store.reactionSet('3', 'bob')).toBeUndefined();
+		expect(store.reactionSet('1', 'bob')?.emojis).toEqual(['👍']);
+	});
+
 	it('clears a room with its reaction sets but leaves other rooms alone', () => {
 		const store = new ProtocolStore();
 		install(store, snapshot(1), snapshot(2, 2, { room_id: 'other' }));
