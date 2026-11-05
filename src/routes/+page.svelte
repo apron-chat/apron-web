@@ -1069,17 +1069,31 @@
 		});
 	});
 
+	/**
+	 * The pane and the count of items last measured for filling it (below), while they still stand: the room is
+	 * another with each reaction, edit or receipt in it, which needs no measuring again. Not state, only a memo.
+	 */
+	let fillMeasured: string | undefined;
 	// A thread's or a room's first page may not fill the pane, leaving nothing to
 	// scroll back with: load older pages until it does or there are none. Not while
-	// some of what it has are still to render (`reveal`): they may fill it.
+	// some of what it has are still to render (`reveal`): they may fill it. Measuring
+	// lays the page out, so only once for each room and count of items.
 	$effect(() => {
 		const room = olderSource;
-		void timeline.length;
-		if (!room?.loaded || !room.olderAvailable || room.loadingOlder || !messageScroll || reveal.hidden > 0) return;
+		const length = timeline.length;
+		const scroller = messageScroll;
+		if (!room?.loaded || !room.olderAvailable || room.loadingOlder || !scroller || reveal.hidden > 0) {
+			fillMeasured = undefined;
+			return;
+		}
+		const measure = `${room.id} ${length}`;
+		if (measure === fillMeasured) return;
 		untrack(() => {
 			tick().then(() => {
 				// Not while the pane isn't laid out (a phone showing the rooms list): it would never fill, and load every page.
-				if (messageScroll && messageScroll.clientHeight > 0 && messageScroll.scrollHeight <= messageScroll.clientHeight + OLDER_REPLIES_MARGIN_PX) void loadOlderReplies();
+				if (messageScroll !== scroller || !scroller.clientHeight) return;
+				fillMeasured = measure;
+				if (scroller.scrollHeight <= scroller.clientHeight + OLDER_REPLIES_MARGIN_PX) void loadOlderReplies();
 			});
 		});
 	});
@@ -1172,21 +1186,41 @@
 		};
 	});
 
+	/**
+	 * The observer watching the pane's last row, kept while that row stays last: a reaction, an edit or a receipt
+	 * makes the timeline anew, and watching the same row again would look through every row to find it.
+	 */
+	let latestWatch: { observer: IntersectionObserver; row: HTMLElement; pane: string | undefined } | undefined;
+	function unwatchLatest(): void {
+		latestWatch?.observer.disconnect();
+		latestWatch = undefined;
+	}
+	$effect(() => unwatchLatest);
+	/** The timeline's last row, looked for from its end: each row is one of its children, or (a thread card) inside one. */
+	function lastRow(scroll: HTMLElement): HTMLElement | undefined {
+		for (let child = scroll.lastElementChild; child; child = child.previousElementSibling) {
+			const row = child.hasAttribute('data-timeline-item') ? child : child.querySelector('[data-timeline-item]');
+			if (row instanceof HTMLElement) return row;
+		}
+		return undefined;
+	}
+
 	$effect(() => {
 		const scroll = messageScroll;
 		const items = timeline;
 		const pane = paneRoom?.id;
+		// The same row still last, in the same pane: it is watched already. Another, and the one watched says nothing more.
+		if (scroll && latestWatch && latestWatch.row === lastRow(scroll) && latestWatch.pane === pane) return;
+		unwatchLatest();
 		if (!scroll) return;
-		let observer: IntersectionObserver | undefined;
 		const frame = requestAnimationFrame(() => {
-			const nodes = scroll.querySelectorAll<HTMLElement>('[data-timeline-item]');
-			const latest = nodes[nodes.length - 1];
+			const latest = lastRow(scroll);
 			if (!items.length || !latest) {
 				latestVisible = true;
 				latestVisibleIn = pane;
 				return;
 			}
-			observer = new IntersectionObserver((entries) => {
+			const observer = new IntersectionObserver((entries) => {
 				// An entry says where the latest was at a frame since gone: on a busy main thread several frames'
 				// entries arrive together, and the pane may have been pinned again before this runs. Out of view is
 				// checked against now.
@@ -1210,11 +1244,9 @@
 				}
 			}, { root: scroll });
 			observer.observe(latest);
+			latestWatch = { observer, row: latest, pane };
 		});
-		return () => {
-			cancelAnimationFrame(frame);
-			observer?.disconnect();
-		};
+		return () => cancelAnimationFrame(frame);
 	});
 
 	onMount(() => trackKeyboard());
@@ -2972,7 +3004,7 @@
 		if (!step || event.shiftKey) return;
 		event.preventDefault();
 		let rows = messageRows(messageScroll);
-		const next = stepMessage(rows, row, step, rowsPerPage(rows));
+		const next = stepMessage(rows, row, step, step === 'pageUp' || step === 'pageDown' ? rowsPerPage(rows) : 1);
 		if (next) {
 			focusMessage(next);
 			return;
