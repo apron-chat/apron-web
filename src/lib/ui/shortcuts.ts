@@ -31,8 +31,8 @@ export function shortcutGroups(mac: boolean): ShortcutGroup[] {
 		{
 			title: 'Messages',
 			shortcuts: [
-				// The composer's ↑ (Composer.svelte's `key`), then +page.svelte's timelineKey.
-				{ label: 'Go up to the messages', where: 'In an empty composer', keys: [['↑']] },
+				// The composer's ↑ (Composer.svelte's `key`), or windowKeydown's with nothing focused; then timelineKey.
+				{ label: 'Go to the messages', where: 'In an empty composer, or with nothing focused', keys: [['↑']] },
 				{ label: 'Previous or next message', where: 'On a message', keys: [['↑'], ['↓']] },
 				{ label: 'Back to the composer', where: 'On a message', keys: [['Esc']] },
 				{ label: 'Its actions', where: 'On a message', keys: [['Enter']] },

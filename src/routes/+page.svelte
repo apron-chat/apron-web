@@ -2955,7 +2955,9 @@
 			// In select mode Escape ends it (windowKeydown); the composer is the selection bar then.
 			if (selection.active) return;
 			event.preventDefault();
-			composer?.focus();
+			// Back to the composer; without one (a guest who only reads), off the messages.
+			if (composer) composer.focus();
+			else row.blur();
 			return;
 		}
 		if (event.key === 'Enter') {
@@ -2976,6 +2978,7 @@
 			return;
 		}
 		if (step === 'next' || step === 'last' || step === 'pageDown') {
+			// At the newest: the composer is next, where there is one.
 			composer?.focus();
 			return;
 		}
@@ -3393,6 +3396,13 @@
 	}
 
 	function windowKeydown(event: KeyboardEvent): void {
+		// ↑ or ↓ with the keyboard nowhere (a guest who only reads has no composer to go up from, and the page starts
+		// with nothing focused): onto the newest message, and from there the timeline's keys (timelineKey).
+		if ((event.key === 'ArrowUp' || event.key === 'ArrowDown') && (event.target === document.body || event.target === document.documentElement) &&
+			!event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.defaultPrevented && !modalOpen()) {
+			if (focusNewestMessage()) event.preventDefault();
+			return;
+		}
 		// The keyboard shortcuts, signed in, from anywhere on the page but another dialog (lib/ui/shortcuts.ts lists them).
 		// The key is read first, so typing calls nothing more here.
 		if ((event.key === '?' || event.key === '/') && client && !connectOpen && !event.defaultPrevented && shortcutsKey(event) && !modalOpen()) {

@@ -1299,12 +1299,13 @@ thread, or where the server grants you `add_members` (or lacks `ext:permissions`
 decides each (it adds no guests); the moves stand either way, and the toast says
 how many authors weren't added and why. Escape leaves select mode.
 
-**The keyboard among the messages.** ↑ in the empty composer puts the keyboard on the newest message (its row
-outlined, its toolbar showing, as on hover); from there ↑ and ↓ go from message to message, Home and End to the
+**The keyboard among the messages.** ↑ in the empty composer, or ↑ or ↓ with nothing focused (as a guest who only
+reads starts, with no composer), puts the keyboard on the newest message (its row outlined, its toolbar showing, as on
+hover); from there ↑ and ↓ go from message to message, Home and End to the
 oldest and newest drawn, and Page Up and Page Down a paneful at a time, keeping it in view. They go past system lines
 and notices, which have nothing to act on, and thread cards. ↑ at the oldest draws the rest of what's loaded, then
 loads older messages, as scrolling back does. ↓ at the newest, or Escape, gives the keyboard back to the composer
-(in select mode Escape ends it instead). On a message, `r` replies to it and `e` edits it when it is yours, as their
+(in select mode Escape ends it instead); without a composer, Escape takes the keyboard off the messages. On a message, `r` replies to it and `e` edits it when it is yours, as their
 toolbar buttons do, and Enter goes into its toolbar, where Escape comes back to the row; an edit opened on the message
 (`e`, or its **Edit**) gives the keyboard back to its row when it ends. Neither `r` nor `e` does anything in select
 mode, while it is being edited, or in a field (where they are letters), nor with Ctrl, Alt or ⌘. Clicking a message

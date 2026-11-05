@@ -17,7 +17,7 @@ test('? shows the keyboard shortcuts, but types a ? in a field; Ctrl+/ and the �
 		await page.keyboard.press('Shift+?');
 		await expect(shortcuts).toBeVisible();
 		await expect(shortcuts.getByRole('heading', { level: 3 })).toHaveText(['General', 'Composer', 'Messages', 'Rooms']);
-		await expect(shortcuts.locator('.ap-keys-row').filter({ hasText: 'Go up to the messages' })).toContainText('In an empty composer');
+		await expect(shortcuts.locator('.ap-keys-row').filter({ hasText: 'Go to the messages' })).toContainText('In an empty composer');
 		await page.keyboard.press('Escape');
 		await expect(shortcuts).toHaveCount(0);
 	});
@@ -331,5 +331,30 @@ test.describe('Alt+↑/↓ onto a room listed to join', () => {
 		await page.keyboard.press('Enter');
 		await preview.waitForSent('room_join', (params) => params.room_id === 'design');
 		await expect(page.getByRole('complementary', { name: 'Rooms' }).locator('[data-testid="room-list"] button.ap-room[data-room="design"]')).toBeVisible();
+	});
+});
+
+test.describe('a guest who only reads', () => {
+	test.use({ knobs: { seed: 'rich', permissions: { write: false } } });
+
+	test('↑ with nothing focused goes to the newest message, ↑ ↓ between them, Escape off them', async ({ preview, page }) => {
+		await preview.open();
+		await expect(preview.composer()).toHaveCount(0);
+		await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+		const focused = () => page.evaluate(() => (document.activeElement as HTMLElement | null)?.dataset.messageId);
+		const order = await page.getByTestId('message-list').locator('article.ap-msg[data-message-id]:not(.ap-msg-system)').evaluateAll((articles) => articles.map((article) => (article as HTMLElement).dataset.messageId));
+		await page.keyboard.press('ArrowUp');
+		expect(await focused()).toBe(order.at(-1));
+		await page.keyboard.press('ArrowUp');
+		expect(await focused()).toBe(order.at(-2));
+		await page.keyboard.press('ArrowDown');
+		await page.keyboard.press('ArrowDown');
+		// The newest, with no composer below it: it stays.
+		expect(await focused()).toBe(order.at(-1));
+		await page.keyboard.press('Escape');
+		expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+		// ↓ from nowhere goes there too.
+		await page.keyboard.press('ArrowDown');
+		expect(await focused()).toBe(order.at(-1));
 	});
 });
