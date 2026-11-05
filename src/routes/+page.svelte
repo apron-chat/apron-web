@@ -309,8 +309,6 @@
 	let displayName = $state('');
 	/** The `user_id`s the composer's chips mention (§3.5), sent as `body.mentions`. */
 	let composerMentions = $state<string[]>([]);
-	/** Link previews removed from the composer's draft, by URL. */
-	let composerDismissed = $state<string[]>([]);
 	let connectOpen = $state(false);
 	/** Disconnected from the server pane: the connect screen can't be cancelled back to it. */
 	let disconnected = $state(false);
@@ -2241,7 +2239,7 @@
 		const reply = drafts.reply;
 		const originKey = draftKey(roomId);
 		const mentions = composerMentions;
-		const dismissed = composerDismissed;
+		const dismissed = drafts.dismissed;
 		const action = composerAction(draft, { command: snapshot.capabilities.command, rooms: session.canManageRooms, members: !snapshot.memberChangesUnsupported, append: snapshot.capabilities['embed:append'] }, mentions);
 		if (action.kind === 'live') {
 			startLive(chat, paneRoom, reply);
@@ -2249,9 +2247,7 @@
 		}
 		// A draft given back keeps the link previews that were removed from it.
 		const restore = () => {
-			if (!drafts.restore(originKey, draft, reply)) return;
-			composerDismissed = dismissed;
-			composer?.focus();
+			if (drafts.restore(originKey, draft, reply, [], dismissed)) composer?.focus();
 		};
 		const options = { ...(reply ? { replyTo: reply } : {}), ...(mentions.length ? { mentions } : {}) };
 		if (action.kind === 'message') {
@@ -2397,7 +2393,7 @@
 		const refit = limits !== media.upload ? staged.map(({ file }) => prepareUpload(file, { limits })) : undefined;
 		const text = action.kind === 'message' ? action.text : draft;
 		const mentions = composerMentions;
-		const dismissed = composerDismissed;
+		const dismissed = drafts.dismissed;
 		const embeds = command ? [] : linkPreviews.embeds(text, dismissed);
 		const options = { ...(reply ? { replyTo: reply } : {}), ...(mentions.length ? { mentions } : {}), ...(embeds.length ? { embeds } : {}) };
 		clearComposer(roomId);
@@ -2413,9 +2409,7 @@
 		const files = readied.flatMap((result, index) => (result.status === 'fulfilled' ? [{ ...result.value, ...(staged[index].title ? { title: staged[index].title } : {}) }] : []));
 		const kept = staged.filter((_, index) => readied[index].status === 'fulfilled');
 		const restore = (back = kept) => {
-			if (!drafts.restore(originKey, draft, reply, back)) return;
-			composerDismissed = dismissed;
-			composer?.focus();
+			if (drafts.restore(originKey, draft, reply, back, dismissed)) composer?.focus();
 		};
 		// One `/emoji add` can't take is handed back with the draft, unsent, with the reason.
 		const refused = refit && readied.find((result): result is PromiseRejectedResult => result.status === 'rejected');
@@ -3750,7 +3744,7 @@
 					bind:this={composer}
 					bind:value={drafts.text}
 					bind:mentions={composerMentions}
-					bind:dismissed={composerDismissed}
+					bind:dismissed={drafts.dismissed}
 					placeholder={activeThread ? `Reply in ${threadTitle(activeThread)}` : `Message ${activeRoom.title}`}
 					disabled={!paneSteady || session.readOnly}
 					holdSend={!canCompose}

@@ -55,6 +55,25 @@ describe('PaneDrafts', () => {
 		expect([drafts.text, drafts.files.map(({ id }) => id)]).toEqual(['', ['b']]);
 	});
 
+	it('keeps each pane the link previews removed from its draft, until it is sent, and gives them back with a failed send', () => {
+		const drafts = new PaneDrafts();
+		drafts.open('lobby');
+		drafts.text = 'see https://example.com';
+		drafts.dismissed = ['https://example.com'];
+		drafts.open('thread');
+		expect(drafts.dismissed).toEqual([]);
+		drafts.open('lobby');
+		expect(drafts.dismissed).toEqual(['https://example.com']);
+		const dismissed = drafts.dismissed;
+		drafts.clear('lobby');
+		expect(drafts.dismissed).toEqual([]);
+		expect(drafts.restore('lobby', 'see https://example.com', undefined, [], dismissed)).toBe(true);
+		expect(drafts.dismissed).toEqual(['https://example.com']);
+		// Gone out as a live message: forgotten with the text.
+		drafts.forget('lobby');
+		expect(drafts.dismissed).toEqual([]);
+	});
+
 	it('keeps each pane its own staged files, removable and renamable before sending', () => {
 		const drafts = new PaneDrafts();
 		drafts.open('lobby');
