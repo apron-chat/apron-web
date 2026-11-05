@@ -26,5 +26,5 @@ export const reactorsPopover = part((m) => m.ReactorsPopover);
 export const serverPaneHost = part((m) => m.ServerPane);
 /** Not a component: `archiveExport.load()` gives `exportArchive`. */
 export const archiveExport = part((m) => m.exportArchive);
-/** svelte-dnd-action, for dragging rooms: `roomDrag.whenLoaded()` waits for it without fetching it (Sidebar's `reorderable`). */
-export const roomDrag = part(({ dndzone, DRAGGED_ELEMENT_ID, SHADOW_PLACEHOLDER_ITEM_ID, TRIGGERS }) => ({ dndzone, DRAGGED_ELEMENT_ID, SHADOW_PLACEHOLDER_ITEM_ID, TRIGGERS }));
+/** Not a component: `dragRooms`, for dragging rooms; `roomDrag.whenLoaded()` waits for it without fetching it (Sidebar's `reorderable`). */
+export const roomDrag = part((m) => m.dragRooms);
