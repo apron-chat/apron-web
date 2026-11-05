@@ -54,8 +54,10 @@ within 5 seconds is replaced as if it had closed, rather than looking connected
 for up to a whole ping interval after a laptop slept. For 3 minutes after a
 check replaced a socket, the next waits 30 seconds instead, so a slow network
 that outlasts 5 seconds isn't met with one new connection after another.
-Back after a minute or more away, or with the network back, the check also
-opens a second connection beside the first, which sends nothing: if the first
+Back after a minute or more away, or with the network back, a check that
+hears nothing within 2 seconds also opens a second connection beside the
+first, which sends nothing (none within 3 minutes of a socket replaced for
+staying quiet, so a flaky network has one connection at a time): if the first
 answers, the second closes unused; if the second's greeting arrives first (a
 whole handshake before one ping's answer), the first is gone, and the second
 takes over at once with its handshake already done, as it does when the check

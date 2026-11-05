@@ -259,6 +259,12 @@ export const OPENING_MS = 10_000;
  */
 export const STANDBY_AFTER_HIDDEN_MS = 60_000;
 /**
+ * How long such a probe waits for its answer before it opens the standby: a socket that is alive answers well within
+ * it, and opens none. Nor does a probe within `PROBE_PATIENT_FOR_MS` of a socket replaced for staying quiet: a flaky
+ * network gets one socket at a time.
+ */
+export const STANDBY_AFTER_MS = 2_000;
+/**
  * How often one room's read cursor goes to the server at most (`markRead`):
  * reading down a busy room sends a frame every ten seconds, not one a message.
  */
