@@ -493,7 +493,10 @@ describe('liveness pings', () => {
 		onTestFinished(() => quiet.stop());
 		await latest().greet([]);
 		listeners.get('online')?.();
+		vi.advanceTimersByTime(2_000);
 		expect(pings(latest())).toBe(0);
+		// Nor, with no probe, a standby beside it.
+		expect(FakeSocket.instances).toHaveLength(1);
 	});
 
 	it('follows a replacing server frame to its new interval, or to none where it does not ask', async () => {
@@ -537,117 +540,92 @@ describe('a connection that doesn’t come up', () => {
 		};
 	}
 
-	it('replaces a reconnect’s socket that is still opening after 10 s, instead of waiting on it however long', async () => {
+	it('gives each new socket 10 s to open and bring the server’s greeting, else replaces it, and 30 s for 3 minutes after', async () => {
 		let snapshot: ClientSnapshot | undefined;
 		startClient({ onSnapshot: (next) => (snapshot = next) });
-		await latest().greet([]);
-		latest().drop();
-		const stuck = await nextSocket(latest());
-		vi.advanceTimersByTime(9_999);
-		expect(stuck.readyState).toBe(FakeSocket.CONNECTING);
-		vi.advanceTimersByTime(1);
-		expect(stuck.readyState).toBe(FakeSocket.CLOSED);
-		expect(snapshot?.status).toBe('reconnecting');
-		const next = await nextSocket(stuck);
-		await next.greet([]);
-		expect(snapshot?.authenticated).toBe(true);
-	});
-
-	it('replaces one that opened but never brought the server’s greeting, and keeps one that did, however long it took', async () => {
-		const { reconnect } = startClient();
-		await latest().greet([]);
-		const silent = reconnect();
-		silent.open();
-		vi.advanceTimersByTime(10_000);
-		expect(silent.readyState).toBe(FakeSocket.CLOSED);
-		const slow = await nextSocket(silent);
-		vi.advanceTimersByTime(9_000);
-		slow.open();
-		slow.receive(server());
-		vi.advanceTimersByTime(60_000);
-		expect(slow.readyState).toBe(FakeSocket.OPEN);
-		expect(FakeSocket.latest()).toBe(slow);
-	});
-
-	it('gives the first connection the same 10 s', async () => {
-		let snapshot: ClientSnapshot | undefined;
-		startClient({ onSnapshot: (next) => (snapshot = next) });
+		// The first connection, never opening: dropped at 10 s, as if it had failed.
 		const first = latest();
-		vi.advanceTimersByTime(10_000);
+		vi.advanceTimersByTime(9_999);
+		expect(first.readyState).toBe(FakeSocket.CONNECTING);
+		vi.advanceTimersByTime(1);
 		expect(first.readyState).toBe(FakeSocket.CLOSED);
 		expect(snapshot?.status).toBe('reconnecting');
-		expect(await nextSocket(first)).not.toBe(first);
-	});
-
-	it('waits 30 s instead for a while after one ran out, so a slow network isn’t met with socket after socket', async () => {
-		startClient();
-		const first = latest();
-		vi.advanceTimersByTime(10_000);
+		// Soon after, the next waits 30 s: here it opens, and the server never greets it.
 		const second = await nextSocket(first);
+		second.open();
 		vi.advanceTimersByTime(29_999);
-		expect(second.readyState).toBe(FakeSocket.CONNECTING);
+		expect(second.readyState).toBe(FakeSocket.OPEN);
 		vi.advanceTimersByTime(1);
 		expect(second.readyState).toBe(FakeSocket.CLOSED);
+		// One greeted in time is kept, however long it took.
+		const third = await nextSocket(second);
+		vi.advanceTimersByTime(29_000);
+		await third.greet([]);
+		expect(snapshot?.authenticated).toBe(true);
+		// 3 minutes on, a reconnect's socket has 10 s again.
+		vi.advanceTimersByTime(180_000);
+		expect(latest()).toBe(third);
+		third.drop();
+		const fourth = await nextSocket(third);
+		vi.advanceTimersByTime(9_999);
+		expect(fourth.readyState).toBe(FakeSocket.CONNECTING);
+		vi.advanceTimersByTime(1);
+		expect(fourth.readyState).toBe(FakeSocket.CLOSED);
 	});
 
-	it('replaces one still opening at once when the page comes back after its wait ran out while hidden pages’ timers were held back', () => {
-		const { show, away } = page();
+	it('replaces one still opening at once when the page comes back after its wait ran out while hidden, or the network comes back', async () => {
+		const { away, online } = page();
 		startClient();
 		const first = latest();
-		// A glance away: the socket opening goes on.
+		// A glance away: the socket opening goes on. Hidden past its 10 s, with timers held back: it goes on return.
 		away(5_000);
 		expect(first.readyState).toBe(FakeSocket.CONNECTING);
 		away(5_000);
 		expect(first.readyState).toBe(FakeSocket.CLOSED);
-		show('visible');
-	});
-
-	it('replaces one still opening at once when the network comes back: it was opened on the network that went', () => {
-		const { online } = page();
-		startClient();
-		const first = latest();
+		// The network back: one opening was opened on the network that went, however new.
+		const second = await nextSocket(first);
 		online();
-		expect(first.readyState).toBe(FakeSocket.CLOSED);
+		expect(second.readyState).toBe(FakeSocket.CLOSED);
 	});
 
 	describe('back after a long absence', () => {
-		it('opens a standby beside the probed socket when no answer comes within 2 s, and closes it, unused, once the probed one answers', async () => {
-			const { away } = page();
+		it('opens a standby only when the probed socket hasn’t answered in 2 s, after a minute away or the network back, and closes it unused once it does', async () => {
+			const { away, online } = page();
 			const { socket } = startClient();
 			await socket.greet([], { ping: 30 });
+			const answer = () => socket.receive({ method: 'pong' });
 			// Away under a minute: a probe alone.
 			away(59_000);
 			expect(pings(socket)).toBe(1);
 			vi.advanceTimersByTime(2_000);
 			expect(FakeSocket.instances).toHaveLength(1);
-			socket.receive({ method: 'pong' });
-
+			answer();
+			// Away longer, and answered within 2 s: none.
+			away(5 * 60_000);
+			vi.advanceTimersByTime(1_500);
+			answer();
+			vi.advanceTimersByTime(5_000);
+			expect(FakeSocket.instances).toHaveLength(1);
+			// Not answered within 2 s: one, sending nothing, closed once the probed socket answers, which stays.
 			away(60_000);
-			expect(pings(socket)).toBe(2);
 			vi.advanceTimersByTime(1_999);
 			expect(FakeSocket.instances).toHaveLength(1);
 			vi.advanceTimersByTime(1);
 			expect(FakeSocket.instances).toHaveLength(2);
 			const standby = latest();
 			standby.open();
-			socket.receive({ method: 'pong' });
+			answer();
 			expect(standby.readyState).toBe(FakeSocket.CLOSED);
 			expect(standby.sent).toEqual([]);
-			// Past the probe's wait: kept.
 			vi.advanceTimersByTime(5_000);
 			expect(socket.readyState).toBe(FakeSocket.OPEN);
-			expect(FakeSocket.instances).toHaveLength(2);
-		});
-
-		it('opens none when the probed socket answers within 2 s', async () => {
-			const { away } = page();
-			const { socket } = startClient();
-			await socket.greet([], { ping: 30 });
-			away(5 * 60_000);
-			vi.advanceTimersByTime(1_500);
-			socket.receive({ method: 'pong' });
-			vi.advanceTimersByTime(10_000);
-			expect(FakeSocket.instances).toHaveLength(1);
+			// The network back does the same.
+			online();
+			vi.advanceTimersByTime(2_000);
+			expect(FakeSocket.instances).toHaveLength(3);
+			answer();
+			expect(latest().readyState).toBe(FakeSocket.CLOSED);
+			expect(socket.readyState).toBe(FakeSocket.OPEN);
 		});
 
 		it('opens none for a while after a socket was replaced for staying quiet: a flaky network gets one socket at a time', async () => {
@@ -655,11 +633,13 @@ describe('a connection that doesn’t come up', () => {
 			let snapshot: ClientSnapshot | undefined;
 			const { socket } = startClient({ onSnapshot: (next) => (snapshot = next) });
 			await socket.greet([], { ping: 30 });
-			// The network blinks: the probe goes unanswered, and its standby takes over.
+			// The network blinks: the probe goes unanswered, and its standby, still opening, takes over: no other opens.
 			online();
-			vi.advanceTimersByTime(5_000);
+			vi.advanceTimersByTime(2_000);
 			const second = latest();
+			vi.advanceTimersByTime(3_000);
 			expect(socket.readyState).toBe(FakeSocket.CLOSED);
+			expect(FakeSocket.instances).toHaveLength(2);
 			await second.greet([], { ping: 30 });
 			expect(snapshot?.authenticated).toBe(true);
 			// It blinks again, and again, within 3 minutes: each probe waits on its own socket, patiently, with no standby.
@@ -674,42 +654,7 @@ describe('a connection that doesn’t come up', () => {
 			expect(second.readyState).toBe(FakeSocket.OPEN);
 		});
 
-		it('takes the standby at once when its greeting comes before the probed socket answers: that one is gone', async () => {
-			const { away } = page();
-			let snapshot: ClientSnapshot | undefined;
-			const { socket } = startClient({ onSnapshot: (next) => (snapshot = next) });
-			await socket.greet([], { ping: 30 });
-			away(5 * 60_000);
-			vi.advanceTimersByTime(2_000);
-			const standby = latest();
-			standby.open();
-			standby.receive(server(30));
-			expect(socket.readyState).toBe(FakeSocket.CLOSED);
-			expect(standby.sent.map((frame) => frame.method)).toEqual(['auth']);
-			await standby.reply('auth', { you: { user_id: 'guest_1' } });
-			expect(snapshot?.authenticated).toBe(true);
-			expect(FakeSocket.instances).toHaveLength(2);
-			// It is the connection now: pinged, and nothing else opens.
-			vi.advanceTimersByTime(30_000);
-			expect(pings(standby)).toBe(1);
-			expect(FakeSocket.instances).toHaveLength(2);
-		});
-
-		it('takes the standby, still opening, when the probe runs out first', async () => {
-			const { away } = page();
-			const { socket } = startClient();
-			await socket.greet([], { ping: 30 });
-			away(5 * 60_000);
-			vi.advanceTimersByTime(2_000);
-			const standby = latest();
-			vi.advanceTimersByTime(3_000);
-			expect(socket.readyState).toBe(FakeSocket.CLOSED);
-			expect(FakeSocket.instances).toHaveLength(2);
-			await standby.greet([]);
-			expect(FakeSocket.instances).toHaveLength(2);
-		});
-
-		it('keeps the two apart: the standby changes nothing until it takes over, and the probed socket nothing after', async () => {
+		it('takes the standby over once its greeting comes before the probed socket answers, and keeps the two apart: the standby changes nothing before, the probed socket nothing after', async () => {
 			const { away } = page();
 			let snapshot: ClientSnapshot | undefined;
 			const { socket } = startClient({ onSnapshot: (next) => (snapshot = next) });
@@ -770,22 +715,6 @@ describe('a connection that doesn’t come up', () => {
 			expect(latest().sent).toEqual([]);
 		});
 
-		it('opens one when the network comes back too, and none where the server doesn’t ping', async () => {
-			const { online } = page();
-			const { client, socket } = startClient();
-			await socket.greet([], { ping: 30 });
-			online();
-			vi.advanceTimersByTime(2_000);
-			expect(FakeSocket.instances).toHaveLength(2);
-			client.stop();
-			expect(latest().readyState).toBe(FakeSocket.CLOSED);
-
-			const { socket: quiet } = startClient();
-			await quiet.greet([]);
-			online();
-			vi.advanceTimersByTime(2_000);
-			expect(FakeSocket.instances).toHaveLength(1);
-		});
 	});
 });
 
