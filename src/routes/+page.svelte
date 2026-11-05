@@ -91,7 +91,7 @@
 	import { receiptSettings } from '$lib/ui/receipt-settings.svelte';
 	import { onlyPreferencesDiffer, preferencesOpener } from '$lib/ui/preferences.svelte';
 	import { nextRoomRow } from '$lib/ui/room-steps';
-	import { isMessageRow, MESSAGE_STEPS, messageRows, stepMessage } from '$lib/ui/message-focus';
+	import { articleOf, isMessageRow, MESSAGE_STEPS, messageRows, rowControls, stepMessage, tabbableOutside, timelineItems } from '$lib/ui/message-focus';
 	import { buildRoomTimeline, newDividerBefore, steady, threadEntries, threadStartedFrom, threadDescriptionFor, threadTitleFor, type ThreadEntry, type TimelineItem } from '$lib/ui/timeline';
 	import { takeSignInLink } from '$lib/ui/sign-in-link';
 	import { SignInLinks } from '$lib/ui/link-controller.svelte';
@@ -324,8 +324,8 @@
 	let editFrom: 'row' | undefined;
 	/** The Edit form for the open room or thread (its title and description). */
 	let roomEditorOpen = $state(false);
-	/** Search local history is open (`SearchDialog`). */
-	let searchOpen = $state(false);
+	/** Search is open (`SearchDialog`), at Go to a Room or Thread or at Search Local History. */
+	let searchMode = $state<'rooms' | 'messages' | undefined>();
 	/** The keyboard shortcuts' overlay (`?`) is open. */
 	let shortcutsOpen = $state(false);
 	/**
@@ -1780,6 +1780,8 @@
 	let canSearch = $derived(Boolean(client) && session.ready);
 	/** Search's shortcut, as this platform writes it; none on a touch screen, which has no keys for it. */
 	const searchHint = globalThis.matchMedia?.('(pointer: coarse)').matches ? undefined : /Mac/.test(globalThis.navigator?.platform ?? '') ? '⌘F' : 'Ctrl+F';
+	/** The shortcuts of search's two modes, beside their names; none on a touch screen. */
+	const searchKeys = searchHint === undefined ? undefined : searchHint === '⌘F' ? { rooms: '⌘K', messages: '⌘F' } : { rooms: 'Ctrl K', messages: 'Ctrl F' };
 
 	/** What keeps this session's history on this device, if anything does: a session saved here, while keeping is on. */
 	function sessionKeeper(): HistoryKeeper | undefined {
@@ -1808,10 +1810,23 @@
 		linked = { server: client.url, room: message.room_id, message: message.message_id, searched: true };
 	}
 
+	/**
+	 * A room or thread picked in Go to a Room or Thread: one shown opens as a mention of it would; any other as a
+	 * link to it does, read without joining, under its room if it's a thread (`openLinked`).
+	 */
+	function openSwitched(roomId: string): void {
+		if (!client) return;
+		const room = session.rooms.find((candidate) => candidate.id === roomId);
+		if (room && (room.parentRoomId === undefined || session.rooms.some((candidate) => candidate.id === room.parentRoomId))) openMentionedRoom(roomId);
+		else linked = { server: client.url, room: roomId, searched: true };
+	}
+
 	/** Part of a link isn't here: the URL says where the page is instead, and a toast says what wasn't found. */
 	function abandonLink(missing: 'room' | 'thread' | 'message', searched = linked?.searched): void {
+		// A room or thread picked in Go to a Room or Thread is searched for with no message.
+		const found = linked?.message !== undefined;
 		linked = undefined;
-		feedback.error(!searched ? `The linked ${missing} isn’t available here.` : missing === 'message' ? 'That message is too far back to open here.' : `That message’s ${missing} isn’t available here.`);
+		feedback.error(!searched ? `The linked ${missing} isn’t available here.` : missing === 'message' ? 'That message is too far back to open here.' : found ? `That message’s ${missing} isn’t available here.` : `That ${missing} isn’t available here.`);
 		scrubUrl(addressOf(selectedRoomId, activeThread));
 	}
 
@@ -2942,25 +2957,105 @@
 		}).length - 1;
 	}
 
+	/** The last item of the timeline the keyboard was on, where Tab from outside comes back to; not state, only a memo. */
+	let lastItem: HTMLElement | undefined;
+	/** The latest key was Tab: a focus arriving in the timeline is Tab's, not a click's. */
+	let tabbing = false;
+	/** Where Shift+↑ ↓ began, which the selection runs from (Selection.extend). */
+	let selectAnchor: string | undefined;
+
 	/**
-	 * Keys on a message's row (the keyboard on the row itself; what's in it keeps its own): ↑ ↓, Home End and Page Up
-	 * Page Down move to another message, ↑ at the oldest drawing or loading older ones as scrolling back does, and ↓ at
-	 * the newest going back to the composer, as Escape does; Enter goes into its actions. `x`, `r` and `e` are the
-	 * row's own (Message.svelte).
+	 * Tab into the timeline (from the header, or Shift+Tab from the composer) lands on the item the keyboard was last on,
+	 * else the newest message, rather than on the first or last of its links: the timeline is a single Tab stop.
+	 */
+	function timelineFocusin(event: FocusEvent): void {
+		const target = event.target;
+		if (!(target instanceof HTMLElement) || !messageScroll) return;
+		if (timelineItems(messageScroll).includes(target)) lastItem = target;
+		const from = event.relatedTarget;
+		if (!tabbing || (from instanceof Node && messageScroll.contains(from)) || target.closest('[data-testid="message-editor"]')) return;
+		if (lastItem === target) return;
+		const back = lastItem?.isConnected && messageScroll.contains(lastItem) ? lastItem : messageRows(messageScroll).at(-1);
+		if (back && back !== target) focusMessage(back);
+	}
+
+	/**
+	 * Shift+↑ or Shift+↓ on a message: select mode picks from where the run began to the message the keyboard moves to,
+	 * the way a shift-click fills a range; stepping back gives them up again.
+	 */
+	function extendSelection(row: HTMLElement, step: 'previous' | 'next'): void {
+		if (!messageScroll || !paneRoom) return;
+		const items = timelineItems(messageScroll);
+		let next: HTMLElement | undefined = row;
+		do next = stepMessage(items, next, step);
+		while (next && !isMessageRow(next));
+		const here = messages.find((event) => event.message_id === row.dataset.messageId);
+		const there = next && messages.find((event) => event.message_id === next!.dataset.messageId);
+		if (!here || !canSelect(here) || !next || !there || !canSelect(there)) return;
+		if (!selection.active) {
+			beginSelect(here);
+			selectAnchor = here.message_id;
+		} else if (!selectAnchor || !selection.current?.ids.includes(selectAnchor)) {
+			// Select mode begun otherwise (`x`, a click): the run starts here.
+			selectAnchor = here.message_id;
+		}
+		selection.extend(selectAnchor ?? here.message_id, there.message_id, selectableOrder);
+		focusMessage(next);
+	}
+
+	/**
+	 * Keys in the timeline (where text is written, the keys are the field's):
+	 * - Tab and Shift+Tab go past it, a single stop.
+	 * - On an item (a message, a notice, a thread's card): ↑ ↓, Home End and Page Up Page Down move to another, ↑ at the
+	 *   oldest drawing or loading older ones as scrolling back does, ↓ at the newest going back to the composer, as
+	 *   Escape does. Shift+↑ ↓ on a message select from there.
+	 * - On a message: Enter goes into its toolbar, → into its links and buttons, where ← → go through them and Escape
+	 *   back to the row. `x`, `r` and `e` are the row's own (Message.svelte).
 	 */
 	async function timelineKey(event: KeyboardEvent): Promise<void> {
-		const row = event.target;
-		if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || !isMessageRow(row) || !messageScroll) return;
+		const target = event.target;
+		if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || !(target instanceof HTMLElement) || !messageScroll) return;
+		if (target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [data-testid="message-editor"]')) return;
+		if (event.key === 'Tab') {
+			const out = tabbableOutside(messageScroll, !event.shiftKey);
+			if (!out) return;
+			event.preventDefault();
+			out.focus();
+			return;
+		}
+		const row = articleOf(target);
+		// In a message's links and buttons.
+		if (row && target !== row) {
+			if (event.key === 'Escape') {
+				event.preventDefault();
+				row.focus();
+			} else if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && !event.shiftKey) {
+				event.preventDefault();
+				const controls = rowControls(row);
+				const at = controls.indexOf(target);
+				const to = event.key === 'ArrowRight' ? controls[at + 1] : at <= 0 ? row : controls[at - 1];
+				to?.focus();
+			}
+			return;
+		}
+		if (!timelineItems(messageScroll).includes(target)) return;
 		if (event.key === 'Escape') {
 			// In select mode Escape ends it (windowKeydown); the composer is the selection bar then.
 			if (selection.active) return;
 			event.preventDefault();
 			// Back to the composer; without one (a guest who only reads), off the messages.
 			if (composer) composer.focus();
-			else row.blur();
+			else target.blur();
 			return;
 		}
-		if (event.key === 'Enter') {
+		if (row && event.key === 'ArrowRight' && !event.shiftKey) {
+			const first = rowControls(row)[0];
+			if (!first) return;
+			event.preventDefault();
+			first.focus();
+			return;
+		}
+		if (row && event.key === 'Enter') {
 			if (selection.active) return;
 			const action = row.querySelector<HTMLElement>('.ap-msg-actions button');
 			if (!action) return;
@@ -2969,10 +3064,16 @@
 			return;
 		}
 		const step = MESSAGE_STEPS[event.key];
-		if (!step || event.shiftKey) return;
+		if (!step) return;
+		if (event.shiftKey) {
+			if (!isMessageRow(target) || (step !== 'previous' && step !== 'next')) return;
+			event.preventDefault();
+			extendSelection(target, step);
+			return;
+		}
 		event.preventDefault();
-		let rows = messageRows(messageScroll);
-		const next = stepMessage(rows, row, step, rowsPerPage(rows));
+		let items = timelineItems(messageScroll);
+		const next = stepMessage(items, target, step, rowsPerPage(items));
 		if (next) {
 			focusMessage(next);
 			return;
@@ -2986,15 +3087,15 @@
 		if (reveal.hidden > 0) {
 			reveal.from(0);
 			await tick();
-			rows = messageRows(messageScroll);
-			const older = stepMessage(rows, row, 'previous');
+			items = timelineItems(messageScroll);
+			const older = stepMessage(items, target, 'previous');
 			if (older) focusMessage(older);
 			return;
 		}
 		await loadOlderReplies();
-		rows = messageRows(messageScroll);
-		const older = stepMessage(rows, row, 'previous');
-		if (older && document.activeElement === row) focusMessage(older);
+		items = timelineItems(messageScroll);
+		const older = stepMessage(items, target, 'previous');
+		if (older && document.activeElement === target) focusMessage(older);
 	}
 
 	async function loadOlderReplies(): Promise<void> {
@@ -3396,6 +3497,7 @@
 	}
 
 	function windowKeydown(event: KeyboardEvent): void {
+		tabbing = event.key === 'Tab';
 		// ↑ or ↓ with the keyboard nowhere (a guest who only reads has no composer to go up from, and the page starts
 		// with nothing focused): onto the newest message, and from there the timeline's keys (timelineKey).
 		if ((event.key === 'ArrowUp' || event.key === 'ArrowDown') && (event.target === document.body || event.target === document.documentElement) &&
@@ -3422,11 +3524,12 @@
 			row.click();
 			return;
 		}
-		// Ctrl+F (⌘F on a Mac) searches local history, from anywhere on the page but another dialog; there, and
-		// before signing in, the browser finds in the page as usual. (Ctrl+K is kept for a quick switcher.)
-		if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'f' && canSearch && !modalOpen()) {
+		// Ctrl+F (⌘F on a Mac) searches local history, and Ctrl+K (⌘K) goes to a room or thread, from anywhere on the
+		// page but another dialog; there, and before signing in, the browser's keys are its own as usual. In search,
+		// either switches to its mode (SearchDialog).
+		if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && (event.key.toLowerCase() === 'f' || event.key.toLowerCase() === 'k') && canSearch && !modalOpen()) {
 			event.preventDefault();
-			searchOpen = true;
+			searchMode = event.key.toLowerCase() === 'k' ? 'rooms' : 'messages';
 			return;
 		}
 		// Escape in a dialog (the NewThreadDialog, the keyboard shortcuts) closes it and keeps the selection.
@@ -3440,7 +3543,7 @@
 	}
 </script>
 
-<svelte:window onkeydown={windowKeydown} onpaste={windowPaste} ondragover={refuseDrop} ondrop={refuseDrop} onfocus={() => { presence.focus(); refreshNotificationPermission(); }} onblur={() => presence.blur()} />
+<svelte:window onkeydown={windowKeydown} onpointerdowncapture={() => (tabbing = false)} onpaste={windowPaste} ondragover={refuseDrop} ondrop={refuseDrop} onfocus={() => { presence.focus(); refreshNotificationPermission(); }} onblur={() => presence.blur()} />
 <svelte:document onclick={mediaAskClick} onvisibilitychange={() => { presence.visibilityChanged(); refreshNotificationPermission(); if (document.visibilityState === 'hidden') { keepView(); void historyKeeper?.flush(); } }} />
 
 <svelte:head>
@@ -3555,7 +3658,7 @@
 				memberListToggle={!memberListWide}
 				{unreadElsewhere}
 				{mentionsElsewhere}
-				onsearch={canSearch ? () => (searchOpen = true) : undefined} {searchHint} onshortcuts={searchHint ? () => (shortcutsOpen = true) : undefined}
+				onsearch={canSearch ? () => (searchMode = 'messages') : undefined} {searchHint} onshortcuts={searchHint ? () => (shortcutsOpen = true) : undefined}
 				onback={openRooms} onroom={backToRoom} onedit={() => (roomEditorOpen = true)} onleave={leavePane} oncopylink={copyPaneLink} onjoin={joinPane} onmemberlist={toggleMemberList}
 				onmute={canMuteRoom ? mutePane : undefined}
 			/>
@@ -3596,7 +3699,7 @@
 			{#if olderLoading}<TimelineLoading top label={activeThread ? 'Loading earlier replies…' : 'Loading earlier messages…'} />{/if}
 			<!-- The log's rows take the keyboard (timelineKey): its keys move between them. -->
 			<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-			<div class={['ap-timeline', pickingRow && 'ap-timeline-picking']} bind:this={messageScroll} onscroll={trackScroll} onkeydown={timelineKey} {@attach markFirstMessages} data-testid="message-list" role="log" aria-live="polite" aria-label={`${activeThread ? threadTitle(activeThread) : activeRoom.title} messages`}>
+			<div class={['ap-timeline', pickingRow && 'ap-timeline-picking']} bind:this={messageScroll} onscroll={trackScroll} onkeydown={timelineKey} onfocusin={timelineFocusin} {@attach markFirstMessages} data-testid="message-list" role="log" aria-live="polite" aria-label={`${activeThread ? threadTitle(activeThread) : activeRoom.title} messages`}>
 				<FloatingDayPill label={floatingDay.label} shown={floatingDay.shown && !olderLoading} testid="floating-day" />
 				{#if snapshot.showReconnectDivider}
 					<TimelineDivider kind="gap" testid="reconnect-divider" />
@@ -3728,9 +3831,13 @@
 				oncreate={(thread) => createThread(start, thread)} onclose={() => (newThread = undefined)} />
 		{/key}
 	{/if}
-	{#if searchOpen && client && searchDialog.component}
+	{#if searchMode && client && searchDialog.component}
 		{@const SearchDialog = searchDialog.component}
-		<SearchDialog {client} keeper={sessionKeeper()} rooms={session.rooms} {roomSuggestions} initial={paneRoom ? `room:#${paneRoom.id} ` : ''} note={searchNote()} onopen={openFound} kept={historySettings.title} onhistory={showHistoryPreferences} onclose={() => (searchOpen = false)} />
+		<SearchDialog
+			{client} mode={searchMode} keeper={sessionKeeper()} rooms={session.rooms} listed={snapshot.directory} threadsListed={snapshot.threadDirectory} unread={unread.byRoom} mentions={mentions.byRoom}
+			openRoomId={activeRoom?.id} canList={session.canManageRooms} {roomSuggestions} initial={paneRoom ? `room:#${paneRoom.id} ` : ''} note={searchNote()} keys={searchKeys}
+			onopen={openFound} onopenroom={openSwitched} kept={historySettings.title} onhistory={showHistoryPreferences} onclose={() => (searchMode = undefined)}
+		/>
 	{/if}
 	{#if shortcutsOpen && shortcutsDialog.component}
 		{@const ShortcutsDialog = shortcutsDialog.component}

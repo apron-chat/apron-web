@@ -905,6 +905,14 @@ export class ChatClient {
 		return this.store.room(roomId);
 	}
 
+	/**
+	 * The record of every room this client holds one for, each room's latest: those listed or shown, and those whose
+	 * history this device kept, joined or not, for finding a room by name (`$lib/ui/room-search`).
+	 */
+	storedRooms(): RoomRecord[] {
+		return this.store.roomList();
+	}
+
 	/** Aggregated reactions for a message (undefined for tombstones or none). */
 	reactions(messageId: string): ReactionSummary[] | undefined {
 		return this.store.reactions(messageId, this.you?.user_id);

@@ -17,6 +17,7 @@ export function shortcutGroups(mac: boolean): ShortcutGroup[] {
 			shortcuts: [
 				// +page.svelte's windowKeydown.
 				{ label: 'Show keyboard shortcuts', keys: [['?'], [mod, '/']] },
+				{ label: 'Go to a room or thread', keys: [[mod, 'K']] },
 				{ label: 'Search local history', keys: [[mod, 'F']] }
 			]
 		},
@@ -35,11 +36,13 @@ export function shortcutGroups(mac: boolean): ShortcutGroup[] {
 				{ label: 'Go to the messages', where: 'In an empty composer, or with nothing focused', keys: [['↑']] },
 				{ label: 'Previous or next message', where: 'On a message', keys: [['↑'], ['↓']] },
 				{ label: 'Back to the composer', where: 'On a message', keys: [['Esc']] },
+				{ label: 'Its links and buttons', where: 'On a message', keys: [['←'], ['→']] },
 				{ label: 'Its actions', where: 'On a message', keys: [['Enter']] },
 				// Message.svelte's keydown.
 				{ label: 'Reply', where: 'On a message', keys: [['r']] },
 				{ label: 'Edit your message', where: 'On a message', keys: [['e']] },
-				{ label: 'Select it, to move it', where: 'On a message', keys: [['x']] }
+				{ label: 'Select it, to move it', where: 'On a message', keys: [['x']] },
+				{ label: 'Select up or down from it', where: 'On a message', keys: [[shift, '↑'], [shift, '↓']] }
 			]
 		},
 		{
@@ -49,7 +52,9 @@ export function shortcutGroups(mac: boolean): ShortcutGroup[] {
 				{ label: 'Previous or next room or thread', keys: [[alt, '↑'], [alt, '↓']] },
 				{ label: 'Previous or next room, past threads', keys: [[alt, shift, '↑'], [alt, shift, '↓']] },
 				// Sidebar.svelte's reorderKey.
-				{ label: 'Move a room up or down', where: 'On a room in the list', keys: [[alt, '↑'], [alt, '↓']] }
+				{ label: 'Move a room up or down', where: 'On a room in the list', keys: [[alt, '↑'], [alt, '↓']] },
+				// SearchDialog's fieldKey.
+				{ label: 'Search a room’s threads', where: 'On a room, in Go to a room or thread', keys: [['→']] }
 			]
 		}
 	];

@@ -2,6 +2,7 @@ import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
 import type { Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
+import { UPDATE_POLL_MS } from './src/lib/ui/update-poll';
 
 // Node's fs, without Node's types (the app has none): only to sort the test files below.
 const fsModule = 'node:fs';
@@ -70,8 +71,9 @@ export default defineConfig(({ command }) => {
 				},
 				// Strict (every route prerendered) where /__preview is: without it, that one route is left out on purpose.
 				adapter: adapter({ strict: preview }),
-				// Open tabs look for a newer deploy every 5 minutes and offer a reload (UpdateNotice).
-				version: { pollInterval: 5 * 60 * 1000 }
+				// Open tabs look for a newer deploy every 5 minutes, and on coming back after as long away, and offer a
+				// reload (UpdateNotice).
+				version: { pollInterval: UPDATE_POLL_MS }
 			})
 		],
 		test: {

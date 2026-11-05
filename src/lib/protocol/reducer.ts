@@ -169,6 +169,11 @@ export class ProtocolStore {
 		return this.roomRecords.get(roomId);
 	}
 
+	/** Every stored room record, each room's latest. */
+	roomList(): RoomRecord[] {
+		return [...this.roomRecords.values()];
+	}
+
 	message(messageId: string): MessageRecord | undefined {
 		return this.messageRecords.get(messageId);
 	}

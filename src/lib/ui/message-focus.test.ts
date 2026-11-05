@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest';
-import { isMessageRow, MESSAGE_STEPS, messageRows, stepMessage } from './message-focus';
+import { articleOf, isMessageRow, MESSAGE_STEPS, messageRows, stepMessage, timelineItems } from './message-focus';
 
 afterEach(() => (document.body.innerHTML = ''));
 
@@ -51,5 +51,14 @@ describe('stepMessage', () => {
 	it('maps the keys, Shift and the rest left to their owners', () => {
 		expect(MESSAGE_STEPS).toMatchObject({ ArrowUp: 'previous', ArrowDown: 'next', Home: 'first', End: 'last', PageUp: 'pageUp', PageDown: 'pageDown' });
 		expect(MESSAGE_STEPS.Enter).toBeUndefined();
+	});
+});
+
+describe('timelineItems', () => {
+	it('stops at messages and notices, and what between them takes the keyboard, not at what is in a message', () => {
+		const list = timeline('mntsm');
+		expect(timelineItems(list).map((item) => item.dataset.messageId ?? item.textContent)).toEqual(['0', '1', 'thread 2', '4']);
+		expect(articleOf(list.querySelector('article.ap-msg button')!)?.dataset.messageId).toBe('0');
+		expect(articleOf(list.querySelector('.ap-thread')!)).toBeUndefined();
 	});
 });
