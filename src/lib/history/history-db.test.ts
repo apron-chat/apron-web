@@ -139,6 +139,22 @@ describe('pruneHistory', () => {
 		expect(kept?.reactions).toEqual([]);
 		expect(kept?.memberships).toEqual([]);
 	});
+
+	it('drops what is old in a room rebuilt and not settled since, which has no sync to go by', async () => {
+		const db = await opened();
+		const joined = (log: string, room: string) => ({ log_id: log, room_id: room, user: ada, joined: true });
+		await writeHistory(db, write({
+			whole: [
+				{ room: 'general', messages: [message(at(400))], reactions: [], memberships: [joined(at(400), 'general'), joined(at(1), 'general')] },
+				{ room: 'counted', messages: [], reactions: [], memberships: [joined('3', 'counted')] }
+			],
+			rooms: [{ room: 'general', sync: { id: 'general', checkpoint: at(1) } }, { room: 'counted', sync: { id: 'counted', checkpoint: '9' } }]
+		}), new Set());
+		// Rebuilt: messages and sync go, memberships stay.
+		await writeHistory(db, write({ changes: [{ kind: 'clearRoom', room: 'general' }, { kind: 'clearRoom', room: 'counted' }] }), new Set(['general', 'counted']));
+		expect(await pruneHistory(db, now - 30 * day)).toBeDefined();
+		expect((await readKept(db))?.memberships).toEqual([joined('3', 'counted'), joined(at(1), 'general')]);
+	});
 });
 
 describe('scanMessages', () => {

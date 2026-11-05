@@ -462,8 +462,9 @@ export async function writeHistory(db: IDBDatabase, write: HistoryWrite, kept: R
  * Drops what is older than `cutoff` (epoch milliseconds, a `log_id` on servers whose `log_id`s are times): every
  * record logged before it, as a server that discards the start of its log does, so a reaction set logged before it
  * goes even when its message was edited since (a page from here, which starts at the cutoff, would never hold it).
- * Only in rooms whose positions read as times, so a server counting from 1 loses nothing. Resolves with the
- * version it moved from and to, when it dropped anything.
+ * Only in rooms whose positions read as times, so a server counting from 1 loses nothing: by its sync, or for a
+ * room without one (rebuilt, and not settled since, its memberships left), by the newest record it has. Resolves
+ * with the version it moved from and to, when it dropped anything.
  */
 export async function pruneHistory(db: IDBDatabase, cutoff: number): Promise<{ from: number; to: number } | undefined> {
 	const transaction = db.transaction(['meta', 'rooms', 'records'], 'readwrite', { durability: 'relaxed' });
@@ -472,7 +473,8 @@ export async function pruneHistory(db: IDBDatabase, cutoff: number): Promise<{ f
 	const rooms = await done(transaction.objectStore('rooms').getAll()) as RoomRow[];
 	// Every room's at once, not one after another: each request waits its turn on a busy page, as one loading does,
 	// and the transaction holds up every other read and write of what is kept until it is done.
-	const counts = rooms.filter(({ sync }) => timeLike(sync)).map(({ room }) => {
+	const counts = rooms.map(async ({ room, sync }) => {
+		if (sync ? !timeLike(sync) : !timeLikeLog(await newestLog(records, room))) return 0;
 		const range = roomRange(room, cutoff);
 		const counted = done(records.count(range));
 		records.delete(range);
@@ -485,6 +487,15 @@ export async function pruneHistory(db: IDBDatabase, cutoff: number): Promise<{ f
 	if (row) meta.put({ ...row, version: row.version + 1 }, META);
 	await finished;
 	return row && { from: row.version, to: row.version + 1 };
+}
+
+/** The `log_id` of the newest record kept of `room`, if any. */
+function newestLog(records: IDBObjectStore, room: string): Promise<string | undefined> {
+	return new Promise((resolve, reject) => {
+		const request = records.openKeyCursor(roomRange(room), 'prev');
+		request.onsuccess = () => resolve(request.result ? String((request.result.key as [string, number])[1]) : undefined);
+		request.onerror = () => reject(request.error);
+	});
 }
 
 /** What `writeHistory` throws when it would write over what is kept and nothing is: another tab forgot it. */
