@@ -334,6 +334,48 @@ describe('SessionView, snapshot by snapshot', () => {
 		cleanup();
 	});
 
+	it('keeps the uploads, waits, typing and listings while each says the same, though the client makes them afresh', () => {
+		const general = room('general', ['1']);
+		const upload = { status: 'uploading', progress: 0.5 } as never;
+		const listing = (id: string, members: string[]) => ({ id, title: id, record: {}, members: members.map((user_id) => ({ user_id })), joined: false }) as never;
+		const lobby = listing('lobby', []);
+		const thread = listing('thread_9', []);
+		const parts = (fields: Partial<ClientSnapshot> = {}) => live([general], {
+			uploads: { up_1: upload },
+			limits: { message: { until: 1000 } },
+			typing: [{ room: 'general', from: ada }],
+			directory: [{ ...(lobby as object) } as never],
+			threadDirectory: { general: [{ ...(thread as object) } as never] },
+			...fields
+		});
+		const session = new SessionView();
+		const chat = client();
+		session.apply(parts(), chat);
+		const seen = { uploads: 0, limits: 0, typing: 0, directory: 0, threadDirectory: 0 };
+		const cleanup = $effect.root(() => {
+			$effect(() => void (session.uploads, seen.uploads++));
+			$effect(() => void (session.limits, seen.limits++));
+			$effect(() => void (session.typing, seen.typing++));
+			$effect(() => void (session.directory, seen.directory++));
+			$effect(() => void (session.threadDirectory, seen.threadDirectory++));
+		});
+		flushSync();
+		const first = { ...seen };
+		session.apply(parts(), chat);
+		flushSync();
+		expect(seen).toEqual(first);
+		// Someone stops typing: only the typing changes.
+		session.apply(parts({ typing: [] }), chat);
+		flushSync();
+		expect(seen).toEqual({ ...first, typing: first.typing + 1 });
+		// The wait runs longer, and a listing changes.
+		session.apply(parts({ typing: [], limits: { message: { until: 2000 } }, directory: [listing('lobby', ['ada'])] }), chat);
+		flushSync();
+		expect(seen).toEqual({ ...first, typing: first.typing + 1, limits: first.limits + 1, directory: first.directory + 1 });
+		expect(session.limits?.message?.until).toBe(2000);
+		cleanup();
+	});
+
 	it('gives the held rooms by id while it shows them', () => {
 		const session = new SessionView();
 		session.prime(kept);

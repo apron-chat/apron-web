@@ -23,7 +23,19 @@ export const blankSnapshot = (): ClientSnapshot => ({
 });
 
 /** The same values in the same order, item by item: the same list, though the client made it afresh. */
-const sameItems = <T>(a: readonly T[] | undefined, b: readonly T[] | undefined): boolean => a === b || Boolean(a && b && a.length === b.length && a.every((item, index) => item === b[index]));
+const sameItems = <T>(a: readonly T[] | undefined, b: readonly T[] | undefined, same: (x: T, y: T) => boolean = (x, y) => x === y): boolean =>
+	a === b || Boolean(a && b && a.length === b.length && a.every((item, index) => same(item, b[index])));
+
+/** The same keys holding the same values, as `same` compares them: the same record, though the client made it afresh. */
+const sameEntries = <T>(a: Readonly<Record<string, T>> | undefined, b: Readonly<Record<string, T>> | undefined, same: (x: T, y: T) => boolean = (x, y) => x === y): boolean => {
+	if (a === b) return true;
+	if (!a || !b) return false;
+	const keys = Object.keys(a);
+	return keys.length === Object.keys(b).length && keys.every((key) => key in b && same(a[key], b[key]));
+};
+
+/** An object the client made afresh with the same fields holding the same values: a listing, a typing indicator, a wait. */
+const sameFields = (a: object, b: object): boolean => sameEntries(a as Record<string, unknown>, b as Record<string, unknown>);
 
 /** One listed room, as state of its own (`SnapshotParts.room`). */
 class RoomPart {
@@ -61,6 +73,13 @@ class SnapshotParts {
 	held = $state.raw<boolean | undefined>();
 	disconnectedAt = $state.raw<number | undefined>();
 	retryingSince = $state.raw<number | undefined>();
+	authBusy = $state.raw<boolean | undefined>();
+	showReconnectDivider = $state.raw(false);
+	uploads = $state.raw<ClientSnapshot['uploads']>({});
+	limits = $state.raw<ClientSnapshot['limits']>();
+	typing = $state.raw<ClientSnapshot['typing']>([]);
+	directory = $state.raw<ClientSnapshot['directory']>();
+	threadDirectory = $state.raw<ClientSnapshot['threadDirectory']>({});
 	/** Each room listed now, or before (then undefined), by id. Not state: only take() adds to it. */
 	private byId = new Map<string, RoomPart>();
 
@@ -105,6 +124,14 @@ class SnapshotParts {
 		this.held = next.held;
 		this.disconnectedAt = next.disconnectedAt;
 		this.retryingSince = next.retryingSince;
+		this.authBusy = next.authBusy;
+		this.showReconnectDivider = next.showReconnectDivider;
+		// Each made afresh with every snapshot: kept while it says the same.
+		if (!sameEntries(this.uploads, next.uploads)) this.uploads = next.uploads;
+		if (!sameEntries(this.limits, next.limits, sameFields)) this.limits = next.limits;
+		if (!sameItems(this.typing, next.typing, sameFields)) this.typing = next.typing;
+		if (!sameItems(this.directory, next.directory, sameFields)) this.directory = next.directory;
+		if (!sameEntries(this.threadDirectory, next.threadDirectory, (a, b) => sameItems(a, b, sameFields))) this.threadDirectory = next.threadDirectory;
 	}
 }
 
@@ -120,6 +147,35 @@ export class SessionView {
 	// Each is new, so whatever reads it is checked again with every one: the views here read its parts (`live`) instead.
 	snapshot = $state.raw<ClientSnapshot>(blankSnapshot());
 	private live = new SnapshotParts();
+	/**
+	 * Parts of the snapshot, each kept while it says the same (`SnapshotParts`): what reads one of these isn't checked
+	 * again with every message, as what reads `snapshot` is.
+	 */
+	get error(): string | undefined {
+		return this.live.error;
+	}
+	/** A sign-in is under way (a passkey's, or an approval's). */
+	get authBusy(): boolean {
+		return Boolean(this.live.authBusy);
+	}
+	get showReconnectDivider(): boolean {
+		return this.live.showReconnectDivider;
+	}
+	get uploads(): ClientSnapshot['uploads'] {
+		return this.live.uploads;
+	}
+	get limits(): ClientSnapshot['limits'] {
+		return this.live.limits;
+	}
+	get typing(): ClientSnapshot['typing'] {
+		return this.live.typing;
+	}
+	get directory(): ClientSnapshot['directory'] {
+		return this.live.directory;
+	}
+	get threadDirectory(): ClientSnapshot['threadDirectory'] {
+		return this.live.threadDirectory;
+	}
 	/** True once a dropped connection has stayed down for RECONNECT_STALL_MS while someone could see it. */
 	stalled = $state(false);
 	/**
@@ -226,7 +282,7 @@ export class SessionView {
 	 */
 	threadSource(roomId: string | undefined): { rooms: RoomSnapshot[]; directory: ClientSnapshot['threadDirectory'][string] | undefined } {
 		if (roomId !== undefined && this.activeRoomHeld && this.held) return { rooms: this.held.rooms, directory: this.held.threadDirectory?.[roomId] };
-		return { rooms: this.rooms.map((room) => this.currentCopy(room) ?? room), directory: roomId !== undefined ? this.snapshot.threadDirectory[roomId] : undefined };
+		return { rooms: this.rooms.map((room) => this.currentCopy(room) ?? room), directory: roomId !== undefined ? this.live.threadDirectory[roomId] : undefined };
 	}
 
 	/**

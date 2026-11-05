@@ -445,7 +445,7 @@
 
 	let snapshot = $derived(session.snapshot);
 	$effect(() => {
-		if (!snapshot.error) untrack(() => (dismissedError = undefined));
+		if (!session.error) untrack(() => (dismissedError = undefined));
 	});
 	/** The top-level room open in the pane (or behind the open thread). */
 	let activeRoom = $derived(session.activeRoom);
@@ -458,8 +458,8 @@
 	/** The sidebar lists joined threads, and a thread open without joining while it is open. */
 	let listedThreads = $derived(threads.filter((entry) => entry.joined || entry.id === activeThread));
 	/** The open thread, joined or read without joining; the client holds either as a room. */
-	let activeThreadEntry = $derived(activeThread && session.rooms.some((room) => room.id === activeThread) ? threads.find((entry) => entry.id === activeThread) : undefined);
-	let threadRoom = $derived(activeThreadEntry ? session.rooms.find((room) => room.id === activeThreadEntry.id) : undefined);
+	let activeThreadEntry = $derived(activeThread && session.room(activeThread) ? threads.find((entry) => entry.id === activeThread) : undefined);
+	let threadRoom = $derived(activeThreadEntry ? session.room(activeThreadEntry.id) : undefined);
 	/** The room the pane shows and the composer posts to: the open thread (itself a room), else the room. */
 	/**
 	 * The rooms whose thread listing (`room_list` with their `parent_room_id`) has settled on this connection.
@@ -523,12 +523,12 @@
 	let shownThreadRoom = $derived(session.heldCopy(threadRoom) ?? threadRoom);
 	let paneRoom = $derived(activeThread ? shownThreadRoom : activeRoom);
 	/** The live thread or room whose older pages load as the reader scrolls back: not a copy held from before. */
-	let olderSource = $derived(activeThread ? threadRoom : session.activeRoomHeld ? undefined : session.rooms.find((room) => room.id === session.activeRoomId));
+	let olderSource = $derived(activeThread ? threadRoom : session.activeRoomHeld ? undefined : session.room(session.activeRoomId));
 	/** What's new in the rooms and threads other than the one being read, as the rooms list counts it: the phone header's back button shows it. */
 	let unreadElsewhere = $derived(countElsewhere(unread.byRoom, paneRoom?.id));
 	let mentionsElsewhere = $derived(countElsewhere(mentions.byRoom, paneRoom?.id));
 	/** The waits the server asked for (`retry_after`) that are on, as the client holds them. */
-	let limits = $derived(snapshot.limits ?? {});
+	let limits = $derived(session.limits ?? {});
 	/** The pane's history waits out a refused `history`, which every room's history shares: it waits, then loads by itself. */
 	let historyWait = $derived(paneRoom?.limited ? limits.history : undefined);
 	/**
@@ -616,9 +616,9 @@
 		return (lastReceipts = steadyReceipts(lastReceipts, next));
 	});
 	/** The pane is live: its room is listed, and no sign-in is under way. */
-	let paneReady = $derived(Boolean(paneRoom && session.ready && !snapshot.authBusy));
+	let paneReady = $derived(Boolean(paneRoom && session.ready && !session.authBusy));
 	/** `paneReady`, or a quiet reconnect from it: what shows stays as it was, and what's asked waits for the connection. */
-	let paneSteady = $derived(Boolean(paneRoom && session.steady && !snapshot.authBusy));
+	let paneSteady = $derived(Boolean(paneRoom && session.steady && !session.authBusy));
 	/** Writing here: posting, replying, reacting, and editing threads. A guest who only reads can't. */
 	let canCompose = $derived(paneReady && !session.readOnly);
 	/** Live typing (`/live`), loaded the first time it is used: see `startLive`. */
@@ -636,12 +636,12 @@
 	let people = $derived(peopleIn([...(activeThread ? timelineMessages(activeRoom) : []), ...messages], session.you, paneRoom?.members));
 	let roomSuggestions = $derived.by(() => {
 		const rooms = new Map<string, { id: string; title: string }>();
-		for (const room of [...(snapshot.directory ?? []), ...Object.values(snapshot.threadDirectory).flat(), ...session.rooms]) {
+		for (const room of [...(session.directory ?? []), ...Object.values(session.threadDirectory).flat(), ...session.rooms]) {
 			rooms.set(room.id, { id: room.id, title: room.title });
 		}
 		return [...rooms.values()];
 	});
-	let typingNames = $derived(snapshot.typing
+	let typingNames = $derived(session.typing
 		.filter((entry) => entry.room === paneRoom?.id && entry.from.user_id !== session.you?.user_id)
 		.map((entry) => directory.name(entry.from)));
 	/** The first message after your read position, unless you wrote it or older unread ones are still to load: the New divider goes above it. */
@@ -697,7 +697,7 @@
 	let canEditPane = $derived(session.canManageRooms && !session.readOnly && Boolean(activeThread ? activeThreadEntry : activeRoom));
 	/** What the Edit form edits: the open thread, else the room; its title as written (`editableTitle`), so saving sends back every character. */
 	let editTarget = $derived(activeThread
-		? (activeThreadEntry ? { id: activeThreadEntry.id, title: editableTitle(session.rooms.find((room) => room.id === activeThreadEntry?.id) ?? activeThreadEntry), description: activeThreadEntry.description } : undefined)
+		? (activeThreadEntry ? { id: activeThreadEntry.id, title: editableTitle(session.room(activeThreadEntry.id) ?? activeThreadEntry), description: activeThreadEntry.description } : undefined)
 		: (activeRoom ? { id: activeRoom.id, title: editableTitle(activeRoom), description: activeRoom.description } : undefined));
 	/** Room and thread descriptions put away with their ×, on this device. */
 	let hiddenDescriptions = $state(loadHiddenDescriptions());
@@ -918,7 +918,7 @@
 			return;
 		}
 		if (!session.ready || !session.snapshot.roomsListed) return;
-		void [session.rooms, session.snapshot.directory, session.snapshot.threadDirectory[pending.room], activeRoom?.id, activeThread];
+		void [session.rooms, session.directory, session.threadDirectory[pending.room], activeRoom?.id, activeThread];
 		untrack(() => openLinked(pending));
 	});
 
@@ -2676,7 +2676,7 @@
 	}
 
 	/** The rooms and threads listed to join, by `room_id`, for links' cards: made once per snapshot, not per link. */
-	const listedRooms = $derived(new Map([...(snapshot.directory ?? []), ...Object.values(snapshot.threadDirectory).flat()].map((listing) => [listing.id, listing])));
+	const listedRooms = $derived(new Map([...(session.directory ?? []), ...Object.values(session.threadDirectory).flat()].map((listing) => [listing.id, listing])));
 
 	/** The room or thread a link to this server names, likewise: one joined, opened or listed here. */
 	function linkedRoom(link: ApronLink): LinkedRoom | undefined {
@@ -2718,7 +2718,7 @@
 			return client?.url;
 		},
 		get uploads() {
-			return snapshot.uploads;
+			return session.uploads;
 		}
 	};
 
@@ -3552,7 +3552,7 @@
 {#snippet editMessage(view: MessageView)}
 	{@const MessageEditor = messageEditor.component}
 	{@const event = rowEvent(view)}
-	{#if MessageEditor && event}<MessageEditor text={textOf(event)} embeds={embedsOf(event)} uploads={snapshot.uploads} mentions={event.body?.mentions} {people} rooms={roomSuggestions} onsave={(text, edits, mentions) => saveEdit(event, text, edits, mentions)} oncancel={endEdit} onmention={() => { if (!paneRoom?.joined) listMembers(MEMBERS_FRESH_MS); }} />{/if}
+	{#if MessageEditor && event}<MessageEditor text={textOf(event)} embeds={embedsOf(event)} uploads={session.uploads} mentions={event.body?.mentions} {people} rooms={roomSuggestions} onsave={(text, edits, mentions) => saveEdit(event, text, edits, mentions)} oncancel={endEdit} onmention={() => { if (!paneRoom?.joined) listMembers(MEMBERS_FRESH_MS); }} />{/if}
 {/snippet}
 <!-- The pane's history waiting as the server asked, where its messages will appear: it loads by itself at zero. -->
 {#snippet historyNotice()}{#if historyWait}<RateLimitNotice scope="history" until={historyWait.until} />{/if}{/snippet}
@@ -3662,7 +3662,7 @@
 			<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 			<div class={['ap-timeline', pickingRow && 'ap-timeline-picking']} bind:this={messageScroll} onscroll={trackScroll} onkeydown={timelineKey} {@attach markFirstMessages} data-testid="message-list" role="log" aria-live="polite" aria-label={`${activeThread ? threadTitle(activeThread) : activeRoom.title} messages`}>
 				<FloatingDayPill label={floatingDay.label} shown={floatingDay.shown && !olderLoading} testid="floating-day" />
-				{#if snapshot.showReconnectDivider}
+				{#if session.showReconnectDivider}
 					<TimelineDivider kind="gap" testid="reconnect-divider" />
 				{/if}
 				<!-- No messages yet: placeholders, not thread cards on their own. -->
@@ -3819,6 +3819,6 @@
 	{/if}
 	{#if reactorsPopover.once(Boolean(reactorsList.current), () => reactorsList.close(), reactorsList.current?.anchor)}{@const ReactorsPopover = reactorsPopover.component!}<ReactorsPopover />{/if}
 	<!-- While reconnecting, the banner at the top already says what went wrong (statusLabel). -->
-	<Toasts {feedback} error={snapshot.error && snapshot.error !== dismissedError && session.connection !== 'reconnecting' ? snapshot.error : undefined} ondismisserror={() => (dismissedError = snapshot.error)} />
+	<Toasts {feedback} error={session.error && session.error !== dismissedError && session.connection !== 'reconnecting' ? session.error : undefined} ondismisserror={() => (dismissedError = session.error)} />
 </AppShell>
 {/if}
