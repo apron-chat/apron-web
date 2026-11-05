@@ -15,8 +15,11 @@ import { tick } from 'svelte';
 export const CARRIED_ID = 'ap-room-carried';
 /** A room's row, which a press lifts it by: its threads, its + and its … keep their presses. */
 const ROW = 'button[data-room]';
-/** How far a finger moves before its hold is up for the touch to be a scroll. */
-const TOUCH_SLOP = 3;
+/**
+ * How far a finger moves before its hold is up for the touch to be a scroll: past a still finger's drift, and short of
+ * where a browser starts scrolling (Android's 8dp).
+ */
+const TOUCH_SLOP = 6;
 /** How near the sidebar's top or bottom the pointer brings more of the section into view, at most. */
 const EDGE = 30;
 
@@ -133,7 +136,8 @@ export function dragRooms(zone: HTMLElement, options: DragRoomsOptions): { destr
 		const unlisten = listen([
 			['touchmove', (move: TouchEvent) => {
 				const point = move.touches[0];
-				if (move.touches.length !== 1 || Math.abs(point.clientX - x) >= TOUCH_SLOP || Math.abs(point.clientY - y) >= TOUCH_SLOP) stop();
+				// A move the browser no longer lets be kept from scrolling is one it's already scrolling with, however short.
+				if (move.touches.length !== 1 || !move.cancelable || Math.hypot(point.clientX - x, point.clientY - y) >= TOUCH_SLOP) stop();
 			}, { passive: false }],
 			['touchend', stop], ['touchcancel', stop]
 		]);

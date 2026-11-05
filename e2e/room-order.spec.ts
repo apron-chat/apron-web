@@ -460,9 +460,15 @@ test.describe('room order, by touch', () => {
 			await expect(preview.heading()).toHaveText('general');
 			expect(await order(page)).toEqual(['general', 'engineering']);
 		});
-		await test.step('a room held lifts, and can then be dragged to another place', async () => {
+		await test.step('a room held lifts though its finger drifts a little, and can then be dragged to another place', async () => {
 			const from = await middle(page, 'engineering');
 			await touch('touchStart', from.x, from.y);
+			// A still finger's drift, a few pixels each way, isn't a scroll. Chromium keeps moves that short from the page
+			// (until one goes past its own scroll threshold, some 15px), so it's sent as Safari or Firefox would send it.
+			await row(page, 'engineering').evaluate((button, [x, y]) => {
+				const touch = new Touch({ identifier: 0, target: button, clientX: x, clientY: y });
+				button.dispatchEvent(new TouchEvent('touchmove', { bubbles: true, cancelable: true, touches: [touch], targetTouches: [touch], changedTouches: [touch] }));
+			}, [from.x + 3, from.y + 3]);
 			await expect(threadLists(page)).toHaveCount(0);
 			const to = await middle(page, 'general');
 			for (let i = 1; i <= 12; i++) await touch('touchMove', from.x, from.y + (to.top + 4 - from.y) * (i / 12));
