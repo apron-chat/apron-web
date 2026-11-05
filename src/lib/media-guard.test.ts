@@ -77,6 +77,7 @@ describe('markup from anyone else goes through the one sanitizer', () => {
 			'lib/design/components/EmbedHtml.svelte',
 			'lib/design/components/Message.svelte'
 		]);
-		expect(using(/\.innerHTML\s*=|insertAdjacentHTML|outerHTML\s*=/)).toEqual(['lib/protocol/sanitize.ts', 'lib/ui/highlight.ts']);
+		// And one reads a character reference for markdown-it (`&name;`, letters and digits only) in an inert document of its own.
+		expect(using(/\.innerHTML\s*=|insertAdjacentHTML|outerHTML\s*=/)).toEqual(['lib/protocol/entities-dom.ts', 'lib/protocol/sanitize.ts', 'lib/ui/highlight.ts']);
 	});
 });
