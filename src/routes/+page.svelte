@@ -309,8 +309,6 @@
 	let displayName = $state('');
 	/** The `user_id`s the composer's chips mention (§3.5), sent as `body.mentions`. */
 	let composerMentions = $state<string[]>([]);
-	/** Link previews removed from the composer's draft, by URL. */
-	let composerDismissed = $state<string[]>([]);
 	let connectOpen = $state(false);
 	/** Disconnected from the server pane: the connect screen can't be cancelled back to it. */
 	let disconnected = $state(false);
@@ -320,8 +318,6 @@
 	let passkeyUnavailable = $state<string | undefined>();
 	let highlightedId = $state<string | undefined>();
 	let editingId = $state<string | undefined>();
-	/** The edit was opened from its message (its Edit, or `e`): the keyboard goes back to the row when it ends. */
-	let editFrom: 'row' | undefined;
 	/** The Edit form for the open room or thread (its title and description). */
 	let roomEditorOpen = $state(false);
 	/** Search is open (`SearchDialog`), at Go to a Room or Thread or at Search Local History. */
@@ -449,7 +445,7 @@
 
 	let snapshot = $derived(session.snapshot);
 	$effect(() => {
-		if (!snapshot.error) untrack(() => (dismissedError = undefined));
+		if (!session.error) untrack(() => (dismissedError = undefined));
 	});
 	/** The top-level room open in the pane (or behind the open thread). */
 	let activeRoom = $derived(session.activeRoom);
@@ -462,8 +458,8 @@
 	/** The sidebar lists joined threads, and a thread open without joining while it is open. */
 	let listedThreads = $derived(threads.filter((entry) => entry.joined || entry.id === activeThread));
 	/** The open thread, joined or read without joining; the client holds either as a room. */
-	let activeThreadEntry = $derived(activeThread && session.rooms.some((room) => room.id === activeThread) ? threads.find((entry) => entry.id === activeThread) : undefined);
-	let threadRoom = $derived(activeThreadEntry ? session.rooms.find((room) => room.id === activeThreadEntry.id) : undefined);
+	let activeThreadEntry = $derived(activeThread && session.room(activeThread) ? threads.find((entry) => entry.id === activeThread) : undefined);
+	let threadRoom = $derived(activeThreadEntry ? session.room(activeThreadEntry.id) : undefined);
 	/** The room the pane shows and the composer posts to: the open thread (itself a room), else the room. */
 	/**
 	 * The rooms whose thread listing (`room_list` with their `parent_room_id`) has settled on this connection.
@@ -527,12 +523,12 @@
 	let shownThreadRoom = $derived(session.heldCopy(threadRoom) ?? threadRoom);
 	let paneRoom = $derived(activeThread ? shownThreadRoom : activeRoom);
 	/** The live thread or room whose older pages load as the reader scrolls back: not a copy held from before. */
-	let olderSource = $derived(activeThread ? threadRoom : session.activeRoomHeld ? undefined : session.rooms.find((room) => room.id === session.activeRoomId));
+	let olderSource = $derived(activeThread ? threadRoom : session.activeRoomHeld ? undefined : session.room(session.activeRoomId));
 	/** What's new in the rooms and threads other than the one being read, as the rooms list counts it: the phone header's back button shows it. */
 	let unreadElsewhere = $derived(countElsewhere(unread.byRoom, paneRoom?.id));
 	let mentionsElsewhere = $derived(countElsewhere(mentions.byRoom, paneRoom?.id));
 	/** The waits the server asked for (`retry_after`) that are on, as the client holds them. */
-	let limits = $derived(snapshot.limits ?? {});
+	let limits = $derived(session.limits ?? {});
 	/** The pane's history waits out a refused `history`, which every room's history shares: it waits, then loads by itself. */
 	let historyWait = $derived(paneRoom?.limited ? limits.history : undefined);
 	/**
@@ -620,9 +616,9 @@
 		return (lastReceipts = steadyReceipts(lastReceipts, next));
 	});
 	/** The pane is live: its room is listed, and no sign-in is under way. */
-	let paneReady = $derived(Boolean(paneRoom && session.ready && !snapshot.authBusy));
+	let paneReady = $derived(Boolean(paneRoom && session.ready && !session.authBusy));
 	/** `paneReady`, or a quiet reconnect from it: what shows stays as it was, and what's asked waits for the connection. */
-	let paneSteady = $derived(Boolean(paneRoom && session.steady && !snapshot.authBusy));
+	let paneSteady = $derived(Boolean(paneRoom && session.steady && !session.authBusy));
 	/** Writing here: posting, replying, reacting, and editing threads. A guest who only reads can't. */
 	let canCompose = $derived(paneReady && !session.readOnly);
 	/** Live typing (`/live`), loaded the first time it is used: see `startLive`. */
@@ -640,12 +636,12 @@
 	let people = $derived(peopleIn([...(activeThread ? timelineMessages(activeRoom) : []), ...messages], session.you, paneRoom?.members));
 	let roomSuggestions = $derived.by(() => {
 		const rooms = new Map<string, { id: string; title: string }>();
-		for (const room of [...(snapshot.directory ?? []), ...Object.values(snapshot.threadDirectory).flat(), ...session.rooms]) {
+		for (const room of [...(session.directory ?? []), ...Object.values(session.threadDirectory).flat(), ...session.rooms]) {
 			rooms.set(room.id, { id: room.id, title: room.title });
 		}
 		return [...rooms.values()];
 	});
-	let typingNames = $derived(snapshot.typing
+	let typingNames = $derived(session.typing
 		.filter((entry) => entry.room === paneRoom?.id && entry.from.user_id !== session.you?.user_id)
 		.map((entry) => directory.name(entry.from)));
 	/** The first message after your read position, unless you wrote it or older unread ones are still to load: the New divider goes above it. */
@@ -701,7 +697,7 @@
 	let canEditPane = $derived(session.canManageRooms && !session.readOnly && Boolean(activeThread ? activeThreadEntry : activeRoom));
 	/** What the Edit form edits: the open thread, else the room; its title as written (`editableTitle`), so saving sends back every character. */
 	let editTarget = $derived(activeThread
-		? (activeThreadEntry ? { id: activeThreadEntry.id, title: editableTitle(session.rooms.find((room) => room.id === activeThreadEntry?.id) ?? activeThreadEntry), description: activeThreadEntry.description } : undefined)
+		? (activeThreadEntry ? { id: activeThreadEntry.id, title: editableTitle(session.room(activeThreadEntry.id) ?? activeThreadEntry), description: activeThreadEntry.description } : undefined)
 		: (activeRoom ? { id: activeRoom.id, title: editableTitle(activeRoom), description: activeRoom.description } : undefined));
 	/** Room and thread descriptions put away with their ×, on this device. */
 	let hiddenDescriptions = $state(loadHiddenDescriptions());
@@ -922,7 +918,7 @@
 			return;
 		}
 		if (!session.ready || !session.snapshot.roomsListed) return;
-		void [session.rooms, session.snapshot.directory, session.snapshot.threadDirectory[pending.room], activeRoom?.id, activeThread];
+		void [session.rooms, session.directory, session.threadDirectory[pending.room], activeRoom?.id, activeThread];
 		untrack(() => openLinked(pending));
 	});
 
@@ -956,6 +952,22 @@
 		const room = paneRoom;
 		if (!room || newDivider.room !== room.id || !newDivider.fixed || newDivider.landed) return;
 		untrack(() => void landAtDivider(room.id));
+	});
+
+	// Back in view: whatever arrived while the page was hidden drew no frame, so the observer of the latest (which
+	// reports after one) hasn't said whether the latest is still on screen. Unless the pane follows the latest, the
+	// latest row is measured once now, before reading it marks anything read. Before the read below, in this order.
+	$effect.pre(() => {
+		if (!presence.visible) return;
+		untrack(() => {
+			const scroll = messageScroll;
+			const latest = scroll && !stickToBottom ? lastRow(scroll) : undefined;
+			if (!scroll || !latest) return;
+			const at = latest.getBoundingClientRect();
+			const box = scroll.getBoundingClientRect();
+			latestVisible = at.bottom > box.top && at.top < box.bottom;
+			latestVisibleIn = paneRoom?.id;
+		});
 	});
 
 	// Reading the latest message advances your read position, and your read cursor (capability `activity`),
@@ -1069,17 +1081,31 @@
 		});
 	});
 
+	/**
+	 * The pane and the count of items last measured for filling it (below), while they still stand: the room is
+	 * another with each reaction, edit or receipt in it, which needs no measuring again. Not state, only a memo.
+	 */
+	let fillMeasured: string | undefined;
 	// A thread's or a room's first page may not fill the pane, leaving nothing to
 	// scroll back with: load older pages until it does or there are none. Not while
-	// some of what it has are still to render (`reveal`): they may fill it.
+	// some of what it has are still to render (`reveal`): they may fill it. Measuring
+	// lays the page out, so only once for each room and count of items.
 	$effect(() => {
 		const room = olderSource;
-		void timeline.length;
-		if (!room?.loaded || !room.olderAvailable || room.loadingOlder || !messageScroll || reveal.hidden > 0) return;
+		const length = timeline.length;
+		const scroller = messageScroll;
+		if (!room?.loaded || !room.olderAvailable || room.loadingOlder || !scroller || reveal.hidden > 0) {
+			fillMeasured = undefined;
+			return;
+		}
+		const measure = `${room.id} ${length}`;
+		if (measure === fillMeasured) return;
 		untrack(() => {
 			tick().then(() => {
 				// Not while the pane isn't laid out (a phone showing the rooms list): it would never fill, and load every page.
-				if (messageScroll && messageScroll.clientHeight > 0 && messageScroll.scrollHeight <= messageScroll.clientHeight + OLDER_REPLIES_MARGIN_PX) void loadOlderReplies();
+				if (messageScroll !== scroller || !scroller.clientHeight) return;
+				fillMeasured = measure;
+				if (scroller.scrollHeight <= scroller.clientHeight + OLDER_REPLIES_MARGIN_PX) void loadOlderReplies();
 			});
 		});
 	});
@@ -1172,21 +1198,41 @@
 		};
 	});
 
+	/**
+	 * The observer watching the pane's last row, kept while that row stays last: a reaction, an edit or a receipt
+	 * makes the timeline anew, and watching the same row again would look through every row to find it.
+	 */
+	let latestWatch: { observer: IntersectionObserver; row: HTMLElement; pane: string | undefined } | undefined;
+	function unwatchLatest(): void {
+		latestWatch?.observer.disconnect();
+		latestWatch = undefined;
+	}
+	$effect(() => unwatchLatest);
+	/** The timeline's last row, looked for from its end: each row is one of its children, or (a thread card) inside one. */
+	function lastRow(scroll: HTMLElement): HTMLElement | undefined {
+		for (let child = scroll.lastElementChild; child; child = child.previousElementSibling) {
+			const row = child.hasAttribute('data-timeline-item') ? child : child.querySelector('[data-timeline-item]');
+			if (row instanceof HTMLElement) return row;
+		}
+		return undefined;
+	}
+
 	$effect(() => {
 		const scroll = messageScroll;
 		const items = timeline;
 		const pane = paneRoom?.id;
+		// The same row still last, in the same pane: it is watched already. Another, and the one watched says nothing more.
+		if (scroll && latestWatch && latestWatch.row === lastRow(scroll) && latestWatch.pane === pane) return;
+		unwatchLatest();
 		if (!scroll) return;
-		let observer: IntersectionObserver | undefined;
 		const frame = requestAnimationFrame(() => {
-			const nodes = scroll.querySelectorAll<HTMLElement>('[data-timeline-item]');
-			const latest = nodes[nodes.length - 1];
+			const latest = lastRow(scroll);
 			if (!items.length || !latest) {
 				latestVisible = true;
 				latestVisibleIn = pane;
 				return;
 			}
-			observer = new IntersectionObserver((entries) => {
+			const observer = new IntersectionObserver((entries) => {
 				// An entry says where the latest was at a frame since gone: on a busy main thread several frames'
 				// entries arrive together, and the pane may have been pinned again before this runs. Out of view is
 				// checked against now.
@@ -1210,11 +1256,9 @@
 				}
 			}, { root: scroll });
 			observer.observe(latest);
+			latestWatch = { observer, row: latest, pane };
 		});
-		return () => {
-			cancelAnimationFrame(frame);
-			observer?.disconnect();
-		};
+		return () => cancelAnimationFrame(frame);
 	});
 
 	onMount(() => trackKeyboard());
@@ -1382,6 +1426,7 @@
 			if (highlightTimer) clearTimeout(highlightTimer);
 			reveal.stop();
 			floatingDay.dispose();
+			heldTimeline?.release();
 			presence.dispose();
 			worker?.removeEventListener('message', notificationClicked);
 			if (permission) permission.onchange = null;
@@ -1528,15 +1573,18 @@
 		if (!room || !client) return;
 		const body = notificationBody(plainTextOf(event));
 		const id = accountPushId;
+		// Without a `push_id`, the server's address stands in for it: each tab of this server alerts once for a message.
+		const owner = id ?? client.url;
 		const target: NotificationTarget = {
 			tab: tabId, server: client.url, roomId: room.parentRoomId ?? room.id, ...(room.parentRoomId ? { threadId: room.id } : {}), messageId: event.message_id,
-			...(id ? { pushId: id, group: notificationGroup(id, room.id) } : {})
+			...(id ? { pushId: id } : {}), group: notificationGroup(owner, room.id)
 		};
 		const shown = await showNotification(notificationTitle(senderName(event), room), {
 			body: body || embedsLabel(event.body?.embeds) || 'New message',
-			// One per message, shared with the server's push of it (§4.9), which replaces it quietly;
-			// a newer message in the room closes it. Without a `push_id`, one per room.
-			...(id ? { tag: messageNotificationTag(id, event.message_id), renotify: false } : { tag: `apron:${client.url}:${room.id}`, renotify: true }),
+			// One per message, shared with the server's push of it (§4.9) and with this server's other tabs, the second
+			// replacing the first quietly; a newer message in the room closes it.
+			tag: messageNotificationTag(owner, event.message_id),
+			renotify: false,
 			data: target
 		}, () => openNotificationTarget(target));
 		if (!shown && mention) playPing();
@@ -1750,6 +1798,16 @@
 			return;
 		}
 		linked = undefined;
+		// On a phone the rooms list makes way for the pane, as picking a room does: its entry is the pane's now, so Back
+		// doesn't show it again. Opening another room or thread above took the entry already.
+		if (page.state.rooms) {
+			try {
+				replaceState(window.location.href, target.thread ? { room: target.room, thread: target.thread } : { room: target.room });
+			} catch {
+				// The router isn't started yet (in development): the list just stays its entry.
+			}
+		}
+		mobilePane = 'main';
 		if (target.message) void revealLinkedMessage(target.room, target.thread, target.message, () => abandonLink('message', target.searched));
 		if (target.user) void revealLinkedUser(target.thread ?? target.room, target.user);
 	}
@@ -2032,6 +2090,7 @@
 		mentions.clearUnseen();
 		mentions.clearRoom(roomId);
 		if (thread) mentions.clearRoom(thread);
+		floatingDay.hide();
 		stickToBottom = true;
 		reveal.from(timeline.length - FIRST_PAINT_ITEMS);
 		arriving = messages.length === 0;
@@ -2208,7 +2267,7 @@
 		const reply = drafts.reply;
 		const originKey = draftKey(roomId);
 		const mentions = composerMentions;
-		const dismissed = composerDismissed;
+		const dismissed = drafts.dismissed;
 		const action = composerAction(draft, { command: snapshot.capabilities.command, rooms: session.canManageRooms, members: !snapshot.memberChangesUnsupported, append: snapshot.capabilities['embed:append'] }, mentions);
 		if (action.kind === 'live') {
 			startLive(chat, paneRoom, reply);
@@ -2216,9 +2275,7 @@
 		}
 		// A draft given back keeps the link previews that were removed from it.
 		const restore = () => {
-			if (!drafts.restore(originKey, draft, reply)) return;
-			composerDismissed = dismissed;
-			composer?.focus();
+			if (drafts.restore(originKey, draft, reply, [], dismissed)) composer?.focus();
 		};
 		const options = { ...(reply ? { replyTo: reply } : {}), ...(mentions.length ? { mentions } : {}) };
 		if (action.kind === 'message') {
@@ -2364,7 +2421,7 @@
 		const refit = limits !== media.upload ? staged.map(({ file }) => prepareUpload(file, { limits })) : undefined;
 		const text = action.kind === 'message' ? action.text : draft;
 		const mentions = composerMentions;
-		const dismissed = composerDismissed;
+		const dismissed = drafts.dismissed;
 		const embeds = command ? [] : linkPreviews.embeds(text, dismissed);
 		const options = { ...(reply ? { replyTo: reply } : {}), ...(mentions.length ? { mentions } : {}), ...(embeds.length ? { embeds } : {}) };
 		clearComposer(roomId);
@@ -2380,9 +2437,7 @@
 		const files = readied.flatMap((result, index) => (result.status === 'fulfilled' ? [{ ...result.value, ...(staged[index].title ? { title: staged[index].title } : {}) }] : []));
 		const kept = staged.filter((_, index) => readied[index].status === 'fulfilled');
 		const restore = (back = kept) => {
-			if (!drafts.restore(originKey, draft, reply, back)) return;
-			composerDismissed = dismissed;
-			composer?.focus();
+			if (drafts.restore(originKey, draft, reply, back, dismissed)) composer?.focus();
 		};
 		// One `/emoji add` can't take is handed back with the draft, unsent, with the reason.
 		const refused = refit && readied.find((result): result is PromiseRejectedResult => result.status === 'rejected');
@@ -2636,7 +2691,7 @@
 	}
 
 	/** The rooms and threads listed to join, by `room_id`, for links' cards: made once per snapshot, not per link. */
-	const listedRooms = $derived(new Map([...(snapshot.directory ?? []), ...Object.values(snapshot.threadDirectory).flat()].map((listing) => [listing.id, listing])));
+	const listedRooms = $derived(new Map([...(session.directory ?? []), ...Object.values(session.threadDirectory).flat()].map((listing) => [listing.id, listing])));
 
 	/** The room or thread a link to this server names, likewise: one joined, opened or listed here. */
 	function linkedRoom(link: ApronLink): LinkedRoom | undefined {
@@ -2678,7 +2733,7 @@
 			return client?.url;
 		},
 		get uploads() {
-			return snapshot.uploads;
+			return session.uploads;
 		}
 	};
 
@@ -2721,10 +2776,7 @@
 			const event = rowEvent(view);
 			return event ? reactionsFor(event) : [];
 		}),
-		edit: onRow((event) => {
-			editingId = event.message_id;
-			editFrom = 'row';
-		}),
+		edit: onRow((event) => (editingId = event.message_id)),
 		delete: onRow(deleteMessage),
 		startThread: onRow(startThread),
 		copyLink: async (view) => {
@@ -2862,6 +2914,7 @@
 	function jumpToLatest(): void {
 		stickToBottom = true;
 		pins++;
+		floatingDay.hide();
 		mentions.clearUnseen();
 		scrollToLatest();
 	}
@@ -3073,7 +3126,7 @@
 		}
 		event.preventDefault();
 		let items = timelineItems(messageScroll);
-		const next = stepMessage(items, target, step, rowsPerPage(items));
+		const next = stepMessage(items, target, step, step === 'pageUp' || step === 'pageDown' ? rowsPerPage(items) : 1);
 		if (next) {
 			focusMessage(next);
 			return;
@@ -3110,6 +3163,8 @@
 			return; // The next scroll back tries again.
 		}
 		await tick();
+		// The pane went on to another room or thread meanwhile, in the same scroller: the place kept was the other's.
+		if (paneRoom?.id !== room.id) return;
 		keepPlace(scroller, top, height);
 	}
 
@@ -3242,18 +3297,18 @@
 		};
 	}
 
-	/** The edit ends, saved, cancelled or its message gone: the keyboard goes back to the message's row, once the editor's going has left it nowhere. */
+	/**
+	 * The edit ends, saved, cancelled or its message gone: the keyboard goes back to the message's row, where every
+	 * edit opens from (its Edit, or `e`), once the editor's going has left it nowhere.
+	 */
 	function endEdit(): void {
 		const id = editingId;
-		const from = editFrom;
 		editingId = undefined;
-		editFrom = undefined;
-		if (from === 'row' && id !== undefined) {
-			void tick().then(() => {
-				if (document.activeElement && document.activeElement !== document.body) return;
-				document.querySelector<HTMLElement>(`article[data-message-id="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
-			});
-		}
+		if (id === undefined) return;
+		void tick().then(() => {
+			if (document.activeElement && document.activeElement !== document.body) return;
+			document.querySelector<HTMLElement>(`article[data-message-id="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
+		});
 	}
 
 	/** Saves an edit: the new text, and any embeds removed or renamed in the editor, together. */
@@ -3459,7 +3514,7 @@
 	 */
 	function windowPaste(event: ClipboardEvent): void {
 		if (event.defaultPrevented || !canAttach) return;
-		if (inField(event.target)) return;
+		if (inField(keyOrigin(event))) return;
 		const files = pastedFiles(event.clipboardData);
 		if (!files.length) return;
 		event.preventDefault();
@@ -3483,6 +3538,14 @@
 		}
 	}
 
+	/**
+	 * What an event happened on: inside a shadow root (emoji-mart's picker), the element there, not its host, which
+	 * the event's `target` names once it is out of the shadow root, and which is no field.
+	 */
+	function keyOrigin(event: Event): EventTarget | null {
+		return event.composedPath()[0] ?? event.target;
+	}
+
 	/** Where text is written, whose keys are its own: `?` there is a character. */
 	function inField(target: EventTarget | null): boolean {
 		return target instanceof HTMLElement && (target.isContentEditable || target.closest('input, textarea, select') !== null);
@@ -3493,7 +3556,7 @@
 		if (event.altKey || event.isComposing) return false;
 		// With Shift too: on many layouts (German, Nordic, Spanish) `/` is Shift+7.
 		if (event.ctrlKey || event.metaKey) return event.key === '/';
-		return event.key === '?' && !inField(event.target);
+		return event.key === '?' && !inField(keyOrigin(event));
 	}
 
 	function windowKeydown(event: KeyboardEvent): void {
@@ -3517,7 +3580,8 @@
 		// moves it instead: the Sidebar's reorderKey takes it first. A room listed to join opens to read, as a click does.
 		// With nowhere to go (an end of the list), the key is the field's or the page's as usual.
 		if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown') && !event.ctrlKey && !event.metaKey && !event.defaultPrevented && client && !connectOpen && !modalOpen()) {
-			if (inField(event.target) && !(event.target as HTMLElement).closest('#message-input')) return;
+			const origin = keyOrigin(event);
+			if (inField(origin) && !(origin as HTMLElement).closest('#message-input')) return;
 			const row = nextRoomRow(document.querySelector('.ap-shell-side') ?? document, event.key === 'ArrowDown' ? 1 : -1, event.shiftKey);
 			if (!row) return;
 			event.preventDefault();
@@ -3591,7 +3655,7 @@
 {#snippet editMessage(view: MessageView)}
 	{@const MessageEditor = messageEditor.component}
 	{@const event = rowEvent(view)}
-	{#if MessageEditor && event}<MessageEditor text={textOf(event)} embeds={embedsOf(event)} uploads={snapshot.uploads} mentions={event.body?.mentions} {people} rooms={roomSuggestions} onsave={(text, edits, mentions) => saveEdit(event, text, edits, mentions)} oncancel={endEdit} onmention={() => { if (!paneRoom?.joined) listMembers(MEMBERS_FRESH_MS); }} />{/if}
+	{#if MessageEditor && event}<MessageEditor text={textOf(event)} embeds={embedsOf(event)} uploads={session.uploads} mentions={event.body?.mentions} {people} rooms={roomSuggestions} onsave={(text, edits, mentions) => saveEdit(event, text, edits, mentions)} oncancel={endEdit} onmention={() => { if (!paneRoom?.joined) listMembers(MEMBERS_FRESH_MS); }} />{/if}
 {/snippet}
 <!-- The pane's history waiting as the server asked, where its messages will appear: it loads by itself at zero. -->
 {#snippet historyNotice()}{#if historyWait}<RateLimitNotice scope="history" until={historyWait.until} />{/if}{/snippet}
@@ -3701,7 +3765,7 @@
 			<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 			<div class={['ap-timeline', pickingRow && 'ap-timeline-picking']} bind:this={messageScroll} onscroll={trackScroll} onkeydown={timelineKey} onfocusin={timelineFocusin} {@attach markFirstMessages} data-testid="message-list" role="log" aria-live="polite" aria-label={`${activeThread ? threadTitle(activeThread) : activeRoom.title} messages`}>
 				<FloatingDayPill label={floatingDay.label} shown={floatingDay.shown && !olderLoading} testid="floating-day" />
-				{#if snapshot.showReconnectDivider}
+				{#if session.showReconnectDivider}
 					<TimelineDivider kind="gap" testid="reconnect-divider" />
 				{/if}
 				<!-- No messages yet: placeholders, not thread cards on their own. -->
@@ -3794,7 +3858,7 @@
 					bind:this={composer}
 					bind:value={drafts.text}
 					bind:mentions={composerMentions}
-					bind:dismissed={composerDismissed}
+					bind:dismissed={drafts.dismissed}
 					placeholder={activeThread ? `Reply in ${threadTitle(activeThread)}` : `Message ${activeRoom.title}`}
 					disabled={!paneSteady || session.readOnly}
 					holdSend={!canCompose}
@@ -3862,6 +3926,6 @@
 	{/if}
 	{#if reactorsPopover.once(Boolean(reactorsList.current), () => reactorsList.close(), reactorsList.current?.anchor)}{@const ReactorsPopover = reactorsPopover.component!}<ReactorsPopover />{/if}
 	<!-- While reconnecting, the banner at the top already says what went wrong (statusLabel). -->
-	<Toasts {feedback} error={snapshot.error && snapshot.error !== dismissedError && session.connection !== 'reconnecting' ? snapshot.error : undefined} ondismisserror={() => (dismissedError = snapshot.error)} />
+	<Toasts {feedback} error={session.error && session.error !== dismissedError && session.connection !== 'reconnecting' ? session.error : undefined} ondismisserror={() => (dismissedError = session.error)} />
 </AppShell>
 {/if}

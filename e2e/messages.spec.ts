@@ -97,6 +97,62 @@ test.describe('the timeline at its latest', () => {
 	});
 });
 
+test.describe('the page shown again', () => {
+	test.use(DEVICES.desktop);
+
+	test('marks read only what is on screen: what came while it was hidden, below the latest it showed, stays unread', async ({ preview, page }) => {
+		// The tab's visibility is played: a test's page is never hidden. As a hidden one, it draws no frames meanwhile
+		// (`requestAnimationFrame` waits until it is shown), so nothing measures what arrives.
+		await page.addInitScript(() => {
+			let hidden = false;
+			const held = new Map<number, FrameRequestCallback>();
+			let heldId = 0;
+			// Taken when hidden: the fake clock (`preview.open`) puts its own in place after this script.
+			let request = window.requestAnimationFrame;
+			let cancel = window.cancelAnimationFrame;
+			Object.defineProperty(Document.prototype, 'visibilityState', { configurable: true, get: () => (hidden ? 'hidden' : 'visible') });
+			Object.defineProperty(Document.prototype, 'hidden', { configurable: true, get: () => hidden });
+			(window as unknown as { setHidden: (next: boolean) => void }).setHidden = (next) => {
+				hidden = next;
+				if (hidden) {
+					request = window.requestAnimationFrame;
+					cancel = window.cancelAnimationFrame;
+					window.requestAnimationFrame = (callback) => {
+						held.set(--heldId, callback);
+						return heldId;
+					};
+					window.cancelAnimationFrame = (id) => void held.delete(id);
+				} else {
+					window.requestAnimationFrame = request;
+					window.cancelAnimationFrame = cancel;
+				}
+				document.dispatchEvent(new Event('visibilitychange'));
+				if (hidden) return;
+				const callbacks = [...held.values()];
+				held.clear();
+				request((time) => callbacks.forEach((callback) => callback(time)));
+			};
+		});
+		const setHidden = (hidden: boolean) => page.evaluate((next) => (window as unknown as { setHidden: (next: boolean) => void }).setHidden(next), hidden);
+		await preview.open();
+		const list = page.getByTestId('message-list');
+		// A long message last, read: its top on screen, its end a way below, so the pane no longer follows the latest.
+		await preview.post('general', 'ada', Array.from({ length: 60 }, (_, n) => `Line ${n + 1}`).join('\n\n'));
+		await expect(preview.message('Line 60')).toBeVisible();
+		await list.evaluate((el) => el.scrollTo({ top: el.scrollHeight - el.clientHeight - 400 }));
+		await expect(preview.message('Line 60')).toBeInViewport();
+		await expect(page.getByTestId('jump-button')).toHaveCount(0);
+		await setHidden(true);
+		await preview.post('general', 'ada', 'While you were away');
+		await expect(preview.message('While you were away')).toHaveCount(1);
+		await setHidden(false);
+		await expect(page.getByTestId('jump-button')).toBeVisible();
+		// Left as it is, general still has it to read.
+		await preview.openRoom('engineering');
+		await expect(page.locator('[data-testid="room-list"] button[data-room="general"]').getByTestId('room-unread')).toHaveText('1');
+	});
+});
+
 test.describe('the timeline at its latest, dragged back slowly', () => {
 	test.use(DEVICES.phone);
 
