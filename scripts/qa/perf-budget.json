@@ -16,7 +16,7 @@
 		"load-busy": {
 			"requests": 20,
 			"startupJsKB": 878.8,
-			"domNodes": 1193,
+			"domNodes": 1149,
 			"layouts": 13,
 			"styleRecalcs": 16,
 			"calls": 1608665,
@@ -34,7 +34,7 @@
 		"load-phone-busy": {
 			"requests": 20,
 			"startupJsKB": 878.8,
-			"domNodes": 1194,
+			"domNodes": 1150,
 			"layouts": 9,
 			"styleRecalcs": 15,
 			"calls": 1241227,
@@ -92,7 +92,7 @@
 		}
 	},
 	"bundle": {
-		"jsGzipKB": 615.7,
+		"jsGzipKB": 605.3,
 		"cssGzipKB": 25.8
 	},
 	"production": {

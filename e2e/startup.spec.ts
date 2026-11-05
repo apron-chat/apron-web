@@ -12,10 +12,10 @@ import { DEVICES, expect, test } from './fixtures';
  */
 
 /**
- * Strings only the held chunks hold: svelte-dnd-action's dragged element's id (on-demand), the emoji picker's mount
- * (overlays). Not a class the layout's own code shares (the terminal viewer draws the image viewer's bar).
+ * Strings only the held chunks hold: the carried room's copy's id (`room-drag.ts`, on-demand), the emoji picker's
+ * mount (overlays). Not a class the layout's own code shares (the terminal viewer draws the image viewer's bar).
  */
-const HELD = /dnd-action-dragged-el|ap-emojipop-mount/;
+const HELD = /ap-room-carried|ap-emojipop-mount/;
 
 /** Holds the code that loads on demand until `release`; every other script goes through. */
 async function holdOnDemand(page: Page): Promise<{ release: () => Promise<void>; held: () => number }> {

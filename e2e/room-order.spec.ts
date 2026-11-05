@@ -1,6 +1,8 @@
 import type { BrowserContext, Page } from '@playwright/test';
-import { DRAGGED_ELEMENT_ID } from 'svelte-dnd-action';
 import { DEVICES, expect, test, type Preview } from './fixtures';
+
+/** The carried room's copy (`CARRIED_ID`, `$lib/ui/room-drag`). */
+const CARRIED_ID = 'ap-room-carried';
 
 /** The sidebar's top-level rooms in an order of your own: dragged by their rows, or moved with Alt+↑/↓. */
 
@@ -15,7 +17,7 @@ const deployThread = (page: Page) => threadLists(page).getByText('Deploy checkli
 const nextFrame = (page: Page) => page.evaluate(() => new Promise((done) => requestAnimationFrame(() => done(null))));
 
 /**
- * Waits until rooms can be dragged: svelte-dnd-action comes with the on-demand chunk, which the page fetches 2 s after it
+ * Waits until rooms can be dragged: the drag code comes with the on-demand chunk, which the page fetches 2 s after it
  * settles and once it's idle (up to 5 s more), past the default expect timeout (Sidebar's `reorderable`).
  */
 async function draggable(page: Page): Promise<void> {
@@ -57,7 +59,7 @@ async function liftBelowThreads(preview: Preview): Promise<void> {
 	await openGeneral(preview);
 	await row(page, 'engineering').evaluate((button) => button.scrollIntoView({ block: 'center' }));
 	const from = await middle(page, 'engineering');
-	const held = page.locator(`#${DRAGGED_ELEMENT_ID} button[data-room]`);
+	const held = page.locator(`#${CARRIED_ID} button[data-room]`);
 	await page.mouse.move(from.x, from.y);
 	await page.mouse.down();
 	await page.mouse.move(from.x, from.y - 10, { steps: 3 });
@@ -111,7 +113,7 @@ test.describe('room order, with a mouse', () => {
 		await page.mouse.move(700, 600, { steps: 10 });
 		await expect.poll(async () => {
 			const list = (await page.getByTestId('room-list').boundingBox())!;
-			const carried = (await page.locator(`#${DRAGGED_ELEMENT_ID}`).boundingBox())!;
+			const carried = (await page.locator(`#${CARRIED_ID}`).boundingBox())!;
 			return Math.abs(carried.x - list.x) <= 1 && carried.y + carried.height <= list.y + list.height + 1;
 		}).toBe(true);
 		await expect.poll(() => order(page)).toEqual(['engineering', 'general']);
@@ -121,7 +123,7 @@ test.describe('room order, with a mouse', () => {
 		await expect(row(page, 'general')).toBeFocused();
 	});
 
-	test('a room lifted and let go where it was, pressed without a left-button drag, or keyed on its block stays where it was; Alt+↑ and Alt+↓ move it, and a click opens it', async ({ preview, page }) => {
+	test('a room lifted and let go where it was, or pressed without a left-button drag, stays where it was; Alt+↑ and Alt+↓ move it, and a click opens it', async ({ preview, page }) => {
 		// It opens general itself; the steps after it carry on in the same sidebar.
 		await test.step('a room just below the open room’s threads stays under the pointer as they fold away, and where it’s let go as they come back', async () => {
 			await liftBelowThreads(preview);
@@ -139,16 +141,6 @@ test.describe('room order, with a mouse', () => {
 			await page.mouse.up();
 			await expect(threadLists(page)).toHaveCount(1);
 			expect(await privateRooms.evaluateAll((buttons) => buttons.map((button) => (button as HTMLElement).dataset.room))).toEqual(before);
-		});
-		await test.step('Space or Enter on a room’s block, focused by a click beside its buttons, leaves the threads as they are', async () => {
-			// The block the library makes of each room (with its threads) takes focus from a click that lands off its buttons.
-			await row(page, 'general').evaluate((button) => (button.closest('.ap-roomblock') as HTMLElement).focus());
-			for (const key of ['Space', 'Enter']) {
-				await page.keyboard.press(key);
-				await nextFrame(page);
-				await expect(threadLists(page)).toHaveCount(1);
-			}
-			expect(await order(page)).toEqual(['general', 'engineering']);
 		});
 		await test.step('pressing a thread and moving doesn’t carry its room', async () => {
 			const thread = (await deployThread(page).boundingBox())!;
@@ -235,7 +227,7 @@ test.describe('room order, in a short window', { tag: '@full' }, () => {
 				await page.waitForTimeout(100);
 			}
 			await expect.poll(async () => {
-				const carried = (await page.locator(`#${DRAGGED_ELEMENT_ID}`).boundingBox())!;
+				const carried = (await page.locator(`#${CARRIED_ID}`).boundingBox())!;
 				const list = (await page.getByTestId('room-list').boundingBox())!;
 				const middleY = carried.y + carried.height / 2;
 				return middleY >= list.y && middleY <= list.y + list.height;
@@ -335,7 +327,7 @@ test.describe('room order, in a short window with motion allowed', { tag: '@full
 					each();
 				}, { capture: true, once: true });
 			});
-		}, DRAGGED_ELEMENT_ID);
+		}, CARRIED_ID);
 		await page.mouse.up();
 		const scrolls = await page.evaluate(() => (window as unknown as { scrolls: Promise<number[]> }).scrolls);
 		expect(scrolls.length).toBeGreaterThan(0);
@@ -353,9 +345,8 @@ test.describe('room order, with pointer moves out of step with frames', { tag: '
 		await page.mouse.down();
 		await page.mouse.move(from.x, from.y + 12, { steps: 3 });
 		// Moves well off the list, more often than frames are drawn, as some browsers send them: right after each, before
-		// any frame (when the library may check where it is), the room is already back in the list's column. Every 3ms
-		// for half a second: some hundred moves, a few to each of some thirty frames, and at least two of the library's
-		// checks (every 200ms) among them.
+		// any frame, the room is still in the list's column. Every 3ms for half a second: some hundred moves, a few to
+		// each of some thirty frames.
 		const strays = await page.getByTestId('room-list').evaluate((list, id) => new Promise<number>((done) => {
 			let i = 0;
 			let stray = 0;
@@ -365,7 +356,7 @@ test.describe('room order, with pointer moves out of step with frames', { tag: '
 				if (Math.abs(carried.left - list.getBoundingClientRect().left) > 1) stray++;
 			}, 3);
 			setTimeout(() => (clearInterval(timer), done(stray)), 500);
-		}), DRAGGED_ELEMENT_ID);
+		}), CARRIED_ID);
 		expect(strays).toBe(0);
 		// The list has made way for it where it's seen, at the end, before it's let go.
 		await expect.poll(() => order(page)).toEqual(['engineering', 'general']);
@@ -458,6 +449,17 @@ test.describe('room order, by touch', () => {
 			await expect(threadLists(page)).toHaveCount(1);
 			expect(await order(page)).toEqual(['general', 'engineering']);
 		});
+		await test.step('a room held and let go without moving stays where it was, and isn’t opened', async () => {
+			const from = await middle(page, 'engineering');
+			await touch('touchStart', from.x, from.y);
+			await expect(threadLists(page)).toHaveCount(0);
+			await touch('touchEnd');
+			await expect(threadLists(page)).toHaveCount(1);
+			// The browser's own click after the hold, were it let through, would open it.
+			await page.waitForTimeout(300);
+			await expect(preview.heading()).toHaveText('general');
+			expect(await order(page)).toEqual(['general', 'engineering']);
+		});
 		await test.step('a room held lifts, and can then be dragged to another place', async () => {
 			const from = await middle(page, 'engineering');
 			await touch('touchStart', from.x, from.y);
@@ -487,11 +489,11 @@ test.describe('room order, by touch', () => {
 test.describe('folding a room on a phone', () => {
 	test.use(DEVICES.phone);
 
-	// A tap is one pick: were it two (svelte-dnd-action clicks after a tap, as the browser does), this fold would undo itself.
+	// A tap is one pick: were it two (the drag code clicking after a tap, as the browser does), this fold would undo itself.
 	test('tapping the open room folds its threads in the rooms list, which stays, its › going back to the room', async ({ preview, page }) => {
 		await preview.open('#room=general');
 		await preview.roomsPane();
-		// The library that would add the second click is there, so this checks the guard against it.
+		// The drag code that listens to the tap is there, so this checks it adds nothing to it.
 		await draggable(page);
 		await expect(threadLists(page)).toHaveCount(1);
 		await preview.press(row(page, 'general'));
