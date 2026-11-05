@@ -10,7 +10,7 @@
 			"domNodes": 537,
 			"layouts": 10,
 			"styleRecalcs": 18,
-			"calls": 216027,
+			"calls": 217235,
 			"heapMB": 8.4
 		},
 		"load-busy": {
@@ -97,7 +97,7 @@
 	},
 	"production": {
 		"startupFiles": 13,
-		"startupJsKB": 798.9,
-		"startupJsBrotliKB": 225.8
+		"startupJsKB": 807.5,
+		"startupJsBrotliKB": 228.5
 	}
 }
