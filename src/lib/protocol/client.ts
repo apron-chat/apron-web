@@ -3337,11 +3337,13 @@ export class ChatClient {
 				}
 				// A limit or timeout keeps the token: reconnect, after any retry_after, and resume again.
 				socket?.close(1000, 'resume failed');
-			} else if (cause instanceof RateLimitError) {
-				// A guest sign-in the server put off (`retry_after`, §1.1): left as it is, the connection
-				// would sit signed in as no one until the server drops it. Reconnect once the wait is
-				// over (`scheduleReconnect` honours it) and sign in as a guest again.
-				socket?.close(1000, 'guest sign-in limited');
+			} else if ((cause as Error & { code?: number }).code !== -32001) {
+				// A guest sign-in the server put off (`retry_after`, §1.1), that went unanswered, or that failed
+				// for a reason of the moment: left as it is, the connection would sit signed in as no one until
+				// the server drops it, and a late result is ignored. Reconnect, once any wait is over
+				// (`scheduleReconnect` honours it), and sign in as a guest again. Only `denied` stands: a server
+				// that will not have guests would refuse every attempt.
+				socket?.close(1000, cause instanceof RateLimitError ? 'guest sign-in limited' : 'guest sign-in failed');
 			}
 			this.emit();
 		});
