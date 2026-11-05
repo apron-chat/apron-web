@@ -17,7 +17,7 @@ test('? shows the keyboard shortcuts, but types a ? in a field; Ctrl+/ and the �
 		await page.keyboard.press('Shift+?');
 		await expect(shortcuts).toBeVisible();
 		await expect(shortcuts.getByRole('heading', { level: 3 })).toHaveText(['General', 'Composer', 'Messages', 'Rooms']);
-		await expect(shortcuts.locator('.ap-keys-row').filter({ hasText: 'Edit your last message' })).toContainText('In an empty composer');
+		await expect(shortcuts.locator('.ap-keys-row').filter({ hasText: 'Go to the messages' })).toContainText('In an empty composer');
 		await page.keyboard.press('Escape');
 		await expect(shortcuts).toHaveCount(0);
 	});
@@ -42,38 +42,78 @@ test('? shows the keyboard shortcuts, but types a ? in a field; Ctrl+/ and the �
 	});
 });
 
-test('↑ in the empty composer edits your last message, and Escape there cancels a reply', async ({ preview, page }) => {
+test('↑ in the empty composer goes up to the messages, ↑ ↓ move between them, and Escape there cancels a reply', async ({ preview, page }) => {
 	await preview.open();
 	const composer = preview.composer();
+	const focused = () => page.evaluate(() => (document.activeElement as HTMLElement | null)?.dataset.messageId);
+	const rows = () => page.getByTestId('message-list').locator('article.ap-msg[data-message-id]:not(.ap-msg-system)').evaluateAll((articles) => articles.map((article) => (article as HTMLElement).dataset.messageId));
 
-	await test.step('↑ edits your newest message, and the keyboard comes back to the composer as the edit ends', async () => {
+	await test.step('↑ goes to the newest message, ↑ ↓ from one to the next, ↓ at the newest back to the composer', async () => {
 		await composer.click();
 		await page.keyboard.type('first try');
 		await page.keyboard.press('Enter');
-		await expect(preview.message('first try')).toBeVisible();
+		const mine = preview.message('first try');
+		await expect(mine).toBeVisible();
 		await expect(composer).toHaveText('');
+		const order = await rows();
+		const newest = order.at(-1)!;
+		expect(await mine.getAttribute('data-message-id')).toBe(newest);
 
 		await page.keyboard.press('ArrowUp');
+		await expect(mine).toBeFocused();
+		// Its toolbar shows, as on hover.
+		await expect(mine.getByRole('button', { name: 'Reply to message', exact: true })).toBeVisible();
+		await page.keyboard.press('ArrowUp');
+		expect(await focused()).toBe(order.at(-2));
+		await page.keyboard.press('Home');
+		expect(await focused()).toBe(order[0]);
+		await page.keyboard.press('End');
+		expect(await focused()).toBe(newest);
+		await page.keyboard.press('ArrowDown');
+		await expect(composer).toBeFocused();
+	});
+
+	await test.step('a message arriving leaves the keyboard where it is; another room gives it back to the composer', async () => {
+		await page.keyboard.press('ArrowUp');
+		await page.keyboard.press('ArrowUp');
+		const on = await focused();
+		await preview.post('general', 'ada', 'Arriving meanwhile');
+		await expect(preview.message('Arriving meanwhile')).toBeVisible();
+		expect(await focused()).toBe(on);
+		await page.keyboard.press('Alt+ArrowDown');
+		await expect(composer).toBeFocused();
+		await preview.openRoom('general');
+		await composer.click();
+	});
+
+	await test.step('↑ then e edits it, and the keyboard comes back to it as the edit ends; Escape there is the composer', async () => {
+		// Ada's arrived since: two up.
+		const mine = preview.message('first try');
+		await page.keyboard.press('ArrowUp');
+		await page.keyboard.press('ArrowUp');
+		await expect(mine).toBeFocused();
+		await page.keyboard.press('e');
 		const editor = page.getByRole('textbox', { name: 'Edit message', exact: true });
 		await expect(editor).toBeFocused();
 		await expect(editor).toHaveText('first try');
-		await page.keyboard.press('Escape');
-		await expect(editor).toHaveCount(0);
-		await expect(composer).toBeFocused();
-
-		await page.keyboard.press('ArrowUp');
-		await expect(editor).toBeFocused();
 		await page.keyboard.type(', fixed');
 		await page.keyboard.press('Enter');
 		const edit = await preview.waitForSent('message', (params) => params.message_id !== undefined);
 		expect(edit.body.text).toBe('first try, fixed');
+		await expect(mine).toBeFocused();
+		// Enter goes into its actions, Escape back to the row, and Escape again to the composer.
+		await page.keyboard.press('Enter');
+		await expect(mine.locator('.ap-msg-actions button').first()).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(mine).toBeFocused();
+		await page.keyboard.press('Escape');
 		await expect(composer).toBeFocused();
 	});
 
 	await test.step('with a draft, ↑ stays the field\'s', async () => {
 		await page.keyboard.type('draft');
 		await page.keyboard.press('ArrowUp');
-		await expect(page.getByRole('textbox', { name: 'Edit message', exact: true })).toHaveCount(0);
+		await expect(composer).toBeFocused();
 		await expect(composer).toHaveText('draft');
 	});
 
@@ -175,7 +215,7 @@ test('r replies to the focused message, and e edits it when it is yours', async 
 	await expect(page.getByRole('textbox', { name: 'Edit message', exact: true })).toBeFocused();
 });
 
-test('the shortcuts keep out of what else is under way: a selection, an open edit, an end of the list', async ({ preview, page }) => {
+test('the shortcuts keep out of what else is under way: a selection, an edit, an end of the list', async ({ preview, page }) => {
 	await preview.open();
 	const shortcuts = page.getByRole('dialog', { name: 'Keyboard shortcuts' });
 	const editor = page.getByRole('textbox', { name: 'Edit message', exact: true });
@@ -194,20 +234,16 @@ test('the shortcuts keep out of what else is under way: a selection, an open edi
 		await expect(page.getByTestId('selection-bar')).toHaveCount(0);
 	});
 
-	await test.step('↑ with an edit open goes back to it, its words kept', async () => {
+	await test.step('in select mode Escape ends the selection, and the keys stay off the composer, which is the bar', async () => {
 		await composer.click();
 		await page.keyboard.type('to fix');
 		await page.keyboard.press('Enter');
 		await expect(preview.message('to fix')).toBeVisible();
 		await page.keyboard.press('ArrowUp');
-		await expect(editor).toBeFocused();
-		await page.keyboard.type(' later');
-		await composer.click();
-		await page.keyboard.press('ArrowUp');
-		await expect(editor).toBeFocused();
-		await expect(editor).toHaveText('to fix later');
+		await page.keyboard.press('x');
+		await expect(page.getByTestId('selection-bar')).toBeVisible();
 		await page.keyboard.press('Escape');
-		await expect(composer).toBeFocused();
+		await expect(page.getByTestId('selection-bar')).toHaveCount(0);
 	});
 
 	await test.step('an edit opened on the message with e gives the keyboard back to the message', async () => {
@@ -295,5 +331,30 @@ test.describe('Alt+↑/↓ onto a room listed to join', () => {
 		await page.keyboard.press('Enter');
 		await preview.waitForSent('room_join', (params) => params.room_id === 'design');
 		await expect(page.getByRole('complementary', { name: 'Rooms' }).locator('[data-testid="room-list"] button.ap-room[data-room="design"]')).toBeVisible();
+	});
+});
+
+test.describe('a guest who only reads', () => {
+	test.use({ knobs: { seed: 'rich', permissions: { write: false } } });
+
+	test('↑ with nothing focused goes to the newest message, ↑ ↓ between them, Escape off them', async ({ preview, page }) => {
+		await preview.open();
+		await expect(preview.composer()).toHaveCount(0);
+		await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+		const focused = () => page.evaluate(() => (document.activeElement as HTMLElement | null)?.dataset.messageId);
+		const order = await page.getByTestId('message-list').locator('article.ap-msg[data-message-id]:not(.ap-msg-system)').evaluateAll((articles) => articles.map((article) => (article as HTMLElement).dataset.messageId));
+		await page.keyboard.press('ArrowUp');
+		expect(await focused()).toBe(order.at(-1));
+		await page.keyboard.press('ArrowUp');
+		expect(await focused()).toBe(order.at(-2));
+		await page.keyboard.press('ArrowDown');
+		await page.keyboard.press('ArrowDown');
+		// The newest, with no composer below it: it stays.
+		expect(await focused()).toBe(order.at(-1));
+		await page.keyboard.press('Escape');
+		expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+		// ↓ from nowhere goes there too.
+		await page.keyboard.press('ArrowDown');
+		expect(await focused()).toBe(order.at(-1));
 	});
 });

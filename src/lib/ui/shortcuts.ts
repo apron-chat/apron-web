@@ -25,17 +25,21 @@ export function shortcutGroups(mac: boolean): ShortcutGroup[] {
 			shortcuts: [
 				// DraftField's keydown (enterAction), and the composer's own keys (Composer.svelte's `key`).
 				{ label: 'New line', keys: [[shift, 'Enter']] },
-				{ label: 'Edit your last message', where: 'In an empty composer', keys: [['↑']] },
 				{ label: 'Cancel the reply', where: 'While replying', keys: [['Esc']] }
 			]
 		},
 		{
 			title: 'Messages',
 			shortcuts: [
+				// The composer's ↑ (Composer.svelte's `key`), or windowKeydown's with nothing focused; then timelineKey.
+				{ label: 'Go to the messages', where: 'In an empty composer, or with nothing focused', keys: [['↑']] },
+				{ label: 'Previous or next message', where: 'On a message', keys: [['↑'], ['↓']] },
+				{ label: 'Back to the composer', where: 'On a message', keys: [['Esc']] },
+				{ label: 'Its actions', where: 'On a message', keys: [['Enter']] },
 				// Message.svelte's keydown.
-				{ label: 'Reply to a message', where: 'On a focused message', keys: [['r']] },
-				{ label: 'Edit your message', where: 'On a focused message', keys: [['e']] },
-				{ label: 'Select a message', where: 'On a focused message', keys: [['x']] }
+				{ label: 'Reply', where: 'On a message', keys: [['r']] },
+				{ label: 'Edit your message', where: 'On a message', keys: [['e']] },
+				{ label: 'Select it, to move it', where: 'On a message', keys: [['x']] }
 			]
 		},
 		{

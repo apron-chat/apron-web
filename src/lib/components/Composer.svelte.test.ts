@@ -40,23 +40,23 @@ describe('Composer', () => {
 		expect(oncancelreply).toHaveBeenCalledOnce();
 	});
 
-	it('↑ in the empty field edits your last message, and leaves the key alone with a draft, a modifier or nothing to edit', () => {
-		const onedit = vi.fn(() => true);
-		const empty = render({ value: '', onedit });
+	it('↑ in the empty field goes up to the messages, and leaves the key alone with a draft, a modifier or none to go to', () => {
+		const onup = vi.fn(() => true);
+		const empty = render({ value: '', onup });
 		expect(dom.press(empty.field, 'ArrowUp', { shiftKey: true })).toBe(true);
-		expect(onedit).not.toHaveBeenCalled();
+		expect(onup).not.toHaveBeenCalled();
 		expect(dom.press(empty.field, 'ArrowUp')).toBe(false);
-		expect(onedit).toHaveBeenCalledOnce();
+		expect(onup).toHaveBeenCalledOnce();
 		dom.unmount();
 
 		// A draft keeps ↑ for moving the caret.
-		const drafted = render({ onedit });
+		const drafted = render({ onup });
 		expect(dom.press(drafted.field, 'ArrowUp')).toBe(true);
-		expect(onedit).toHaveBeenCalledOnce();
+		expect(onup).toHaveBeenCalledOnce();
 		dom.unmount();
 
-		// Nothing to edit: the key is the field's.
-		const none = render({ value: '', onedit: () => false });
+		// No messages to go to: the key is the field's.
+		const none = render({ value: '', onup: () => false });
 		expect(dom.press(none.field, 'ArrowUp')).toBe(true);
 	});
 });

@@ -91,6 +91,7 @@
 	import { receiptSettings } from '$lib/ui/receipt-settings.svelte';
 	import { onlyPreferencesDiffer, preferencesOpener } from '$lib/ui/preferences.svelte';
 	import { nextRoomRow } from '$lib/ui/room-steps';
+	import { isMessageRow, MESSAGE_STEPS, messageRows, stepMessage } from '$lib/ui/message-focus';
 	import { buildRoomTimeline, newDividerBefore, steady, threadEntries, threadStartedFrom, threadDescriptionFor, threadTitleFor, type ThreadEntry, type TimelineItem } from '$lib/ui/timeline';
 	import { takeSignInLink } from '$lib/ui/sign-in-link';
 	import { SignInLinks } from '$lib/ui/link-controller.svelte';
@@ -319,8 +320,8 @@
 	let passkeyUnavailable = $state<string | undefined>();
 	let highlightedId = $state<string | undefined>();
 	let editingId = $state<string | undefined>();
-	/** Where the edit was opened: the keyboard goes back there when it ends (↑ in the composer, or the message's row). */
-	let editFrom: 'composer' | 'row' | undefined;
+	/** The edit was opened from its message (its Edit, or `e`): the keyboard goes back to the row when it ends. */
+	let editFrom: 'row' | undefined;
 	/** The Edit form for the open room or thread (its title and description). */
 	let roomEditorOpen = $state(false);
 	/** Search local history is open (`SearchDialog`). */
@@ -2912,6 +2913,90 @@
 	 * back near the top loads the page before it. The reader's place is kept:
 	 * whatever was on screen stays put while the older messages land above it.
 	 */
+	// --- The keyboard among the messages (lib/ui/message-focus.ts) ---
+
+	/**
+	 * Puts the keyboard on a message's row, in view, its toolbar showing as on hover: the least scroll that shows it
+	 * whole, or for one taller than the pane (a picture or two), its top, where its sender and toolbar are.
+	 */
+	function focusMessage(row: HTMLElement): void {
+		row.focus({ preventScroll: true });
+		row.scrollIntoView({ block: messageScroll && row.offsetHeight > messageScroll.clientHeight ? 'start' : 'nearest' });
+	}
+
+	/** ↑ in the empty composer: the keyboard goes to the newest message. False with none to go to. */
+	function focusNewestMessage(): boolean {
+		const newest = messageScroll ? messageRows(messageScroll).at(-1) : undefined;
+		if (!newest) return false;
+		focusMessage(newest);
+		return true;
+	}
+
+	/** How many rows fill the pane, for Page Up and Page Down (a measure taken only on the key). */
+	function rowsPerPage(rows: HTMLElement[]): number {
+		const pane = messageScroll?.getBoundingClientRect();
+		if (!pane) return 1;
+		return rows.filter((row) => {
+			const box = row.getBoundingClientRect();
+			return box.bottom > pane.top && box.top < pane.bottom;
+		}).length - 1;
+	}
+
+	/**
+	 * Keys on a message's row (the keyboard on the row itself; what's in it keeps its own): ↑ ↓, Home End and Page Up
+	 * Page Down move to another message, ↑ at the oldest drawing or loading older ones as scrolling back does, and ↓ at
+	 * the newest going back to the composer, as Escape does; Enter goes into its actions. `x`, `r` and `e` are the
+	 * row's own (Message.svelte).
+	 */
+	async function timelineKey(event: KeyboardEvent): Promise<void> {
+		const row = event.target;
+		if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || !isMessageRow(row) || !messageScroll) return;
+		if (event.key === 'Escape') {
+			// In select mode Escape ends it (windowKeydown); the composer is the selection bar then.
+			if (selection.active) return;
+			event.preventDefault();
+			// Back to the composer; without one (a guest who only reads), off the messages.
+			if (composer) composer.focus();
+			else row.blur();
+			return;
+		}
+		if (event.key === 'Enter') {
+			if (selection.active) return;
+			const action = row.querySelector<HTMLElement>('.ap-msg-actions button');
+			if (!action) return;
+			event.preventDefault();
+			action.focus();
+			return;
+		}
+		const step = MESSAGE_STEPS[event.key];
+		if (!step || event.shiftKey) return;
+		event.preventDefault();
+		let rows = messageRows(messageScroll);
+		const next = stepMessage(rows, row, step, rowsPerPage(rows));
+		if (next) {
+			focusMessage(next);
+			return;
+		}
+		if (step === 'next' || step === 'last' || step === 'pageDown') {
+			// At the newest: the composer is next, where there is one.
+			composer?.focus();
+			return;
+		}
+		// Past the oldest drawn: the rest of what's loaded first, then older pages, as scrolling back would.
+		if (reveal.hidden > 0) {
+			reveal.from(0);
+			await tick();
+			rows = messageRows(messageScroll);
+			const older = stepMessage(rows, row, 'previous');
+			if (older) focusMessage(older);
+			return;
+		}
+		await loadOlderReplies();
+		rows = messageRows(messageScroll);
+		const older = stepMessage(rows, row, 'previous');
+		if (older && document.activeElement === row) focusMessage(older);
+	}
+
 	async function loadOlderReplies(): Promise<void> {
 		const room = olderSource;
 		if (!client || !room || !messageScroll || !room.olderAvailable || room.loadingOlder) return;
@@ -3056,34 +3141,13 @@
 		};
 	}
 
-	/**
-	 * ↑ in the empty composer: edits your newest message in the pane that you can, as its Edit would; with an edit
-	 * already open, the keyboard goes back to it, its words kept. False when there's nothing to edit.
-	 */
-	function editLast(): boolean {
-		if (editingId !== undefined) {
-			const field = document.querySelector<HTMLElement>('[data-testid="message-editor"] [role="textbox"]');
-			field?.focus();
-			return field !== null;
-		}
-		const event = messages.findLast((candidate) => capsFor(candidate).edit);
-		if (!event) return false;
-		editingId = event.message_id;
-		editFrom = 'composer';
-		return true;
-	}
-
-	/**
-	 * The edit ends, saved, cancelled or its message gone: the keyboard goes back to the composer when ↑ there opened
-	 * it, else to the message's row, once the editor's going has left it nowhere.
-	 */
+	/** The edit ends, saved, cancelled or its message gone: the keyboard goes back to the message's row, once the editor's going has left it nowhere. */
 	function endEdit(): void {
 		const id = editingId;
 		const from = editFrom;
 		editingId = undefined;
 		editFrom = undefined;
-		if (from === 'composer') composer?.focus();
-		else if (from === 'row' && id !== undefined) {
+		if (from === 'row' && id !== undefined) {
 			void tick().then(() => {
 				if (document.activeElement && document.activeElement !== document.body) return;
 				document.querySelector<HTMLElement>(`article[data-message-id="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
@@ -3332,6 +3396,13 @@
 	}
 
 	function windowKeydown(event: KeyboardEvent): void {
+		// ↑ or ↓ with the keyboard nowhere (a guest who only reads has no composer to go up from, and the page starts
+		// with nothing focused): onto the newest message, and from there the timeline's keys (timelineKey).
+		if ((event.key === 'ArrowUp' || event.key === 'ArrowDown') && (event.target === document.body || event.target === document.documentElement) &&
+			!event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.defaultPrevented && !modalOpen()) {
+			if (focusNewestMessage()) event.preventDefault();
+			return;
+		}
 		// The keyboard shortcuts, signed in, from anywhere on the page but another dialog (lib/ui/shortcuts.ts lists them).
 		// The key is read first, so typing calls nothing more here.
 		if ((event.key === '?' || event.key === '/') && client && !connectOpen && !event.defaultPrevented && shortcutsKey(event) && !modalOpen()) {
@@ -3523,7 +3594,9 @@
 
 			<!-- Outside the log, so it's announced once as a status rather than as an entry each time older messages load. -->
 			{#if olderLoading}<TimelineLoading top label={activeThread ? 'Loading earlier replies…' : 'Loading earlier messages…'} />{/if}
-			<div class={['ap-timeline', pickingRow && 'ap-timeline-picking']} bind:this={messageScroll} onscroll={trackScroll} {@attach markFirstMessages} data-testid="message-list" role="log" aria-live="polite" aria-label={`${activeThread ? threadTitle(activeThread) : activeRoom.title} messages`}>
+			<!-- The log's rows take the keyboard (timelineKey): its keys move between them. -->
+			<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+			<div class={['ap-timeline', pickingRow && 'ap-timeline-picking']} bind:this={messageScroll} onscroll={trackScroll} onkeydown={timelineKey} {@attach markFirstMessages} data-testid="message-list" role="log" aria-live="polite" aria-label={`${activeThread ? threadTitle(activeThread) : activeRoom.title} messages`}>
 				<FloatingDayPill label={floatingDay.label} shown={floatingDay.shown && !olderLoading} testid="floating-day" />
 				{#if snapshot.showReconnectDivider}
 					<TimelineDivider kind="gap" testid="reconnect-divider" />
@@ -3629,7 +3702,7 @@
 					{people}
 					rooms={roomSuggestions}
 					reply={drafts.reply ? replyPreview(drafts.reply) : undefined}
-					oninput={composerInput} onsend={sendMessage} files={drafts.files} onfiles={stageFiles} onunstage={(id) => drafts.unstage(id)} onrename={(id, title) => drafts.rename(id, title)} oncancelreply={cancelReply} onedit={editLast}
+					oninput={composerInput} onsend={sendMessage} files={drafts.files} onfiles={stageFiles} onunstage={(id) => drafts.unstage(id)} onrename={(id, title) => drafts.rename(id, title)} oncancelreply={cancelReply} onup={focusNewestMessage}
 					onmention={() => { if (!paneRoom?.joined) listMembers(MEMBERS_FRESH_MS); }}
 					waitUntil={composerWait}
 				/>
