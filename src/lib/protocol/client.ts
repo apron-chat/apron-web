@@ -2739,11 +2739,6 @@ export class ChatClient {
 		if (failures.length) throw new Error(failures[0]);
 	}
 
-	/** Forget a failed upload's state once the UI has shown it. */
-	dismissUpload(embedId: string): void {
-		if (this.uploads.delete(embedId)) this.emit();
-	}
-
 	/**
 	 * Loads a room's history (§4.3). Threads and rooms opened without joining
 	 * never recover automatically: call this when one is opened (a joined
@@ -2827,15 +2822,15 @@ export class ChatClient {
 				if (!validHistoryMetadata(result)) throw new Error('Invalid history response');
 				this.observeHistoryResponse(room, result);
 				if (stale()) return;
-				this.applyPage(room, result);
+				this.installPage(result, room);
 				this.noteOlderPage(room, result);
 				room.loadCheckpoint = head;
 				room.resumed = false;
 				return;
 			}
 			let checkpoint: string | undefined = room.loadCheckpoint;
-			let after: string | undefined = maxDefined(checkpoint === undefined ? undefined : increment(checkpoint), room.floor) ?? FIRST_LOG_ID;
-			while (after === undefined || compareLogIds(after, head) <= 0) {
+			let after = maxDefined(increment(checkpoint), room.floor)!;
+			while (compareLogIds(after, head) <= 0) {
 				const request = this.historyQueue.request(room.id, historyParams(room.id, after, head), { retry: !background() });
 				if (run) run.requestId = request.id;
 				const result = await request.promise;
@@ -2843,12 +2838,12 @@ export class ChatClient {
 				if (!validHistoryMetadata(result)) throw new Error('Invalid history response');
 				this.observeHistoryResponse(room, result);
 				if (stale()) return;
-				if (after !== undefined && room.floor !== undefined && compareLogIds(room.floor, after) > 0) {
+				if (room.floor !== undefined && compareLogIds(room.floor, after) > 0) {
 					// History was discarded underneath this load: continue from the bound.
 					after = room.floor;
 					continue;
 				}
-				this.applyPage(room, result);
+				this.installPage(result, room);
 				if (!result.more) {
 					checkpoint = maxDefined(checkpoint, head);
 					room.loadCheckpoint = checkpoint;
@@ -2856,7 +2851,7 @@ export class ChatClient {
 					return;
 				}
 				const lastId = result.last_log_id;
-				if (!isLogId(lastId) || (after !== undefined && compareLogIds(lastId, after) < 0) || compareLogIds(lastId, head) >= 0) {
+				if (!isLogId(lastId) || compareLogIds(lastId, after) < 0 || compareLogIds(lastId, head) >= 0) {
 					throw new Error('Invalid history continuation');
 				}
 				after = increment(lastId);
@@ -2895,7 +2890,7 @@ export class ChatClient {
 			const kept = this.olderSource ? await this.olderSource(room.id, before, THREAD_PAGE_SIZE).catch(() => undefined) : undefined;
 			if (stale()) return;
 			if (kept && validHistoryMetadata(kept)) {
-				this.applyPage(room, kept);
+				this.installPage(kept, room);
 				this.noteOlderPage(room, kept);
 				return;
 			}
@@ -2904,7 +2899,7 @@ export class ChatClient {
 			if (!validHistoryMetadata(result)) throw new Error('Invalid history response');
 			this.observeHistoryResponse(room, result);
 			if (stale()) return;
-			this.applyPage(room, result);
+			this.installPage(result, room);
 			this.noteOlderPage(room, result);
 		} finally {
 			if (!stale()) room.loadingOlder = false;
@@ -3116,7 +3111,7 @@ export class ChatClient {
 	}
 
 	/**
-	 * After a handshake that failed, asks the server why (EXT.md §7): `GET`
+	 * After a handshake that failed, asks the server why (EXT.md §5): `GET`
 	 * its URL over HTTP with `?apron_connection_status=1`. A reply marked
 	 * `Apron-Connection-Status: 1`, with status 403, 429 or 503 and a JSON
 	 * `{error}`, shows as the error and holds reconnects for its
@@ -3622,10 +3617,8 @@ export class ChatClient {
 	}
 
 	private requestJoinedPage(run: NonNullable<ChatClient['joinedCatchUp']>, after: string): void {
-		// Right behind `auth`, as the resumes it stands for would have gone (§3.2).
-		const pipelined = !this.authenticated && this.authRequested;
 		const params: JsonObject = { after, ...(run.head !== undefined ? { before: run.head } : {}), limit: HISTORY_PAGE_SIZE };
-		this.historyQueue.request(JOINED_LOG, params, { allowBeforeAuth: pipelined }).promise.then((result) => {
+		this.historyQueue.request(JOINED_LOG, params).promise.then((result) => {
 			if (this.joinedCatchUp !== run) return;
 			this.applyJoinedPage(run, after, result);
 		}, (cause: Error & { code?: number }) => {
@@ -4059,13 +4052,6 @@ export class ChatClient {
 	}
 
 	/**
-	 * A room's members under their current `user_id`s (§3.3): a membership of
-	 * an ID retired by a `user_id` change (a guest that became an account) stays
-	 * in the store until the room is listed again, beside the new ID's own, so
-	 * it shows as the identity that replaced it, once. The same array when no
-	 * member's ID is retired.
-	 */
-	/**
 	 * An untitled private room's title (`peopleTitle`): its members other than
 	 * you, each by the name kept for them, else the one listed, else their
 	 * `user_id`. "Private room" while its members aren't known.
@@ -4076,6 +4062,13 @@ export class ChatClient {
 		return peopleTitle(members.filter((member) => member.user_id !== you).map((member) => this.users.get(member.user_id)?.name || member.name || member.user_id));
 	}
 
+	/**
+	 * A room's members under their current `user_id`s (§3.3): a membership of
+	 * an ID retired by a `user_id` change (a guest that became an account) stays
+	 * in the store until the room is listed again, beside the new ID's own, so
+	 * it shows as the identity that replaced it, once. The same array when no
+	 * member's ID is retired.
+	 */
 	private currentMembers(members: Identity[] | undefined): Identity[] | undefined {
 		if (!members || !members.some((member) => this.userAliases.has(member.user_id))) return members;
 		// The new ID's own membership, where it has one, is the one listed.
@@ -4649,7 +4642,7 @@ export class ChatClient {
 		this.observeHistoryResponse(room, result);
 		if (room.recovery !== recovery || recovery.generation !== generation) return;
 		this.clearForRebuild(room);
-		this.applyPage(room, result);
+		this.installPage(result, room);
 		if (recovery.newest) {
 			// Everything up to H is covered for live delivery; what is older loads as the reader scrolls back.
 			this.noteOlderPage(room, result);
@@ -4674,18 +4667,10 @@ export class ChatClient {
 	}
 
 	/**
-	 * Install a page's records, skipping message and reaction records below
-	 * the room's bound. Memberships keep the room's member list current; a
-	 * listing's members already cover the ones at or below its head.
-	 */
-	private applyPage(room: RoomState, result: JsonObject): void {
-		this.installPage(result, room);
-	}
-
-	/**
 	 * Installs a page's records, message and reaction records only at or above their room's bound: `room`'s for a
 	 * page of its log, else (a page of every joined room's log, `history` without `room_id`) each record's own
-	 * room's, whose head the record moves as a live one does.
+	 * room's, whose head the record moves as a live one does. Memberships keep a room's member list current; a
+	 * listing's members already cover the ones at or below its head.
 	 */
 	private installPage(result: JsonObject, room?: RoomState): void {
 		// `~private` messages are never installed (Appendix A.1), from history either.
@@ -4789,7 +4774,7 @@ export class ChatClient {
 		recovery.buffer = recovery.buffer.filter((live) => isEmbedded(live) || compareLogIds(live.record.log_id, effective) >= 0);
 		recovery.bufferBytes = recovery.buffer.reduce((bytes, live) => bytes + recordBytes(live.record), 0);
 		// The newest page needs no position the bound could pass: the server keeps it to what is retained, and
-		// what it sends below the bound is skipped (`applyPage`).
+		// what it sends below the bound is skipped (`installPage`).
 		if (recovery.newest) return;
 		// `nextAfter` is the first unprocessed position. Equality is safe; a
 		// strictly larger bound means a retained gap was discarded underneath us.
@@ -5499,10 +5484,10 @@ function isSignInMethod(method: string | null): method is SignInMethod {
 	return method === 'webauthn' || method === 'email' || method === 'external' || method === 'link' || method === 'token';
 }
 
-/** The proposals a sign-in link can approve, either of which a server's approval takes (§4.11.3). */
 /** The history queue's key for the joined rooms' log (`history` without `room_id`, §4.3), which no room's id is. */
 const JOINED_LOG = '';
 
+/** The proposals a sign-in link can approve, either of which a server's approval takes (§4.11.3). */
 const PROPOSAL_SCHEMES: ProposalScheme[] = ['email', 'external'];
 
 /**

@@ -451,14 +451,12 @@ describe('uploads', () => {
 		expect(snapshot.uploads).toEqual({});
 	});
 
-	it('keeps a failed write visible until dismissed', async () => {
+	it('keeps a failed write visible', async () => {
 		vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 413 })));
 		const { uploaded } = client.sendFiles('general', '', [new File(['x'], 'big.bin')]);
 		await socket.reply('message', { message_id: '51', embeds: [{ embed_id: 'embed_2', kind: 'upload', write_url: 'http://fake.test/write/x' }] });
 		await expect(uploaded).rejects.toThrow(/larger than this server accepts/);
 		expect(snapshot.uploads.embed_2).toMatchObject({ name: 'big.bin', failed: expect.stringMatching(/larger/) });
-		client.dismissUpload('embed_2');
-		expect(snapshot.uploads).toEqual({});
 	});
 
 	it('reads a refused write by its standard HTTP meaning only', async () => {
