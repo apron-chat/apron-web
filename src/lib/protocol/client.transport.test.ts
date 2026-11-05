@@ -607,6 +607,37 @@ describe('a connection that doesn’t come up', () => {
 		expect(opened()).toBe(before + 4);
 	});
 
+	it('tells `beforeConnect` a reload cuts nothing short only for the first connection, or within a minute of coming back from a minute or more away', async () => {
+		const { away } = page();
+		const asked: boolean[] = [];
+		const { socket } = startClient({ beforeConnect: (reloadable) => void asked.push(reloadable) });
+		await socket.greet([]);
+		expect(asked).toEqual([true]);
+		// Dropped while in use: no.
+		socket.drop();
+		const second = await nextSocket(socket);
+		expect(asked).toEqual([true, false]);
+		await second.greet([]);
+		// Back after five minutes away: yes.
+		away(5 * 60_000);
+		second.drop();
+		const third = await nextSocket(second);
+		expect(asked.at(-1)).toBe(true);
+		await third.greet([]);
+		// A minute on, in use again: no.
+		vi.advanceTimersByTime(60_000);
+		third.drop();
+		const fourth = await nextSocket(third);
+		expect(asked.at(-1)).toBe(false);
+		await fourth.greet([]);
+		// Back after under a minute away: no.
+		away(59_000);
+		fourth.drop();
+		await nextSocket(fourth);
+		expect(asked.at(-1)).toBe(false);
+		expect(asked).toHaveLength(5);
+	});
+
 	it('connects only once the page is shown again, if it was hidden while `beforeConnect` held the connection', async () => {
 		const { show } = page();
 		let release!: () => void;

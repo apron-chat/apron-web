@@ -8,7 +8,8 @@ import { loadVersionChecked, saveVersionChecked, type VersionChecked } from './s
  * Before the app connects, it checks it is the latest deploy if that hasn't been checked for a while (`STALE_AFTER_MS`).
  * If a newer one is out, it reloads into that one before connecting, so an old copy never signs in to a server that
  * has moved on. That copy might be a tab or an installed app resumed after days, or the page the service worker kept
- * for offline.
+ * for offline. A reconnect while the page is in use (not just back from a long absence) only offers the reload: one
+ * would cut short an upload, a recording or a half-typed sign-in code.
  *
  * A page loaded from the network is the latest deploy already (the service worker fetches pages network-first),
  * and the record of the latest deploy is shared by this device's tabs, so most connections check nothing. Open tabs
@@ -49,23 +50,33 @@ function newer(a: string, b: string): boolean {
 	return Number.isFinite(x) && Number.isFinite(y) && x > y;
 }
 
+/** What a reload never settles: the page goes before it would. */
+const RELOADING = new Promise<never>(() => undefined);
+
 export class VersionGate {
 	private pending?: Promise<void>;
 	private failedAt?: number;
-	/** This copy was found out of date and says so (`notice`) rather than reloading: there's nothing more to check. */
-	private noticed = false;
+	/** No call yet: the first, as the page loads, may take it as the latest deploy (`due`). */
+	private loading = true;
+	/**
+	 * The newer deploy this copy found, while it says so (`notice`) rather than reloading: nothing more to check, and a
+	 * later connection that may reload does, with no check.
+	 */
+	private stale?: string;
 
 	constructor(private readonly deps: VersionGateDeps) {}
 
 	/**
 	 * Undefined when connecting may go ahead now. Otherwise a check is due, and connecting waits on the promise:
 	 * it settles once it may go ahead, or never if the page is reloading into a newer deploy. Callers at the same time
-	 * share one check.
+	 * share one check. `reloadable`: a reload now would cut short nothing in use (the page's first connection, or
+	 * one just after a long absence); otherwise a newer deploy is only offered.
 	 */
-	beforeConnect(): Promise<void> | undefined {
+	beforeConnect(reloadable = true): Promise<void> | undefined {
 		if (this.pending) return this.pending;
+		if (this.stale !== undefined) return reloadable && this.reload(this.stale) ? RELOADING : undefined;
 		if (!this.due()) return undefined;
-		const pending = this.check().finally(() => {
+		const pending = this.check(reloadable).finally(() => {
 			if (this.pending === pending) this.pending = undefined;
 		});
 		this.pending = pending;
@@ -74,20 +85,23 @@ export class VersionGate {
 
 	private due(): boolean {
 		const { version, now, load, save } = this.deps;
-		if (this.noticed) return false;
+		const loading = this.loading;
+		this.loading = false;
 		const at = now();
 		if (this.failedAt !== undefined && at - this.failedAt < RETRY_AFTER_MS) return false;
 		const checked = load();
-		// The first copy here of this deploy or a newer one: pages load from the network, so it is the latest.
-		if (!checked || newer(version, checked.version)) {
+		// As the page loads, a deploy newer than the one noted (or none noted) is the latest: pages load from the
+		// network. Only then: later, the one noted may be a rollback from this one, found by another tab since.
+		if (!checked || (loading && newer(version, checked.version))) {
 			save({ version, at });
 			return false;
 		}
-		// A deploy other than this one was the latest (an older copy, or a rollback), or it's been a while.
-		return checked.version !== version || at - checked.at >= STALE_AFTER_MS;
+		// A deploy other than this one was the latest (an older copy, or a rollback), it's been a while, or the record
+		// is from ahead of this clock (one set back since), which can't say how long it's been.
+		return checked.version !== version || at - checked.at >= STALE_AFTER_MS || at < checked.at;
 	}
 
-	private async check(): Promise<void> {
+	private async check(reloadable: boolean): Promise<void> {
 		const { deps } = this;
 		const latest = await deps.latest();
 		if (latest === undefined) {
@@ -97,13 +111,19 @@ export class VersionGate {
 		this.failedAt = undefined;
 		deps.save({ version: latest, at: deps.now() });
 		if (latest === deps.version) return;
-		// Once per deploy per tab: if the reload didn't bring it (a cache still serving the old page), don't loop.
-		if (deps.mayReload() && !deps.reloadedFor(latest)) {
-			deps.reload();
-			return new Promise<never>(() => undefined);
-		}
-		this.noticed = true;
+		this.stale = latest;
+		if (reloadable && this.reload(latest)) return RELOADING;
 		deps.notice();
+	}
+
+	/**
+	 * Reloads into `latest`, unless that would lose an unsent draft, or this tab reloaded for it already (a cache still
+	 * serving the old page): once per deploy per tab, so it can't loop. Returns whether it did.
+	 */
+	private reload(latest: string): boolean {
+		if (!this.deps.mayReload() || this.deps.reloadedFor(latest)) return false;
+		this.deps.reload();
+		return true;
 	}
 }
 
@@ -150,6 +170,6 @@ const gate = dev ? undefined : new VersionGate({
 });
 
 /** `VersionGate.beforeConnect` for the app: undefined when connecting may go ahead now. */
-export function beforeConnect(): Promise<void> | undefined {
-	return gate?.beforeConnect();
+export function beforeConnect(reloadable = true): Promise<void> | undefined {
+	return gate?.beforeConnect(reloadable);
 }

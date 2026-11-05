@@ -95,6 +95,7 @@ import {
 	ROOM_LIST_REUSE_MS,
 	STABLE_CONNECTION_MS,
 	STANDBY_AFTER_HIDDEN_MS,
+	RELOADABLE_AFTER_RETURN_MS,
 	STANDBY_AFTER_MS,
 	THREAD_PAGE_SIZE,
 	FRESH_HOOK_MS,
@@ -384,6 +385,10 @@ export class ChatClient {
 	private earlyConnection?: ChatClientOptions['earlyConnection'];
 	/** What each connection waits on before it opens (`ChatClientOptions.beforeConnect`). */
 	private readonly beforeConnect?: ChatClientOptions['beforeConnect'];
+	/** A socket has opened on this client: connections from then on may find the page in use. */
+	private openedOnce = false;
+	/** When the page last came back from `STANDBY_AFTER_HIDDEN_MS` or more away. */
+	private returnedAt?: number;
 	/** The wait under way for `beforeConnect`, while a connection waits on it. */
 	private connectGate?: Promise<void>;
 	private reconnectTimer?: ReturnType<typeof setTimeout>;
@@ -525,6 +530,7 @@ export class ChatClient {
 		} else {
 			const away = this.hiddenAt === undefined ? 0 : this.now() - this.hiddenAt;
 			this.hiddenAt = undefined;
+			if (away >= STANDBY_AFTER_HIDDEN_MS) this.returnedAt = this.now();
 			// One still opening may have outrun its wait while hidden pages' timers were held back: the next goes now,
 			// as it would have once shown, had its timer run.
 			if (this.openingUntil !== undefined && this.now() >= this.openingUntil) this.replaceOpening('opening timed out', false);
@@ -2967,7 +2973,7 @@ export class ChatClient {
 			return;
 		}
 		this.stopWaitingForPresence();
-		const gate = gated ? undefined : this.beforeConnect?.();
+		const gate = gated ? undefined : this.beforeConnect?.(this.reloadable());
 		if (gate) {
 			// A standby waits for nothing: it closes, and the connection after the wait opens its own.
 			if (handover) closeUnused(handover.socket);
@@ -3026,8 +3032,18 @@ export class ChatClient {
 		this.attachSocket(socket, id, false);
 	}
 
+	/**
+	 * Whether reloading into a newer deploy before this connection would cut short nothing in use
+	 * (`ChatClientOptions.beforeConnect`): the client's first, or one within `RELOADABLE_AFTER_RETURN_MS` of coming back
+	 * after a long absence. Otherwise an upload, a recording or a half-typed sign-in code may be under way.
+	 */
+	private reloadable(): boolean {
+		return !this.openedOnce || (this.returnedAt !== undefined && this.now() - this.returnedAt < RELOADABLE_AFTER_RETURN_MS);
+	}
+
 	/** The current socket has opened. */
 	private socketOpened(): void {
+		this.openedOnce = true;
 		startupMark('socket-open');
 		this.status = 'connected';
 		this.error = undefined;

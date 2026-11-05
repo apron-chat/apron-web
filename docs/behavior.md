@@ -82,10 +82,12 @@ any room or thread has unsent text or files it adds that reloading clears your
 unsent message.
 A copy of the app that hasn't confirmed in 3 days that it is the latest (a tab or
 installed app resumed after days, or the page kept for offline) checks first,
-before it connects or reconnects (`version.json`, waiting up to 5 seconds), and
-reloads into a newer version rather than connecting with the old one; with an
-unsent draft, or if the reload brought back the same old page, it connects and
-shows the notice instead. A page loaded from the network is the latest already,
+before it connects or reconnects (`version.json`, waiting up to 5 seconds).
+Finding a newer version as it starts, or reconnecting within a minute of coming
+back from a minute or more away, it reloads into that version rather than
+connecting with the old one. A reconnect while the page is in use only shows
+the notice, since a reload would cut short an upload, a recording or a sign-in;
+so do an unsent draft, and a reload that brought back the same old page. A page loaded from the network is the latest already,
 and the time of the last check is shared by the device's tabs, so this rarely
 costs a request; a check that can't be made lets the connection go ahead.
 

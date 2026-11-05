@@ -113,6 +113,33 @@ describe('checking for a newer deploy before connecting', () => {
 		expect(state).toMatchObject({ reloads: 0, notices: 1 });
 	});
 
+	it('on a connection while the page is in use, offers a newer deploy rather than reloading; a later one that may reload does, without checking again', async () => {
+		const { gate, state } = setup('200', { version: '200', at: 0 }, '300');
+		expect(await settled(gate.beforeConnect(false)!)).toBe(true);
+		expect(state).toMatchObject({ fetches: 1, reloads: 0, notices: 1 });
+		// In use still: it connects at once.
+		expect(gate.beforeConnect(false)).toBeUndefined();
+		// Back from a long absence: it reloads, from what it found.
+		expect(await settled(gate.beforeConnect(true)!)).toBe(false);
+		expect(state).toMatchObject({ fetches: 1, reloads: 1, notices: 1 });
+	});
+
+	it('takes a deploy newer than the one noted as the latest only as the page loads: later, the one noted may be a rollback', async () => {
+		const { gate, state } = setup('300', { version: '200', at: 0 }, '200');
+		expect(gate.beforeConnect()).toBeUndefined();
+		expect(state.stored).toEqual({ version: '300', at: state.now });
+		// Another tab, on the rollback, finds 200 the latest: this one's next connection checks, and reloads into it.
+		state.stored = { version: '200', at: state.now };
+		expect(await settled(gate.beforeConnect()!)).toBe(false);
+		expect(state).toMatchObject({ fetches: 1, reloads: 1 });
+	});
+
+	it('checks when the last check is dated ahead of this clock, which can’t say how long it’s been', async () => {
+		const { gate, state } = setup('200', { version: '200', at: 100 * DAY + 1 }, '200');
+		expect(await settled(gate.beforeConnect()!)).toBe(true);
+		expect(state).toMatchObject({ fetches: 1, stored: { version: '200', at: state.now } });
+	});
+
 	it('connects when the check can’t be made, and doesn’t hold the next connections up for a minute', async () => {
 		const { gate, state } = setup('200', { version: '200', at: 0 }, undefined);
 		expect(await settled(gate.beforeConnect()!)).toBe(true);
