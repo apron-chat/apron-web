@@ -2546,14 +2546,10 @@
 		const target = resolveMessage(id);
 		const destination = target ? destinationOf(target) : undefined;
 		if (!destination) return;
-		if (destination.room !== activeRoom?.id || destination.thread !== activeThread) {
-			openDestination(destination.room, destination.thread);
-			viewport.stickToBottom = false;
-		}
-		viewport.reveal.from(0);
-		const node = await viewport.renderedMessage(id);
+		const opening = destination.room !== activeRoom?.id || destination.thread !== activeThread;
+		if (opening) openDestination(destination.room, destination.thread);
+		const node = await viewport.jumpTo(id, opening);
 		if (!node) return;
-		viewport.scrollToMessage(node);
 		node.focus({ preventScroll: true });
 		highlightedId = id;
 		if (highlightTimer) clearTimeout(highlightTimer);
@@ -2575,12 +2571,14 @@
 	 */
 	function focusMessage(row: HTMLElement): void {
 		row.focus({ preventScroll: true });
-		row.scrollIntoView({ block: viewport.messageScroll && row.offsetHeight > viewport.messageScroll.clientHeight ? 'start' : 'nearest' });
+		const list = viewport.messageScroll;
+		row.scrollIntoView({ block: list && row.offsetHeight > list.clientHeight ? 'start' : 'nearest' });
 	}
 
 	/** ↑ in the empty composer: the keyboard goes to the newest message. False with none to go to. */
 	function focusNewestMessage(): boolean {
-		const newest = viewport.messageScroll ? messageRows(viewport.messageScroll).at(-1) : undefined;
+		const list = viewport.messageScroll;
+		const newest = list && messageRows(list).at(-1);
 		if (!newest) return false;
 		focusMessage(newest);
 		return true;
@@ -2609,12 +2607,13 @@
 	 */
 	function timelineFocusin(event: FocusEvent): void {
 		const target = event.target;
-		if (!(target instanceof HTMLElement) || !viewport.messageScroll) return;
-		if (timelineItems(viewport.messageScroll).includes(target)) lastItem = target;
+		const list = viewport.messageScroll;
+		if (!(target instanceof HTMLElement) || !list) return;
+		if (timelineItems(list).includes(target)) lastItem = target;
 		const from = event.relatedTarget;
-		if (!tabbing || (from instanceof Node && viewport.messageScroll.contains(from)) || target.closest('[data-testid="message-editor"]')) return;
+		if (!tabbing || (from instanceof Node && list.contains(from)) || target.closest('[data-testid="message-editor"]')) return;
 		if (lastItem === target) return;
-		const back = lastItem?.isConnected && viewport.messageScroll.contains(lastItem) ? lastItem : messageRows(viewport.messageScroll).at(-1);
+		const back = lastItem?.isConnected && list.contains(lastItem) ? lastItem : messageRows(list).at(-1);
 		if (back && back !== target) focusMessage(back);
 	}
 
@@ -2623,8 +2622,9 @@
 	 * the way a shift-click fills a range; stepping back gives them up again.
 	 */
 	function extendSelection(row: HTMLElement, step: 'previous' | 'next'): void {
-		if (!viewport.messageScroll || !paneRoom) return;
-		const items = timelineItems(viewport.messageScroll);
+		const list = viewport.messageScroll;
+		if (!list || !paneRoom) return;
+		const items = timelineItems(list);
 		let next: HTMLElement | undefined = row;
 		do next = stepMessage(items, next, step);
 		while (next && !isMessageRow(next));
@@ -2653,10 +2653,11 @@
 	 */
 	async function timelineKey(event: KeyboardEvent): Promise<void> {
 		const target = event.target;
-		if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || !(target instanceof HTMLElement) || !viewport.messageScroll) return;
+		const list = viewport.messageScroll;
+		if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || !(target instanceof HTMLElement) || !list) return;
 		if (target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [data-testid="message-editor"]')) return;
 		if (event.key === 'Tab') {
-			const out = tabbableOutside(viewport.messageScroll, !event.shiftKey);
+			const out = tabbableOutside(list, !event.shiftKey);
 			if (!out) return;
 			event.preventDefault();
 			out.focus();
@@ -2677,7 +2678,7 @@
 			}
 			return;
 		}
-		if (!timelineItems(viewport.messageScroll).includes(target)) return;
+		if (!timelineItems(list).includes(target)) return;
 		if (event.key === 'Escape') {
 			// In select mode Escape ends it (windowKeydown); the composer is the selection bar then.
 			if (selection.active) return;
@@ -2711,7 +2712,7 @@
 			return;
 		}
 		event.preventDefault();
-		let items = timelineItems(viewport.messageScroll);
+		const items = timelineItems(list);
 		const next = stepMessage(items, target, step, step === 'pageUp' || step === 'pageDown' ? rowsPerPage(items) : 1);
 		if (next) {
 			focusMessage(next);
@@ -2723,17 +2724,8 @@
 			return;
 		}
 		// Past the oldest drawn: the rest of what's loaded first, then older pages, as scrolling back would.
-		if (viewport.reveal.hidden > 0) {
-			viewport.reveal.from(0);
-			await tick();
-			items = timelineItems(viewport.messageScroll);
-			const older = stepMessage(items, target, 'previous');
-			if (older) focusMessage(older);
-			return;
-		}
-		await viewport.loadOlderReplies();
-		items = timelineItems(viewport.messageScroll);
-		const older = stepMessage(items, target, 'previous');
+		await viewport.showOlder();
+		const older = stepMessage(timelineItems(list), target, 'previous');
 		if (older && document.activeElement === target) focusMessage(older);
 	}
 

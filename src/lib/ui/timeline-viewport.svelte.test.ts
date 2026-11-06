@@ -81,6 +81,12 @@ function setup(room: RoomSnapshot, messages: MessageRecord[] = []) {
 	return { state, viewport, loadOlder, readThrough };
 }
 
+/** The reader scrolls the list back to `top`. */
+function scrollBack(viewport: TimelineViewport, list: List, top: number): void {
+	list.scrollTop = top;
+	viewport.trackScroll();
+}
+
 /** Lets whatever is under way settle: awaited loads, ticks and the like. */
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -102,23 +108,24 @@ describe('TimelineViewport', () => {
 	it('keeps the reader’s place as an older page lands above, unless the pane went elsewhere meanwhile', async () => {
 		const general = roomSnapshot('general', [messageRecord(10)], { olderAvailable: true });
 		const { state, viewport, loadOlder } = setup(general);
-		const list = new List(1000, 400, 100);
+		const list = new List(1000, 400);
 		viewport.messageScroll = asList(list);
-		viewport.stickToBottom = false;
+		scrollBack(viewport, list, 300);
+		expect(viewport.stickToBottom).toBe(false);
 		loadOlder.mockImplementationOnce(async () => {
 			list.scrollHeight = 1600;
 		});
-		await viewport.loadOlderReplies();
-		expect(list.scrollTop).toBe(700);
+		await viewport.showOlder();
+		expect(list.scrollTop).toBe(900);
 
 		// Another room opened while the page was on its way: its place isn't the one kept.
-		list.scrollTop = 100;
+		list.scrollTop = 300;
 		loadOlder.mockImplementationOnce(async () => {
 			list.scrollHeight = 2200;
 			state.room = roomSnapshot('random');
 		});
-		await viewport.loadOlderReplies();
-		expect(list.scrollTop).toBe(100);
+		await viewport.showOlder();
+		expect(list.scrollTop).toBe(300);
 	});
 
 	it('keeps no place while it follows the latest, nor in a list it no longer shows', async () => {
@@ -128,16 +135,16 @@ describe('TimelineViewport', () => {
 		loadOlder.mockImplementationOnce(async () => {
 			list.scrollHeight = 1600;
 		});
-		await viewport.loadOlderReplies();
+		await viewport.showOlder();
 		expect(list.scrollTop).toBe(100);
 
-		viewport.stickToBottom = false;
+		scrollBack(viewport, list, 300);
 		loadOlder.mockImplementationOnce(async () => {
 			list.scrollHeight = 2200;
 			viewport.messageScroll = asList(new List(1000, 400, 100));
 		});
-		await viewport.loadOlderReplies();
-		expect(list.scrollTop).toBe(100);
+		await viewport.showOlder();
+		expect(list.scrollTop).toBe(300);
 	});
 
 	it('scrolls to the latest only when short of it, so a bounce past the end is left be', () => {
@@ -233,6 +240,41 @@ describe('TimelineViewport', () => {
 		await settle();
 		expect(pinned.loadOlder).toHaveBeenCalledTimes(1);
 		stopPinned();
+	});
+
+	it('jumps to a message in a pane it opened without opening at the divider meanwhile', async () => {
+		vi.stubGlobal('CSS', { escape: (text: string) => text });
+		const { state, viewport, readThrough } = setup(roomSnapshot('random'));
+		const list = new List(2000, 400, 1600);
+		list.rows.set('.ap-divider-new', new Row(list, 1000));
+		list.rows.set('article[data-message-id="3"]', new Row(list, 300));
+		viewport.messageScroll = asList(list);
+		const stop = $effect.root(() => viewport.watchDivider());
+		flushSync();
+
+		// As the page opens the message's room, and then jumps.
+		readThrough.mockReturnValue('5');
+		state.room = roomSnapshot('general');
+		state.messages = ids(1, 9);
+		viewport.openPane();
+		const row = await viewport.jumpTo('3', true);
+		await settle();
+		expect(row).toBe(list.rows.get('article[data-message-id="3"]'));
+		expect(list.scrollTop).toBe(100);
+		expect(list.sets).toBe(1);
+		expect(viewport.stickToBottom).toBe(false);
+		stop();
+	});
+
+	it('draws the rest of what is loaded before loading older pages, for the keyboard going on up', async () => {
+		const { viewport, loadOlder } = setup(roomSnapshot('general', [messageRecord(10)], { olderAvailable: true }), ids(10, 30));
+		viewport.messageScroll = asList(new List(1000, 400, 0));
+		viewport.reveal.from(5);
+		await viewport.showOlder();
+		expect(viewport.reveal.hidden).toBe(0);
+		expect(loadOlder).not.toHaveBeenCalled();
+		await viewport.showOlder();
+		expect(loadOlder).toHaveBeenCalledWith('general');
 	});
 
 	it('takes no word on the latest from an observer of a row it no longer watches', () => {

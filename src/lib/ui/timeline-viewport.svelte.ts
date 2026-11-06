@@ -120,6 +120,12 @@ function lastRow(scroll: HTMLElement): HTMLElement | undefined {
 export class TimelineViewport {
 	readonly #host: TimelineViewportHost;
 	#messageScroll = $state<HTMLDivElement | undefined>();
+	/**
+	 * The pane follows the latest: it scrolls there as more comes in, and counts nothing as unseen. Only the viewport
+	 * sets it: opening a pane, sending (`pin`) and jumping to the latest pin it, each scroll event says whether the
+	 * reader is at the latest, and a jump to a message or a landing at the divider says so where it leaves the list
+	 * (`settle`).
+	 */
 	#stickToBottom = $state(true);
 	/** Whether the pane's latest row was on screen, as last measured, and the pane it was measured in (`measured`). */
 	#latestVisible = $state(true);
@@ -189,13 +195,9 @@ export class TimelineViewport {
 		this.#messageScroll = scroller;
 	}
 
-	/** The pane follows the latest: it scrolls there as more comes in, and counts nothing as unseen. */
+	/** The pane follows the latest. */
 	get stickToBottom(): boolean {
 		return this.#stickToBottom;
-	}
-
-	set stickToBottom(stick: boolean) {
-		this.#stickToBottom = stick;
 	}
 
 	/** The pane's latest row was on screen when last measured: in this pane, or until it is measured here, the last. */
@@ -308,7 +310,7 @@ export class TimelineViewport {
 					// Not while the pane isn't laid out (a phone showing the rooms list): it would never fill, and load every page.
 					if (!this.#shows(room.id, scroller) || !scroller.clientHeight) return;
 					this.#fillMeasured = measure;
-					if (scroller.scrollHeight <= scroller.clientHeight + OLDER_REPLIES_MARGIN_PX) void this.loadOlderReplies();
+					if (scroller.scrollHeight <= scroller.clientHeight + OLDER_REPLIES_MARGIN_PX) void this.#loadOlder();
 				});
 			});
 		});
@@ -448,25 +450,33 @@ export class TimelineViewport {
 		this.#latestVisibleIn = pane;
 	}
 
-	/** The message `id` once it has rendered in the list, waiting for it a while (`JUMP_WAIT_MS`). */
-	async renderedMessage(id: string): Promise<HTMLElement | undefined> {
+	/**
+	 * Scrolls the list to the message `id`, centred, once it has rendered (all of the pane's items render for it, and it
+	 * waits a while, `JUMP_WAIT_MS`, for a thread's history to load), and returns its row. A jump that `opened` the pane
+	 * lets go of the latest at once, so that meanwhile the pane neither follows the latest nor opens at its divider.
+	 */
+	async jumpTo(id: string, opened: boolean): Promise<HTMLElement | undefined> {
+		if (opened) this.#stickToBottom = false;
+		this.reveal.from(0);
 		await tick();
-		const node = () => this.#messageScroll?.querySelector<HTMLElement>(`article[data-message-id="${CSS.escape(id)}"]`) ?? undefined;
-		await until(() => Boolean(node()), JUMP_WAIT_MS);
-		return node();
+		const find = () => this.#messageScroll?.querySelector<HTMLElement>(`article[data-message-id="${CSS.escape(id)}"]`) ?? undefined;
+		await until(() => Boolean(find()), JUMP_WAIT_MS);
+		const scroller = this.#messageScroll;
+		const row = find();
+		if (!scroller || !row) return undefined;
+		row.scrollIntoView({ block: 'center' });
+		this.#settle(scroller);
+		return row;
 	}
 
-	/** Scrolls the list to a message jumped to, centred, and lets go of the latest unless that is where it is. */
-	scrollToMessage(node: HTMLElement): void {
-		this.#stickToBottom = false;
-		node.scrollIntoView({ block: 'center' });
-		// Settled here, as landing at the divider is: a jump to the latest, the pane already there, scrolls nothing,
-		// so no scroll event would pin it again to follow what comes next.
-		const scroller = this.#messageScroll;
-		if (scroller) {
-			this.#lastScrollTop = scroller.scrollTop;
-			this.#stickToBottom = atLatest(scroller);
-		}
+	/**
+	 * Settles whether the pane follows the latest from where a jump or a landing left `scroller`, rather than by the next
+	 * scroll event: a jump to the latest, the pane already there, scrolls nothing, so no event would pin it again to
+	 * follow what comes next, and until one came the pane would read as at its latest wherever it was.
+	 */
+	#settle(scroller: HTMLElement): void {
+		this.#lastScrollTop = scroller.scrollTop;
+		this.#stickToBottom = atLatest(scroller);
 	}
 
 	/**
@@ -505,11 +515,9 @@ export class TimelineViewport {
 			const node = line();
 			const scroller = this.#messageScroll;
 			if (!node || !scroller || !still()) return;
-			this.#stickToBottom = false;
 			scroller.scrollTop += node.getBoundingClientRect().top - scroller.getBoundingClientRect().top - LAND_MARGIN_PX;
-			this.#lastScrollTop = scroller.scrollTop;
 			// Settled here, not by the next scroll event or intersection, so nothing reads the pane as at its latest meanwhile.
-			this.#stickToBottom = atLatest(scroller);
+			this.#settle(scroller);
 			const items = scroller.querySelectorAll<HTMLElement>('[data-timeline-item]');
 			const latest = items[items.length - 1]?.getBoundingClientRect();
 			const visible = !latest || latest.top < scroller.getBoundingClientRect().bottom;
@@ -569,7 +577,7 @@ export class TimelineViewport {
 			return;
 		}
 		const atBottom = atLatest(scroller);
-		if (top < OLDER_REPLIES_MARGIN_PX) void this.loadOlderReplies();
+		if (top < OLDER_REPLIES_MARGIN_PX) void this.#loadOlder();
 		if (!atBottom && pinned) {
 			const messages = this.#host.messages;
 			this.#seenThrough = messages[messages.length - 1]?.message_id;
@@ -583,7 +591,7 @@ export class TimelineViewport {
 	 * back near the top loads the page before it. The reader's place is kept:
 	 * whatever was on screen stays put while the older messages land above it.
 	 */
-	async loadOlderReplies(): Promise<void> {
+	async #loadOlder(): Promise<void> {
 		const host = this.#host;
 		const room = host.olderSource;
 		if (!host.client || !room || !room.olderAvailable || room.loadingOlder) return;
@@ -596,6 +604,17 @@ export class TimelineViewport {
 		}
 		await tick();
 		this.#keepPlace(place);
+	}
+
+	/**
+	 * Past the oldest item drawn (the keyboard going on up): the rest of what's loaded draws first, then the page before
+	 * it loads, as scrolling back would.
+	 */
+	async showOlder(): Promise<void> {
+		if (this.reveal.hidden > 0) {
+			this.reveal.from(0);
+			await tick();
+		} else await this.#loadOlder();
 	}
 
 	/**

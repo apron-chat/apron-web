@@ -226,8 +226,12 @@ kept on this device: where the New divider goes and the pane opens), `MessageSel
 `ProgressiveReveal` (long timelines paint newest-first), `FloatingDay`, and
 `TimelineViewport`, which holds the open pane's two of those and where its list
 is scrolled: pinned to the latest, kept in place as older pages land, opened at
-the New divider, and whether the latest is on screen; the page calls its
-`watch*` methods where their effects go among its own —
+the New divider, and whether the latest is on screen. It alone decides whether
+the pane follows the latest (the page asks: `pin`, `jumpTo`, `jumpToLatest`,
+`showOlder`); a place it keeps is noted with its pane, so a page or chunk that
+lands after the pane moved on moves nothing; the divider is placed, and the
+pane lands at it, once per visit; and the page reads `readingLatest` for its
+read. The page calls its `watch*` methods where their effects go among its own —
 beside pure, unit-tested
 helpers: `timeline.ts` groups threads under their rooms and builds the room and
 thread views, `membership.ts` nets runs of joins and leaves and words their
