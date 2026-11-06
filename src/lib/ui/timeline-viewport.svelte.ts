@@ -407,9 +407,6 @@ export class TimelineViewport {
 					return;
 				}
 				const observer = new IntersectionObserver((entries) => {
-					// Entries queued before the row stopped being watched (another came last, or the pane went elsewhere)
-					// are about a row the pane has moved on from: they say nothing of its latest now.
-					if (this.#latestWatch?.observer !== observer) return;
 					// An entry says where the latest was at a frame since gone: on a busy main thread several frames'
 					// entries arrive together, and the pane may have been pinned again before this runs. Out of view is
 					// checked against now.
@@ -425,6 +422,10 @@ export class TimelineViewport {
 						this.#scrollToLatest();
 						return;
 					}
+					// Entries queued before the row stopped being watched (another came last, or the pane went elsewhere)
+					// are about a row the pane has moved on from: they say nothing of whether its latest shows now. Following
+					// the latest, above, holds whichever row they are about.
+					if (this.#latestWatch?.observer !== observer) return;
 					this.#measured(visible, pane);
 					if (visible) {
 						const messages = host.messages;
