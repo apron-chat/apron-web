@@ -43,12 +43,12 @@
 		"switch-room-busy": {
 			"layouts": 2,
 			"styleRecalcs": 12,
-			"calls": 87487
+			"calls": 86619
 		},
 		"send-message-busy": {
 			"layouts": 38,
 			"styleRecalcs": 16,
-			"calls": 286628
+			"calls": 284904
 		},
 		"sidebar-collapse": {
 			"layouts": 3,
@@ -68,7 +68,7 @@
 		"open-thread": {
 			"layouts": 4,
 			"styleRecalcs": 14,
-			"calls": 65454
+			"calls": 64988
 		},
 		"open-preferences": {
 			"layouts": 3,
