@@ -892,10 +892,13 @@ whole title or `room_id` first, then the start of one, the start of a word in
 the title, anywhere in it, and then the description. The ones you've joined come
 first, under Joined, then those you haven't, under Not joined, each then by how
 well it matches and then by when it was last active; with nothing typed it lists
-them all that way, at most fifty. Each is drawn as the rooms list draws it (a
-private room with its faces, a lock, what's new in it, a bell-off when muted, a
-thread you haven't joined with when it was last active), what matched marked,
-and a thread with its room under its title. `room:` (suggested as in Search
+them all that way, at most fifty, each group headed with how many it holds.
+Each has a # for a room, a hooked arrow for a thread or a private room's faces,
+its title with what matched marked (a lock if private; the titles of those you
+haven't joined muted), under it a thread's room or else what the room is about,
+and, for one you haven't joined, when it was last active; at its end a bell-off
+when muted and what's new in it, as the rooms list counts it. The two modes are
+tabs under the title. `room:` (suggested as in Search
 local history, rooms only) narrows it to the threads of that room, and → at the
 end of the field on a room does the same, putting in `room:#room_id `; Backspace
 there takes the filter away again. A room `room:` names has its threads you

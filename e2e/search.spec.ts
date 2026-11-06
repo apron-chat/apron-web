@@ -133,12 +133,12 @@ test('Ctrl/⌘K searches rooms and threads: joined ones first, → into a room\'
 	await test.step('with nothing typed it lists what you know of, joined first; typing narrows it, in any case', async () => {
 		await expect(search.getByRole('button', { name: 'Rooms and threads' })).toHaveAttribute('aria-pressed', 'true');
 		await expect(results.first()).toBeVisible();
-		await expect(search.locator('.ap-search-group')).toHaveText(['Joined', 'Not joined']);
+		await expect(search.locator('.ap-search-group')).toHaveText([/^Joined\d+$/, /^Not joined\d+$/]);
 		await field.fill('OFF');
 		await expect(results).toHaveCount(1);
 		await expect(results.first()).toContainText('Offsite planning');
 		await expect(results.first()).toContainText('in general');
-		await expect(search.locator('.ap-search-group')).toHaveText(['Not joined']);
+		await expect(search.locator('.ap-search-group')).toHaveText(['Not joined1']);
 		await expect(results.first().locator('mark')).toHaveText('Off');
 	});
 
@@ -148,7 +148,7 @@ test('Ctrl/⌘K searches rooms and threads: joined ones first, → into a room\'
 		await field.press('ArrowRight');
 		await expect(field).toHaveValue('room:#general ');
 		await expect(results).toHaveText([/Expired cert on the runner/, /Deploy checklist/, /On-call rotation/, /Logo feedback/, /Offsite planning/]);
-		await expect(search.locator('.ap-search-group')).toHaveText(['Joined', 'Not joined']);
+		await expect(search.locator('.ap-search-group')).toHaveText(['Joined2', 'Not joined3']);
 		// Its threads you haven't joined are listed from the server, as the rooms list lists the open room's.
 		await expect(search.locator('.ap-search-foot')).toHaveText('Threads you haven’t joined: the 3 the server lists, its most recently active.');
 		await field.press('Backspace');

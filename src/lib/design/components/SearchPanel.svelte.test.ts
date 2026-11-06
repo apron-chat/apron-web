@@ -85,23 +85,25 @@ describe('SearchPanel', () => {
 		expect(document.querySelector('.ap-dialog-titlebtn')).toBeNull();
 	});
 
-	it('finds rooms, each drawn as the rooms list draws it with what matched marked, under headings', () => {
+	it('finds rooms: each with its kind, its title marked, where it is and what is new, under headings that count them', () => {
 		const rooms: RoomResult[] = [
 			{ kind: 'room', id: 't1', group: 'Joined', joined: true, thread: true, parts: [{ text: 'Dep', match: true }, { text: 'loy checklist', match: false }], parent: 'Engineering', unread: 2 },
-			{ kind: 'room', id: 'r1', group: 'Not joined', joined: false, private: true, parts: [{ text: 'Dep', match: true }, { text: 'artures', match: false }], description: '14 members' }
+			{ kind: 'room', id: 'r1', group: 'Not joined', joined: false, private: true, parts: [{ text: 'Dep', match: true }, { text: 'artures', match: false }], description: '14 members', ago: { text: '3w' } }
 		];
 		const state = $state<Record<string, unknown>>({ open: true, kind: 'rooms', query: 'dep', results: rooms, onpick: vi.fn() });
 		dom.render(SearchPanel, state as never);
 		flushSync();
 		const list = dom.queryByRole('listbox', 'Rooms and threads found')!;
-		expect([...list.querySelectorAll('.ap-search-group')].map((group) => group.textContent)).toEqual(['Joined', 'Not joined']);
+		expect([...list.querySelectorAll('.ap-search-group')].map((group) => group.textContent)).toEqual(['Joined1', 'Not joined1']);
 		const [thread, room] = [...list.querySelectorAll('[role="option"]')];
+		expect(thread.querySelector('[aria-label="Thread"]')).not.toBeNull();
 		expect(thread.querySelector('mark')!.textContent).toBe('Dep');
 		expect(thread.textContent).toContain('in Engineering');
 		expect(thread.querySelector('[aria-label="2 unread replies"]')).not.toBeNull();
+		expect(room.querySelector('[aria-label="Room"]')).not.toBeNull();
 		expect(room.querySelector('[aria-label="Private"]')).not.toBeNull();
-		expect(room.textContent).toContain('14 members');
-		// No buttons in an option: no door in or out, and nothing the interop suite finds rooms by.
+		expect(room.textContent).toContain('14 members · active 3w ago');
+		// No buttons in an option, and nothing the interop suite finds rooms by.
 		expect(list.querySelector('button, [data-room], [data-thread], [data-join]')).toBeNull();
 		expect(document.querySelector('[role="status"]')!.textContent).toBe('2 rooms found.');
 		(room as HTMLElement).click();
