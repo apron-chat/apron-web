@@ -127,7 +127,7 @@ class SnapshotParts {
 		this.authBusy = next.authBusy;
 		this.showReconnectDivider = next.showReconnectDivider;
 		// Each made afresh with every snapshot: kept while it says the same.
-		if (!sameEntries(this.uploads, next.uploads)) this.uploads = next.uploads;
+		if (!sameEntries(this.uploads, next.uploads, sameFields)) this.uploads = next.uploads;
 		if (!sameEntries(this.limits, next.limits, sameFields)) this.limits = next.limits;
 		if (!sameItems(this.typing, next.typing, sameFields)) this.typing = next.typing;
 		if (!sameItems(this.directory, next.directory, sameFields)) this.directory = next.directory;

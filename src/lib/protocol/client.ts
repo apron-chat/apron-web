@@ -814,7 +814,8 @@ export class ChatClient {
 			...(this.sawOffline.size ? { sawOffline: Object.fromEntries(this.sawOffline) } : {}),
 			recordedUsers: Object.fromEntries([...this.recordedUsers].map(([id, entry]) => [id, entry.identity])),
 			userAliases: Object.fromEntries(this.userAliases),
-			uploads: Object.fromEntries(this.uploads),
+			// Copies: a write moves its own state on as it goes (`writeUploads`), and a snapshot never changes once made.
+			uploads: Object.fromEntries([...this.uploads].map(([embedId, state]) => [embedId, { ...state }])),
 			...(this.memberChangesUnsupported ? { memberChangesUnsupported: true } : {}),
 			...(this.directory ? { directory: this.directory.map((listing) => this.withJoined(listing)) } : {}),
 			...(this.keptListings.size ? { keptListings: [...this.keptListings] } : {}),

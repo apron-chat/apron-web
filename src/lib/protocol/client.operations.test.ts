@@ -459,6 +459,20 @@ describe('uploads', () => {
 		expect(snapshot.uploads.embed_2).toMatchObject({ name: 'big.bin', failed: expect.stringMatching(/larger/) });
 	});
 
+	it('gives each snapshot its own copy of an upload, so one made earlier never changes under it', async () => {
+		vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 413 })));
+		const seen: ClientSnapshot[] = [];
+		const stop = client.subscribe((next) => seen.push(next));
+		const { uploaded } = client.sendFiles('general', '', [new File(['x'], 'big.bin')]);
+		await socket.reply('message', { message_id: '52', embeds: [{ embed_id: 'embed_3', kind: 'upload', write_url: 'http://fake.test/write/y' }] });
+		await expect(uploaded).rejects.toThrow(/larger/);
+		stop();
+		const writing = seen.find((one) => one.uploads.embed_3 && !one.uploads.embed_3.failed);
+		expect(writing?.uploads.embed_3).toEqual({ name: 'big.bin', progress: 0 });
+		expect(snapshot.uploads.embed_3).toMatchObject({ failed: expect.stringMatching(/larger/) });
+		expect(snapshot.uploads.embed_3).not.toBe(writing?.uploads.embed_3);
+	});
+
 	it('reads a refused write by its standard HTTP meaning only', async () => {
 		// What a 409 means beyond "conflict" is the server's own: it is only a refusal here.
 		vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 409 })));

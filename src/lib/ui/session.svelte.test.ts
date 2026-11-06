@@ -341,7 +341,8 @@ describe('SessionView, snapshot by snapshot', () => {
 		const lobby = listing('lobby', []);
 		const thread = listing('thread_9', []);
 		const parts = (fields: Partial<ClientSnapshot> = {}) => live([general], {
-			uploads: { up_1: upload },
+			// A copy each time, as the client gives every snapshot its own.
+			uploads: { up_1: { ...(upload as object) } as never },
 			limits: { message: { until: 1000 } },
 			typing: [{ room: 'general', from: ada }],
 			directory: [{ ...(lobby as object) } as never],
@@ -373,6 +374,11 @@ describe('SessionView, snapshot by snapshot', () => {
 		flushSync();
 		expect(seen).toEqual({ ...first, typing: first.typing + 1, limits: first.limits + 1, directory: first.directory + 1 });
 		expect(session.limits?.message?.until).toBe(2000);
+		// The upload moves on, each snapshot with a copy of it: the part changes with it, so its progress shows.
+		session.apply(parts({ typing: [], limits: { message: { until: 2000 } }, directory: [listing('lobby', ['ada'])], uploads: { up_1: { status: 'uploading', progress: 0.75 } as never } }), chat);
+		flushSync();
+		expect(seen.uploads).toBe(first.uploads + 1);
+		expect(session.uploads.up_1).toMatchObject({ progress: 0.75 });
 		cleanup();
 	});
 
