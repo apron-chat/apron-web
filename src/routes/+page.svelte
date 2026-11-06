@@ -637,13 +637,10 @@
 	});
 	// A thread kept through a reconnect counts what it had while it catches up, rather than the count going and coming back.
 	let threadReplyCount = $derived(threadRoom?.loaded || threadRoom?.resumed ? messages.length : undefined);
-	/**
-	 * You are reading the open pane's latest message: it is on screen, as
-	 * measured in this pane, and the pane has opened at its divider.
-	 */
 	/** The conversation shows: not behind the phone's rooms list, where only a faded sliver of it peeks out. */
 	let paneShown = $derived(!(narrow && mobilePane === 'rooms'));
-	let readingLatest = $derived(paneShown && viewport.latestVisible && viewport.latestVisibleIn === paneRoom?.id && viewport.newDivider.room === paneRoom?.id && viewport.newDivider.landed);
+	/** You are reading the open pane's latest message: it shows, and the viewport says you are (`readingLatest`). */
+	let readingLatest = $derived(paneShown && viewport.readingLatest);
 	/** The pane's messages this viewer may pick, in order: what shift-click ranges run along. */
 	let selectableOrder = $derived(messages.filter(canSelect).map((event) => event.message_id));
 	/** Picked messages move with `message` requests (capability `edit`), which a reader who may not write makes none of. */

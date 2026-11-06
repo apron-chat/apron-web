@@ -69,6 +69,19 @@ export interface TimelineViewportHost {
 	readThrough(room: RoomSnapshot): string | undefined;
 }
 
+/** Where the New divider sits on a visit to a pane, and how far the pane has got opening at it. */
+interface Divider {
+	/** The pane visited: a visit lasts until the pane shows another room or thread. */
+	readonly pane: string;
+	/** Your read position as the pane loaded, from `readThrough`: the divider goes after it. */
+	readonly after?: string;
+	/**
+	 * `waiting` for the pane's history, which the read position is placed against; then `landing` while the pane opens
+	 * at the divider (`landAtDivider`); `landed` once it has, or stayed at the latest. Each comes once per visit.
+	 */
+	readonly phase: 'waiting' | 'landing' | 'landed';
+}
+
 /**
  * Where the reader was, noted before older items land above them (`keepPlace`): the list, its scroll top and height,
  * and the pane it showed, so that a page or chunk that lands after the pane went elsewhere moves nothing.
@@ -113,18 +126,16 @@ export class TimelineViewport {
 	#latestVisibleIn = $state<string | undefined>();
 	/** The newest message you had on screen in the pane, for counting what arrived since. */
 	#seenThrough = $state<string | undefined>();
-	/** Bumped when you send or jump to the latest: a pane still opening at its divider stays at the latest instead. */
-	#pins = 0;
 	/** Where the last scroll event, or automatic scroll to the latest item, left the list. */
 	#lastScrollTop: number | undefined;
 	/**
 	 * Where the New divider sits in the open pane: after your read position
 	 * (`ReadPositions`) as it was when the pane opened. It stays put while you
-	 * read. `landed` once the pane has opened at it (or stayed at the latest).
+	 * read. Replaced whole, never changed in place: each visit is its own.
 	 */
-	#newDivider = $state<{ room: string; after?: string; fixed: boolean; landed: boolean }>({ room: '', fixed: false, landed: false });
-	/** The visit to a pane (its `newDivider`) that `landAtDivider` is opening at its divider. */
-	#landing: object | undefined;
+	#divider = $state.raw<Divider>({ pane: '', phase: 'waiting' });
+	/** The divider the pane is opening at, until it has: sending or jumping to the latest (`pin`) stops it there. */
+	#landing: Divider | undefined;
 	/** The open pane has no messages yet: its first items with them render newest first (`ARRIVAL_ITEMS`). */
 	#arriving = $state(false);
 	/**
@@ -154,8 +165,10 @@ export class TimelineViewport {
 	/** Made as the page starts, which binds the list to `messageScroll`. */
 	constructor(host: TimelineViewportHost) {
 		this.#host = host;
-		this.newDividerAt = $derived(this.#newDivider.room === host.paneRoom?.id && this.#newDivider.after !== undefined
-			? newDividerBefore(host.timeline, this.#newDivider.after, host.you, Boolean(host.paneRoom?.olderAvailable))
+		this.#paneCount = $derived(host.messages.length);
+		this.#paneId = $derived(host.paneRoom?.id);
+		this.newDividerAt = $derived(this.#divider.pane === this.#paneId && this.#divider.after !== undefined
+			? newDividerBefore(host.timeline, this.#divider.after, host.you, Boolean(host.paneRoom?.olderAvailable))
 			: undefined);
 		this.unseenCount = $derived.by(() => {
 			const seen = this.#seenThrough;
@@ -165,8 +178,6 @@ export class TimelineViewport {
 			for (let index = messages.length - 1; index >= 0 && compareLogIds(messages[index].message_id, seen) > 0; index--) count++;
 			return count;
 		});
-		this.#paneCount = $derived(host.messages.length);
-		this.#paneId = $derived(host.paneRoom?.id);
 	}
 
 	/** The timeline's scrolling list (`bind:this`), the same element from pane to pane. */
@@ -187,19 +198,18 @@ export class TimelineViewport {
 		this.#stickToBottom = stick;
 	}
 
-	/** The pane's latest row is on screen, as last measured. */
+	/** The pane's latest row was on screen when last measured: in this pane, or until it is measured here, the last. */
 	get latestVisible(): boolean {
 		return this.#latestVisible;
 	}
 
-	/** The pane `latestVisible` was last measured in: until it is this one, it says nothing about this one. */
-	get latestVisibleIn(): string | undefined {
-		return this.#latestVisibleIn;
-	}
-
-	/** Where the New divider sits in the open pane, and whether the pane has opened at it (`landed`). */
-	get newDivider(): { readonly room: string; readonly after?: string; readonly fixed: boolean; readonly landed: boolean } {
-		return this.#newDivider;
+	/**
+	 * You are reading the pane's latest message, as far as the list can say: it is on screen, as measured in this
+	 * pane, and the pane has opened at its divider. Worked out on each read: the page keeps it in a `$derived` of its
+	 * own, and one here as well would be a layer more to update as it changes.
+	 */
+	get readingLatest(): boolean {
+		return this.#latestVisible && this.#latestVisibleIn === this.#paneId && this.#divider.pane === this.#paneId && this.#divider.phase === 'landed';
 	}
 
 	/** The pane went to another room or thread: it opens at the latest, its newest items first. */
@@ -213,7 +223,7 @@ export class TimelineViewport {
 	/** You sent, or started a live message: the pane follows the latest, and stops opening at its divider. */
 	pin(): void {
 		this.#stickToBottom = true;
-		this.#pins++;
+		this.#landing = undefined;
 	}
 
 	/**
@@ -234,22 +244,24 @@ export class TimelineViewport {
 		});
 	}
 
-	/** The New divider, placed once per visit, and the pane opening at it. */
+	/**
+	 * The New divider, placed once per visit from your read position (kept on this device, the server's cursor, or your
+	 * newest message) once the pane's history has loaded, and the pane opening at it then: the one place a landing
+	 * starts, so there is one per visit.
+	 */
 	watchDivider(): void {
 		const host = this.#host;
-		// The New divider is placed once per visit, from your read position: kept on this device, the server's cursor, or your newest message.
 		$effect(() => {
 			const room = host.paneRoom;
 			if (!room) return;
-			if (this.#newDivider.room !== room.id) this.#newDivider = { room: room.id, fixed: false, landed: false };
-			else if (!this.#newDivider.fixed && room.loaded) this.#newDivider = { room: room.id, after: untrack(() => host.readThrough(room)), fixed: true, landed: false };
-		});
-
-		// Then the pane opens at it, where you left off, unless something already moved it from the latest.
-		$effect(() => {
-			const room = host.paneRoom;
-			if (!room || this.#newDivider.room !== room.id || !this.#newDivider.fixed || this.#newDivider.landed) return;
-			untrack(() => void this.#landAtDivider(room.id));
+			if (this.#divider.pane !== room.id) this.#divider = { pane: room.id, phase: 'waiting' };
+			else if (this.#divider.phase === 'waiting' && room.loaded) {
+				untrack(() => {
+					const divider: Divider = { pane: room.id, after: host.readThrough(room), phase: 'landing' };
+					this.#divider = divider;
+					void this.#landAtDivider(divider);
+				});
+			}
 		});
 	}
 
@@ -466,20 +478,18 @@ export class TimelineViewport {
 	 * load. Not back to it by then, it shows no divider (`newDividerBefore`)
 	 * and stays at the latest. Either way the pane has landed after.
 	 */
-	async #landAtDivider(roomId: string): Promise<void> {
+	async #landAtDivider(divider: Divider): Promise<void> {
 		const host = this.#host;
-		const visit = this.#newDivider;
-		if (this.#landing === visit) return;
-		this.#landing = visit;
-		const pinned = this.#pins;
-		const still = () => this.#newDivider === visit && host.paneRoom?.id === roomId && this.#stickToBottom && this.#pins === pinned;
+		const pane = divider.pane;
+		this.#landing = divider;
+		const still = () => this.#landing === divider && this.#divider === divider && host.paneRoom?.id === pane && this.#stickToBottom;
 		try {
-			const after = visit.after;
+			const after = divider.after;
 			for (let page = 0; page < DIVIDER_PAGES && host.client && after !== undefined && still(); page++) {
 				const oldest = host.paneRoom?.timeline.order[0];
 				if (!host.paneRoom?.olderAvailable || oldest === undefined || compareLogIds(oldest, after) <= 0) break;
 				try {
-					await host.client.loadOlder(roomId);
+					await host.client.loadOlder(pane);
 				} catch {
 					break;
 				}
@@ -490,9 +500,9 @@ export class TimelineViewport {
 			const index = host.timeline.findIndex((item) => item.kind === 'message' && item.event.message_id === before);
 			if (index >= 0 && index - LAND_CONTEXT_ITEMS < this.reveal.hidden) this.reveal.from(index - LAND_CONTEXT_ITEMS);
 			await tick();
-			const divider = () => this.#messageScroll?.querySelector<HTMLElement>('.ap-divider-new') ?? undefined;
-			await until(() => Boolean(divider()) || !still(), JUMP_WAIT_MS);
-			const node = divider();
+			const line = () => this.#messageScroll?.querySelector<HTMLElement>('.ap-divider-new') ?? undefined;
+			await until(() => Boolean(line()) || !still(), JUMP_WAIT_MS);
+			const node = line();
 			const scroller = this.#messageScroll;
 			if (!node || !scroller || !still()) return;
 			this.#stickToBottom = false;
@@ -503,17 +513,17 @@ export class TimelineViewport {
 			const items = scroller.querySelectorAll<HTMLElement>('[data-timeline-item]');
 			const latest = items[items.length - 1]?.getBoundingClientRect();
 			const visible = !latest || latest.top < scroller.getBoundingClientRect().bottom;
-			this.#measured(visible, roomId);
+			this.#measured(visible, pane);
 			if (!visible) this.#seenThrough = after;
 		} finally {
-			if (this.#landing === visit) this.#landing = undefined;
-			if (this.#newDivider === visit) this.#newDivider = { ...visit, landed: true };
+			if (this.#landing === divider) this.#landing = undefined;
+			if (this.#divider === divider) this.#divider = { ...divider, phase: 'landed' };
 		}
 	}
 
+	/** The jump bar's: the pane goes to its latest and follows it, and the mentions that came meanwhile count as seen. */
 	jumpToLatest(): void {
-		this.#stickToBottom = true;
-		this.#pins++;
+		this.pin();
 		this.floatingDay.hide();
 		this.#host.mentions.clearUnseen();
 		this.#scrollToLatest();
