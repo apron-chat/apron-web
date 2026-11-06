@@ -16,8 +16,8 @@
 	 * finds messages, newest first, each with its room, sender, time and a line of it with the words searched for
 	 * marked; or (`kind: 'rooms'`) rooms and threads, each with a # (a thread's arrow, a private room's faces), its
 	 * title marked, a thread's room or what a room is about, and what's new in it. `modes`, tabs under the title,
-	 * switch between such searches. What it searches,
-	 * and how far back, is the caller's: `note` says so, and `foot`, after the results, can say more or look further.
+	 * switch between such searches. What it searches, and how far back, is the caller's: `note` says so, and `foot`,
+	 * after the results, can say more or look further.
 	 */
 	interface Props {
 		/** Shown as a centered modal while true; bindable, and set false however it closes. */
@@ -179,6 +179,7 @@
 		{#each results as result, i (result.id)}
 			{#if result.group && result.group !== results[i - 1]?.group}<li class="ap-search-group" role="presentation"><span>{result.group}</span><span class="ap-search-groupsize">{groupSizes.get(result.group)}</span></li>{/if}
 			{#if isRoom(result)}
+				{@const detail = detailOf(result)}
 				<!-- The field's combobox takes the keys for its options (↑ ↓, Enter), which keep the focus out of the list. -->
 				<!-- svelte-ignore a11y_click_events_have_key_events -->
 				<li
@@ -188,7 +189,7 @@
 					<span class="ap-search-kind">{#if result.faces?.length}<Faces people={result.faces} size="sm" />{:else if result.thread}<CornerDownRight size={16} role="img" aria-label="Thread" />{:else}<Hash size={16} role="img" aria-label="Room" />{/if}</span>
 					<span class="ap-search-main">
 						<span class="ap-search-title"><bdi>{#each result.parts as part, p (p)}{#if part.match}<mark>{part.text}</mark>{:else}{part.text}{/if}{/each}</bdi>{#if result.private && !result.faces?.length}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}</span>
-						{#if detailOf(result)}<span class="ap-search-detail" dir="auto">{detailOf(result)}</span>{/if}
+						{#if detail}<span class="ap-search-detail" dir="auto">{detail}</span>{/if}
 					</span>
 					{#if result.muted}<BellOff class="ap-muted" role="img" aria-label="Muted" />{/if}
 					<UnreadCount unread={result.unread ?? 0} mentions={result.mentions ?? 0} quiet={result.muted} noun={result.thread ? 'reply' : 'message'} />
