@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { memoryIdb } from '$lib/test/idb';
-import { clearRegisterAgain, loadEnabledPushIds, loadRegisterAgain, loadRoomTitles, markRegisterAgain, saveEnabledPushIds, saveRoomTitles, TITLES_MAX, withShown } from './push-store';
+import { clearRegisterAgain, loadEnabledPushIds, loadRegisterAgain, markRegisterAgain, saveEnabledPushIds, withShown } from './push-store';
+import { loadRoomTitles, saveRoomTitles, TITLES_MAX } from './push-titles';
 import { isNewerMessage } from './sw-handlers';
 
 /** An IndexedDB whose one store holds `stored`, or whose open fails. */

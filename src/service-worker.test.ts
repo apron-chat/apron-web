@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { memoryIdb } from '$lib/test/idb';
-import { loadRegisterAgain, PUSH_RESUBSCRIBED, saveEnabledPushIds, saveRoomTitles } from '$lib/ui/push-store';
+import { loadRegisterAgain, PUSH_RESUBSCRIBED, saveEnabledPushIds } from '$lib/ui/push-store';
+import { saveRoomTitles } from '$lib/ui/push-titles';
 import { NOTIFICATION_CLICK, PUSH_CLICK, QUIET_PUSH } from '$lib/ui/notifications';
 
 /**

@@ -2,7 +2,8 @@ import { embedsLabel } from '$lib/protocol/embeds';
 import { compareLogIds } from '$lib/protocol/reducer';
 import { withoutBidiOverrides } from '$lib/protocol/plain-text';
 import { isJsonObject } from '$lib/protocol/types';
-import { loadShownMarks, markShown, type RoomTitle } from './push-store';
+import { loadShownMarks, markShown } from './push-store';
+import type { RoomTitle } from './push-titles';
 
 export type NotificationPermissionState = 'default' | 'granted' | 'denied' | 'unsupported';
 export type NotificationTestResult = 'sent' | 'denied' | 'unsupported' | 'error';

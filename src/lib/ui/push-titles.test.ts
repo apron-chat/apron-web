@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { TITLES_MAX } from './push-store';
-import { PushTitles, roomTitlesOf, type TitledRoom } from './push-titles';
+import { PushTitles, roomTitlesOf, TITLES_MAX, type TitledRoom } from './push-titles';
 
 const room = (id: string, title: string, joined = true, namedForMembers?: true): TitledRoom => ({ id, title, joined, ...(namedForMembers ? { namedForMembers } : {}) });
 

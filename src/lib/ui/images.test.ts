@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { centerSquare, fileSize, fitWithin, ImageTooLargeError, NotAcceptedError, prepareAvatar, prepareUpload, sniffImage, stripMetadata, type Crop, type ImageCodec } from './images';
+import { stripMetadata } from './image-metadata';
+import { centerSquare, fileSize, fitWithin, ImageTooLargeError, NotAcceptedError, prepareAvatar, prepareUpload, sniffImage, type Crop, type ImageCodec } from './images';
 
 const JPEG = [0xff, 0xd8, 0xff, 0xe1];
 /** Each quality tried lower than the last: the quality steps down, whatever its steps are. */

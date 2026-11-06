@@ -5,7 +5,8 @@ import {
 	clickedTab, closeOlderInGroup, pageTarget, planPush, pushTarget, readPush,
 	type PushPayload, type PushTarget, type ShowNotificationOptions, type TabAnswer
 } from './notifications';
-import { PUSH_RESUBSCRIBED, type RoomTitle } from './push-store';
+import { PUSH_RESUBSCRIBED } from './push-store';
+import type { RoomTitle } from './push-titles';
 
 /**
  * The service worker's push and notification-click handlers (§4.9), apart

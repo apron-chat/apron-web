@@ -109,7 +109,7 @@
 	import { isPaused, muteFor, type PausedUntil } from '$lib/ui/pause';
 	import { pageSilenced } from '$lib/ui/user-status';
 	import { PushSettings } from '$lib/ui/push-settings.svelte';
-	import { PushTitles } from '$lib/ui/push-titles';
+	import type { PushTitles } from '$lib/ui/push-titles';
 	import { notifyAccount, notifyScopesOf, pushWake } from '$lib/ui/notify-scopes';
 	import { arrivalAlerts } from '$lib/ui/alerts';
 	import { readAction, readElsewhere, readFurthest } from '$lib/ui/read-action';
@@ -196,11 +196,18 @@
 	/** The server's VAPID key, offered to a signed-in account. */
 	let webPushServerKey = $derived(pushAccount ? webPushKey(session.server) : undefined);
 	let webPushActive = $derived(pushSettings.isOn(pushAccount) && notificationState === 'granted');
-	/** While push is on for the account, its rooms' titles are kept for the service worker, which names a pushed room by them. */
-	const pushTitles = new PushTitles();
+	/**
+	 * While push is on for the account, its rooms' titles are kept for the service worker, which names a pushed room by
+	 * them. The code that keeps them loads the first time push is on, not with the app.
+	 */
+	let pushTitles: Promise<PushTitles> | undefined;
 	$effect(() => {
 		const pushId = webPushActive ? accountPushId : undefined;
-		void pushTitles.keep(pushId, pushId ? session.rooms : undefined);
+		const rooms = pushId ? session.rooms : undefined;
+		// Never on: nothing was kept to forget.
+		if (!pushId && !pushTitles) return;
+		pushTitles ??= import('$lib/ui/push-titles').then(({ PushTitles }) => new PushTitles());
+		pushTitles.then((titles) => titles.keep(pushId, rooms)).catch(() => (pushTitles = undefined));
 	});
 	/**
 	 * Notifications on this device, one setting: the page's own while Apron is open, and push

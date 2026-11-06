@@ -4,7 +4,8 @@
 /// <reference lib="webworker" />
 import { base, build, files, prerendered, version } from '$service-worker';
 import { setAppBadge, type BadgeNavigator } from '$lib/ui/notifications';
-import { loadEnabledPushIds, loadRoomTitles, loadShownMarks, markRegisterAgain, markShown } from '$lib/ui/push-store';
+import { loadEnabledPushIds, loadShownMarks, markRegisterAgain, markShown } from '$lib/ui/push-store';
+import { loadRoomTitles } from '$lib/ui/push-titles';
 import { anyWindowVisible, appWindows, askTab, handleClick, handlePush, handleSubscriptionChange, isNewerMessage } from '$lib/ui/sw-handlers';
 
 /**
