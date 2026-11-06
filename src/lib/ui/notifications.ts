@@ -3,6 +3,7 @@ import { compareLogIds } from '$lib/protocol/reducer';
 import { withoutBidiOverrides } from '$lib/protocol/plain-text';
 import { isJsonObject } from '$lib/protocol/types';
 import { loadShownMarks, markShown } from './push-store';
+import type { RoomTitle } from './push-titles';
 
 export type NotificationPermissionState = 'default' | 'granted' | 'denied' | 'unsupported';
 export type NotificationTestResult = 'sent' | 'denied' | 'unsupported' | 'error';
@@ -230,8 +231,14 @@ export interface PushTarget extends MessageNotificationData {
 /** What the service worker posts to the tab it picks when one of its push notifications is clicked. */
 export const PUSH_CLICK = 'apron:push-click';
 
-/** What the service worker asks each tab, with a port to answer on: `{pushId}` of the account it is signed in to. */
+/** What the service worker asks each tab, with a port to answer on: which it is (`TabAnswer`). */
 export const PUSH_ID_QUERY = 'apron:push-id';
+
+/** What a tab answers `PUSH_ID_QUERY` with: the `push_id` of the account it is signed in to, and its own id (`NotificationTarget.tab`). */
+export interface TabAnswer {
+	pushId?: string;
+	tab?: string;
+}
 
 /** The fragment parameters that carry a push notification's room, its `push_id` and its message into a window opened for it. */
 export const PUSH_ROOM_PARAM = 'push_room';
@@ -250,13 +257,15 @@ export interface PushPayload {
 /**
  * Reads a push payload (§4.9): an object with `push_id`, `unread` and
  * `message`, ignoring other fields. Without `message` (a badge push) there
- * is no notification. Undefined for anything but an object.
+ * is no notification. Undefined for anything but an object. `titles`: the
+ * room titles kept for each account (`loadRoomTitles`), to name the room as
+ * the page would.
  */
-export function readPush(payload: unknown): PushPayload | undefined {
+export function readPush(payload: unknown, titles?: ReadonlyMap<string, ReadonlyMap<string, RoomTitle>>): PushPayload | undefined {
 	if (!isJsonObject(payload)) return undefined;
 	const pushId = typeof payload.push_id === 'string' && payload.push_id ? payload.push_id : undefined;
 	const unread = typeof payload.unread === 'number' && Number.isInteger(payload.unread) && payload.unread >= 0 ? payload.unread : undefined;
-	const notification = Object.hasOwn(payload, 'message') ? pushNotification(payload.message, pushId) : undefined;
+	const notification = Object.hasOwn(payload, 'message') ? pushNotification(payload.message, pushId, pushId ? titles?.get(pushId) : undefined) : undefined;
 	const unreadable = Object.hasOwn(payload, 'message') && !notification;
 	return { ...(pushId ? { pushId } : {}), ...(unread !== undefined ? { unread } : {}), ...(notification ? { notification } : {}), ...(unreadable ? { unreadable: true as const } : {}) };
 }
@@ -332,7 +341,9 @@ export function planPush(push: PushPayload | undefined, visible: readonly Visibl
  * (`namedForMembers`), where "Bob · Bob" would say it twice.
  */
 export function notificationTitle(sender: string, room: { title: string; namedForMembers?: true }): string {
-	return room.namedForMembers && room.title === sender ? sender : `${sender} · ${room.title}`;
+	// As shown (§3.5.2): a title that is a `room_id`, or a sender that is a `user_id`, may carry overrides too.
+	const who = withoutBidiOverrides(sender), where = withoutBidiOverrides(room.title);
+	return room.namedForMembers && where === who ? who : `${who} · ${where}`;
 }
 
 /**
@@ -341,20 +352,24 @@ export function notificationTitle(sender: string, room: { title: string; namedFo
  * the message's own notification, which replaces the page's for the same
  * message quietly, and the other way round. Undefined for anything else,
  * and without a `push_id` or `message_id`, which every push of this
- * client's registrations carries.
+ * client's registrations carries. The payload names its room only by
+ * `room_id` (§4.9.3): with the account's kept `titles`, the room is named as
+ * the page names it, else by its `room_id`.
  */
-export function pushNotification(message: unknown, pushId: string | undefined): { title: string; options: ShowNotificationOptions } | undefined {
+export function pushNotification(message: unknown, pushId: string | undefined, titles?: ReadonlyMap<string, RoomTitle>): { title: string; options: ShowNotificationOptions } | undefined {
 	if (!isJsonObject(message) || typeof message.room_id !== 'string' || !message.room_id) return undefined;
 	const messageId = typeof message.message_id === 'string' && message.message_id ? message.message_id : undefined;
 	if (pushId === undefined || messageId === undefined) return undefined;
 	const roomId = message.room_id;
 	const from = isJsonObject(message.from) ? message.from : {};
-	const name = typeof from.name === 'string' ? withoutBidiOverrides(from.name) : undefined;
-	const sender = [name, from.user_id].find((value): value is string => typeof value === 'string' && value.trim() !== '') ?? 'Someone';
+	// Each as shown (§3.5.2): a name, or a `user_id` or `room_id` standing in for one, can't reorder the title.
+	const shown = (value: unknown) => (typeof value === 'string' ? withoutBidiOverrides(value) : undefined);
+	const sender = [shown(from.name), shown(from.user_id)].find((value): value is string => value !== undefined && value.trim() !== '') ?? 'Someone';
 	const text = isJsonObject(message.body) && typeof message.body.text === 'string' ? message.body.text : undefined;
 	const body = notificationBody(text) || embedsLabel(isJsonObject(message.body) ? message.body.embeds : undefined) || 'New message';
 	const target: PushTarget = { push: true, roomId, pushId, messageId, group: notificationGroup(pushId, roomId) };
-	return { title: `${sender} · ${roomId}`, options: { body, tag: messageNotificationTag(pushId, messageId), renotify: false, data: target } };
+	const room = titles?.get(roomId);
+	return { title: room ? notificationTitle(sender, room) : `${sender} · ${shown(roomId)}`, options: { body, tag: messageNotificationTag(pushId, messageId), renotify: false, data: target } };
 }
 
 /** The app badge API, where the browser has it (`navigator` in a page or a service worker). */
@@ -410,11 +425,14 @@ export function pushClickTarget(message: unknown): PushTarget | undefined {
 }
 
 /**
- * The first of `tabs` (in order) whose account has this `push_id`, asking
- * them all at once with `ask`, which resolves undefined for a tab that
- * doesn't answer in time.
+ * The tab a click on a notification goes to, asking all of `tabs` at once with `ask`, which resolves undefined for a
+ * tab that doesn't answer in time: the one that raised it (`raisedBy`, a page notification's `tab`), else the first
+ * of them (in order) whose account has `pushId`. `raised` says which.
  */
-export async function tabWithPushId<T>(tabs: readonly T[], pushId: string, ask: (tab: T) => Promise<string | undefined>): Promise<T | undefined> {
+export async function clickedTab<T>(tabs: readonly T[], ask: (tab: T) => Promise<TabAnswer | undefined>, want: { raisedBy?: string; pushId?: string }): Promise<{ tab: T; raised: boolean } | undefined> {
 	const answers = await Promise.all(tabs.map((tab) => ask(tab).catch(() => undefined)));
-	return tabs.find((_, index) => answers[index] === pushId);
+	const index = want.raisedBy === undefined ? -1 : answers.findIndex((answer) => answer?.tab === want.raisedBy);
+	if (index >= 0) return { tab: tabs[index], raised: true };
+	const signedIn = want.pushId === undefined ? -1 : answers.findIndex((answer) => answer?.pushId === want.pushId);
+	return signedIn >= 0 ? { tab: tabs[signedIn], raised: false } : undefined;
 }

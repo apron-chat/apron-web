@@ -216,6 +216,63 @@ describe('a guest sign-in refused with retry_after', () => {
 	});
 });
 
+describe('a sign-in result', () => {
+	it('signs in as no one whose user_id is empty or has whitespace (§2.4)', async () => {
+		let snapshot!: ClientSnapshot;
+		vi.useFakeTimers();
+		startClient({ onSnapshot: (next) => (snapshot = next) });
+		const socket = latest();
+		socket.open();
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: [] } });
+		await socket.reply('auth', { you: { user_id: ' ' } });
+		expect(snapshot.authenticated).toBe(false);
+		expect(snapshot.you).toBeUndefined();
+		expect(snapshot.error).toBe('Server authentication response did not include an identity');
+	});
+});
+
+describe('a guest sign-in that fails for the moment', () => {
+	let snapshot: ClientSnapshot;
+
+	beforeEach(() => {
+		vi.useFakeTimers();
+		startClient({ onSnapshot: (next) => (snapshot = next) });
+	});
+
+	it('gives up a connection whose sign-in went unanswered, and signs in on the next', async () => {
+		const socket = latest();
+		socket.open();
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['rooms'] } });
+		const auth = socket.request('auth');
+		await vi.advanceTimersByTimeAsync(20_000);
+		expect(snapshot.authenticated).toBe(false);
+		expect(snapshot.error).toBe('auth request timed out');
+		// Rather than sit open signed in as no one, with nothing to reconnect it.
+		expect(socket.readyState).toBe(FakeSocket.CLOSED);
+		// A result too late for its request changes nothing.
+		socket.receive({ id: auth.id, result: { you: { user_id: 'guest_9' } } });
+		await settle();
+		expect(snapshot.authenticated).toBe(false);
+		socket.drop();
+		const next = await nextSocket(socket);
+		await next.greet();
+		expect(snapshot.authenticated).toBe(true);
+		expect(snapshot.you?.user_id).toBe('guest_1');
+	});
+
+	it('gives up a connection whose sign-in failed on the server’s side', async () => {
+		const socket = latest();
+		socket.open();
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['rooms'] } });
+		socket.receive({ id: socket.request('auth').id, error: { code: -32603, message: 'Internal error' } });
+		await settle();
+		expect(socket.readyState).toBe(FakeSocket.CLOSED);
+		socket.drop();
+		await (await nextSocket(socket)).greet();
+		expect(snapshot.authenticated).toBe(true);
+	});
+});
+
 describe('failed handshake diagnostics', () => {
 	let client: ChatClient;
 	let snapshot: ClientSnapshot;

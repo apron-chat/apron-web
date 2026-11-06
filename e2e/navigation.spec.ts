@@ -45,6 +45,24 @@ test.describe('deep links', () => {
 	});
 });
 
+test.describe('deep links on a phone', () => {
+	test.use(DEVICES.phone);
+
+	test('a link pasted into the open tab over the rooms list shows where it goes, as picking a room does', async ({ preview, page }) => {
+		await preview.open();
+		await preview.roomsPane();
+		await page.evaluate(() => (location.hash = 'room=engineering'));
+		await at(preview, 'engineering', /#room=engineering$/);
+		await expect(page.getByTestId('room-list')).toBeHidden();
+		await expect(preview.message('Engineering room preview')).toBeVisible();
+		// A message in the room already open, too.
+		await preview.roomsPane();
+		await page.evaluate(() => (location.hash = 'room=engineering&message=1710000000007'));
+		await expect(page.getByTestId('room-list')).toBeHidden();
+		await expect(preview.message('Engineering room preview')).toBeInViewport();
+	});
+});
+
 test.describe('a window opened for a push notification', () => {
 	test.use(DEVICES.desktop);
 

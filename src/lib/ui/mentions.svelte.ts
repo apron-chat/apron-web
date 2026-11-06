@@ -2,6 +2,7 @@ import type { RoomSnapshot } from '$lib/protocol/client';
 import { compareLogIds, type TimelineState } from '$lib/protocol/reducer';
 import type { Identity, MessageRecord } from '$lib/protocol/types';
 import { isOwn, mentionsMe } from './messages';
+import { sameCounts } from './unread.svelte';
 
 /** How long the mention pulse stays on a row; the animation itself runs once. */
 const PING_MS = 1200;
@@ -157,9 +158,4 @@ function addCounts(a: Record<string, number>, b: Record<string, number>): Record
 	const sum = { ...a };
 	for (const [room, count] of Object.entries(b)) sum[room] = (sum[room] ?? 0) + count;
 	return sum;
-}
-
-function sameCounts(a: Record<string, number>, b: Record<string, number>): boolean {
-	const keys = Object.keys(a);
-	return keys.length === Object.keys(b).length && keys.every((key) => a[key] === b[key]);
 }

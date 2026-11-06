@@ -38,9 +38,9 @@ export interface ReadAction {
 	message: string;
 	/**
 	 * Close the room's notifications on this device up to `message`: those of the account's group where it has
-	 * a `push_id`, else the page's own of the room. `key` names this read, kept so each closes once.
+	 * a `push_id`, else of the server's, which the page's own carry. `key` names this read, kept so each closes once.
 	 */
-	close?: { key: string; target: { group: string } | { tag: string } };
+	close?: { key: string; target: { group: string } };
 }
 
 /**
@@ -58,8 +58,7 @@ export function readAction(state: ReadState, notifications: ReadNotifications): 
 	if (state.away) return action;
 	const key = `${notifications.pushId ?? ''}:${server}:${room.id}:${last}`;
 	if (key === notifications.closedThrough) return action;
-	const target = notifications.pushId ? { group: notificationGroup(notifications.pushId, room.id) } : { tag: `apron:${server}:${room.id}` };
-	return { ...action, close: { key, target } };
+	return { ...action, close: { key, target: { group: notificationGroup(notifications.pushId ?? server, room.id) } } };
 }
 
 /**

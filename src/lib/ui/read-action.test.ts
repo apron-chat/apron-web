@@ -12,7 +12,8 @@ const none = { pushId: undefined, closedThrough: undefined };
 
 describe('reading the latest message', () => {
 	it('marks it read, and closes the room’s notifications on this device up to it, the account’s where it has a push_id', () => {
-		expect(readAction(reading(), none)).toEqual({ room: 'general', message: '120', close: { key: `:${SERVER}:general:120`, target: { tag: `apron:${SERVER}:general` } } });
+		// Without one, those the page showed itself, which carry the server in its place.
+		expect(readAction(reading(), none)).toEqual({ room: 'general', message: '120', close: { key: `:${SERVER}:general:120`, target: { group: notificationGroup(SERVER, 'general') } } });
 		// The account's, where it has a push_id.
 		expect(readAction(reading(), { pushId: 'a1', closedThrough: undefined })?.close).toEqual({ key: `a1:${SERVER}:general:120`, target: { group: notificationGroup('a1', 'general') } });
 	});

@@ -110,6 +110,31 @@ describe('posts and commands', () => {
 	});
 });
 
+describe('a request the connection ends under', () => {
+	it('says one that never went out was not sent, and one that did may have been', async () => {
+		await connect();
+		const sent = client.send('general', 'out');
+		socket.drop();
+		// Asked while away: it waits for the next connection, which goes before it is signed in.
+		const unsent = client.send('general', 'waiting');
+		vi.advanceTimersByTime(5_000);
+		FakeSocket.latest().drop();
+		await expect(sent.promise).rejects.toThrow('Connection closed; delivery is uncertain. Please retry');
+		await expect(unsent.promise).rejects.toThrow('Connection closed; not sent. Please retry');
+	});
+
+	it('says one that never went out before it timed out was not sent', async () => {
+		// A server that signs in only with a passkey: the connection stays up, waiting for a tap.
+		socket.open();
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['webauthn'], capabilities: ['rooms'] } });
+		const unsent = client.send('general', 'early');
+		quiet(unsent);
+		await vi.advanceTimersByTimeAsync(20_000);
+		expect(socket.sent.some((frame) => frame.method === 'message')).toBe(false);
+		await expect(unsent.promise).rejects.toThrow('Not connected in time; message request not sent. Please retry');
+	});
+});
+
 describe('saves', () => {
 	it('resubmits reply_to bare and the rest of the body on edits, but never ext, which the server merges', async () => {
 		await connect();
@@ -426,14 +451,26 @@ describe('uploads', () => {
 		expect(snapshot.uploads).toEqual({});
 	});
 
-	it('keeps a failed write visible until dismissed', async () => {
+	it('keeps a failed write visible', async () => {
 		vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 413 })));
 		const { uploaded } = client.sendFiles('general', '', [new File(['x'], 'big.bin')]);
 		await socket.reply('message', { message_id: '51', embeds: [{ embed_id: 'embed_2', kind: 'upload', write_url: 'http://fake.test/write/x' }] });
 		await expect(uploaded).rejects.toThrow(/larger than this server accepts/);
 		expect(snapshot.uploads.embed_2).toMatchObject({ name: 'big.bin', failed: expect.stringMatching(/larger/) });
-		client.dismissUpload('embed_2');
-		expect(snapshot.uploads).toEqual({});
+	});
+
+	it('gives each snapshot its own copy of an upload, so one made earlier never changes under it', async () => {
+		vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 413 })));
+		const seen: ClientSnapshot[] = [];
+		const stop = client.subscribe((next) => seen.push(next));
+		const { uploaded } = client.sendFiles('general', '', [new File(['x'], 'big.bin')]);
+		await socket.reply('message', { message_id: '52', embeds: [{ embed_id: 'embed_3', kind: 'upload', write_url: 'http://fake.test/write/y' }] });
+		await expect(uploaded).rejects.toThrow(/larger/);
+		stop();
+		const writing = seen.find((one) => one.uploads.embed_3 && !one.uploads.embed_3.failed);
+		expect(writing?.uploads.embed_3).toEqual({ name: 'big.bin', progress: 0 });
+		expect(snapshot.uploads.embed_3).toMatchObject({ failed: expect.stringMatching(/larger/) });
+		expect(snapshot.uploads.embed_3).not.toBe(writing?.uploads.embed_3);
 	});
 
 	it('reads a refused write by its standard HTTP meaning only', async () => {

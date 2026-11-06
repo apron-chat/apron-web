@@ -38,6 +38,19 @@ function message(id: string, fields: Record<string, unknown> = {}, log = id): Re
 
 const room = (id: string) => snapshot.rooms.find((entry) => entry.id === id)!;
 
+describe('history added by a replacing server frame', () => {
+	it('recovers each room shown, as if it had been there at sign-in', async () => {
+		await socket.greet(['rooms'], { room: { room_id: 'general', log_id: '10', title: 'General', latest_log_id: '12', history_log_id: '10' } });
+		socket.receive({ method: 'message', params: message('13') });
+		expect(socket.sent.some((frame) => frame.method === 'history')).toBe(false);
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['rooms', 'history'] } });
+		expect(socket.request('history').params).toEqual({ room_id: 'general', before: '13', limit: 50 });
+		await socket.reply('history', { messages: [message('11'), message('12'), message('13')], more: false, latest_log_id: '13', history_log_id: '10' });
+		expect(room('general')).toMatchObject({ recovering: false, loaded: true });
+		expect(room('general').timeline.order).toEqual(['11', '12', '13']);
+	});
+});
+
 describe('history per room', () => {
 	beforeEach(async () => {
 		await socket.greet(['history', 'rooms'], { room: { room_id: 'general', log_id: '10', title: 'General', latest_log_id: '12', history_log_id: '10' } });
@@ -956,6 +969,42 @@ describe('catching up every joined room together (`history` without `room_id`)',
 		await settle();
 		expect(room(side.room_id).timeline.order).toEqual([at(21), at(22), at(23)]);
 		expect(histories(next)).toHaveLength(1);
+	});
+
+	it('keeps the rooms the listing leaves out current from what comes live, as those it lists', async () => {
+		const next = await reconnected();
+		await next.reply('auth', { you: { user_id: 'ada', name: 'Ada' } });
+		// Only general changed: the thread is left out, complete up to its head as it was.
+		await next.reply('room_list', { joined: [{ ...general, latest_log_id: at(14) }], left: [], users: [] });
+		await next.reply('history', { messages: [entry(13), entry(14)], more: false, latest_log_id: at(14), history_log_id: at(10) });
+		await settle();
+		expect(room(side.room_id).resumed).toBeUndefined();
+		next.receive({ method: 'message', params: entry(23, side.room_id) });
+		next.drop();
+		vi.advanceTimersByTime(5_000);
+		const again = latest();
+		again.open();
+		again.receive({ method: 'server', params: { apron: 10, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
+		await again.reply('auth', { you: { user_id: 'ada', name: 'Ada' } });
+		await again.reply('room_list', { joined: [{ ...side, latest_log_id: at(24) }], left: [], users: [] });
+		expect(histories(again)).toEqual([{ after: at(24) }]);
+		await again.reply('history', { messages: [entry(24, side.room_id)], more: false, latest_log_id: at(24), history_log_id: at(10) });
+		await settle();
+		// Its last load moved with the reply that came live: the catch-up vouches for it, and it needs no load of its own.
+		expect(histories(again)).toHaveLength(1);
+		expect(room(side.room_id).timeline.order).toEqual([at(21), at(22), at(23), at(24)]);
+
+		// The same for a top-level room left out: its checkpoint moves with what comes live.
+		again.receive({ method: 'message', params: entry(25) });
+		again.drop();
+		vi.advanceTimersByTime(5_000);
+		const third = latest();
+		third.open();
+		third.receive({ method: 'server', params: { apron: 10, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
+		expect(third.request('room_list').params).toMatchObject({ latest_log_id: at(24) });
+		await third.reply('auth', { you: { user_id: 'ada', name: 'Ada' } });
+		await third.reply('room_list', { joined: [{ ...general, latest_log_id: at(26) }, { ...side, latest_log_id: at(27) }], left: [], users: [] });
+		expect(histories(third)).toEqual([{ after: at(25) }]);
 	});
 
 	it('starts after what came live, which moved every room\u2019s checkpoint', async () => {

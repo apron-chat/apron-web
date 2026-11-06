@@ -1,6 +1,8 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import X from '@lucide/svelte/icons/x';
 	import type { FeedbackState } from '$lib/ui/feedback.svelte';
+	import { onLoadFailed } from '$lib/ui/lazy.svelte';
 	import StatusBanner from '$lib/design/components/StatusBanner.svelte';
 
 	/**
@@ -14,6 +16,9 @@
 		ondismisserror: () => void;
 	}
 	let { feedback, error, ondismisserror }: Props = $props();
+
+	// Code asked for that didn't load (a dialog, a popover) shows nothing by itself: say so, once for each try.
+	onMount(() => onLoadFailed(() => feedback.error('Couldn’t load that part of Apron. Check your connection, then try again.')));
 </script>
 
 <!-- An error stays until closed or the next request; a pending line goes by itself. -->

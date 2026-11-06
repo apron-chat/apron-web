@@ -77,6 +77,17 @@ describe('message store', () => {
 		expect(store.message('3')).toBeUndefined();
 	});
 
+	it('evicts a message’s reaction sets with it, and keeps those of a message kept', () => {
+		const store = new ProtocolStore();
+		install(store, snapshot(2, 1), snapshot(8, 1, { body: { text: 'edited recently' } }), snapshot(3, 3));
+		for (const message of ['1', '3']) {
+			for (const set of decodeReactions({ log_id: '4', message_id: message, room_id: 'general', reactions: [{ from: { user_id: 'bob' }, emojis: ['👍'] }] })) store.putReaction(set);
+		}
+		store.evictBefore('general', '8');
+		expect(store.reactionSet('3', 'bob')).toBeUndefined();
+		expect(store.reactionSet('1', 'bob')?.emojis).toEqual(['👍']);
+	});
+
 	it('clears a room with its reaction sets but leaves other rooms alone', () => {
 		const store = new ProtocolStore();
 		install(store, snapshot(1), snapshot(2, 2, { room_id: 'other' }));
@@ -133,6 +144,14 @@ describe('wire decoding', () => {
 		// Only a boolean is a `private` flag; a bad count is dropped.
 		expect(decodeRoom({ room_id: 'x', private: 'yes', member_count: -1 })!.record).not.toHaveProperty('private');
 		expect(decodeRoom({ room_id: 'x', member_count: 1.5 })!.delivery).toEqual({});
+	});
+
+	it('leaves out a field of the wrong type, as if absent', () => {
+		const message = decodeMessage({ ...snapshot(1), body: 'hi', deleted: 'yes', ext: ['a'] })!.record;
+		expect(Object.keys(message).sort()).toEqual(['from', 'log_id', 'message_id', 'room_id']);
+		expect(decodeMessage({ ...snapshot(1), body: ['hi'] })!.record).not.toHaveProperty('body');
+		const room = decodeRoom({ room_id: 'x', title: { text: 'General' }, description: 42, ext: 'x' })!.record;
+		expect(JSON.parse(JSON.stringify(room))).toEqual({ room_id: 'x' });
 	});
 
 	it('replaces room records in full and lets a record without log_id always replace', () => {

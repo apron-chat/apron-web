@@ -29,7 +29,10 @@ export const NOWHERE: MediaCheck = { key: 'none', src: () => undefined };
 /**
  * `message`: what a body holds once rendered, what CommonMark produces plus the links, mention chips and custom
  * emoji added to it; raw HTML never gets this far, and sanitizing last also covers everything done after rendering.
- * `embed`: an HTML embed (§4.8), as its server sent it, without scripts, styles, forms or anything but HTML.
+ * `embed`: an HTML embed (§4.8), as its server sent it: text, tables, lists, links and media, without scripts,
+ * styles, forms or anything but HTML. Nothing in it names the page's own parts (`class`, `id`, `role`, ARIA) or
+ * shows itself on its own (`open`, `hidden`, `popover`, a dialog), so it can't wear the app's classes to draw
+ * over the room or pass for its controls.
  */
 const CONFIGS: Record<'message' | 'embed', Config> = {
 	message: {
@@ -40,7 +43,21 @@ const CONFIGS: Record<'message' | 'embed', Config> = {
 		ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|matrix|apron):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i
 	},
 	// No `data-` attribute either: Load, Always load and Block (`data-media-load`, `data-media-trust`, `data-media-block`) are written only here.
-	embed: { USE_PROFILES: { html: true }, FORBID_TAGS: ['style', 'form', 'input', 'button'], FORBID_ATTR: ['style'], ALLOW_DATA_ATTR: false }
+	embed: {
+		ALLOWED_TAGS: [
+			'p', 'br', 'hr', 'div', 'span', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'pre', 'code', 'kbd', 'samp', 'var',
+			'b', 'i', 'u', 's', 'em', 'strong', 'small', 'sub', 'sup', 'mark', 'del', 'ins', 'abbr', 'cite', 'q', 'dfn', 'time',
+			'bdi', 'bdo', 'wbr', 'ruby', 'rt', 'rp', 'ul', 'ol', 'li', 'dl', 'dt', 'dd',
+			'table', 'caption', 'colgroup', 'col', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td',
+			'a', 'img', 'figure', 'figcaption', 'video', 'audio', 'source', 'track', 'details', 'summary'
+		],
+		ALLOWED_ATTR: [
+			'href', 'title', 'src', 'alt', 'poster', 'width', 'height', 'controls', 'loop', 'muted', 'type', 'kind', 'srclang', 'label',
+			'start', 'reversed', 'value', 'colspan', 'rowspan', 'span', 'scope', 'abbr', 'datetime', 'lang', 'dir'
+		],
+		ALLOW_ARIA_ATTR: false,
+		ALLOW_DATA_ATTR: false
+	}
 };
 
 export type SanitizeKind = keyof typeof CONFIGS;
@@ -69,7 +86,8 @@ const sanitized = new Map<string, string>();
  * is kept.
  */
 export function sanitizeHtml(html: string, kind: SanitizeKind, media: MediaCheck): string {
-	const key = `${kind}\n${media.key}\n${html}`;
+	// The gate's key by its length: it holds line breaks of its own (the URLs clicked to load), so no separator tells where it ends.
+	const key = `${kind} ${media.key.length} ${media.key}${html}`;
 	let clean = sanitized.get(key);
 	if (clean !== undefined) {
 		sanitized.delete(key);

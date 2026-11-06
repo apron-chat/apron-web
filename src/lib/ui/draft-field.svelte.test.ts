@@ -80,6 +80,25 @@ describe('DraftField', () => {
 		f.done();
 	});
 
+	it('sends nothing on the Enter that commits a composition, as Safari sends it after `compositionend`', () => {
+		const f = field({ value: true });
+		const press = (init: KeyboardEventInit) => {
+			const event = new KeyboardEvent('keydown', { cancelable: true, ...init });
+			f.draft.keydown(event);
+			return event;
+		};
+		expect(press({ key: 'Enter', isComposing: true }).defaultPrevented).toBe(false);
+		// Safari: no longer composing, but the input method's key code.
+		expect(press({ key: 'Enter', keyCode: 229 }).defaultPrevented).toBe(false);
+		expect(f.submit).not.toHaveBeenCalled();
+		// Nor takes a suggestion in the picker.
+		f.type('@al');
+		expect(press({ key: 'Enter', keyCode: 229 }).defaultPrevented).toBe(false);
+		expect(f.mentions()).toEqual([]);
+		expect(f.key).not.toHaveBeenCalled();
+		f.done();
+	});
+
 	it('takes no keys for a picker that isn’t drawn yet: Enter sends, and the field names no picker', () => {
 		const shown = $state({ value: false });
 		const f = field(shown);

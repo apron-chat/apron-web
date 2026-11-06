@@ -5,12 +5,20 @@ import { onDemand } from './on-demand';
  * asks for it: undefined until it has loaded, then the component, which stays, so later opens render at once (render
  * it as `{#if open && lazy.component}`). Each one is also fetched shortly after the page settles (`prefetchLazy`), so
  * the first open rarely waits on the network, and a tab opened before a deploy already holds it. A failed load is
- * forgotten, so the next read tries again.
+ * forgotten, so the next ask tries again; one that was asked for is told (`onLoadFailed`, the page's toast), and
+ * what still asks for it reads `component` again at the next press or key (`retryOnNextTouch`), as the next open.
  */
 export class Lazy<T> {
 	#component = $state<T>();
+	/** Moves on when a failed ask may be tried again, so what reads `component` reads it again. */
+	#retry = $state(0);
 	#load: () => Promise<T>;
 	#arrived: Promise<T>;
+	/** An ask's load is under way: it is told of once if it fails, however often `component` is read meanwhile. */
+	#asking = false;
+	#retryArmed = false;
+	/** The waiting host's `cancel` (`once`), which a failed load calls: its next ask asks again. */
+	#cancel?: () => void;
 
 	/** `load` imports the code, once asked: `() => import('./on-demand').then((m) => m.Dialog)`. */
 	constructor(load: () => Promise<T>) {
@@ -21,8 +29,26 @@ export class Lazy<T> {
 	}
 
 	get component(): T | undefined {
-		if (this.#component === undefined) this.load().catch(() => undefined);
+		void this.#retry;
+		if (this.#component === undefined) this.#ask();
 		return this.#component;
+	}
+
+	#ask(): void {
+		if (this.#asking) return;
+		this.#asking = true;
+		this.load().then(() => (this.#asking = false), (cause: unknown) => {
+			this.#asking = false;
+			tellFailure(cause);
+			// A host that waits with `once` lets go, so its next ask asks again; one that reads `component` asks still.
+			this.#cancel?.();
+			if (this.#retryArmed) return;
+			this.#retryArmed = true;
+			retryOnNextTouch(() => {
+				this.#retryArmed = false;
+				this.#retry += 1;
+			});
+		});
 	}
 
 	#asked = false;
@@ -41,7 +67,9 @@ export class Lazy<T> {
 	 */
 	once(asked: boolean, cancel?: () => void, anchor?: HTMLElement): T | undefined {
 		if (asked) this.#asked = true;
-		const component = this.#asked ? this.component : undefined;
+		// Let go of before it came (cancelled, or failed): the code isn't asked for again until the next ask.
+		const component = asked ? this.component : this.#asked ? this.#component : undefined;
+		this.#cancel = asked && component === undefined ? cancel : undefined;
 		if (asked && cancel && component === undefined) this.#waiting ??= cancelWhileWaiting(true, cancel, anchor);
 		else {
 			this.#waiting?.();
@@ -79,6 +107,43 @@ export function lazyChunk<M>(load: () => Promise<M>): <T>(pick: (loaded: M) => T
 		parts.push(lazy);
 		return lazy;
 	};
+}
+
+/** What hears of a load someone asked for that failed (`onLoadFailed`). */
+const failureListeners = new Set<(cause: unknown) => void>();
+/** Failures already told: the parts of a chunk asked for together fail with one cause, told once. */
+const told = new WeakSet<object>();
+
+/**
+ * Hears of each failed load of code someone asked for (`component`, `once`): the page's toast says it, as nothing
+ * else would show. Not of the background prefetch's, which nobody waits on. Returns what stops it.
+ */
+export function onLoadFailed(listener: (cause: unknown) => void): () => void {
+	failureListeners.add(listener);
+	return () => failureListeners.delete(listener);
+}
+
+function tellFailure(cause: unknown): void {
+	if (typeof cause === 'object' && cause !== null) {
+		if (told.has(cause)) return;
+		told.add(cause);
+	}
+	for (const listener of failureListeners) listener(cause);
+}
+
+/**
+ * Runs `again` at the next press or key anywhere, the likeliest moment the viewer asks again (a host whose open state
+ * stays set can't ask any other way), or once the browser is back online; while it says it's offline, only then.
+ */
+function retryOnNextTouch(again: () => void): void {
+	if (typeof window === 'undefined') return;
+	const triggers: Array<[EventTarget, string]> = [[window, 'online']];
+	if (navigator.onLine !== false) triggers.push([document, 'pointerdown'], [document, 'keydown']);
+	const run = () => {
+		for (const [target, type] of triggers) target.removeEventListener(type, run, true);
+		again();
+	};
+	for (const [target, type] of triggers) target.addEventListener(type, run, true);
 }
 
 const registered: Lazy<unknown>[] = [];

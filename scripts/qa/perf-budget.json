@@ -6,49 +6,49 @@
 	"probes": {
 		"load": {
 			"requests": 22,
-			"startupJsKB": 888.3,
+			"startupJsKB": 898.2,
 			"domNodes": 537,
 			"layouts": 10,
 			"styleRecalcs": 18,
-			"calls": 216027,
+			"calls": 209590,
 			"heapMB": 8.4
 		},
 		"load-busy": {
 			"requests": 20,
-			"startupJsKB": 861,
+			"startupJsKB": 870.8,
 			"domNodes": 1149,
 			"layouts": 13,
 			"styleRecalcs": 16,
-			"calls": 1608665,
+			"calls": 1507671,
 			"heapMB": 10.9
 		},
 		"load-phone": {
 			"requests": 22,
-			"startupJsKB": 888.3,
+			"startupJsKB": 898.2,
 			"domNodes": 538,
 			"layouts": 10,
 			"styleRecalcs": 16,
-			"calls": 186928,
+			"calls": 183608,
 			"heapMB": 8.2
 		},
 		"load-phone-busy": {
 			"requests": 20,
-			"startupJsKB": 861,
+			"startupJsKB": 870.8,
 			"domNodes": 1150,
 			"layouts": 9,
 			"styleRecalcs": 15,
-			"calls": 1241227,
+			"calls": 1161020,
 			"heapMB": 10.6
 		},
 		"switch-room-busy": {
 			"layouts": 2,
 			"styleRecalcs": 12,
-			"calls": 90491
+			"calls": 86619
 		},
 		"send-message-busy": {
 			"layouts": 38,
 			"styleRecalcs": 16,
-			"calls": 294826
+			"calls": 284904
 		},
 		"sidebar-collapse": {
 			"layouts": 3,
@@ -68,7 +68,7 @@
 		"open-thread": {
 			"layouts": 4,
 			"styleRecalcs": 14,
-			"calls": 70008
+			"calls": 64988
 		},
 		"open-preferences": {
 			"layouts": 3,
@@ -83,21 +83,21 @@
 		"type-composer": {
 			"layouts": 36,
 			"styleRecalcs": 6,
-			"calls": 41853
+			"calls": 41247
 		},
 		"hover-messages": {
 			"layouts": 7,
 			"styleRecalcs": 7,
-			"calls": 7255
+			"calls": 7302
 		}
 	},
 	"bundle": {
-		"jsGzipKB": 578.8,
+		"jsGzipKB": 584.7,
 		"cssGzipKB": 26.4
 	},
 	"production": {
 		"startupFiles": 13,
-		"startupJsKB": 798.9,
-		"startupJsBrotliKB": 225.8
+		"startupJsKB": 805.6,
+		"startupJsBrotliKB": 227.4
 	}
 }

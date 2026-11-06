@@ -165,6 +165,26 @@ describe('the joined set (cap rooms)', () => {
 		expect(snapshot.rooms).toEqual([]);
 	});
 
+	it('lists the joined rooms again after a listing that failed for the moment, waiting longer each time', async () => {
+		await authenticate(['rooms']);
+		const listings = () => socket.sent.filter((frame) => frame.method === 'room_list');
+		socket.receive({ id: socket.request('room_list').id, error: { code: -32603, message: 'Internal error' } });
+		await settle();
+		await vi.advanceTimersByTimeAsync(4_999);
+		expect(listings()).toHaveLength(1);
+		await vi.advanceTimersByTimeAsync(1);
+		expect(listings()).toHaveLength(2);
+		expect(socket.request('room_list').params).toEqual({ filter: 'joined', members: true });
+		// This one goes unanswered: the next waits twice as long once it times out.
+		await vi.advanceTimersByTimeAsync(20_000 + 9_999);
+		expect(listings()).toHaveLength(2);
+		await vi.advanceTimersByTimeAsync(1);
+		expect(listings()).toHaveLength(3);
+		await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General' }] });
+		expect(ids()).toEqual(['general']);
+		expect(snapshot.error).toBeUndefined();
+	});
+
 	it('lists the joined rooms again when the connection becomes another user', async () => {
 		await socket.greet([], { room: { room_id: 'general', title: 'General' } });
 		socket.receive({ method: 'user', params: { you: { user_id: 'guest_1', name: 'Renamed' } } });
@@ -354,6 +374,19 @@ describe('the default room (no cap rooms)', () => {
 		socket.receive({ method: 'message', params: { message_id: '11', log_id: '11', room_id: 'side', from: { user_id: 'bob' }, body: { text: 'x' } } });
 		expect(snapshot.rooms.map((room) => room.id)).toEqual(['lobby', 'side']);
 		await settle();
+	});
+
+	it('lists the joined rooms in its place once a replacing server frame adds cap rooms', async () => {
+		await socket.greet([], { rooms: false });
+		expect(ids()).toEqual([DEFAULT_ROOM_ID]);
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['rooms'] } });
+		expect(socket.request('room_list').params).toEqual({ filter: 'joined', members: true });
+		await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General' }] });
+		expect(ids()).toEqual(['general']);
+		expect(snapshot.activeRoom).toBe('general');
+		// Frames that add nothing ask nothing again.
+		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['rooms'] } });
+		expect(socket.sent.filter((frame) => frame.method === 'room_list')).toHaveLength(1);
 	});
 });
 

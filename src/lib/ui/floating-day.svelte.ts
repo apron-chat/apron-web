@@ -28,6 +28,12 @@ export class FloatingDay {
 		if (this.shown) this.timer = setTimeout(() => (this.shown = false), SHOWN_MS);
 	}
 
+	/** Puts the day away at once: the pane went to another room, or to its latest, where no day floats. */
+	hide(): void {
+		this.stopTimer();
+		this.shown = false;
+	}
+
 	dispose(): void {
 		this.stopTimer();
 	}

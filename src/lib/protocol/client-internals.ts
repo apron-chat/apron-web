@@ -175,7 +175,10 @@ export function muteEnd(mute: number | boolean | undefined, now = Date.now()): n
 	return typeof mute === 'number' && mute > 0 ? now + mute * 1000 : undefined;
 }
 
-/** The first wait before an `idle` request that failed goes again; it doubles with each failure, to IDLE_RETRY_MAX_MS. */
+/**
+ * The first wait before an `idle` request that failed goes again, or the joined listing one that went unanswered or
+ * failed on the server's side; it doubles with each failure, to IDLE_RETRY_MAX_MS.
+ */
 export const IDLE_RETRY_MS = 5_000;
 export const IDLE_RETRY_MAX_MS = 5 * 60_000;
 /** The longest `setTimeout` delay browsers keep. */
@@ -675,6 +678,20 @@ function sameKept(a: Identity, b: Identity): boolean {
 		if (x !== y && JSON.stringify(x) !== JSON.stringify(y)) return false;
 	}
 	return true;
+}
+
+/** Where the browser keeps the token of the session saved for `serverUrl` (a server address, `serverAddress`). */
+export function keptSessionKey(serverUrl: string): string {
+	return `apron.session:${serverUrl}`;
+}
+
+/** Whether a session is saved for `serverUrl` (a server address): the next visit there resumes it. */
+export function hasKeptSession(serverUrl: string): boolean {
+	try {
+		return Boolean(globalThis.localStorage?.getItem(keptSessionKey(serverUrl)));
+	} catch {
+		return false;
+	}
 }
 
 /** Where the browser keeps whose session is saved for `serverUrl` (beside its token), as the sign-in named it. */

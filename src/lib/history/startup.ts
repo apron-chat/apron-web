@@ -4,6 +4,7 @@
  * (`HistoryKeeper.prepare`), so the read goes on while the app loads, renders and begins its session, and is
  * done or under way when signing in waits for it (`FRESH_HOOK_MS`).
  */
+import { hasKeptSession } from '$lib/protocol/client-internals';
 import { defaultWebSocketUrl, normalizeWebSocketUrl } from '$lib/protocol/client-views';
 import { loadServerUrl } from '$lib/ui/storage';
 import { HistoryKeeper } from './history-keeper';
@@ -19,7 +20,9 @@ export function startKeeping(): void {
 	if (started) return;
 	try {
 		const keeper = newKeeper();
-		void keeper.prepare(normalizeWebSocketUrl(loadServerUrl() ?? defaultWebSocketUrl(window.location), window.location));
+		const server = normalizeWebSocketUrl(loadServerUrl() ?? defaultWebSocketUrl(window.location), window.location);
+		// Only for a session saved there, which is all a restore is for: a guest's or a first visit opens nothing.
+		if (hasKeptSession(server)) void keeper.prepare(server);
 		started = keeper;
 	} catch {
 		// Never in the way of the app starting: the page makes its keeper as it mounts (`takeKeeper`).

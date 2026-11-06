@@ -16,7 +16,7 @@ export interface StagedFile {
 }
 
 /**
- * The composer's text, reply target and staged files, kept per destination:
+ * The composer's text, reply target, staged files and removed link previews, kept per destination:
  * each room, and each thread, since a thread is a room of its own. Keys are
  * opaque to this class; the page keys by server and `room_id`.
  */
@@ -27,10 +27,13 @@ export class PaneDrafts {
 	reply = $state<string | undefined>();
 	/** The files the open pane's draft will be sent with, in order. */
 	files = $state.raw<StagedFile[]>([]);
+	/** The link previews removed from the open pane's draft, by URL: it goes out without them. */
+	dismissed = $state.raw<string[]>([]);
 	private key: string | undefined;
 	private readonly texts = new Map<string, string>();
 	private readonly replies = new Map<string, string | undefined>();
 	private readonly staged = new Map<string, StagedFile[]>();
+	private readonly dismissals = new Map<string, string[]>();
 
 	/** The open pane's key, if a pane is open. */
 	get current(): string | undefined {
@@ -44,6 +47,7 @@ export class PaneDrafts {
 		this.text = key !== undefined ? this.texts.get(key) ?? '' : '';
 		this.reply = key !== undefined ? this.replies.get(key) : undefined;
 		this.files = key !== undefined ? this.staged.get(key) ?? [] : [];
+		this.dismissed = key !== undefined ? this.dismissals.get(key) ?? [] : [];
 	}
 
 	/** Keeps the open pane's draft and reply. */
@@ -52,6 +56,7 @@ export class PaneDrafts {
 		this.texts.set(this.key, this.text);
 		this.replies.set(this.key, this.reply);
 		this.staged.set(this.key, this.files);
+		this.dismissals.set(this.key, this.dismissed);
 	}
 
 	/** Keeps the open pane's text as it is typed. */
@@ -93,9 +98,11 @@ export class PaneDrafts {
 		this.text = '';
 		this.reply = undefined;
 		this.files = [];
+		this.dismissed = [];
 		this.texts.set(key, '');
 		this.replies.set(key, undefined);
 		this.staged.set(key, []);
+		this.dismissals.set(key, []);
 	}
 
 	/**
@@ -105,27 +112,32 @@ export class PaneDrafts {
 	forget(key: string): void {
 		this.texts.set(key, '');
 		this.replies.set(key, undefined);
+		this.dismissals.set(key, []);
 		if (this.key !== key) return;
 		this.text = '';
 		this.reply = undefined;
+		this.dismissed = [];
 	}
 
 	/**
-	 * A failed send gives `key`'s draft back, unless something else has been
-	 * typed or attached there since; the composer shows it again when `key`
-	 * is still open and empty. Returns whether it did.
+	 * A failed send gives `key`'s draft back, with the link previews that were
+	 * removed from it, unless something else has been typed or attached there
+	 * since; the composer shows it again when `key` is still open and empty.
+	 * Returns whether it did.
 	 */
-	restore(key: string, text: string, reply: string | undefined, files: StagedFile[] = []): boolean {
+	restore(key: string, text: string, reply: string | undefined, files: StagedFile[] = [], dismissed: string[] = []): boolean {
 		const open = this.key === key;
 		if (!this.texts.get(key) && !this.replies.get(key) && !this.staged.get(key)?.length && !(open && this.busy())) {
 			this.texts.set(key, text);
 			this.replies.set(key, reply);
 			this.staged.set(key, files);
+			this.dismissals.set(key, dismissed);
 		}
 		if (!open || this.busy()) return false;
 		this.text = this.texts.get(key) ?? '';
 		this.reply = this.replies.get(key);
 		this.files = this.staged.get(key) ?? [];
+		this.dismissed = this.dismissals.get(key) ?? [];
 		return true;
 	}
 

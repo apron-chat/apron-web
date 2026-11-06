@@ -283,7 +283,8 @@ export function decodeMessage(value: unknown): { record: MessageRecord; embedded
 	record.log_id = value.log_id;
 	record.room_id = value.room_id;
 	record.from = cloneJson(value.from);
-	if (Object.hasOwn(value, 'body')) record.body = cloneJson(value.body) as MessageBody;
+	// A field of the wrong type is ignored, and takes its default, absent (as EXT.md §2 has it).
+	if (isJsonObject(value.body)) record.body = cloneJson(value.body) as MessageBody;
 	const embedded: MessageRecord[] = [];
 	if (Object.hasOwn(value, 'reply_to')) {
 		const reference = toMessageRef(value.reply_to);
@@ -295,8 +296,8 @@ export function decodeMessage(value: unknown): { record: MessageRecord; embedded
 			}
 		}
 	}
-	if (Object.hasOwn(value, 'deleted')) record.deleted = cloneJson(value.deleted) as boolean;
-	if (Object.hasOwn(value, 'ext')) record.ext = cloneJson(value.ext) as JsonObject;
+	if (typeof value.deleted === 'boolean') record.deleted = value.deleted;
+	if (isJsonObject(value.ext)) record.ext = cloneJson(value.ext);
 	return { record, embedded };
 }
 
@@ -311,9 +312,10 @@ export function decodeRoom(value: unknown): { record: RoomRecord; delivery: Room
 	if (isLogId(value.log_id)) record.log_id = value.log_id;
 	if (Object.hasOwn(value, 'parent_room_id') && isOpaqueId(value.parent_room_id)) record.parent_room_id = value.parent_room_id;
 	if (Object.hasOwn(value, 'private') && typeof value.private === 'boolean') record.private = value.private;
-	if (Object.hasOwn(value, 'title')) record.title = cloneJson(value.title) as string;
-	if (Object.hasOwn(value, 'description')) record.description = cloneJson(value.description) as string;
-	if (Object.hasOwn(value, 'ext')) record.ext = cloneJson(value.ext) as JsonObject;
+	// A field of the wrong type is ignored, and takes its default, absent (as EXT.md §2 has it).
+	if (typeof value.title === 'string') record.title = value.title;
+	if (typeof value.description === 'string') record.description = value.description;
+	if (isJsonObject(value.ext)) record.ext = cloneJson(value.ext);
 	const delivery: RoomDelivery = {};
 	if (value.latest_log_id !== undefined && isLogId(value.latest_log_id)) delivery.latest_log_id = value.latest_log_id;
 	if (value.history_log_id === null || isLogId(value.history_log_id)) delivery.history_log_id = value.history_log_id;

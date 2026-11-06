@@ -208,7 +208,10 @@ export class DraftField {
 
 	keydown = (event: KeyboardEvent): void => {
 		const completion = this.completion;
-		if (completion && !event.isComposing) {
+		// A key the input method takes, as part of a composition. Safari sends the Enter that commits one after
+		// `compositionend`, so `isComposing` is false then, but its `keyCode` is 229, as during one: it sends nothing.
+		const composing = event.isComposing || event.keyCode === 229;
+		if (completion && !composing) {
 			if (event.key === 'Escape') {
 				event.preventDefault();
 				this.dismissAutocomplete();
@@ -228,7 +231,7 @@ export class DraftField {
 				}
 			}
 		}
-		if (event.isComposing || (event.key.length > 1 && this.host.key?.(event))) return;
+		if (composing || (event.key.length > 1 && this.host.key?.(event))) return;
 		if (event.key === 'Enter') {
 			event.preventDefault();
 			if (enterAction(event, this.onHandheld) === 'newline') document.execCommand('insertText', false, '\n');

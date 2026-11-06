@@ -40,6 +40,16 @@ describe('FloatingDay', () => {
 		expect(day.shown).toBe(false);
 	});
 
+	it('puts the day away at once when asked, with nothing left to fade it', () => {
+		vi.useFakeTimers();
+		const day = new FloatingDay();
+		day.update(timeline(400, dividers, rows), false);
+		expect(day.shown).toBe(true);
+		day.hide();
+		expect(day.shown).toBe(false);
+		expect(vi.getTimerCount()).toBe(0);
+	});
+
 	it('floats nothing while that day\'s own divider still shows at the top, or at the live end', () => {
 		const day = new FloatingDay();
 		day.update(timeline(0, dividers, rows), false);
