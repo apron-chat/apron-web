@@ -1,17 +1,23 @@
 <script lang="ts">
 	import { tick, untrack, type Snippet } from 'svelte';
 	import type { ClassValue } from 'svelte/elements';
+	import BellOff from '@lucide/svelte/icons/bell-off';
+	import CornerDownRight from '@lucide/svelte/icons/corner-down-right';
+	import Hash from '@lucide/svelte/icons/hash';
+	import Lock from '@lucide/svelte/icons/lock';
+	import Search from '@lucide/svelte/icons/search';
 	import Dialog from './Dialog.svelte';
-	import RoomItem from './RoomItem.svelte';
-	import ThreadItem from './ThreadItem.svelte';
+	import Faces from './Faces.svelte';
+	import UnreadCount from './UnreadCount.svelte';
 	import type { RoomResult, SearchFoot, SearchMode, SearchResult } from './types';
 
 	/**
 	 * Searching, in a centered Dialog: a field, and what matches below it as a listbox (↑ ↓ move, Enter opens). It
 	 * finds messages, newest first, each with its room, sender, time and a line of it with the words searched for
-	 * marked; or (`kind: 'rooms'`) rooms and threads, each drawn as the rooms list draws it (a RoomItem or a
-	 * ThreadItem) with what matched marked. `modes` switches between such searches above the field. What it searches,
-	 * and how far back, is the caller's: `note` says so, and `foot`, after the results, can say more or look further.
+	 * marked; or (`kind: 'rooms'`) rooms and threads, each with a # (a thread's arrow, a private room's faces), its
+	 * title marked, a thread's room or what a room is about, and what's new in it. `modes`, tabs under the title,
+	 * switch between such searches. What it searches, and how far back, is the caller's: `note` says so, and `foot`,
+	 * after the results, can say more or look further.
 	 */
 	interface Props {
 		/** Shown as a centered modal while true; bindable, and set false however it closes. */
@@ -134,16 +140,22 @@
 	}
 
 	const isRoom = (result: SearchResult | RoomResult): result is RoomResult => result.kind === 'room';
-	const plain = (parts: RoomResult['parts']) => parts.map((part) => part.text).join('');
+	/** A room's line under its title: a thread's room, else what the room is about; and when one you haven't joined was last active. */
+	function detailOf(result: RoomResult): string {
+		const ago = !result.joined && result.ago?.text ? (result.ago.text === 'now' ? 'active now' : `active ${result.ago.text} ago`) : '';
+		return [result.parent ? `in ${result.parent}` : result.description, ago].filter(Boolean).join(' · ');
+	}
+	/** How many results each group holds, beside its heading. */
+	const groupSizes = $derived(results.reduce((sizes, result) => (result.group ? sizes.set(result.group, (sizes.get(result.group) ?? 0) + 1) : sizes), new Map<string, number>()));
 </script>
 
 <!-- How far back history is kept, beside the title: it goes to where that's set. -->
 {#snippet keptButton()}<button type="button" class="ap-dialog-titlebtn" aria-label="{kept} of history kept, in Preferences" title="How long history is kept on this device" onclick={() => { open = false; onhistory?.(); }}>{kept}</button>{/snippet}
 <Dialog class={['ap-search', className]} bind:open size="md" {title} titleEnd={kept && onhistory ? keptButton : undefined} backdropCloses {onclose}>
 	{#if modes?.length}
-		<div class="ap-seg ap-search-modes" role="group" aria-label="Search for">
+		<div class="ap-search-tabs" role="group" aria-label="Search for">
 			{#each modes as candidate (candidate.id)}
-				<button class="ap-seg-item" class:ap-seg-on={mode === candidate.id} type="button" aria-pressed={mode === candidate.id} aria-keyshortcuts={candidate.shortcut} onclick={() => { mode = candidate.id; input?.focus(); }}>
+				<button class="ap-search-tab" type="button" aria-pressed={mode === candidate.id} aria-keyshortcuts={candidate.shortcut} onclick={() => { mode = candidate.id; input?.focus(); }}>
 					{candidate.label}{#if candidate.keys}<kbd class="ap-keys-key ap-search-modekeys" aria-hidden="true">{candidate.keys}</kbd>{/if}
 				</button>
 			{/each}
@@ -152,6 +164,7 @@
 	<div class="ap-fieldlabel">
 		<label class="ap-sr" for="{uid}-query">Search for</label>
 		<div class="ap-search-field">
+			<Search class="ap-search-glass" size={16} aria-hidden="true" />
 			<input
 				id="{uid}-query" class="ap-field ap-search-input" type="search" bind:this={input} bind:value={query} onkeydown={keydown} oninput={moved} onkeyup={moved} onclick={moved} onselect={moved}
 				role="combobox" aria-autocomplete="list" aria-expanded={suggesting !== undefined || results.length > 0} aria-controls={suggesting?.list ?? listId} aria-activedescendant={suggesting ? suggesting.option : results.length ? `${listId}-${active}` : undefined}
@@ -164,20 +177,23 @@
 	</div>
 	<ul class="ap-search-list" id={listId} role="listbox" aria-label={words.found} aria-busy={searching} data-testid={listTestid} bind:this={list}>
 		{#each results as result, i (result.id)}
-			{#if result.group && result.group !== results[i - 1]?.group}<li class="ap-search-group" role="presentation">{result.group}</li>{/if}
+			{#if result.group && result.group !== results[i - 1]?.group}<li class="ap-search-group" role="presentation"><span>{result.group}</span><span class="ap-search-groupsize">{groupSizes.get(result.group)}</span></li>{/if}
 			{#if isRoom(result)}
-				{@const option = { id: `${listId}-${i}`, selected: i === active }}
-				{#if result.thread}
-					<ThreadItem
-						thread={result.id} name={plain(result.parts)} parts={result.parts} parent={result.parent} description={result.description} private={result.private} unjoined={!result.joined}
-						muted={result.muted} unread={result.unread} mentions={result.mentions} ago={result.joined ? undefined : result.ago} {option} onselect={() => pick(result.id)} onhover={() => (active = i)}
-					/>
-				{:else}
-					<RoomItem
-						room={result.id} name={plain(result.parts)} parts={result.parts} topic={result.description} private={result.faces?.length ? false : result.private} faces={result.faces} listed={!result.joined}
-						muted={result.muted} unread={result.unread} mentions={result.mentions} {option} onselect={() => pick(result.id)} onhover={() => (active = i)}
-					/>
-				{/if}
+				{@const detail = detailOf(result)}
+				<!-- The field's combobox takes the keys for its options (↑ ↓, Enter), which keep the focus out of the list. -->
+				<!-- svelte-ignore a11y_click_events_have_key_events -->
+				<li
+					id="{listId}-{i}" role="option" aria-selected={i === active} class={['ap-search-row', 'ap-search-roomrow', !result.joined && 'ap-search-unjoined', i === active && 'ap-search-row-active']}
+					onmousedown={(event) => event.preventDefault()} onclick={() => pick(result.id)} onmouseenter={() => (active = i)}
+				>
+					<span class="ap-search-kind">{#if result.faces?.length}<Faces people={result.faces} size="sm" />{:else if result.thread}<CornerDownRight size={16} role="img" aria-label="Thread" />{:else}<Hash size={16} role="img" aria-label="Room" />{/if}</span>
+					<span class="ap-search-main">
+						<span class="ap-search-title"><bdi>{#each result.parts as part, p (p)}{#if part.match}<mark>{part.text}</mark>{:else}{part.text}{/if}{/each}</bdi>{#if result.private && !result.faces?.length}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}</span>
+						{#if detail}<span class="ap-search-detail" dir="auto">{detail}</span>{/if}
+					</span>
+					{#if result.muted}<BellOff class="ap-muted" role="img" aria-label="Muted" />{/if}
+					<UnreadCount unread={result.unread ?? 0} mentions={result.mentions ?? 0} quiet={result.muted} noun={result.thread ? 'reply' : 'message'} />
+				</li>
 			{:else}
 				<!-- The field's combobox takes the keys for its options (↑ ↓, Enter), which keep the focus out of the list. -->
 				<!-- svelte-ignore a11y_click_events_have_key_events -->

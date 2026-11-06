@@ -224,7 +224,7 @@
 	onfieldkey={fieldKey} suggesting={suggesting ? { list: pickerId, option: `${pickerId}-${picking}` } : undefined}
 	results={mode === 'rooms' ? finder.results : messageResults} searching={mode === 'messages' && messages.searching}
 	more={mode === 'rooms' ? (finder.found?.total ?? 0) > finder.results.length : messages.more}
-	note={mode === 'rooms' ? 'Those you’ve joined first. → on a room searches its threads.' : note}
+	note={mode === 'rooms' ? undefined : note}
 	placeholder={mode === 'rooms' ? 'A room or thread, room:#name for its threads' : 'Words, user:@name, room:#name'}
 	foot={mode === 'rooms' ? finder.foot : messages.foot}
 	{kept} {onhistory} onpick={pick} {onclose} listTestid="search-results"

@@ -1810,18 +1810,27 @@ a.ap-linkchip-elsewhere:hover { background: var(--hover); }
 .ap-search-text { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; font-size: var(--text-ui); line-height: var(--leading-ui); overflow-wrap: anywhere; }
 .ap-search-text mark { border-radius: var(--radius-sm); background: var(--accent-soft); color: inherit; }
 .ap-search-empty { padding: var(--space-2) var(--space-3); color: var(--ink-muted); font-size: var(--text-ui); line-height: var(--leading-ui); }
-/* Its modes (rooms, messages) above the field, each with its shortcut; a heading over a group of results; and after them a line, and a button. A room's or thread's result is its RoomItem or ThreadItem, as an option. */
-.ap-search-modes { margin: 0 0 var(--space-3); }
-.ap-search-modes .ap-seg-item { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); }
+/* Its modes (rooms, messages) as tabs under the title, each with its shortcut; a heading over a group of results, with how many; a room's or thread's result; and after them a line, and a button. */
+.ap-search:has(.ap-search-tabs) .ap-dialog-head { border-bottom: 0; padding-bottom: var(--space-2); }
+.ap-search-tabs { display: flex; gap: var(--space-6); margin: calc(-1 * var(--space-6)) calc(-1 * var(--space-6)) var(--space-4); padding: 0 var(--space-6); border-bottom: 1px solid var(--line); }
+.ap-search-tab { display: inline-flex; align-items: center; gap: var(--space-2); margin-bottom: -1px; padding: var(--space-2) 0; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--ink-muted); font: inherit; font-size: var(--text-ui); line-height: var(--leading-ui); font-weight: 600; cursor: pointer; }
+.ap-search-tab:hover, .ap-search-tab[aria-pressed="true"] { color: var(--ink); }
+.ap-search-tab[aria-pressed="true"] { border-bottom-color: var(--ink); }
 .ap-search-modekeys { color: var(--ink-muted); font-weight: 400; }
-.ap-search-group { padding: var(--space-2) var(--space-3) var(--space-0_5); color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 600; }
+.ap-search-glass { position: absolute; inset-inline-start: var(--space-2); top: 50%; translate: 0 -50%; color: var(--ink-muted); pointer-events: none; }
+.ap-search-field .ap-search-input { padding-inline-start: calc(var(--space-2) + 24px); }
+.ap-search-group { display: flex; justify-content: space-between; padding: var(--space-2) var(--space-3) var(--space-0_5); color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 600; }
+.ap-search-groupsize { font-weight: 400; }
+.ap-search-roomrow { flex-direction: row; align-items: center; gap: var(--space-3); }
+.ap-search-kind { flex: none; display: grid; place-items: center; width: 24px; color: var(--ink-muted); }
+.ap-search-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ap-search-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-ui); line-height: var(--leading-ui); font-weight: 600; }
+.ap-search-title mark { border-radius: var(--radius-sm); background: var(--accent-soft); color: inherit; }
+.ap-search-detail { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); }
+.ap-search-unjoined .ap-search-title { font-weight: 400; color: var(--ink-muted); }
 .ap-search-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-top: var(--space-2); }
 .ap-search-footnote { margin: 0; color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); }
 .ap-search-foot .ap-btn { flex: none; margin-inline-start: auto; }
-.ap-room-option { list-style: none; }
-.ap-room-option, .ap-room-option:hover { background: transparent; }
-.ap-room-option[aria-selected="true"] { background: var(--hover); }
-.ap-room-label mark { border-radius: var(--radius-sm); background: var(--accent-soft); color: inherit; }
 /* KeyboardShortcuts: titled groups in as many columns as fit, each row what a shortcut does and, at its end, its keys. */
 .ap-keys { --dialog-w: 760px; }
 .ap-keys-groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: var(--space-6) var(--space-8); }
