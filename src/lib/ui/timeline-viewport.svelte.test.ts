@@ -1,9 +1,11 @@
+// @vitest-environment jsdom
 import { flushSync } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RoomSnapshot } from '$lib/protocol/client';
 import type { MessageRecord } from '$lib/protocol/types';
 import { messageRecord, roomSnapshot } from '$lib/test/builders';
-import { atLatest, TimelineViewport, type TimelineViewportHost } from './timeline-viewport.svelte';
+import { atLatest, TimelineViewport } from './timeline-viewport.svelte';
+import type { TimelineItem } from './timeline';
 
 /** A list as the browser scrolls one: its scroll top held between its top and its end, and each set counted. */
 class List {
@@ -33,6 +35,9 @@ class List {
 
 const asList = (list: List) => list as unknown as HTMLDivElement;
 
+/** Each message as the timeline shows it. */
+const itemsOf = (messages: MessageRecord[]): TimelineItem[] => messages.map((event) => ({ kind: 'message', key: event.message_id, event, grouped: false }));
+
 /** A viewport over the pane `room`, with `messages`, as the page makes one. */
 function setup(room: RoomSnapshot, messages: MessageRecord[] = []) {
 	const state = $state({ room, messages });
@@ -42,7 +47,7 @@ function setup(room: RoomSnapshot, messages: MessageRecord[] = []) {
 		client: { loadOlder },
 		get paneRoom() { return state.room; },
 		get olderSource() { return state.room; },
-		timeline: [],
+		get timeline() { return itemsOf(state.messages); },
 		get messages() { return state.messages; },
 		you: undefined,
 		paneHeldBack: false,
@@ -183,5 +188,52 @@ describe('TimelineViewport', () => {
 		await vi.waitFor(() => expect(pinned.viewport.newDivider.landed).toBe(true));
 		expect(pinned.loadOlder).toHaveBeenCalledTimes(1);
 		stopPinned();
+	});
+	it('takes no word on the latest from an observer of a row it no longer watches', () => {
+		const frames: FrameRequestCallback[] = [];
+		vi.stubGlobal('requestAnimationFrame', (run: FrameRequestCallback) => frames.push(run));
+		const reports: IntersectionObserverCallback[] = [];
+		vi.stubGlobal('IntersectionObserver', class {
+			constructor(report: IntersectionObserverCallback) {
+				reports.push(report);
+			}
+
+			observe(): void {}
+			disconnect(): void {}
+		});
+		const paint = () => {
+			for (const run of frames.splice(0)) run(0);
+		};
+		const report = (index: number, isIntersecting: boolean) => reports[index]([{ isIntersecting } as IntersectionObserverEntry], {} as IntersectionObserver);
+		/** A row of its own comes last in `list`. */
+		const rowIn = (list: HTMLElement) => {
+			const item = document.createElement('div');
+			item.setAttribute('data-timeline-item', '');
+			list.replaceChildren(item);
+		};
+
+		const { state, viewport } = setup(roomSnapshot('general'), [messageRecord(1)]);
+		const list = document.createElement('div');
+		rowIn(list);
+		viewport.messageScroll = list as HTMLDivElement;
+		const stop = $effect.root(() => viewport.watchLatest());
+		flushSync();
+		paint();
+		expect(reports).toHaveLength(1);
+
+		// Another room's row comes last; what the first observer had queued about the last one arrives after.
+		state.room = roomSnapshot('random');
+		state.messages = [messageRecord(2, 'random')];
+		rowIn(list);
+		flushSync();
+		report(0, false);
+		expect(viewport.latestVisible).toBe(true);
+
+		// The row watched now says so.
+		paint();
+		expect(reports).toHaveLength(2);
+		report(1, false);
+		expect(viewport.latestVisible).toBe(false);
+		stop();
 	});
 });

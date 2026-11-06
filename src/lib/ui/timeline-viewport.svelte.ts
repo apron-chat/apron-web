@@ -69,6 +69,17 @@ export interface TimelineViewportHost {
 	readThrough(room: RoomSnapshot): string | undefined;
 }
 
+/**
+ * Where the reader was, noted before older items land above them (`keepPlace`): the list, its scroll top and height,
+ * and the pane it showed, so that a page or chunk that lands after the pane went elsewhere moves nothing.
+ */
+interface Place {
+	readonly pane: string | undefined;
+	readonly scroller: HTMLElement;
+	readonly top: number;
+	readonly height: number;
+}
+
 /** Whether the list is scrolled to (near enough) its end. */
 export function atLatest(scroller: HTMLElement): boolean {
 	return scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 96;
@@ -97,6 +108,7 @@ export class TimelineViewport {
 	readonly #host: TimelineViewportHost;
 	#messageScroll = $state<HTMLDivElement | undefined>();
 	#stickToBottom = $state(true);
+	/** Whether the pane's latest row was on screen, as last measured, and the pane it was measured in (`measured`). */
 	#latestVisible = $state(true);
 	#latestVisibleIn = $state<string | undefined>();
 	/** The newest message you had on screen in the pane, for counting what arrived since. */
@@ -128,7 +140,7 @@ export class TimelineViewport {
 	/** The timeline held at its width while a side panel slides (`prepareSlide`). */
 	#heldTimeline: { scroller: HTMLElement; width: number; release: () => void } | undefined;
 	/** Long timelines paint newest-first; each chunk revealed above keeps the reader's place. */
-	readonly reveal = new ProgressiveReveal(REVEAL_CHUNK_ITEMS, () => this.#messageScroll, (scroller, top, height) => this.#keepPlace(scroller, top, height));
+	readonly reveal = new ProgressiveReveal(REVEAL_CHUNK_ITEMS, () => this.#place(), (place) => this.#keepPlace(place));
 	/** While you scroll back, the day you're reading floats at the top of the timeline. */
 	readonly floatingDay = new FloatingDay();
 	/** The first message after your read position, unless you wrote it or older unread ones are still to load: the New divider goes above it. */
@@ -256,8 +268,7 @@ export class TimelineViewport {
 				if (!scroll || !latest) return;
 				const at = latest.getBoundingClientRect();
 				const box = scroll.getBoundingClientRect();
-				this.#latestVisible = at.bottom > box.top && at.top < box.bottom;
-				this.#latestVisibleIn = host.paneRoom?.id;
+				this.#measured(at.bottom > box.top && at.top < box.bottom, host.paneRoom?.id);
 			});
 		});
 	}
@@ -283,7 +294,7 @@ export class TimelineViewport {
 			untrack(() => {
 				tick().then(() => {
 					// Not while the pane isn't laid out (a phone showing the rooms list): it would never fill, and load every page.
-					if (this.#messageScroll !== scroller || !scroller.clientHeight) return;
+					if (!this.#shows(room.id, scroller) || !scroller.clientHeight) return;
 					this.#fillMeasured = measure;
 					if (scroller.scrollHeight <= scroller.clientHeight + OLDER_REPLIES_MARGIN_PX) void this.loadOlderReplies();
 				});
@@ -378,11 +389,13 @@ export class TimelineViewport {
 			const frame = requestAnimationFrame(() => {
 				const latest = lastRow(scroll);
 				if (!items.length || !latest) {
-					this.#latestVisible = true;
-					this.#latestVisibleIn = pane;
+					this.#measured(true, pane);
 					return;
 				}
 				const observer = new IntersectionObserver((entries) => {
+					// Entries queued before the row stopped being watched (another came last, or the pane went elsewhere)
+					// are about a row the pane has moved on from: they say nothing of its latest now.
+					if (this.#latestWatch?.observer !== observer) return;
 					// An entry says where the latest was at a frame since gone: on a busy main thread several frames'
 					// entries arrive together, and the pane may have been pinned again before this runs. Out of view is
 					// checked against now.
@@ -398,9 +411,8 @@ export class TimelineViewport {
 						this.#scrollToLatest();
 						return;
 					}
-					this.#latestVisible = visible;
-					this.#latestVisibleIn = pane;
-					if (this.#latestVisible) {
+					this.#measured(visible, pane);
+					if (visible) {
 						const messages = host.messages;
 						this.#seenThrough = messages[messages.length - 1]?.message_id;
 						host.mentions.clearUnseen();
@@ -416,6 +428,12 @@ export class TimelineViewport {
 	#unwatchLatest(): void {
 		this.#latestWatch?.observer.disconnect();
 		this.#latestWatch = undefined;
+	}
+
+	/** The latest row was measured on screen or off it, in the pane `pane`: the one write of what `latestVisible` says. */
+	#measured(visible: boolean, pane: string | undefined): void {
+		this.#latestVisible = visible;
+		this.#latestVisibleIn = pane;
 	}
 
 	/** The message `id` once it has rendered in the list, waiting for it a while (`JUMP_WAIT_MS`). */
@@ -484,9 +502,9 @@ export class TimelineViewport {
 			this.#stickToBottom = atLatest(scroller);
 			const items = scroller.querySelectorAll<HTMLElement>('[data-timeline-item]');
 			const latest = items[items.length - 1]?.getBoundingClientRect();
-			this.#latestVisible = !latest || latest.top < scroller.getBoundingClientRect().bottom;
-			this.#latestVisibleIn = roomId;
-			if (!this.#latestVisible) this.#seenThrough = after;
+			const visible = !latest || latest.top < scroller.getBoundingClientRect().bottom;
+			this.#measured(visible, roomId);
+			if (!visible) this.#seenThrough = after;
 		} finally {
 			if (this.#landing === visit) this.#landing = undefined;
 			if (this.#newDivider === visit) this.#newDivider = { ...visit, landed: true };
@@ -558,19 +576,16 @@ export class TimelineViewport {
 	async loadOlderReplies(): Promise<void> {
 		const host = this.#host;
 		const room = host.olderSource;
-		if (!host.client || !room || !this.#messageScroll || !room.olderAvailable || room.loadingOlder) return;
-		const scroller = this.#messageScroll;
-		const height = scroller.scrollHeight;
-		const top = scroller.scrollTop;
+		if (!host.client || !room || !room.olderAvailable || room.loadingOlder) return;
+		const place = this.#place();
+		if (!place) return;
 		try {
 			await host.client.loadOlder(room.id);
 		} catch {
 			return; // The next scroll back tries again.
 		}
 		await tick();
-		// The pane went on to another room or thread meanwhile, in the same scroller: the place kept was the other's.
-		if (host.paneRoom?.id !== room.id) return;
-		this.#keepPlace(scroller, top, height);
+		this.#keepPlace(place);
 	}
 
 	/**
@@ -611,15 +626,28 @@ export class TimelineViewport {
 		}
 	}
 
+	/** Where the reader is in the open pane, before older items land above: `keepPlace` keeps them there after. */
+	#place(): Place | undefined {
+		const scroller = this.#messageScroll;
+		return scroller && { pane: this.#paneId, scroller, top: scroller.scrollTop, height: scroller.scrollHeight };
+	}
+
 	/**
-	 * Older items landed above: keeps what was on screen in place, given the
-	 * list's scroll top and height from before, unless the pane follows the
-	 * latest. Where the browser anchored the view itself this is already the position.
+	 * Older items landed above: keeps what was on screen in place, from where `place` noted it, unless the pane follows
+	 * the latest. Where the browser anchored the view itself this is already the position. Only in the list and the
+	 * pane it was noted in: the list is the same element from pane to pane, and a page that lands after the pane went
+	 * on to another room or thread would otherwise move that one.
 	 */
-	#keepPlace(scroller: HTMLElement | undefined, top: number, height: number): void {
-		if (!scroller || this.#messageScroll !== scroller || this.#stickToBottom) return;
-		scroller.scrollTop = top + (scroller.scrollHeight - height);
+	#keepPlace(place: Place | undefined): void {
+		if (!place || !this.#shows(place.pane, place.scroller) || this.#stickToBottom) return;
+		const { scroller } = place;
+		scroller.scrollTop = place.top + (scroller.scrollHeight - place.height);
 		this.#lastScrollTop = scroller.scrollTop;
+	}
+
+	/** The list is still `scroller`, showing the pane `pane`: what was measured or begun there still applies. */
+	#shows(pane: string | undefined, scroller: HTMLElement): boolean {
+		return this.#messageScroll === scroller && this.#paneId === pane;
 	}
 
 	/**
