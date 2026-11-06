@@ -150,10 +150,12 @@
 		field?.mention(userId);
 	}
 
-	/** Closes the picker and stops any recording without sending: the pane is changing under it. */
+	/**
+	 * Closes the picker and stops any recording without sending: the pane is changing under it. The previews removed
+	 * stay with the draft, which the page keeps per pane.
+	 */
 	export function reset(): void {
 		field?.reset();
-		dismissed = [];
 		emojiPicker.release(emojiButton);
 		stopRecording(false);
 	}

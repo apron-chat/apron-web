@@ -273,7 +273,7 @@
 			"name": "Alert when it’s closed, too",
 			"exact": false,
 			"at": [
-				"push.spec.ts:521"
+				"push.spec.ts:525"
 			]
 		},
 		"button \"Back to room\"": {
@@ -466,9 +466,9 @@
 				"push.spec.ts:284",
 				"push.spec.ts:409",
 				"push.spec.ts:424",
-				"push.spec.ts:518",
-				"push.spec.ts:624",
-				"push.spec.ts:641"
+				"push.spec.ts:522",
+				"push.spec.ts:628",
+				"push.spec.ts:645"
 			]
 		},
 		"button \"React\"": {
@@ -524,7 +524,7 @@
 			"exact": true,
 			"at": [
 				"push.spec.ts:425",
-				"push.spec.ts:642"
+				"push.spec.ts:646"
 			]
 		},
 		"button \"Run command\"": {
@@ -584,7 +584,7 @@
 			"name": "Show member list",
 			"exact": false,
 			"at": [
-				"push.spec.ts:579",
+				"push.spec.ts:583",
 				"seen.spec.ts:37"
 			]
 		},
@@ -700,7 +700,7 @@
 			},
 			"exact": false,
 			"at": [
-				"push.spec.ts:640"
+				"push.spec.ts:644"
 			]
 		},
 		"button /^Pause/": {
@@ -714,7 +714,7 @@
 			"exact": false,
 			"at": [
 				"push.spec.ts:410",
-				"push.spec.ts:625"
+				"push.spec.ts:629"
 			]
 		},
 		"button /^Server: /": {
@@ -766,7 +766,7 @@
 			},
 			"exact": false,
 			"at": [
-				"push.spec.ts:539"
+				"push.spec.ts:543"
 			]
 		},
 		"combobox /status/i": {
@@ -779,7 +779,7 @@
 			},
 			"exact": false,
 			"at": [
-				"push.spec.ts:539"
+				"push.spec.ts:543"
 			]
 		},
 		"complementary \"Room member list\"": {
@@ -789,7 +789,7 @@
 			"name": "Room member list",
 			"exact": true,
 			"at": [
-				"push.spec.ts:581"
+				"push.spec.ts:585"
 			]
 		},
 		"complementary \"Rooms\"": {
@@ -922,7 +922,7 @@
 			},
 			"exact": false,
 			"at": [
-				"push.spec.ts:626"
+				"push.spec.ts:630"
 			]
 		},
 		"menuitem /Until I resume/": {
@@ -994,7 +994,7 @@
 			},
 			"exact": false,
 			"at": [
-				"push.spec.ts:626"
+				"push.spec.ts:630"
 			]
 		},
 		"option /Until I resume/": {
@@ -1058,7 +1058,7 @@
 			},
 			"exact": false,
 			"at": [
-				"push.spec.ts:541"
+				"push.spec.ts:545"
 			]
 		},
 		"switch \"Notifications\"": {
@@ -1069,7 +1069,7 @@
 			"exact": true,
 			"at": [
 				"push.spec.ts:285",
-				"push.spec.ts:519"
+				"push.spec.ts:523"
 			]
 		},
 		"textbox \"Edit message\"": {
@@ -1119,7 +1119,7 @@
 	},
 	"selectors": {
 		"#ap-pref-notifications-note": [
-			"push.spec.ts:520"
+			"push.spec.ts:524"
 		],
 		".ap-divider-date": [
 			"chat.spec.ts:255"
@@ -1283,7 +1283,7 @@
 			"test-helpers.ts:273"
 		],
 		"[data-user]": [
-			"push.spec.ts:581"
+			"push.spec.ts:585"
 		],
 		"a.ap-embed-file": [
 			"reference.spec.ts:91"
@@ -1342,7 +1342,7 @@
 			"chat.spec.ts:432"
 		],
 		"body": [
-			"push.spec.ts:556"
+			"push.spec.ts:560"
 		],
 		"button.ap-mention-room[data-room-id=\"general\"]": [
 			"reference.spec.ts:342"
@@ -1378,7 +1378,7 @@
 			"seen.spec.ts:43"
 		],
 		"option": [
-			"push.spec.ts:550"
+			"push.spec.ts:554"
 		],
 		"small": [
 			"chat.spec.ts:639",
@@ -1451,8 +1451,8 @@
 			"test-helpers.ts:134"
 		],
 		"choices(…, label)": [
-			"push.spec.ts:547",
-			"push.spec.ts:556"
+			"push.spec.ts:551",
+			"push.spec.ts:560"
 		],
 		"option named new RegExp(handle)": [
 			"chat.spec.ts:810"

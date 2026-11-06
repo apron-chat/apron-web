@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import type { Locator, Page } from '@playwright/test';
 import { DEVICES, expect, test } from './fixtures';
 
 /**
@@ -7,6 +8,17 @@ import { DEVICES, expect, test } from './fixtures';
  */
 
 test.use(DEVICES.desktop);
+
+/**
+ * Chooses a file on `/archive` until `shown` says the page read it. The input is in the prerendered page before it
+ * hydrates, and a file chosen before its handler is there goes unread; choosing the same file again reads it the same.
+ */
+async function choose(page: Page, file: { name: string; buffer: Buffer }, shown: (page: Page) => Locator): Promise<void> {
+	await expect(async () => {
+		await page.getByTestId('archive-file').setInputFiles({ ...file, mimeType: 'application/jsonl' });
+		await expect(shown(page)).toBeVisible({ timeout: 1_000 });
+	}).toPass();
+}
 
 test('an export opens on /archive as it was, read-only', async ({ preview, page }) => {
 	await preview.open();
@@ -28,7 +40,7 @@ test('an export opens on /archive as it was, read-only', async ({ preview, page 
 	expect(await readFile((await withPrivate.path())!, 'utf8')).toContain('"room_id":"private_1710000000060"');
 
 	await page.goto(`${process.env.E2E_URL}/archive`);
-	await page.getByTestId('archive-file').setInputFiles({ name: download.suggestedFilename(), mimeType: 'application/jsonl', buffer: Buffer.from(text) });
+	await choose(page, { name: download.suggestedFilename(), buffer: Buffer.from(text) }, (page) => page.getByTestId('archive-hosts'));
 	// Its images load from the sites it names only when asked to.
 	await expect(page.getByTestId('archive-hosts')).toContainText('apron-preview.invalid');
 	await page.getByRole('button', { name: 'Open without images' }).click();
@@ -45,7 +57,7 @@ test('an export opens on /archive as it was, read-only', async ({ preview, page 
 
 test('a file that isn’t an export says so', async ({ page }) => {
 	await page.goto(`${process.env.E2E_URL}/archive`);
-	await page.getByTestId('archive-file').setInputFiles({ name: 'notes.jsonl', mimeType: 'application/jsonl', buffer: Buffer.from('{"hello":1}\n') });
+	await choose(page, { name: 'notes.jsonl', buffer: Buffer.from('{"hello":1}\n') }, (page) => page.getByRole('alert'));
 	await expect(page.getByRole('alert')).toHaveText('This file isn’t an Apron export.');
 });
 
@@ -64,7 +76,7 @@ test('an export opened without images loads nothing from anywhere else', async (
 		return route.fulfill({ status: 404 });
 	});
 	await page.goto(`${process.env.E2E_URL}/archive`);
-	await page.getByTestId('archive-file').setInputFiles({ name: 'elsewhere.jsonl', mimeType: 'application/jsonl', buffer: Buffer.from(elsewhere) });
+	await choose(page, { name: 'elsewhere.jsonl', buffer: Buffer.from(elsewhere) }, (page) => page.getByTestId('archive-hosts'));
 	await expect(page.getByTestId('archive-hosts')).toContainText('media.example');
 	await page.getByRole('button', { name: 'Open without images' }).click();
 	await page.locator('[data-room="general"]').first().click();
@@ -82,7 +94,7 @@ test('an export opened with its images loads them from the sites it names, and n
 		return route.fulfill({ status: 404 });
 	});
 	await page.goto(`${process.env.E2E_URL}/archive`);
-	await page.getByTestId('archive-file').setInputFiles({ name: 'elsewhere.jsonl', mimeType: 'application/jsonl', buffer: Buffer.from(elsewhere) });
+	await choose(page, { name: 'elsewhere.jsonl', buffer: Buffer.from(elsewhere) }, (page) => page.getByRole('button', { name: 'Load images' }));
 	await page.getByRole('button', { name: 'Load images' }).click();
 	await page.locator('[data-room="general"]').first().click();
 	await expect(page.locator('img[src="https://media.example/story.png"]')).toHaveCount(1);

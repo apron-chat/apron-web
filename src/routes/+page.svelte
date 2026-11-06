@@ -92,24 +92,24 @@
 	import { onlyPreferencesDiffer, preferencesOpener } from '$lib/ui/preferences.svelte';
 	import { nextRoomRow } from '$lib/ui/room-steps';
 	import { articleOf, isMessageRow, MESSAGE_STEPS, messageRows, rowControls, stepMessage, tabbableOutside, timelineItems } from '$lib/ui/message-focus';
-	import { buildRoomTimeline, newDividerBefore, steady, threadEntries, threadStartedFrom, threadDescriptionFor, threadTitleFor, type ThreadEntry, type TimelineItem } from '$lib/ui/timeline';
+	import { buildRoomTimeline, steady, threadEntries, threadStartedFrom, threadDescriptionFor, threadTitleFor, type ThreadEntry, type TimelineItem } from '$lib/ui/timeline';
 	import { takeSignInLink } from '$lib/ui/sign-in-link';
 	import { SignInLinks } from '$lib/ui/link-controller.svelte';
 	import { findProposal } from '$lib/protocol/proposals';
 	import { idMillis } from '$lib/ui/time';
 	import { tabTitle } from '$lib/ui/attention';
-	import { FloatingDay } from '$lib/ui/floating-day.svelte';
 	import { trackKeyboard } from '$lib/ui/viewport';
 	import { linkPreviews } from '$lib/ui/link-previews';
 	import { carriesFiles, fileDrop, pastedFiles } from '$lib/ui/file-transfer';
 	import { PaneDrafts, pageDrafts, type StagedFile } from '$lib/ui/pane-drafts.svelte';
 	import { PagePresence } from '$lib/ui/presence.svelte';
-	import { ProgressiveReveal } from '$lib/ui/reveal.svelte';
+	import { JUMP_WAIT_MS, TimelineViewport, until } from '$lib/ui/timeline-viewport.svelte';
 	import { setAppBadge, closeReadNotifications, messageNotificationTag, notificationBody, notificationClickTarget, notificationGroup, notificationTitle, notificationPermission, pushClickTarget, PUSH_ID_PARAM, PUSH_ID_QUERY, PUSH_MESSAGE_PARAM, PUSH_ROOM_PARAM, pushRoute, offersAtSignIn, offersNotifications, requestNotificationPermission, showNotification, type PushTarget, type NotificationPermissionState, type NotificationTarget, type NotificationTestResult } from '$lib/ui/notifications';
 	import { playPing } from '$lib/ui/attention';
 	import { isPaused, muteFor, type PausedUntil } from '$lib/ui/pause';
 	import { pageSilenced } from '$lib/ui/user-status';
 	import { PushSettings } from '$lib/ui/push-settings.svelte';
+	import type { PushTitles } from '$lib/ui/push-titles';
 	import { notifyAccount, notifyScopesOf, pushWake } from '$lib/ui/notify-scopes';
 	import { arrivalAlerts } from '$lib/ui/alerts';
 	import { readAction, readElsewhere, readFurthest } from '$lib/ui/read-action';
@@ -131,29 +131,6 @@
 		moving?: number;
 	};
 
-	/** How near the top of a thread reading back starts loading its older replies. */
-	const OLDER_REPLIES_MARGIN_PX = 240;
-
-	/** How long a jump waits for its target to render (a thread's history may still be loading). */
-	const JUMP_WAIT_MS = 4000;
-	/** Room left above the New divider when a pane opens at it, clear of the floating day. */
-	const LAND_MARGIN_PX = 48;
-	/** Items rendered above the New divider when a pane opens at it, so there is something to scroll up to. */
-	const LAND_CONTEXT_ITEMS = 10;
-	/**
-	 * Opening a room renders its newest items first, enough to fill the pane,
-	 * and the older ones a chunk per frame after that paints, so switching
-	 * rooms shows the room without waiting for its whole history to render.
-	 */
-	const FIRST_PAINT_ITEMS = 40;
-	const REVEAL_CHUNK_ITEMS = 60;
-	/**
-	 * A pane opened before its messages came (the page's first, or a room not loaded yet) renders this many of its newest
-	 * items when they do, then as many more as fill it (`fillPane`), before the frame paints; the rest follow it.
-	 */
-	const ARRIVAL_ITEMS = 6;
-	/** How far the first item rendered must sit above the pane's top at its latest: past any shadow from a row above. */
-	const FILL_SLACK_PX = 16;
 	/**
 	 * How long a members listing stays current when the mention picker opens, in a pane read without joining it: a
 	 * joined room's members came with its listing and stay current by memberships (§4.2.2), so it lists nothing.
@@ -176,7 +153,6 @@
 	/** How far you have read each room and thread, kept for the account (or this server's guests) on this device. */
 	const readPositions = new ReadPositions(() => notifyKey);
 	const presence = new PagePresence();
-	const floatingDay = new FloatingDay();
 	const drafts = new PaneDrafts();
 	// The update notice, in the layout, says when reloading would lose a draft.
 	$effect(() => {
@@ -185,7 +161,22 @@
 			if (pageDrafts.current === drafts) pageDrafts.current = undefined;
 		};
 	});
-	const reveal = new ProgressiveReveal(REVEAL_CHUNK_ITEMS, () => messageScroll, keepPlace);
+	/** The timeline's scroll: following the latest, keeping your place, opening at the New divider (`TimelineViewport`). */
+	const viewport = new TimelineViewport({
+		get client() { return client; },
+		get paneRoom() { return paneRoom; },
+		get olderSource() { return olderSource; },
+		get timeline() { return timeline; },
+		get messages() { return messages; },
+		get you() { return session.you; },
+		get paneHeldBack() { return paneHeldBack; },
+		get paneCatchingUp() { return paneCatchingUp; },
+		get visible() { return presence.visible; },
+		mentions,
+		readThrough: (room) => readPositions.through(room, session.you, true)
+	});
+	/** Its scroll handler, handed to the list's `onscroll` as it is: through `viewport.` it would be wrapped, a call more per scroll event. */
+	const trackScroll = viewport.trackScroll;
 	/** Notifications on this device (one setting with push, below): this page's own, while it's open. */
 	let notificationsEnabled = $state(false);
 	/** Notifications were turned on or off on this device, or the first-mention offer answered: it isn't made again. */
@@ -205,6 +196,19 @@
 	/** The server's VAPID key, offered to a signed-in account. */
 	let webPushServerKey = $derived(pushAccount ? webPushKey(session.server) : undefined);
 	let webPushActive = $derived(pushSettings.isOn(pushAccount) && notificationState === 'granted');
+	/**
+	 * While push is on for the account, its rooms' titles are kept for the service worker, which names a pushed room by
+	 * them. The code that keeps them loads the first time push is on, not with the app.
+	 */
+	let pushTitles: Promise<PushTitles> | undefined;
+	$effect(() => {
+		const pushId = webPushActive ? accountPushId : undefined;
+		const rooms = pushId ? session.rooms : undefined;
+		// Never on: nothing was kept to forget.
+		if (!pushId && !pushTitles) return;
+		pushTitles ??= import('$lib/ui/push-titles').then(({ PushTitles }) => new PushTitles());
+		pushTitles.then((titles) => titles.keep(pushId, rooms)).catch(() => (pushTitles = undefined));
+	});
 	/**
 	 * Notifications on this device, one setting: the page's own while Apron is open, and push
 	 * for this account while it's closed. On if either is, so a choice made with the two
@@ -282,11 +286,6 @@
 	let offeringLink = $state(false);
 	/** How far back a linked message is looked for, in pages of history. */
 	const LINKED_MESSAGE_PAGES = 20;
-	/**
-	 * How far back a pane opening at its New divider loads to reach it, in pages of history: a client choice, so that
-	 * opening a room read long ago asks for a few pages, not its whole backlog. Further back, it opens at the latest.
-	 */
-	const DIVIDER_PAGES = 3;
 	/** How long a pushed room waits for its account and rooms before it is dropped. */
 	const PUSH_ROOM_WAIT_MS = 30_000;
 	/** Tells this tab's notifications apart from other tabs' when the service worker relays a click. */
@@ -309,8 +308,6 @@
 	let displayName = $state('');
 	/** The `user_id`s the composer's chips mention (§3.5), sent as `body.mentions`. */
 	let composerMentions = $state<string[]>([]);
-	/** Link previews removed from the composer's draft, by URL. */
-	let composerDismissed = $state<string[]>([]);
 	let connectOpen = $state(false);
 	/** Disconnected from the server pane: the connect screen can't be cancelled back to it. */
 	let disconnected = $state(false);
@@ -320,8 +317,6 @@
 	let passkeyUnavailable = $state<string | undefined>();
 	let highlightedId = $state<string | undefined>();
 	let editingId = $state<string | undefined>();
-	/** The edit was opened from its message (its Edit, or `e`): the keyboard goes back to the row when it ends. */
-	let editFrom: 'row' | undefined;
 	/** The Edit form for the open room or thread (its title and description). */
 	let roomEditorOpen = $state(false);
 	/** Search is open (`SearchDialog`), at its rooms and threads or at its messages. */
@@ -367,14 +362,6 @@
 	let pendingOpen = $state<PendingThread | undefined>();
 	/** A room or thread joined from the directory or just created, opened once its `room_update` has arrived. */
 	let pendingJoin = $state.raw<PendingJoin | undefined>();
-	/**
-	 * Where the New divider sits in the open pane: after your read position
-	 * (`ReadPositions`) as it was when the pane opened. It stays put while you
-	 * read. `landed` once the pane has opened at it (or stayed at the latest).
-	 */
-	let newDivider = $state<{ room: string; after?: string; fixed: boolean; landed: boolean }>({ room: '', fixed: false, landed: false });
-	/** The visit to a pane (its `newDivider`) that `landAtDivider` is opening at its divider. */
-	let landing: object | undefined;
 	/** The NewThreadDialog, asking for a new thread's title and description, until it closes. */
 	let newThread = $state<NewThread | undefined>();
 	/** Threads this page started, by the message they were started from: Start thread again opens the same one. */
@@ -418,15 +405,6 @@
 	let memberRowsDrawn = $derived(firstScreenDrawn || (memberRowsKept ||= memberListOpen));
 	let composer = $state<Composer | undefined>();
 	let memberListToggle = $state<PanelToggle | undefined>();
-	let messageScroll = $state<HTMLDivElement | undefined>();
-	let stickToBottom = $state(true);
-	let latestVisible = $state(true);
-	/** The pane `latestVisible` was last measured in: until it is this one, it says nothing about this one. */
-	let latestVisibleIn = $state<string | undefined>();
-	/** The newest message you had on screen in the pane, for counting what arrived since. */
-	let seenThrough = $state<string | undefined>();
-	/** Bumped when you send or jump to the latest: a pane still opening at its divider stays at the latest instead. */
-	let pins = 0;
 	/** The room your typing indicator shows in, and the timer that ends it there 5 s after the last keystroke. */
 	let typingIn: { room: string; timer: ReturnType<typeof setTimeout> } | undefined;
 	/** The last read whose notifications were closed (account, server, room, message), so each closes once. */
@@ -443,13 +421,11 @@
 	};
 	/** Numbers staged files, so each can be taken off its draft. */
 	let stagedCount = 0;
-	/** Where the last scroll event, or automatic scroll to the latest item, left the list. */
-	let lastScrollTop: number | undefined;
 	let highlightTimer: ReturnType<typeof setTimeout> | undefined;
 
 	let snapshot = $derived(session.snapshot);
 	$effect(() => {
-		if (!snapshot.error) untrack(() => (dismissedError = undefined));
+		if (!session.error) untrack(() => (dismissedError = undefined));
 	});
 	/** The top-level room open in the pane (or behind the open thread). */
 	let activeRoom = $derived(session.activeRoom);
@@ -462,8 +438,8 @@
 	/** The sidebar lists joined threads, and a thread open without joining while it is open. */
 	let listedThreads = $derived(threads.filter((entry) => entry.joined || entry.id === activeThread));
 	/** The open thread, joined or read without joining; the client holds either as a room. */
-	let activeThreadEntry = $derived(activeThread && session.rooms.some((room) => room.id === activeThread) ? threads.find((entry) => entry.id === activeThread) : undefined);
-	let threadRoom = $derived(activeThreadEntry ? session.rooms.find((room) => room.id === activeThreadEntry.id) : undefined);
+	let activeThreadEntry = $derived(activeThread && session.room(activeThread) ? threads.find((entry) => entry.id === activeThread) : undefined);
+	let threadRoom = $derived(activeThreadEntry ? session.room(activeThreadEntry.id) : undefined);
 	/** The room the pane shows and the composer posts to: the open thread (itself a room), else the room. */
 	/**
 	 * The rooms whose thread listing (`room_list` with their `parent_room_id`) has settled on this connection.
@@ -527,12 +503,12 @@
 	let shownThreadRoom = $derived(session.heldCopy(threadRoom) ?? threadRoom);
 	let paneRoom = $derived(activeThread ? shownThreadRoom : activeRoom);
 	/** The live thread or room whose older pages load as the reader scrolls back: not a copy held from before. */
-	let olderSource = $derived(activeThread ? threadRoom : session.activeRoomHeld ? undefined : session.rooms.find((room) => room.id === session.activeRoomId));
+	let olderSource = $derived(activeThread ? threadRoom : session.activeRoomHeld ? undefined : session.room(session.activeRoomId));
 	/** What's new in the rooms and threads other than the one being read, as the rooms list counts it: the phone header's back button shows it. */
 	let unreadElsewhere = $derived(countElsewhere(unread.byRoom, paneRoom?.id));
 	let mentionsElsewhere = $derived(countElsewhere(mentions.byRoom, paneRoom?.id));
 	/** The waits the server asked for (`retry_after`) that are on, as the client holds them. */
-	let limits = $derived(snapshot.limits ?? {});
+	let limits = $derived(session.limits ?? {});
 	/** The pane's history waits out a refused `history`, which every room's history shares: it waits, then loads by itself. */
 	let historyWait = $derived(paneRoom?.limited ? limits.history : undefined);
 	/**
@@ -595,20 +571,10 @@
 	const NO_RECEIPTS: ReadonlyMap<string, Face[]> = new Map();
 	// The receipts last shown, which `steadyReceipts` keeps what is unchanged from; not state, only a memo.
 	let lastReceipts: ReadonlyMap<string, Face[]> = NO_RECEIPTS;
-	let shownTimeline = $derived(reveal.hidden > 0 ? timeline.slice(Math.min(reveal.hidden, timeline.length)) : timeline);
-	/** The open pane has no messages yet: its first items with them render newest first (`ARRIVAL_ITEMS`). */
-	let arriving = $state(false);
-	// Before they render (once the pane shows items, not its placeholders, as the timeline below decides): only the
-	// newest of them, then as many more as fill the pane (`fillPane`). A pane that has caught up with none is left as it is.
-	$effect.pre(() => {
-		if (!arriving || ((messages.length === 0 || paneHeldBack) && paneCatchingUp)) return;
-		arriving = false;
-		if (messages.length === 0) return;
-		untrack(() => {
-			reveal.from(timeline.length - ARRIVAL_ITEMS);
-			void fillPane(paneRoom?.id);
-		});
-	});
+	let shownTimeline = $derived(viewport.reveal.hidden > 0 ? timeline.slice(Math.min(viewport.reveal.hidden, timeline.length)) : timeline);
+	// Before they render (once the pane shows items, not its placeholders, as the timeline below decides), a pane's first
+	// messages render newest first.
+	viewport.watchArrival();
 	/**
 	 * Read receipts (`ext.settings.read_receipts`, private rooms only): the other members' faces under the newest message
 	 * shown that each has read through, by `message_id`. Empty, and the same map, wherever there are none.
@@ -620,9 +586,9 @@
 		return (lastReceipts = steadyReceipts(lastReceipts, next));
 	});
 	/** The pane is live: its room is listed, and no sign-in is under way. */
-	let paneReady = $derived(Boolean(paneRoom && session.ready && !snapshot.authBusy));
+	let paneReady = $derived(Boolean(paneRoom && session.ready && !session.authBusy));
 	/** `paneReady`, or a quiet reconnect from it: what shows stays as it was, and what's asked waits for the connection. */
-	let paneSteady = $derived(Boolean(paneRoom && session.steady && !snapshot.authBusy));
+	let paneSteady = $derived(Boolean(paneRoom && session.steady && !session.authBusy));
 	/** Writing here: posting, replying, reacting, and editing threads. A guest who only reads can't. */
 	let canCompose = $derived(paneReady && !session.readOnly);
 	/** Live typing (`/live`), loaded the first time it is used: see `startLive`. */
@@ -640,18 +606,14 @@
 	let people = $derived(peopleIn([...(activeThread ? timelineMessages(activeRoom) : []), ...messages], session.you, paneRoom?.members));
 	let roomSuggestions = $derived.by(() => {
 		const rooms = new Map<string, { id: string; title: string }>();
-		for (const room of [...(snapshot.directory ?? []), ...Object.values(snapshot.threadDirectory).flat(), ...session.rooms]) {
+		for (const room of [...(session.directory ?? []), ...Object.values(session.threadDirectory).flat(), ...session.rooms]) {
 			rooms.set(room.id, { id: room.id, title: room.title });
 		}
 		return [...rooms.values()];
 	});
-	let typingNames = $derived(snapshot.typing
+	let typingNames = $derived(session.typing
 		.filter((entry) => entry.room === paneRoom?.id && entry.from.user_id !== session.you?.user_id)
 		.map((entry) => directory.name(entry.from)));
-	/** The first message after your read position, unless you wrote it or older unread ones are still to load: the New divider goes above it. */
-	let newDividerAt = $derived(newDivider.room === paneRoom?.id && newDivider.after !== undefined
-		? newDividerBefore(timeline, newDivider.after, session.you, Boolean(paneRoom?.olderAvailable))
-		: undefined);
 	// `server.agent` names the implementation, for debugging, not the server: the host is the label.
 	/** What an archive's server says of it (`ext:archive`, ARCHIVE.md §4.1), while reading one. */
 	let archive = $derived(serverArchive(session.server));
@@ -675,21 +637,10 @@
 	});
 	// A thread kept through a reconnect counts what it had while it catches up, rather than the count going and coming back.
 	let threadReplyCount = $derived(threadRoom?.loaded || threadRoom?.resumed ? messages.length : undefined);
-	/** Messages after the newest you had on screen, by `message_id`, so older ones loading above don't count. */
-	let unseenCount = $derived.by(() => {
-		const seen = seenThrough;
-		if (stickToBottom || seen === undefined) return 0;
-		let count = 0;
-		for (let index = messages.length - 1; index >= 0 && compareLogIds(messages[index].message_id, seen) > 0; index--) count++;
-		return count;
-	});
-	/**
-	 * You are reading the open pane's latest message: it is on screen, as
-	 * measured in this pane, and the pane has opened at its divider.
-	 */
 	/** The conversation shows: not behind the phone's rooms list, where only a faded sliver of it peeks out. */
 	let paneShown = $derived(!(narrow && mobilePane === 'rooms'));
-	let readingLatest = $derived(paneShown && latestVisible && latestVisibleIn === paneRoom?.id && newDivider.room === paneRoom?.id && newDivider.landed);
+	/** You are reading the open pane's latest message: it shows, and the viewport says you are (`readingLatest`). */
+	let readingLatest = $derived(paneShown && viewport.readingLatest);
 	/** The pane's messages this viewer may pick, in order: what shift-click ranges run along. */
 	let selectableOrder = $derived(messages.filter(canSelect).map((event) => event.message_id));
 	/** Picked messages move with `message` requests (capability `edit`), which a reader who may not write makes none of. */
@@ -701,7 +652,7 @@
 	let canEditPane = $derived(session.canManageRooms && !session.readOnly && Boolean(activeThread ? activeThreadEntry : activeRoom));
 	/** What the Edit form edits: the open thread, else the room; its title as written (`editableTitle`), so saving sends back every character. */
 	let editTarget = $derived(activeThread
-		? (activeThreadEntry ? { id: activeThreadEntry.id, title: editableTitle(session.rooms.find((room) => room.id === activeThreadEntry?.id) ?? activeThreadEntry), description: activeThreadEntry.description } : undefined)
+		? (activeThreadEntry ? { id: activeThreadEntry.id, title: editableTitle(session.room(activeThreadEntry.id) ?? activeThreadEntry), description: activeThreadEntry.description } : undefined)
 		: (activeRoom ? { id: activeRoom.id, title: editableTitle(activeRoom), description: activeRoom.description } : undefined));
 	/** Room and thread descriptions put away with their ×, on this device. */
 	let hiddenDescriptions = $state(loadHiddenDescriptions());
@@ -760,7 +711,7 @@
 	 */
 	let privateIntro = $derived.by(() => {
 		const room = activeThread ? undefined : activeRoom;
-		if (!room?.private || room.parentRoomId !== undefined || !reachesStart(room) || reveal.hidden > 0) return undefined;
+		if (!room?.private || room.parentRoomId !== undefined || !reachesStart(room) || viewport.reveal.hidden > 0) return undefined;
 		const others = othersIn(room, session.you?.user_id);
 		const one = room.namedForMembers && others.length === 1 ? directory.person(others[0]) : undefined;
 		const bio = one && keepsBio(session.server) ? directory.bio(one)?.split('\n')[0] : undefined;
@@ -787,7 +738,7 @@
 	// they're chosen on this device), and while you're away they notify. Never from a held view (`arrivalAlerts`).
 	$effect(() => {
 		const alerts = arrivalAlerts(
-			{ held: session.showingHeld, rooms: session.rooms, you: session.you, pane: paneRoom?.id, latestVisible: latestVisible && paneShown, readThrough: syncsReads ? (room) => readPositions.through(room, session.you) : () => undefined },
+			{ held: session.showingHeld, rooms: session.rooms, you: session.you, pane: paneRoom?.id, latestVisible: viewport.latestVisible && paneShown, readThrough: syncsReads ? (room) => readPositions.through(room, session.you) : () => undefined },
 			{ mentions, messages: incomingMessages },
 			{
 				offerable: untrack(() => !notifyOffer && !installOffer && offersNotifications({ chosen: notificationsChoiceMade, active: notificationsActive, permission: notificationState, silenced })),
@@ -922,7 +873,7 @@
 			return;
 		}
 		if (!session.ready || !session.snapshot.roomsListed) return;
-		void [session.rooms, session.snapshot.directory, session.snapshot.threadDirectory[pending.room], activeRoom?.id, activeThread];
+		void [session.rooms, session.directory, session.threadDirectory[pending.room], activeRoom?.id, activeThread];
 		untrack(() => openLinked(pending));
 	});
 
@@ -943,20 +894,11 @@
 		untrack(() => presence.noteMentions(arrived, playSound, quiet));
 	});
 
-	// The New divider is placed once per visit, from your read position: kept on this device, the server's cursor, or your newest message.
-	$effect(() => {
-		const room = paneRoom;
-		if (!room) return;
-		if (newDivider.room !== room.id) newDivider = { room: room.id, fixed: false, landed: false };
-		else if (!newDivider.fixed && room.loaded) newDivider = { room: room.id, after: untrack(() => readPositions.through(room, session.you, true)), fixed: true, landed: false };
-	});
+	// The New divider is placed once per visit, from your read position, and the pane opens at it.
+	viewport.watchDivider();
 
-	// Then the pane opens at it, where you left off, unless something already moved it from the latest.
-	$effect(() => {
-		const room = paneRoom;
-		if (!room || newDivider.room !== room.id || !newDivider.fixed || newDivider.landed) return;
-		untrack(() => void landAtDivider(room.id));
-	});
+	// Back in view, the latest row is measured again, before reading it marks anything read: before the read below, in this order.
+	viewport.watchReturn();
 
 	// Reading the latest message advances your read position, and your read cursor (capability `activity`),
 	// which the server syncs to your other devices.
@@ -1069,20 +1011,8 @@
 		});
 	});
 
-	// A thread's or a room's first page may not fill the pane, leaving nothing to
-	// scroll back with: load older pages until it does or there are none. Not while
-	// some of what it has are still to render (`reveal`): they may fill it.
-	$effect(() => {
-		const room = olderSource;
-		void timeline.length;
-		if (!room?.loaded || !room.olderAvailable || room.loadingOlder || !messageScroll || reveal.hidden > 0) return;
-		untrack(() => {
-			tick().then(() => {
-				// Not while the pane isn't laid out (a phone showing the rooms list): it would never fill, and load every page.
-				if (messageScroll && messageScroll.clientHeight > 0 && messageScroll.scrollHeight <= messageScroll.clientHeight + OLDER_REPLIES_MARGIN_PX) void loadOlderReplies();
-			});
-		});
-	});
+	// A thread's or a room's first page may not fill the pane: older pages load until it does.
+	viewport.watchFill();
 
 	// Threads don't recover with their parent, nor does a room read without joining it: the open one loads its own
 	// history, again after a reconnect, which lists it afresh.
@@ -1099,123 +1029,8 @@
 		}
 	});
 
-	// At the latest as soon as the pane's items are in, before the frame paints, and again once it has laid out.
-	// Not only after the frame: the list is the same element from pane to pane, kept where the last pane left it, and the
-	// browser's scroll anchoring can move it on the swap (to a day divider both panes have). That scroll's event
-	// comes before the frame, and against the last pane's position it would read as the reader scrolling up.
-	// By the count and the room's id, not the list and the room themselves, which are new with every snapshot (each
-	// room listed as the page loads, say): each time it scrolls it lays the page out, and what else changes in the
-	// pane is followed below.
-	let paneCount = $derived(messages.length);
-	let paneId = $derived(paneRoom?.id);
-	$effect(() => {
-		void paneCount;
-		void paneId;
-		if (!stickToBottom || !messageScroll) return;
-		scrollToLatest();
-		requestAnimationFrame(() => {
-			if (stickToBottom) scrollToLatest();
-		});
-	});
-
-	// The timeline is anchored at its bottom edge, as chat apps are: when something in the pane takes more or less
-	// room below it (the composer growing a line, a reply bar, staged files, the typing row), what sat just above the
-	// composer stays there, pushed up rather than covered: at the latest message it stays there, and scrolled back,
-	// the view moves with the edge. Before the frame paints. The window resizing (the pane's own height) is left be,
-	// but not an on-screen keyboard coming up or going down (trackKeyboard), which takes room as the composer does.
-	$effect(() => {
-		const scroll = messageScroll;
-		const pane = scroll?.closest<HTMLElement>('.ap-shell-main');
-		if (!scroll || !pane) return;
-		const root = document.documentElement;
-		let height = scroll.clientHeight;
-		let paneHeight = pane.clientHeight;
-		let keyboardHeight = root.style.getPropertyValue('--app-height');
-		const observer = new ResizeObserver(() => {
-			const next = scroll.clientHeight;
-			const change = height - next;
-			const paneChanged = pane.clientHeight !== paneHeight;
-			const keyboardChanged = root.style.getPropertyValue('--app-height') !== keyboardHeight;
-			height = next;
-			paneHeight = pane.clientHeight;
-			keyboardHeight = root.style.getPropertyValue('--app-height');
-			if (!change || (paneChanged && !keyboardChanged)) return;
-			if (stickToBottom) scrollToLatest();
-			else scroll.scrollTop += change;
-			// A message being edited stays in view over the keyboard.
-			const active = document.activeElement;
-			if (keyboardChanged && active instanceof HTMLElement && scroll.contains(active)) active.scrollIntoView({ block: 'nearest' });
-		});
-		observer.observe(scroll);
-		observer.observe(pane);
-		return () => observer.disconnect();
-	});
-
-	// Stay pinned to the latest item while the pane fills in: a room's history, its threads'
-	// cards and descriptions land over several updates, not all of which change what the effect
-	// above tracks. Follow the rendered content instead.
-	$effect(() => {
-		const scroll = messageScroll;
-		if (!scroll) return;
-		let frame = 0;
-		const observer = new MutationObserver(() => {
-			if (!stickToBottom || frame) return;
-			frame = requestAnimationFrame(() => {
-				frame = 0;
-				if (stickToBottom) scrollToLatest();
-			});
-		});
-		observer.observe(scroll, { childList: true, subtree: true, characterData: true });
-		return () => {
-			observer.disconnect();
-			cancelAnimationFrame(frame);
-		};
-	});
-
-	$effect(() => {
-		const scroll = messageScroll;
-		const items = timeline;
-		const pane = paneRoom?.id;
-		if (!scroll) return;
-		let observer: IntersectionObserver | undefined;
-		const frame = requestAnimationFrame(() => {
-			const nodes = scroll.querySelectorAll<HTMLElement>('[data-timeline-item]');
-			const latest = nodes[nodes.length - 1];
-			if (!items.length || !latest) {
-				latestVisible = true;
-				latestVisibleIn = pane;
-				return;
-			}
-			observer = new IntersectionObserver((entries) => {
-				// An entry says where the latest was at a frame since gone: on a busy main thread several frames'
-				// entries arrive together, and the pane may have been pinned again before this runs. Out of view is
-				// checked against now.
-				let visible = entries[entries.length - 1].isIntersecting;
-				if (!visible) {
-					const at = latest.getBoundingClientRect();
-					const box = scroll.getBoundingClientRect();
-					visible = at.bottom > box.top && at.top < box.bottom;
-				}
-				// Pinned, and pushed down by something laying out above it without a mutation or a scroll (an image's
-				// size arriving): it follows the latest, as the pane does while it fills in, rather than offering a jump.
-				if (!visible && stickToBottom && !atLatest(scroll)) {
-					scrollToLatest();
-					return;
-				}
-				latestVisible = visible;
-				latestVisibleIn = pane;
-				if (latestVisible) {
-					seenThrough = messages[messages.length - 1]?.message_id;
-					mentions.clearUnseen();
-				}
-			}, { root: scroll });
-			observer.observe(latest);
-		});
-		return () => {
-			cancelAnimationFrame(frame);
-			observer?.disconnect();
-		};
-	});
+	// At the latest while pinned there, anchored at the pane's bottom edge, and watching whether the latest shows.
+	viewport.watchLatest();
 
 	onMount(() => trackKeyboard());
 
@@ -1380,8 +1195,7 @@
 			window.removeEventListener('appinstalled', installed);
 			if (typingIn) clearTimeout(typingIn.timer);
 			if (highlightTimer) clearTimeout(highlightTimer);
-			reveal.stop();
-			floatingDay.dispose();
+			viewport.dispose();
 			presence.dispose();
 			worker?.removeEventListener('message', notificationClicked);
 			if (permission) permission.onchange = null;
@@ -1528,15 +1342,18 @@
 		if (!room || !client) return;
 		const body = notificationBody(plainTextOf(event));
 		const id = accountPushId;
+		// Without a `push_id`, the server's address stands in for it: each tab of this server alerts once for a message.
+		const owner = id ?? client.url;
 		const target: NotificationTarget = {
 			tab: tabId, server: client.url, roomId: room.parentRoomId ?? room.id, ...(room.parentRoomId ? { threadId: room.id } : {}), messageId: event.message_id,
-			...(id ? { pushId: id, group: notificationGroup(id, room.id) } : {})
+			...(id ? { pushId: id } : {}), group: notificationGroup(owner, room.id)
 		};
 		const shown = await showNotification(notificationTitle(senderName(event), room), {
 			body: body || embedsLabel(event.body?.embeds) || 'New message',
-			// One per message, shared with the server's push of it (§4.9), which replaces it quietly;
-			// a newer message in the room closes it. Without a `push_id`, one per room.
-			...(id ? { tag: messageNotificationTag(id, event.message_id), renotify: false } : { tag: `apron:${client.url}:${room.id}`, renotify: true }),
+			// One per message, shared with the server's push of it (§4.9) and with this server's other tabs, the second
+			// replacing the first quietly; a newer message in the room closes it.
+			tag: messageNotificationTag(owner, event.message_id),
+			renotify: false,
 			data: target
 		}, () => openNotificationTarget(target));
 		if (!shown && mention) playPing();
@@ -1563,7 +1380,7 @@
 	 */
 	function notificationClicked(event: MessageEvent): void {
 		if (isJsonObject(event.data) && event.data.type === PUSH_ID_QUERY) {
-			event.ports[0]?.postMessage({ pushId: accountPushId });
+			event.ports[0]?.postMessage({ pushId: accountPushId, tab: tabId });
 			return;
 		}
 		const target = notificationClickTarget(event.data);
@@ -1750,6 +1567,16 @@
 			return;
 		}
 		linked = undefined;
+		// On a phone the rooms list makes way for the pane, as picking a room does: its entry is the pane's now, so Back
+		// doesn't show it again. Opening another room or thread above took the entry already.
+		if (page.state.rooms) {
+			try {
+				replaceState(window.location.href, target.thread ? { room: target.room, thread: target.thread } : { room: target.room });
+			} catch {
+				// The router isn't started yet (in development): the list just stays its entry.
+			}
+		}
+		mobilePane = 'main';
 		if (target.message) void revealLinkedMessage(target.room, target.thread, target.message, () => abandonLink('message', target.searched));
 		if (target.user) void revealLinkedUser(target.thread ?? target.room, target.user);
 	}
@@ -1879,12 +1706,6 @@
 		}
 		await jumpToMessage(id);
 		scrubUrl(addressOf(roomId, thread, id));
-	}
-
-	/** Waits, a frame at a time, until `ready` holds or `ms` pass. */
-	async function until(ready: () => boolean, ms: number): Promise<void> {
-		const started = performance.now();
-		while (!ready() && performance.now() - started < ms) await new Promise((resolve) => requestAnimationFrame(resolve));
 	}
 
 	/**
@@ -2032,9 +1853,7 @@
 		mentions.clearUnseen();
 		mentions.clearRoom(roomId);
 		if (thread) mentions.clearRoom(thread);
-		stickToBottom = true;
-		reveal.from(timeline.length - FIRST_PAINT_ITEMS);
-		arriving = messages.length === 0;
+		viewport.openPane();
 		// A thread's failed load is about that thread: leaving it takes the toast too.
 		feedback.dismiss(threadError);
 	}
@@ -2208,7 +2027,7 @@
 		const reply = drafts.reply;
 		const originKey = draftKey(roomId);
 		const mentions = composerMentions;
-		const dismissed = composerDismissed;
+		const dismissed = drafts.dismissed;
 		const action = composerAction(draft, { command: snapshot.capabilities.command, rooms: session.canManageRooms, members: !snapshot.memberChangesUnsupported, append: snapshot.capabilities['embed:append'] }, mentions);
 		if (action.kind === 'live') {
 			startLive(chat, paneRoom, reply);
@@ -2216,9 +2035,7 @@
 		}
 		// A draft given back keeps the link previews that were removed from it.
 		const restore = () => {
-			if (!drafts.restore(originKey, draft, reply)) return;
-			composerDismissed = dismissed;
-			composer?.focus();
+			if (drafts.restore(originKey, draft, reply, [], dismissed)) composer?.focus();
 		};
 		const options = { ...(reply ? { replyTo: reply } : {}), ...(mentions.length ? { mentions } : {}) };
 		if (action.kind === 'message') {
@@ -2234,8 +2051,7 @@
 			} else {
 				post();
 			}
-			stickToBottom = true;
-			pins++;
+			viewport.pin();
 		} else {
 			const failed = (cause: unknown) => {
 				chat.notify(roomId, cause instanceof Error && cause.message ? cause.message : 'The command failed');
@@ -2290,8 +2106,7 @@
 				},
 				started: () => {
 					stopTyping();
-					stickToBottom = true;
-					pins++;
+					viewport.pin();
 					composer?.focus();
 				},
 				error: (cause, fallback) => feedback.error(cause, fallback)
@@ -2364,14 +2179,13 @@
 		const refit = limits !== media.upload ? staged.map(({ file }) => prepareUpload(file, { limits })) : undefined;
 		const text = action.kind === 'message' ? action.text : draft;
 		const mentions = composerMentions;
-		const dismissed = composerDismissed;
+		const dismissed = drafts.dismissed;
 		const embeds = command ? [] : linkPreviews.embeds(text, dismissed);
 		const options = { ...(reply ? { replyTo: reply } : {}), ...(mentions.length ? { mentions } : {}), ...(embeds.length ? { embeds } : {}) };
 		clearComposer(roomId);
 		chat.sendTyping(roomId, false);
 		stopTyping();
-		stickToBottom = true;
-		pins++;
+		viewport.pin();
 		composer?.focus();
 		feedback.pending(staged.length === 1 ? `Uploading ${staged[0].title || staged[0].file.name || 'file'}…` : `Uploading ${staged.length} files…`);
 		// A file that couldn't be readied was already taken off with its reason; the rest go.
@@ -2380,9 +2194,7 @@
 		const files = readied.flatMap((result, index) => (result.status === 'fulfilled' ? [{ ...result.value, ...(staged[index].title ? { title: staged[index].title } : {}) }] : []));
 		const kept = staged.filter((_, index) => readied[index].status === 'fulfilled');
 		const restore = (back = kept) => {
-			if (!drafts.restore(originKey, draft, reply, back)) return;
-			composerDismissed = dismissed;
-			composer?.focus();
+			if (drafts.restore(originKey, draft, reply, back, dismissed)) composer?.focus();
 		};
 		// One `/emoji add` can't take is handed back with the draft, unsent, with the reason.
 		const refused = refit && readied.find((result): result is PromiseRejectedResult => result.status === 'rejected');
@@ -2417,46 +2229,6 @@
 		});
 	}
 
-	/** How long a side panel takes to slide open or shut: --duration-slide in tokens.css. */
-	const SLIDE_MS = 240;
-	let heldTimeline: { scroller: HTMLElement; width: number; release: () => void } | undefined;
-
-	/**
-	 * While a side panel slides, the conversation's width changes every frame. The timeline takes the width it will
-	 * end at from the start instead, so its messages are laid out once, not re-wrapped on every frame, and the pane
-	 * clips it meanwhile, on a compositor layer of its own (only then: it would hold fixed-position children). It
-	 * lets go when the grid's slide ends, which a slow first frame (that one layout) can put well after the tap.
-	 * `change` is how much wider the conversation is about to be.
-	 */
-	function prepareSlide(change: number): void {
-		const scroller = messageScroll;
-		const pane = scroller?.closest<HTMLElement>('.ap-shell-main');
-		const app = pane?.parentElement;
-		if (!scroller || !pane || !app || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-		const from = heldTimeline?.scroller === scroller ? heldTimeline.width : scroller.getBoundingClientRect().width;
-		heldTimeline?.release();
-		const width = from + change;
-		scroller.style.width = `${width}px`;
-		pane.style.overflow = 'clip';
-		pane.style.willChange = 'transform';
-		// Re-wrapped at its new width, the history is taller or shorter: still at the latest message if it was.
-		if (stickToBottom) requestAnimationFrame(() => { if (stickToBottom) scrollToLatest(); });
-		const ended = (event: TransitionEvent) => { if (event.target === app && event.propertyName === 'grid-template-columns') release(); };
-		// Should the slide not run (or its end be missed), letting go later changes nothing: the width is the final one.
-		const fallback = setTimeout(() => release(), SLIDE_MS * 4 + 1000);
-		const release = () => {
-			app.removeEventListener('transitionend', ended);
-			clearTimeout(fallback);
-			if (heldTimeline?.release !== release) return;
-			heldTimeline = undefined;
-			scroller.style.width = '';
-			pane.style.overflow = '';
-			pane.style.willChange = '';
-		};
-		app.addEventListener('transitionend', ended);
-		heldTimeline = { scroller, width, release };
-	}
-
 	// A panel opening or shutting (not a drag, nor the window crossing into or out of the member list's column):
 	// before the DOM changes, the timeline takes its final width for the slide.
 	let lastTracks: { rooms: number; members: number; wide: boolean } | undefined;
@@ -2467,7 +2239,7 @@
 			lastTracks = tracks;
 			if (!before || !slidesReady || before.wide !== tracks.wide || sidebar.resizing || memberList.resizing) return;
 			const change = before.rooms - tracks.rooms + before.members - tracks.members;
-			if (change !== 0) prepareSlide(change);
+			if (change !== 0) viewport.prepareSlide(change);
 		});
 	});
 
@@ -2636,7 +2408,7 @@
 	}
 
 	/** The rooms and threads listed to join, by `room_id`, for links' cards: made once per snapshot, not per link. */
-	const listedRooms = $derived(new Map([...(snapshot.directory ?? []), ...Object.values(snapshot.threadDirectory).flat()].map((listing) => [listing.id, listing])));
+	const listedRooms = $derived(new Map([...(session.directory ?? []), ...Object.values(session.threadDirectory).flat()].map((listing) => [listing.id, listing])));
 
 	/** The room or thread a link to this server names, likewise: one joined, opened or listed here. */
 	function linkedRoom(link: ApronLink): LinkedRoom | undefined {
@@ -2678,7 +2450,7 @@
 			return client?.url;
 		},
 		get uploads() {
-			return snapshot.uploads;
+			return session.uploads;
 		}
 	};
 
@@ -2721,10 +2493,7 @@
 			const event = rowEvent(view);
 			return event ? reactionsFor(event) : [];
 		}),
-		edit: onRow((event) => {
-			editingId = event.message_id;
-			editFrom = 'row';
-		}),
+		edit: onRow((event) => (editingId = event.message_id)),
 		delete: onRow(deleteMessage),
 		startThread: onRow(startThread),
 		copyLink: async (view) => {
@@ -2769,13 +2538,6 @@
 		return { room: home.id };
 	}
 
-	async function renderedMessage(id: string): Promise<HTMLElement | undefined> {
-		await tick();
-		const node = () => messageScroll?.querySelector<HTMLElement>(`article[data-message-id="${CSS.escape(id)}"]`) ?? undefined;
-		await until(() => Boolean(node()), JUMP_WAIT_MS);
-		return node();
-	}
-
 	/**
 	 * Scrolls the timeline to a message and highlights it for a moment, first
 	 * opening the room or thread it lives in (and loading a thread's history).
@@ -2784,150 +2546,23 @@
 		const target = resolveMessage(id);
 		const destination = target ? destinationOf(target) : undefined;
 		if (!destination) return;
-		if (destination.room !== activeRoom?.id || destination.thread !== activeThread) {
-			openDestination(destination.room, destination.thread);
-			stickToBottom = false;
-		}
-		reveal.from(0);
-		const node = await renderedMessage(id);
+		const opening = destination.room !== activeRoom?.id || destination.thread !== activeThread;
+		if (opening) openDestination(destination.room, destination.thread);
+		const node = await viewport.jumpTo(id, opening);
 		if (!node) return;
-		stickToBottom = false;
-		node.scrollIntoView({ block: 'center' });
-		// Settled here, as landing at the divider is: a jump to the latest, the pane already there, scrolls nothing,
-		// so no scroll event would pin it again to follow what comes next.
-		const scroller = messageScroll;
-		if (scroller) {
-			lastScrollTop = scroller.scrollTop;
-			stickToBottom = atLatest(scroller);
-		}
 		node.focus({ preventScroll: true });
 		highlightedId = id;
 		if (highlightTimer) clearTimeout(highlightTimer);
 		highlightTimer = setTimeout(() => (highlightedId = undefined), 1600);
 	}
 
-	/**
-	 * Opens the pane at its New divider, near the top with what is new below
-	 * it, as long as it still shows the latest: a jump, the reader, or sending
-	 * may have moved it first. A pane opened on its newest page first loads its
-	 * older messages back to the divider (as a linked message's do, but only
-	 * DIVIDER_PAGES of them), so the divider doesn't move up out of view as they
-	 * load. Not back to it by then, it shows no divider (`newDividerBefore`)
-	 * and stays at the latest. Either way the pane has landed after.
-	 */
-	async function landAtDivider(roomId: string): Promise<void> {
-		const visit = newDivider;
-		if (landing === visit) return;
-		landing = visit;
-		const pinned = pins;
-		const still = () => newDivider === visit && paneRoom?.id === roomId && stickToBottom && pins === pinned;
-		try {
-			const after = visit.after;
-			for (let page = 0; page < DIVIDER_PAGES && client && after !== undefined && still(); page++) {
-				const oldest = paneRoom?.timeline.order[0];
-				if (!paneRoom?.olderAvailable || oldest === undefined || compareLogIds(oldest, after) <= 0) break;
-				try {
-					await client.loadOlder(roomId);
-				} catch {
-					break;
-				}
-			}
-			// Still short of your read position: no divider, and the pane opens at the latest.
-			const before = newDividerAt;
-			if (before === undefined || !still()) return;
-			const index = timeline.findIndex((item) => item.kind === 'message' && item.event.message_id === before);
-			if (index >= 0 && index - LAND_CONTEXT_ITEMS < reveal.hidden) reveal.from(index - LAND_CONTEXT_ITEMS);
-			await tick();
-			const divider = () => messageScroll?.querySelector<HTMLElement>('.ap-divider-new') ?? undefined;
-			await until(() => Boolean(divider()) || !still(), JUMP_WAIT_MS);
-			const node = divider();
-			const scroller = messageScroll;
-			if (!node || !scroller || !still()) return;
-			stickToBottom = false;
-			scroller.scrollTop += node.getBoundingClientRect().top - scroller.getBoundingClientRect().top - LAND_MARGIN_PX;
-			lastScrollTop = scroller.scrollTop;
-			// Settled here, not by the next scroll event or intersection, so nothing reads the pane as at its latest meanwhile.
-			stickToBottom = atLatest(scroller);
-			const items = scroller.querySelectorAll<HTMLElement>('[data-timeline-item]');
-			const latest = items[items.length - 1]?.getBoundingClientRect();
-			latestVisible = !latest || latest.top < scroller.getBoundingClientRect().bottom;
-			latestVisibleIn = roomId;
-			if (!latestVisible) seenThrough = after;
-		} finally {
-			if (landing === visit) landing = undefined;
-			if (newDivider === visit) newDivider = { ...visit, landed: true };
-		}
-	}
-
-	function jumpToLatest(): void {
-		stickToBottom = true;
-		pins++;
-		mentions.clearUnseen();
-		scrollToLatest();
-	}
-
-	/** Whether the list is scrolled to (near enough) its end. */
-	function atLatest(scroller: HTMLElement): boolean {
-		return scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 96;
-	}
-
-	function scrollToLatest(): void {
-		if (!messageScroll) return;
-		// Not when already at the end, or past it in iOS's rubber band: pulling past the latest scrolls down, which
-		// pins again, and setting the scroll top there would snap the bounce back under the finger every frame.
-		const end = messageScroll.scrollHeight - messageScroll.clientHeight;
-		if (messageScroll.scrollTop < end - 1) messageScroll.scrollTop = messageScroll.scrollHeight;
-		// Held at the end, not wherever within a pixel of it the list sits: what a slow drag moved
-		// it short of the end so far still counts toward letting go (trackScroll).
-		lastScrollTop = end;
-	}
-
 	/** Takes you to the oldest mention that arrived while you were reading back. */
 	function jumpToMention(): void {
 		const target = mentions.takeUnseen();
 		if (target) void jumpToMessage(target);
-		else jumpToLatest();
+		else viewport.jumpToLatest();
 	}
 
-	function trackScroll(): void {
-		const scroller = messageScroll;
-		if (!scroller) return;
-		const pinned = stickToBottom;
-		const top = scroller.scrollTop;
-		let scrolledUp = true;
-		// While pinned, only the reader scrolling up lets go. The pane grows under us as a room's
-		// history, its threads' cards and long messages lay out; our own scroll's event can land
-		// after that, and scroll anchoring moves the list down, before the next frame catches up.
-		// Up is measured from where the pane was last held, not from the last event: a slow drag
-		// (on iOS, a third of a pixel at a time) moves less than a pixel between events, each step
-		// too small to count, and pinning back after each would hold it until the drag gathered
-		// speed. Held no further down than the end as it is now, so bouncing back out of iOS's
-		// rubber band below the latest isn't read as scrolling up, nor is the list shrinking under it.
-		if (pinned && lastScrollTop !== undefined) {
-			const end = scroller.scrollHeight - scroller.clientHeight;
-			const held = Math.min(lastScrollTop, end);
-			scrolledUp = top < held - 1;
-			lastScrollTop = Math.min(Math.max(top, held), end);
-		} else lastScrollTop = top;
-		if (pinned && !scrolledUp) {
-			// Unless the reader has gone on up by then: a drag can move the list again before this frame.
-			requestAnimationFrame(() => {
-				if (stickToBottom && messageScroll && lastScrollTop !== undefined && messageScroll.scrollTop >= lastScrollTop - 1) scrollToLatest();
-			});
-			return;
-		}
-		const atBottom = atLatest(scroller);
-		if (top < OLDER_REPLIES_MARGIN_PX) void loadOlderReplies();
-		if (!atBottom && pinned) seenThrough = messages[messages.length - 1]?.message_id;
-		stickToBottom = atBottom;
-		floatingDay.update(scroller, atBottom);
-	}
-
-	/**
-	 * A thread, or a room on its first visit, opens on its newest page; reading
-	 * back near the top loads the page before it. The reader's place is kept:
-	 * whatever was on screen stays put while the older messages land above it.
-	 */
 	// --- The keyboard among the messages (lib/ui/message-focus.ts) ---
 
 	/**
@@ -2936,12 +2571,14 @@
 	 */
 	function focusMessage(row: HTMLElement): void {
 		row.focus({ preventScroll: true });
-		row.scrollIntoView({ block: messageScroll && row.offsetHeight > messageScroll.clientHeight ? 'start' : 'nearest' });
+		const list = viewport.messageScroll;
+		row.scrollIntoView({ block: list && row.offsetHeight > list.clientHeight ? 'start' : 'nearest' });
 	}
 
 	/** ↑ in the empty composer: the keyboard goes to the newest message. False with none to go to. */
 	function focusNewestMessage(): boolean {
-		const newest = messageScroll ? messageRows(messageScroll).at(-1) : undefined;
+		const list = viewport.messageScroll;
+		const newest = list && messageRows(list).at(-1);
 		if (!newest) return false;
 		focusMessage(newest);
 		return true;
@@ -2949,7 +2586,7 @@
 
 	/** How many rows fill the pane, for Page Up and Page Down (a measure taken only on the key). */
 	function rowsPerPage(rows: HTMLElement[]): number {
-		const pane = messageScroll?.getBoundingClientRect();
+		const pane = viewport.messageScroll?.getBoundingClientRect();
 		if (!pane) return 1;
 		return rows.filter((row) => {
 			const box = row.getBoundingClientRect();
@@ -2970,12 +2607,13 @@
 	 */
 	function timelineFocusin(event: FocusEvent): void {
 		const target = event.target;
-		if (!(target instanceof HTMLElement) || !messageScroll) return;
-		if (timelineItems(messageScroll).includes(target)) lastItem = target;
+		const list = viewport.messageScroll;
+		if (!(target instanceof HTMLElement) || !list) return;
+		if (timelineItems(list).includes(target)) lastItem = target;
 		const from = event.relatedTarget;
-		if (!tabbing || (from instanceof Node && messageScroll.contains(from)) || target.closest('[data-testid="message-editor"]')) return;
+		if (!tabbing || (from instanceof Node && list.contains(from)) || target.closest('[data-testid="message-editor"]')) return;
 		if (lastItem === target) return;
-		const back = lastItem?.isConnected && messageScroll.contains(lastItem) ? lastItem : messageRows(messageScroll).at(-1);
+		const back = lastItem?.isConnected && list.contains(lastItem) ? lastItem : messageRows(list).at(-1);
 		if (back && back !== target) focusMessage(back);
 	}
 
@@ -2984,8 +2622,9 @@
 	 * the way a shift-click fills a range; stepping back gives them up again.
 	 */
 	function extendSelection(row: HTMLElement, step: 'previous' | 'next'): void {
-		if (!messageScroll || !paneRoom) return;
-		const items = timelineItems(messageScroll);
+		const list = viewport.messageScroll;
+		if (!list || !paneRoom) return;
+		const items = timelineItems(list);
 		let next: HTMLElement | undefined = row;
 		do next = stepMessage(items, next, step);
 		while (next && !isMessageRow(next));
@@ -3014,10 +2653,11 @@
 	 */
 	async function timelineKey(event: KeyboardEvent): Promise<void> {
 		const target = event.target;
-		if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || !(target instanceof HTMLElement) || !messageScroll) return;
+		const list = viewport.messageScroll;
+		if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || !(target instanceof HTMLElement) || !list) return;
 		if (target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [data-testid="message-editor"]')) return;
 		if (event.key === 'Tab') {
-			const out = tabbableOutside(messageScroll, !event.shiftKey);
+			const out = tabbableOutside(list, !event.shiftKey);
 			if (!out) return;
 			event.preventDefault();
 			out.focus();
@@ -3038,7 +2678,7 @@
 			}
 			return;
 		}
-		if (!timelineItems(messageScroll).includes(target)) return;
+		if (!timelineItems(list).includes(target)) return;
 		if (event.key === 'Escape') {
 			// In select mode Escape ends it (windowKeydown); the composer is the selection bar then.
 			if (selection.active) return;
@@ -3072,8 +2712,8 @@
 			return;
 		}
 		event.preventDefault();
-		let items = timelineItems(messageScroll);
-		const next = stepMessage(items, target, step, rowsPerPage(items));
+		const items = timelineItems(list);
+		const next = stepMessage(items, target, step, step === 'pageUp' || step === 'pageDown' ? rowsPerPage(items) : 1);
 		if (next) {
 			focusMessage(next);
 			return;
@@ -3084,71 +2724,9 @@
 			return;
 		}
 		// Past the oldest drawn: the rest of what's loaded first, then older pages, as scrolling back would.
-		if (reveal.hidden > 0) {
-			reveal.from(0);
-			await tick();
-			items = timelineItems(messageScroll);
-			const older = stepMessage(items, target, 'previous');
-			if (older) focusMessage(older);
-			return;
-		}
-		await loadOlderReplies();
-		items = timelineItems(messageScroll);
-		const older = stepMessage(items, target, 'previous');
+		await viewport.showOlder();
+		const older = stepMessage(timelineItems(list), target, 'previous');
 		if (older && document.activeElement === target) focusMessage(older);
-	}
-
-	async function loadOlderReplies(): Promise<void> {
-		const room = olderSource;
-		if (!client || !room || !messageScroll || !room.olderAvailable || room.loadingOlder) return;
-		const scroller = messageScroll;
-		const height = scroller.scrollHeight;
-		const top = scroller.scrollTop;
-		try {
-			await client.loadOlder(room.id);
-		} catch {
-			return; // The next scroll back tries again.
-		}
-		await tick();
-		keepPlace(scroller, top, height);
-	}
-
-	/**
-	 * Renders more of the open pane's first items, newest first, until the first of them sits above the pane's top
-	 * (`FILL_SLACK_PX` above) at its latest, where the pane opens: from there down it shows what it would with all of
-	 * them, and nothing more is drawn before the frame paints. Each step comes before that paint (a microtask after the
-	 * last update) and lays the page out once to measure; it renders as many more as the rows so far say fill the rest,
-	 * up to `ARRIVAL_ITEMS` (more at once costs the rows' first updates more, in Svelte's bookkeeping, than the extra
-	 * step's layout). The rest follow after the paint (`reveal`).
-	 */
-	async function fillPane(pane: string | undefined): Promise<void> {
-		for (;;) {
-			await tick();
-			const scroller = messageScroll;
-			if (!scroller || paneRoom?.id !== pane || reveal.hidden === 0) return;
-			// A pane out of sight has no size to fill: its rows follow after the paint, as the rest do.
-			if (!scroller.clientHeight) return;
-			// The first row (past the floating day, which takes no room), where the content above it would begin.
-			let first = scroller.firstElementChild;
-			while (first?.classList.contains('ap-dayfloat')) first = first.nextElementSibling;
-			if (!first) return;
-			const box = scroller.getBoundingClientRect();
-			const top = scroller.scrollTop + first.getBoundingClientRect().top - box.top;
-			const short = top + FILL_SLACK_PX - (scroller.scrollHeight - scroller.clientHeight);
-			if (short <= 0) return;
-			// What's missing, by where the rows end (the scroll height is the pane's own while they don't fill it), in rows
-			// as tall as the tallest so far: rows differ (a line, a photo), and the taller ones take longest to render, so
-			// it errs toward another step rather than rows that wouldn't show.
-			let bottom = top;
-			let tallest = 1;
-			for (let row: Element | null = first; row; row = row.nextElementSibling) {
-				const rect = row.getBoundingClientRect();
-				tallest = Math.max(tallest, rect.height);
-				bottom = Math.max(bottom, scroller.scrollTop + rect.bottom - box.top);
-			}
-			const missing = top + FILL_SLACK_PX + scroller.clientHeight - bottom;
-			reveal.more(Math.min(ARRIVAL_ITEMS, Math.ceil(Math.max(short, missing) / tallest)));
-		}
 	}
 
 	/**
@@ -3175,17 +2753,6 @@
 			});
 		});
 		return stop;
-	}
-
-	/**
-	 * Older items landed above: keeps what was on screen in place, given the
-	 * list's scroll top and height from before, unless the pane follows the
-	 * latest. Where the browser anchored the view itself this is already the position.
-	 */
-	function keepPlace(scroller: HTMLElement | undefined, top: number, height: number): void {
-		if (!scroller || messageScroll !== scroller || stickToBottom) return;
-		scroller.scrollTop = top + (scroller.scrollHeight - height);
-		lastScrollTop = scroller.scrollTop;
 	}
 
 	// --- Editing ---
@@ -3242,18 +2809,18 @@
 		};
 	}
 
-	/** The edit ends, saved, cancelled or its message gone: the keyboard goes back to the message's row, once the editor's going has left it nowhere. */
+	/**
+	 * The edit ends, saved, cancelled or its message gone: the keyboard goes back to the message's row, where every
+	 * edit opens from (its Edit, or `e`), once the editor's going has left it nowhere.
+	 */
 	function endEdit(): void {
 		const id = editingId;
-		const from = editFrom;
 		editingId = undefined;
-		editFrom = undefined;
-		if (from === 'row' && id !== undefined) {
-			void tick().then(() => {
-				if (document.activeElement && document.activeElement !== document.body) return;
-				document.querySelector<HTMLElement>(`article[data-message-id="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
-			});
-		}
+		if (id === undefined) return;
+		void tick().then(() => {
+			if (document.activeElement && document.activeElement !== document.body) return;
+			document.querySelector<HTMLElement>(`article[data-message-id="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
+		});
 	}
 
 	/** Saves an edit: the new text, and any embeds removed or renamed in the editor, together. */
@@ -3459,7 +3026,7 @@
 	 */
 	function windowPaste(event: ClipboardEvent): void {
 		if (event.defaultPrevented || !canAttach) return;
-		if (inField(event.target)) return;
+		if (inField(keyOrigin(event))) return;
 		const files = pastedFiles(event.clipboardData);
 		if (!files.length) return;
 		event.preventDefault();
@@ -3483,6 +3050,14 @@
 		}
 	}
 
+	/**
+	 * What an event happened on: inside a shadow root (emoji-mart's picker), the element there, not its host, which
+	 * the event's `target` names once it is out of the shadow root, and which is no field.
+	 */
+	function keyOrigin(event: Event): EventTarget | null {
+		return event.composedPath()[0] ?? event.target;
+	}
+
 	/** Where text is written, whose keys are its own: `?` there is a character. */
 	function inField(target: EventTarget | null): boolean {
 		return target instanceof HTMLElement && (target.isContentEditable || target.closest('input, textarea, select') !== null);
@@ -3493,7 +3068,7 @@
 		if (event.altKey || event.isComposing) return false;
 		// With Shift too: on many layouts (German, Nordic, Spanish) `/` is Shift+7.
 		if (event.ctrlKey || event.metaKey) return event.key === '/';
-		return event.key === '?' && !inField(event.target);
+		return event.key === '?' && !inField(keyOrigin(event));
 	}
 
 	function windowKeydown(event: KeyboardEvent): void {
@@ -3517,7 +3092,8 @@
 		// moves it instead: the Sidebar's reorderKey takes it first. A room listed to join opens to read, as a click does.
 		// With nowhere to go (an end of the list), the key is the field's or the page's as usual.
 		if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown') && !event.ctrlKey && !event.metaKey && !event.defaultPrevented && client && !connectOpen && !modalOpen()) {
-			if (inField(event.target) && !(event.target as HTMLElement).closest('#message-input')) return;
+			const origin = keyOrigin(event);
+			if (inField(origin) && !(origin as HTMLElement).closest('#message-input')) return;
 			const row = nextRoomRow(document.querySelector('.ap-shell-side') ?? document, event.key === 'ArrowDown' ? 1 : -1, event.shiftKey);
 			if (!row) return;
 			event.preventDefault();
@@ -3591,7 +3167,7 @@
 {#snippet editMessage(view: MessageView)}
 	{@const MessageEditor = messageEditor.component}
 	{@const event = rowEvent(view)}
-	{#if MessageEditor && event}<MessageEditor text={textOf(event)} embeds={embedsOf(event)} uploads={snapshot.uploads} mentions={event.body?.mentions} {people} rooms={roomSuggestions} onsave={(text, edits, mentions) => saveEdit(event, text, edits, mentions)} oncancel={endEdit} onmention={() => { if (!paneRoom?.joined) listMembers(MEMBERS_FRESH_MS); }} />{/if}
+	{#if MessageEditor && event}<MessageEditor text={textOf(event)} embeds={embedsOf(event)} uploads={session.uploads} mentions={event.body?.mentions} {people} rooms={roomSuggestions} onsave={(text, edits, mentions) => saveEdit(event, text, edits, mentions)} oncancel={endEdit} onmention={() => { if (!paneRoom?.joined) listMembers(MEMBERS_FRESH_MS); }} />{/if}
 {/snippet}
 <!-- The pane's history waiting as the server asked, where its messages will appear: it loads by itself at zero. -->
 {#snippet historyNotice()}{#if historyWait}<RateLimitNotice scope="history" until={historyWait.until} />{/if}{/snippet}
@@ -3699,9 +3275,9 @@
 			{#if olderLoading}<TimelineLoading top label={activeThread ? 'Loading earlier replies…' : 'Loading earlier messages…'} />{/if}
 			<!-- The log's rows take the keyboard (timelineKey): its keys move between them. -->
 			<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-			<div class={['ap-timeline', pickingRow && 'ap-timeline-picking']} bind:this={messageScroll} onscroll={trackScroll} onkeydown={timelineKey} onfocusin={timelineFocusin} {@attach markFirstMessages} data-testid="message-list" role="log" aria-live="polite" aria-label={`${activeThread ? threadTitle(activeThread) : activeRoom.title} messages`}>
-				<FloatingDayPill label={floatingDay.label} shown={floatingDay.shown && !olderLoading} testid="floating-day" />
-				{#if snapshot.showReconnectDivider}
+			<div class={['ap-timeline', pickingRow && 'ap-timeline-picking']} bind:this={viewport.messageScroll} onscroll={trackScroll} onkeydown={timelineKey} onfocusin={timelineFocusin} {@attach markFirstMessages} data-testid="message-list" role="log" aria-live="polite" aria-label={`${activeThread ? threadTitle(activeThread) : activeRoom.title} messages`}>
+				<FloatingDayPill label={viewport.floatingDay.label} shown={viewport.floatingDay.shown && !olderLoading} testid="floating-day" />
+				{#if session.showReconnectDivider}
 					<TimelineDivider kind="gap" testid="reconnect-divider" />
 				{/if}
 				<!-- No messages yet: placeholders, not thread cards on their own. -->
@@ -3727,7 +3303,7 @@
 							<SystemLine timestamp={idMillis(item.logId)} timelineItem testid={activeThread ? 'thread-renamed' : 'room-renamed'}>{#if item.title}{what} renamed to <span class="ap-msg-text">“{item.title}”</span>{:else}{what} name cleared{/if}</SystemLine>
 						{:else}
 							{@const event = item.event}
-							{#if event.message_id === newDividerAt}
+							{#if event.message_id === viewport.newDividerAt}
 								<TimelineDivider kind="new" testid="new-divider" />
 							{/if}
 							<TimelineMessage
@@ -3753,8 +3329,8 @@
 				{/if}
 			</div>
 
-			{#if timeline.length > 0 && !latestVisible}
-				<JumpBar count={unseenCount} mentions={mentions.unseen.length} onjump={jumpToLatest} onjumpmention={jumpToMention} />
+			{#if timeline.length > 0 && !viewport.latestVisible}
+				<JumpBar count={viewport.unseenCount} mentions={mentions.unseen.length} onjump={() => viewport.jumpToLatest()} onjumpmention={jumpToMention} />
 			{/if}
 
 			<div class="ap-shell-nudge-inline" aria-live="polite">
@@ -3794,7 +3370,7 @@
 					bind:this={composer}
 					bind:value={drafts.text}
 					bind:mentions={composerMentions}
-					bind:dismissed={composerDismissed}
+					bind:dismissed={drafts.dismissed}
 					placeholder={activeThread ? `Reply in ${threadTitle(activeThread)}` : `Message ${activeRoom.title}`}
 					disabled={!paneSteady || session.readOnly}
 					holdSend={!canCompose}
@@ -3862,6 +3438,6 @@
 	{/if}
 	{#if reactorsPopover.once(Boolean(reactorsList.current), () => reactorsList.close(), reactorsList.current?.anchor)}{@const ReactorsPopover = reactorsPopover.component!}<ReactorsPopover />{/if}
 	<!-- While reconnecting, the banner at the top already says what went wrong (statusLabel). -->
-	<Toasts {feedback} error={snapshot.error && snapshot.error !== dismissedError && session.connection !== 'reconnecting' ? snapshot.error : undefined} ondismisserror={() => (dismissedError = snapshot.error)} />
+	<Toasts {feedback} error={session.error && session.error !== dismissedError && session.connection !== 'reconnecting' ? session.error : undefined} ondismisserror={() => (dismissedError = session.error)} />
 </AppShell>
 {/if}

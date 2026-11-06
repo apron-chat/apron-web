@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
+import { flushSync } from 'svelte';
 import { describe, expect, it, vi } from 'vitest';
-import { cancelWhileWaiting, Lazy } from './lazy.svelte';
+import { cancelWhileWaiting, Lazy, lazyChunk, onLoadFailed } from './lazy.svelte';
 
 describe('cancelWhileWaiting', () => {
 	it('lets a popover asked for before its code has come go on Escape or a press anywhere, and only while waiting', () => {
@@ -72,5 +73,89 @@ describe('cancelWhileWaiting', () => {
 		expect(cancel).toHaveBeenCalledOnce();
 		stop();
 		row.remove();
+	});
+});
+
+describe('a failed load someone asked for', () => {
+	const flush = async () => {
+		for (let turn = 0; turn < 5; turn += 1) await Promise.resolve();
+		flushSync();
+	};
+
+	it('is told once for each try, not for the prefetch, and is asked again by what still reads it at the next press', async () => {
+		const told = vi.fn();
+		const stop = onLoadFailed(told);
+		const load = vi.fn().mockRejectedValueOnce(new Error('offline')).mockRejectedValueOnce(new Error('offline')).mockResolvedValue('code');
+		const lazy = new Lazy<string>(load);
+		// The background prefetch's failure is nobody's to hear of.
+		await expect(lazy.load()).rejects.toThrow('offline');
+		expect(told).not.toHaveBeenCalled();
+
+		// A dialog's host, whose open state stays set: `{#if open && lazy.component}`.
+		const seen: Array<string | undefined> = [];
+		const cleanup = $effect.root(() => {
+			$effect(() => void seen.push(lazy.component));
+		});
+		flushSync();
+		await flush();
+		expect(told).toHaveBeenCalledTimes(1);
+		expect(load).toHaveBeenCalledTimes(2);
+		// Nothing asks again by itself: only the next press, the next open, does.
+		await flush();
+		expect(load).toHaveBeenCalledTimes(2);
+		document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+		await flush();
+		expect(load).toHaveBeenCalledTimes(3);
+		expect(seen.at(-1)).toBe('code');
+		expect(told).toHaveBeenCalledTimes(1);
+		cleanup();
+		stop();
+	});
+
+	it('tells the parts of a chunk asked for together once', async () => {
+		const told = vi.fn();
+		const stop = onLoadFailed(told);
+		const part = lazyChunk<{ a: string; b: string }>(vi.fn().mockRejectedValue(new Error('offline')));
+		const a = part((m) => m.a), b = part((m) => m.b);
+		void a.component;
+		void b.component;
+		await flush();
+		expect(told).toHaveBeenCalledTimes(1);
+		stop();
+	});
+
+	it('lets a waiting popover go, so its next ask asks again rather than its anchor closing it', async () => {
+		const load = vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValue('code');
+		const lazy = new Lazy<string>(load);
+		const cancel = vi.fn();
+		expect(lazy.once(true, cancel)).toBeUndefined();
+		await flush();
+		expect(cancel).toHaveBeenCalledTimes(1);
+		// Let go: not asked for again until the next ask.
+		expect(lazy.once(false, cancel)).toBeUndefined();
+		await flush();
+		expect(load).toHaveBeenCalledTimes(1);
+		lazy.once(true, cancel);
+		await lazy.whenLoaded();
+		expect(lazy.once(true, cancel)).toBe('code');
+	});
+
+	it('waits for the browser to be back online before asking again, while it says it is offline', async () => {
+		const onLine = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+		const load = vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValue('code');
+		const lazy = new Lazy<string>(load);
+		const cleanup = $effect.root(() => {
+			$effect(() => void lazy.component);
+		});
+		flushSync();
+		await flush();
+		document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+		await flush();
+		expect(load).toHaveBeenCalledTimes(1);
+		window.dispatchEvent(new Event('online'));
+		await flush();
+		expect(load).toHaveBeenCalledTimes(2);
+		cleanup();
+		onLine.mockRestore();
 	});
 });

@@ -1,10 +1,10 @@
 import 'fake-indexeddb/auto';
 import { IDBFactory } from 'fake-indexeddb';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { StoreChange } from '$lib/protocol/reducer';
 import type { MessageRecord } from '$lib/protocol/types';
 import { readKept } from '$lib/test/kept-history';
-import { deleteHistory, HistoryGone, HistoryMissing, historyName, listHistories, openHistory, pageHistory, pruneHistory, readHistory, scanMessages, writeHistory, type HistoryWrite } from './history-db';
+import { deleteHistory, HistoryGone, HistoryMissing, historyName, listHistories, openHistory, pageHistory, pruneHistory, readHistory, scanMessages, writeHistory, type Databases, type HistoryWrite } from './history-db';
 
 const SERVER = 'wss://chat.example/';
 const day = 24 * 60 * 60 * 1000;
@@ -48,15 +48,25 @@ describe('writeHistory', () => {
 	it('drops what a bound or a rebuild drops, and a rebuild’s sync with it', async () => {
 		const db = await opened();
 		const membership = { log_id: at(3), room_id: 'general', user: ada, joined: true };
+		const grace = { user_id: 'grace' };
 		await writeHistory(db, write({
-			whole: [{ room: 'general', messages: [message(at(3)), message(at(1))], reactions: [{ log_id: at(3), message_id: at(1), room_id: 'general', from: ada, emojis: ['👍'] }], memberships: [membership] }],
+			whole: [{
+				room: 'general', messages: [message(at(3)), message(at(1))], memberships: [membership],
+				reactions: [
+					{ log_id: at(3), message_id: at(1), room_id: 'general', from: ada, emojis: ['👍'] },
+					// On the message the bound evicts, logged below it and above.
+					{ log_id: at(3, 1), message_id: at(3), room_id: 'general', from: grace, emojis: ['👀'] },
+					{ log_id: at(1, 1), message_id: at(3), room_id: 'general', from: ada, emojis: ['🎉'] }
+				]
+			}],
 			rooms: [{ room: 'general', record: { room_id: 'general' }, sync: { id: 'general', checkpoint: at(1) } }]
 		}), new Set());
 		await writeHistory(db, write({ changes: [{ kind: 'evict', room: 'general', floor: at(2) }] }), new Set(['general']));
 		let kept = await readKept(db);
 		expect(kept?.messages.map((record) => record.message_id)).toEqual([at(1)]);
 		expect(kept?.memberships).toEqual([]);
-		expect(kept?.reactions).toHaveLength(1);
+		// The set below the bound on a message above it stays; the evicted message's go with it.
+		expect(kept?.reactions.map((set) => set.emojis)).toEqual([['👍']]);
 
 		await writeHistory(db, write({ changes: [{ kind: 'membership', entry: membership }, { kind: 'clearRoom', room: 'general' }] }), new Set(['general']));
 		kept = await readKept(db);
@@ -79,6 +89,23 @@ describe('writeHistory', () => {
 		const db = await opened();
 		await expect(writeHistory(db, write({ continues: true, whole: [{ room: 'general', messages: [message(at(1))], reactions: [], memberships: [] }] }), new Set())).rejects.toBeInstanceOf(HistoryGone);
 		expect(await readKept(db)).toBeUndefined();
+	});
+
+	it('fails with what aborted it, a full disk rather than its requests’ AbortError, leaving no rejection unheard', async () => {
+		// An unhandled rejection (the commit's, once the write failed before waiting for it) fails the run.
+		const db = await opened();
+		const transaction = db.transaction.bind(db);
+		const full = new DOMException('The disk is full', 'QuotaExceededError');
+		// The browser aborts the write as the disk fills: each request still pending fails with `AbortError`.
+		db.transaction = ((...args: Parameters<IDBDatabase['transaction']>) => {
+			const begun = transaction(...args);
+			Object.defineProperty(begun, 'error', { get: () => full, set: () => undefined });
+			queueMicrotask(() => begun.abort());
+			return begun;
+		}) as IDBDatabase['transaction'];
+		await expect(writeHistory(db, write({ rooms: [{ room: 'general', sync: { id: 'general', checkpoint: at(1) } }] }), new Set())).rejects.toBe(full);
+		await expect(pruneHistory(db, now)).rejects.toBeDefined();
+		await new Promise((resolve) => setTimeout(resolve, 20));
 	});
 
 	it('keeps the users as they are when a write leaves them out', async () => {
@@ -128,6 +155,22 @@ describe('pruneHistory', () => {
 		// Even a reaction set on a message edited since: a page from here, which starts at the cutoff, never holds it.
 		expect(kept?.reactions).toEqual([]);
 		expect(kept?.memberships).toEqual([]);
+	});
+
+	it('drops what is old in a room rebuilt and not settled since, which has no sync to go by', async () => {
+		const db = await opened();
+		const joined = (log: string, room: string) => ({ log_id: log, room_id: room, user: ada, joined: true });
+		await writeHistory(db, write({
+			whole: [
+				{ room: 'general', messages: [message(at(400))], reactions: [], memberships: [joined(at(400), 'general'), joined(at(1), 'general')] },
+				{ room: 'counted', messages: [], reactions: [], memberships: [joined('3', 'counted')] }
+			],
+			rooms: [{ room: 'general', sync: { id: 'general', checkpoint: at(1) } }, { room: 'counted', sync: { id: 'counted', checkpoint: '9' } }]
+		}), new Set());
+		// Rebuilt: messages and sync go, memberships stay.
+		await writeHistory(db, write({ changes: [{ kind: 'clearRoom', room: 'general' }, { kind: 'clearRoom', room: 'counted' }] }), new Set(['general', 'counted']));
+		expect(await pruneHistory(db, now - 30 * day)).toBeDefined();
+		expect((await readKept(db))?.memberships).toEqual([joined('3', 'counted'), joined(at(1), 'general')]);
 	});
 });
 
@@ -185,6 +228,31 @@ describe('history databases', () => {
 		const db = await openHistory(databases, name, undefined, { existing: true });
 		expect(db.objectStoreNames.contains('records')).toBe(true);
 		db.close();
+	});
+
+	it('upgrade from an older version keeping what it has, making only what it lacks', async () => {
+		const databases = new IDBFactory();
+		const name = historyName(SERVER, 'ada');
+		const db = await openHistory(databases, name);
+		await writeHistory(db, write({ whole: [{ room: 'general', messages: [message('1')], reactions: [], memberships: [] }] }), new Set(['general']));
+		db.close();
+		// The next version, as one would be opened: its upgrade meets the stores this one made.
+		const newer: Databases = { open: (named) => databases.open(named, 2), databases: () => databases.databases(), deleteDatabase: (named) => databases.deleteDatabase(named) };
+		const upgraded = await openHistory(newer, name);
+		expect(upgraded.version).toBe(2);
+		expect((await readKept(upgraded))?.messages.map((record) => record.message_id)).toEqual(['1']);
+		upgraded.close();
+	});
+
+	it('close a connection that opens after it was given up on as blocked by an older tab', async () => {
+		const close = vi.fn();
+		const request = { result: { close, objectStoreNames: { contains: () => true } } } as unknown as IDBOpenDBRequest;
+		const opening = openHistory({ open: () => request, databases: async () => [], deleteDatabase: () => request }, historyName(SERVER, 'ada'));
+		request.onblocked!(new Event('blocked') as IDBVersionChangeEvent);
+		await expect(opening).rejects.toThrow();
+		// The older tab lets go: the open goes on, and nobody holds what it opens.
+		request.onsuccess!(new Event('success'));
+		expect(close).toHaveBeenCalled();
 	});
 
 	it('are one per account on each server, named for both, and listed by them', async () => {

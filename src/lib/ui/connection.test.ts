@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { capabilitiesOf, type ClientSnapshot } from '$lib/protocol/client';
-import { addError, connectionStateOf, offeredSchemes, schemeUse, statusLabel, wayBackNudge, wayBackWords } from './connection';
+import { addError, connectionStateOf, offeredSchemes, retryUntil, schemeUse, statusLabel, wayBackNudge, wayBackWords } from './connection';
 import { retryAfterLabel } from '$lib/words';
 
 const snapshot = (fields: Partial<ClientSnapshot>): ClientSnapshot => ({
@@ -21,6 +21,12 @@ describe('connection state', () => {
 		expect(statusLabel(snapshot({ status: 'reconnecting', disconnectedAt: 1, error: 'WebSocket connection error' }), false)).toBe('Reconnecting…');
 		expect(statusLabel(snapshot({ status: 'reconnecting', disconnectedAt: 1, error: 'Refused' }), true)).toBe('Still disconnected: Refused');
 		expect(statusLabel(snapshot({ status: 'reconnecting', disconnectedAt: 1, retryAfterMs: 90_000 }), false)).toBe('Connection limited. Retrying in 2m…');
+		// Counting down from when the wait ends, which the snapshot's time left gives as it arrives.
+		const limited = snapshot({ status: 'reconnecting', disconnectedAt: 1, retryAfterMs: 90_000 });
+		expect(retryUntil(limited, 1_000)).toBe(91_000);
+		expect(retryUntil(snapshot({ status: 'reconnecting' }), 1_000)).toBeUndefined();
+		expect(statusLabel(limited, false, 30_000)).toBe('Connection limited. Retrying in 30s…');
+		expect(statusLabel(limited, false, 0)).toBe('Reconnecting…');
 		expect(statusLabel(snapshot({ status: 'connecting' }), false)).toBe('Connecting…');
 		expect(statusLabel(snapshot({ status: 'idle' }), false)).toBe('Waiting to connect');
 	});

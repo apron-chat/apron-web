@@ -5,7 +5,8 @@
  * Large images are scaled so their longest side fits and encoded as WebP, or
  * JPEG where the browser can't encode WebP, stepping the quality down until
  * the file fits. Animated images can't go through a canvas without losing
- * their animation: they're sent unchanged.
+ * their animation: they're sent as they are, but for their metadata, cut from
+ * around their frames.
  *
  * What fits is the client's own preference, below, unless the server states
  * its limits (`ext:media`, EXT.md §6): then a file goes out only as a type the
@@ -133,7 +134,18 @@ function gifFrames(bytes: Uint8Array): number {
 	return frames;
 }
 
-function ascii(bytes: Uint8Array, start: number, length: number): string {
+/**
+ * `file` without its metadata (`stripMetadata`), by the same name and type; as it is where its bytes can't be followed.
+ * The code that cuts it loads only for such a file, rare enough not to load with the app.
+ */
+async function withoutMetadata(file: File, type: ImageFacts['type']): Promise<File> {
+	const [{ stripMetadata }, bytes] = await Promise.all([import('./image-metadata'), file.arrayBuffer()]);
+	const stripped = stripMetadata(new Uint8Array(bytes), type);
+	return stripped ? new File([stripped as BlobPart], file.name, { type: file.type, lastModified: file.lastModified }) : file;
+}
+
+/** `length` bytes from `start` as text, one character a byte: a chunk's or a format's four-letter name. */
+export function ascii(bytes: Uint8Array, start: number, length: number): string {
 	let text = '';
 	for (let index = start; index < start + length && index < bytes.length; index++) text += String.fromCharCode(bytes[index]);
 	return text;
@@ -224,8 +236,9 @@ async function encodeUnder(codec: ImageCodec, image: DecodedImage, crop: Crop, w
  * is at most 2048 px, or the server's `max_side` if smaller, and re-encoded
  * under 5 MB, or the server's `max_bytes`; small images without metadata, of
  * a type the server takes, go as they are. Photos are always re-encoded so
- * their EXIF is dropped. What can't be re-encoded (an animated image, audio,
- * video, any other file, an image the browser can't decode) goes as it is:
+ * their EXIF is dropped; an animated image loses its metadata chunks instead.
+ * What can't be re-encoded (an animated image, audio, video, any other file,
+ * an image the browser can't decode) goes as it is:
  * refused with `NotAcceptedError` only by the server's stated `limits`
  * (`ext.media.upload`), and otherwise left for the server to judge.
  */
@@ -233,14 +246,14 @@ export async function prepareUpload(
 	file: File,
 	{ maxBytes = UPLOAD_MAX_BYTES, maxSide = UPLOAD_MAX_SIDE, limits, codec = browserCodec() }: { maxBytes?: number; maxSide?: number; limits?: MediaTypes; codec?: ImageCodec | undefined } = {}
 ): Promise<Attachment> {
-	const asIs = (size?: { width: number; height: number }): Attachment => {
-		accept(file, limits);
-		return { file, ...size };
+	const asIs = (size?: { width: number; height: number }, sent = file): Attachment => {
+		accept(sent, limits);
+		return { file: sent, ...size };
 	};
 	const facts = sniffImage(await headOf(file));
 	// Other formats the browser decodes (HEIC, AVIF, BMP) are converted, since not every browser shows them.
 	if (!facts && !file.type.startsWith('image/')) return asIs();
-	if (facts?.animated) return asIs(codec ? await dimensions(codec, file) : undefined);
+	if (facts?.animated) return asIs(codec ? await dimensions(codec, file) : undefined, facts.metadata ? await withoutMetadata(file, facts.type) : file);
 	const fit = reencoding(limits, maxBytes, maxSide);
 	if (!codec || !fit.types.length) return asIs();
 	let image: DecodedImage;

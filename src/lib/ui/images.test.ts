@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { stripMetadata } from './image-metadata';
 import { centerSquare, fileSize, fitWithin, ImageTooLargeError, NotAcceptedError, prepareAvatar, prepareUpload, sniffImage, type Crop, type ImageCodec } from './images';
 
 const JPEG = [0xff, 0xd8, 0xff, 0xe1];
@@ -14,6 +15,17 @@ const png = (...chunks: number[][]) => bytes([0x89], 'PNG', [0x0d, 0x0a, 0x1a, 0
 const gifFrame = [0x2c, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0x02, 0x01, 0x00, 0x00];
 const gif = (frames: number) => bytes('GIF89a', [1, 0, 1, 0, 0, 0, 0], ...Array.from({ length: frames }, () => gifFrame), [0x3b]);
 const webp = (flags?: number) => bytes('RIFF', [0, 0, 0, 0], 'WEBP', flags === undefined ? 'VP8 ' : 'VP8X', [0, 0, 0, 0, flags ?? 0]);
+const le32 = (value: number) => u32(value).reverse();
+/** A RIFF chunk: its type, little-endian size, and data, padded to an even length. */
+const riffChunk = (type: string, data: number[] | string) => {
+	const body = typeof data === 'string' ? [...data].map((char) => char.charCodeAt(0)) : data;
+	return [...[...type].map((char) => char.charCodeAt(0)), ...le32(body.length), ...body, ...(body.length % 2 ? [0] : [])];
+};
+/** A whole extended WebP with its VP8X `flags` first, then `chunks`, its RIFF size to match. */
+const vp8x = (flags: number, ...chunks: number[][]) => {
+	const body = [...riffChunk('VP8X', [flags, 0, 0, 0, 1, 0, 0, 1, 0, 0]), ...chunks.flat()];
+	return bytes('RIFF', le32(4 + body.length), 'WEBP', body);
+};
 
 /** A codec that decodes to fixed dimensions and encodes to `size(width, quality)` bytes. */
 function fakeCodec(width: number, height: number, size: (width: number, height: number, quality: number) => number, { webp = true } = {}) {
@@ -47,6 +59,38 @@ describe('sniffImage', () => {
 		expect(sniffImage(png(pngChunk('iTXt', 'XML:com.adobe.xmp screenshot')))?.metadata).toBe(false);
 		expect(sniffImage(webp(0x02))).toMatchObject({ animated: true, metadata: false });
 		expect(sniffImage(webp(0x08))).toMatchObject({ animated: false, metadata: true });
+	});
+});
+
+describe('stripMetadata', () => {
+	const anim = riffChunk('ANIM', [0, 0, 0, 0, 0, 0]);
+	const frame = (data: number[]) => riffChunk('ANMF', data);
+
+	it('cuts a WebP\'s EXIF and XMP and clears their flags, keeping every frame and its size whole', () => {
+		const original = vp8x(0x02 | 0x08 | 0x04 | 0x10, riffChunk('ICCP', [7, 7]), anim, frame([1, 2, 3]), frame([4, 5, 6, 7]), riffChunk('EXIF', 'GPS'), riffChunk('XMP ', '<x:xmpmeta/>'));
+		const stripped = stripMetadata(original, 'image/webp')!;
+		// Animation and the colour profile stay flagged; padding is kept, here after the odd-sized EXIF and first frame.
+		expect(stripped).toEqual(vp8x(0x02 | 0x10, riffChunk('ICCP', [7, 7]), anim, frame([1, 2, 3]), frame([4, 5, 6, 7])));
+		expect(new DataView(stripped.buffer).getUint32(4, true)).toBe(stripped.length - 8);
+		expect(sniffImage(stripped)).toEqual({ type: 'image/webp', animated: true, metadata: false });
+	});
+
+	it('cuts a PNG\'s EXIF and text chunks, before its frames or among them, and leaves the rest byte for byte', () => {
+		const head = pngChunk('IHDR', [0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0]);
+		const actl = pngChunk('acTL', [0, 0, 0, 2, 0, 0, 0, 0]);
+		const original = bytes([0x89], 'PNG', [0x0d, 0x0a, 0x1a, 0x0a], head, actl, pngChunk('eXIf', [1, 2]), pngChunk('iTXt', 'XML:com.adobe.xmp exif:GPSLatitude'), pngChunk('IDAT', [0]), pngChunk('zTXt', [1]), pngChunk('tEXt', 'Comment'), pngChunk('fdAT', [0]), pngChunk('IEND'));
+		expect(stripMetadata(original, 'image/png')).toEqual(bytes([0x89], 'PNG', [0x0d, 0x0a, 0x1a, 0x0a], head, actl, pngChunk('IDAT', [0]), pngChunk('fdAT', [0]), pngChunk('IEND')));
+	});
+
+	it('gives up on bytes it cannot follow to their end', () => {
+		const whole = vp8x(0x08, anim, riffChunk('EXIF', 'GPS'));
+		expect(stripMetadata(whole.subarray(0, whole.length - 2), 'image/webp')).toBeUndefined();
+		// A chunk said to run past the RIFF's end.
+		expect(stripMetadata(vp8x(0x08, anim, [...bytes('EXIF'), ...le32(100), 1, 2]), 'image/webp')).toBeUndefined();
+		expect(stripMetadata(webp(0x08), 'image/webp')).toBeUndefined();
+		const full = png(pngChunk('eXIf', [1, 2]));
+		expect(stripMetadata(full.subarray(0, full.length - 12), 'image/png')).toBeUndefined();
+		expect(stripMetadata(bytes(JPEG), 'image/jpeg')).toBeUndefined();
 	});
 });
 
@@ -119,6 +163,20 @@ describe('prepareUpload', () => {
 		const photo = file(bytes(JPEG), 'photo.jpeg', 'image/jpeg');
 		const { codec } = fakeCodec(100, 100, () => 10, { webp: false });
 		expect((await prepareUpload(photo, { codec })).file).toMatchObject({ name: 'photo.jpg', type: 'image/jpeg' });
+	});
+
+	it('sends an animated image without its metadata, by the same name and type, and as it is where its bytes cannot be followed', async () => {
+		const { codec, encodes } = fakeCodec(300, 200, () => 1);
+		const party = file(vp8x(0x02 | 0x08, riffChunk('ANIM', [0, 0, 0, 0, 0, 0]), riffChunk('ANMF', [1, 2]), riffChunk('EXIF', 'GPS')), 'party.webp', 'image/webp');
+		const prepared = await prepareUpload(party, { codec });
+		expect(prepared).toMatchObject({ width: 300, height: 200, file: { name: 'party.webp', type: 'image/webp', lastModified: party.lastModified } });
+		expect(new Uint8Array(await prepared.file.arrayBuffer())).toEqual(vp8x(0x02, riffChunk('ANIM', [0, 0, 0, 0, 0, 0]), riffChunk('ANMF', [1, 2])));
+		// Within a limit only once cut.
+		expect((await prepareUpload(party, { codec, limits: { 'image/webp': { max_bytes: party.size - 1 } } })).file.size).toBeLessThan(party.size);
+		// Bytes that end early go as they are.
+		const cut = file(webp(0x02 | 0x08), 'cut.webp', 'image/webp');
+		expect(await prepareUpload(cut, { codec })).toEqual({ file: cut, width: 300, height: 200 });
+		expect(encodes).toEqual([]);
 	});
 
 	it('sends an animated GIF unchanged, whatever its size, for the server to judge', async () => {

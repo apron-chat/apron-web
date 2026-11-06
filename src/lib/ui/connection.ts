@@ -21,15 +21,27 @@ export function reconnectErrorOf(snapshot: Pick<ClientSnapshot, 'error'>): strin
 	return snapshot.error && snapshot.error !== 'WebSocket connection error' ? snapshot.error : '';
 }
 
-/** What the status banner says: what happened, then what the client is doing about it. */
-export function statusLabel(snapshot: ClientSnapshot, stalled: boolean): string {
+/**
+ * When the wait the server asked for before reconnecting (`retryAfterMs`) ends, in epoch milliseconds: worked out
+ * as a snapshot arrives, since its `retryAfterMs` is the time left when it was made and nothing is emitted while the
+ * wait runs. Undefined without one.
+ */
+export function retryUntil(snapshot: Pick<ClientSnapshot, 'retryAfterMs'>, now = Date.now()): number | undefined {
+	return snapshot.retryAfterMs && snapshot.retryAfterMs > 0 ? now + snapshot.retryAfterMs : undefined;
+}
+
+/**
+ * What the status banner says: what happened, then what the client is doing about it. `retryLeftMs` is the time
+ * left of the server's wait (`retryUntil`) as it counts down, the snapshot's own when not given.
+ */
+export function statusLabel(snapshot: ClientSnapshot, stalled: boolean, retryLeftMs = snapshot.retryAfterMs): string {
 	const state = connectionStateOf(snapshot);
 	if (state === 'connected') return 'Connected';
 	if (state === 'offline') return 'Offline';
 	if (state === 'reconnecting') {
 		const error = reconnectErrorOf(snapshot);
 		if (snapshot.held) return error ? `Signed out: ${error}` : 'Signed out';
-		if (snapshot.retryAfterMs && snapshot.retryAfterMs > 0) return `${error || 'Connection limited'}. Retrying in ${retryAfterLabel(snapshot.retryAfterMs)}…`;
+		if (retryLeftMs && retryLeftMs > 0) return `${error || 'Connection limited'}. Retrying in ${retryAfterLabel(retryLeftMs)}…`;
 		if (error) return stalled ? `Still disconnected: ${error}` : error;
 		return stalled ? 'Still trying to reconnect…' : 'Reconnecting…';
 	}

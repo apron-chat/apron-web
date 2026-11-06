@@ -223,7 +223,15 @@ it began trying where someone could see it, not from the drop), `MentionTracker`
 kept on this device: where the New divider goes and the pane opens), `MessageSelection`, `FeedbackState`, `SidebarLayout`,
 `PaneDrafts` (the composer's text and reply per room and thread),
 `PagePresence` (whether the tab is attended, and the mention alert),
-`ProgressiveReveal` (long timelines paint newest-first) and `FloatingDay` —
+`ProgressiveReveal` (long timelines paint newest-first), `FloatingDay`, and
+`TimelineViewport`, which holds the open pane's two of those and where its list
+is scrolled: pinned to the latest, kept in place as older pages land, opened at
+the New divider, and whether the latest is on screen. It alone decides whether
+the pane follows the latest (the page asks: `pin`, `jumpTo`, `jumpToLatest`,
+`showOlder`); a place it keeps is noted with its pane, so a page or chunk that
+lands after the pane moved on moves nothing; the divider is placed, and the
+pane lands at it, once per visit; and the page reads `readingLatest` for its
+read. The page calls its `watch*` methods where their effects go among its own —
 beside pure, unit-tested
 helpers: `timeline.ts` groups threads under their rooms and builds the room and
 thread views, `membership.ts` nets runs of joins and leaves and words their
@@ -317,7 +325,11 @@ Protocol types, replay reduction, and the WebSocket session live under
 `ChatClient`, and re-exports the rest of its API: `client-types.ts` has the
 snapshot and option types, `client-views.ts` the pure helpers over snapshots,
 capabilities and server URLs, and `client-internals.ts` the per-room state,
-tuning constants and helpers only `ChatClient` uses, `signin-connection.ts`
+tuning constants and helpers only `ChatClient` uses, `transport.ts` the
+sockets under the session (`Transport`: opening each, pinging and probing it,
+a probe's standby, reconnecting with backoff, waiting for the page to be
+shown and online), which reaches the session only through its hooks,
+`signin-connection.ts`
 the connection an email or external sign-in proposes and approves on, and
 `proposals.ts` the proposals this browser made, kept by their `state`.
 `plain-text.ts` cleans text that people write and others see as plain text,
@@ -505,8 +517,8 @@ approves on it (`auth` with `token`, the proposal's scheme); a `denied` code
 leaves it open to try again. On success the client
 adopts that connection as its own: `beforeSwitch` runs, it moves to that
 server if another (`switchServer`, as `setUrl` without connecting), closes its
-connection as `restart` would, attaches the socket (`attachSocket`, shared
-with `connectNow`), takes the `server` frame in without answering it, handles
+connection as `restart` would, attaches the socket (`Transport.adopt`, through
+`attachSocket` as `connectNow` does), takes the `server` frame in without answering it, handles
 the result as a sign-in, and then processes the frames that arrived after the
 result. `signInWithLink(token, url?, { scheme?, state?, beforeSwitch? })` does
 the same with a link's token on a fresh connection, with the proposal's
@@ -610,8 +622,9 @@ under a Web Lock. A tab that takes it over goes on from what it restored when
 `version` is still what it read; otherwise, for the same account, it writes
 each room over only as far down as it holds it, keeping what is kept below when
 that reaches up to it, and leaving a room as it is kept when there is a gap
-between the two (`mergeOf`); another account's database on that server is
-deleted first, so one account's is kept per server, as one session is saved.
+between the two (`mergeOf`). Another account's database on that server stays
+as it is, beside this one: only the signed-in account's is ever restored,
+paged or searched.
 Another tab deleting the database (signing out, or keeping turned off) closes
 it here (`versionchange`), and this tab's writer ends rather than make it again.
 A write that fails (a full disk) stops keeping for the page.

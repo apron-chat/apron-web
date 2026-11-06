@@ -152,7 +152,8 @@ export function countElsewhere(byRoom: Record<string, number>, pane: string | un
 	return total;
 }
 
-function sameCounts(a: Record<string, number>, b: Record<string, number>): boolean {
+/** Two per-room counts that say the same: the one kept stays, so nothing that reads it is checked again. */
+export function sameCounts(a: Record<string, number>, b: Record<string, number>): boolean {
 	const keys = Object.keys(a);
 	return keys.length === Object.keys(b).length && keys.every((key) => a[key] === b[key]);
 }

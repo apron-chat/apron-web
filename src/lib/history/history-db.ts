@@ -137,6 +137,7 @@ function openOnce(databases: Databases, name: string, onclose: (() => void) | un
 	return new Promise((resolve, reject) => {
 		const request = databases.open(name, DB_VERSION);
 		let missing = false;
+		let blocked = false;
 		request.onupgradeneeded = (event) => {
 			if (existing && event.oldVersion === 0) {
 				// Aborting the upgrade that would make it leaves no database behind (where a browser keeps one anyway,
@@ -145,13 +146,19 @@ function openOnce(databases: Databases, name: string, onclose: (() => void) | un
 				request.transaction?.abort();
 				return;
 			}
+			// Only what isn't there yet: an upgrade from an older version has its stores, and making one again would
+			// throw, failing the upgrade.
 			const db = request.result;
-			db.createObjectStore('meta');
-			db.createObjectStore('rooms', { keyPath: 'room' });
-			db.createObjectStore('records', { keyPath: ['room', 'log', 'kind', 'id'] }).createIndex('key', ['kind', 'id']);
+			if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta');
+			if (!db.objectStoreNames.contains('rooms')) db.createObjectStore('rooms', { keyPath: 'room' });
+			const records = db.objectStoreNames.contains('records') ? request.transaction!.objectStore('records') : db.createObjectStore('records', { keyPath: ['room', 'log', 'kind', 'id'] });
+			if (!records.indexNames.contains('key')) records.createIndex('key', ['kind', 'id']);
 		};
 		request.onsuccess = () => {
 			const db = request.result;
+			// Given up on as blocked, it opened once the older tab let go: nobody would close it, and it would block the
+			// next upgrade or deletion in turn.
+			if (blocked) return db.close();
 			// Deleted, or a newer version, in another tab: this one steps aside rather than block it.
 			db.onversionchange = () => {
 				db.close();
@@ -163,7 +170,10 @@ function openOnce(databases: Databases, name: string, onclose: (() => void) | un
 			if (missing) event.preventDefault();
 			reject(missing ? new HistoryMissing() : request.error);
 		};
-		request.onblocked = () => reject(new Error('History is open in an older tab'));
+		request.onblocked = () => {
+			blocked = true;
+			reject(new Error('History is open in an older tab'));
+		};
 	});
 }
 
@@ -184,12 +194,19 @@ function done<T>(request: IDBRequest<T>): Promise<T> {
 	});
 }
 
+/**
+ * Settles as `transaction` commits, or rejects with what aborted it (a full disk's `QuotaExceededError`, a request's
+ * error), else as an `AbortError`. Heard from the start, so a write that fails before it waits for this never leaves
+ * it rejected unheard.
+ */
 function committed(transaction: IDBTransaction): Promise<void> {
-	return new Promise((resolve, reject) => {
+	const finished = new Promise<void>((resolve, reject) => {
 		transaction.oncomplete = () => resolve();
-		transaction.onerror = () => reject(transaction.error);
-		transaction.onabort = () => reject(transaction.error ?? new Error('History write aborted'));
+		// A request's error aborts the transaction, which then says why (`error`, null while the error event runs).
+		transaction.onabort = () => reject(transaction.error ?? new DOMException('History write aborted', 'AbortError'));
 	});
+	finished.catch(() => undefined);
+	return finished;
 }
 
 /** Every key of `room`'s records, or those below `below`: arrays order after numbers and strings, so `[room, []]` is past them all. */
@@ -283,9 +300,10 @@ async function pageRows(records: IDBObjectStore, room: string, query: PageQuery,
 
 /**
  * Reads back what is kept, or undefined when nothing is: for each room `plan` takes (its row with a sync, and
- * where to read from, if not its start), its newest `window` entries, in one transaction.
+ * where to read from, if not its start), its newest `window` entries, in one transaction. `plan` sees the meta
+ * row too, which says how recently every room kept was caught up.
  */
-export async function readHistory(db: IDBDatabase, window: number, plan: (row: RoomRow) => { from?: number } | undefined): Promise<KeptHistory | undefined> {
+export async function readHistory(db: IDBDatabase, window: number, plan: (row: RoomRow, meta: MetaRow) => { from?: number } | undefined): Promise<KeptHistory | undefined> {
 	const transaction = db.transaction(['meta', 'rooms', 'records'], 'readonly');
 	const [meta, rows] = await Promise.all([
 		done(transaction.objectStore('meta').get(META)) as Promise<MetaRow | undefined>,
@@ -294,7 +312,7 @@ export async function readHistory(db: IDBDatabase, window: number, plan: (row: R
 	if (!meta) return undefined;
 	const records = transaction.objectStore('records');
 	const rooms = await Promise.all(rows.map(async (row) => {
-		const planned = row.sync ? plan(row) : undefined;
+		const planned = row.sync ? plan(row, meta) : undefined;
 		if (!planned) return undefined;
 		const { page, more } = await pageRows(records, row.room, { limit: window }, planned.from);
 		return { row, entries: page, older: more };
@@ -353,6 +371,16 @@ export interface HistoryWrite {
  */
 export async function writeHistory(db: IDBDatabase, write: HistoryWrite, kept: ReadonlySet<string>): Promise<number> {
 	const transaction = db.transaction(['meta', 'rooms', 'records'], 'readwrite', { durability: 'relaxed' });
+	try {
+		return await writeIn(transaction, write, kept);
+	} catch (cause) {
+		// A request failed as the transaction aborted: what aborted it says why (a full disk), not the `AbortError` each
+		// request still pending was failed with.
+		throw transaction.error ?? cause;
+	}
+}
+
+async function writeIn(transaction: IDBTransaction, write: HistoryWrite, kept: ReadonlySet<string>): Promise<number> {
 	const finished = committed(transaction);
 	const meta = transaction.objectStore('meta');
 	const rooms = transaction.objectStore('rooms');
@@ -361,7 +389,6 @@ export async function writeHistory(db: IDBDatabase, write: HistoryWrite, kept: R
 	const previous = await done(meta.get(META)) as MetaRow | undefined;
 	if (write.continues && !previous) {
 		// Written over what is kept, and nothing is: another tab forgot it (signed out, or chose not to keep).
-		finished.catch(() => undefined);
 		transaction.abort();
 		throw new HistoryGone();
 	}
@@ -397,10 +424,21 @@ export async function writeHistory(db: IDBDatabase, write: HistoryWrite, kept: R
 			case 'membership':
 				if (kept.has(change.entry.room_id)) records.put(membershipRow(change.entry));
 				break;
-			case 'evict':
-				// What the client drops below a room's bound: its messages and memberships (`evictBefore`).
-				if (kept.has(change.room)) await eachRow(records, roomRange(change.room, Number(change.floor)), (row, cursor) => { if (row.kind !== 'r') cursor.delete(); });
+			case 'evict': {
+				// What the client drops below a room's bound (`evictBefore`): its memberships, and its messages with their
+				// reaction sets wherever those are logged. A set below the bound on a message above it stays with its message.
+				if (!kept.has(change.room)) break;
+				const evicted: string[] = [];
+				await eachRow(records, roomRange(change.room, Number(change.floor)), (row, cursor) => {
+					if (row.kind === 'r') return;
+					if (row.kind === 'm') evicted.push(row.id);
+					cursor.delete();
+				});
+				// A set's id is its message's and its sender's (`reactionRow`): every set of a message is one index range.
+				const sets = await Promise.all(evicted.map((id) => done(byKey.getAllKeys(IDBKeyRange.bound(['r', `${id} `], ['r', `${id}!`], false, true)))));
+				for (const key of sets.flat()) if ((key as [string])[0] === change.room) records.delete(key);
 				break;
+			}
 			case 'clearRoom': {
 				// A rebuild: its messages and reactions go, and its sync with them until the room settles again.
 				if (!kept.has(change.room)) break;
@@ -450,8 +488,9 @@ export async function writeHistory(db: IDBDatabase, write: HistoryWrite, kept: R
  * Drops what is older than `cutoff` (epoch milliseconds, a `log_id` on servers whose `log_id`s are times): every
  * record logged before it, as a server that discards the start of its log does, so a reaction set logged before it
  * goes even when its message was edited since (a page from here, which starts at the cutoff, would never hold it).
- * Only in rooms whose positions read as times, so a server counting from 1 loses nothing. Resolves with the
- * version it moved from and to, when it dropped anything.
+ * Only in rooms whose positions read as times, so a server counting from 1 loses nothing: by its sync, or for a
+ * room without one (rebuilt, and not settled since, its memberships left), by the newest record it has. Resolves
+ * with the version it moved from and to, when it dropped anything.
  */
 export async function pruneHistory(db: IDBDatabase, cutoff: number): Promise<{ from: number; to: number } | undefined> {
 	const transaction = db.transaction(['meta', 'rooms', 'records'], 'readwrite', { durability: 'relaxed' });
@@ -460,7 +499,8 @@ export async function pruneHistory(db: IDBDatabase, cutoff: number): Promise<{ f
 	const rooms = await done(transaction.objectStore('rooms').getAll()) as RoomRow[];
 	// Every room's at once, not one after another: each request waits its turn on a busy page, as one loading does,
 	// and the transaction holds up every other read and write of what is kept until it is done.
-	const counts = rooms.filter(({ sync }) => timeLike(sync)).map(({ room }) => {
+	const counts = rooms.map(async ({ room, sync }) => {
+		if (sync ? !timeLike(sync) : !timeLikeLog(await newestLog(records, room))) return 0;
 		const range = roomRange(room, cutoff);
 		const counted = done(records.count(range));
 		records.delete(range);
@@ -473,6 +513,15 @@ export async function pruneHistory(db: IDBDatabase, cutoff: number): Promise<{ f
 	if (row) meta.put({ ...row, version: row.version + 1 }, META);
 	await finished;
 	return row && { from: row.version, to: row.version + 1 };
+}
+
+/** The `log_id` of the newest record kept of `room`, if any. */
+function newestLog(records: IDBObjectStore, room: string): Promise<string | undefined> {
+	return new Promise((resolve, reject) => {
+		const request = records.openKeyCursor(roomRange(room), 'prev');
+		request.onsuccess = () => resolve(request.result ? String((request.result.key as [string, number])[1]) : undefined);
+		request.onerror = () => reject(request.error);
+	});
 }
 
 /** What `writeHistory` throws when it would write over what is kept and nothing is: another tab forgot it. */

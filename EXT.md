@@ -1,8 +1,8 @@
 # apron-web Extensions
 
-| Protocol Version | 9          |
+| Protocol Version | 10         |
 |------------------|------------|
-| Last Updated     | 2026-10-29 |
+| Last Updated     | 2026-11-05 |
 
 apron-web is a web client for the
 [Apron Chat Protocol](https://github.com/shazow/apron/blob/main/PROTOCOL.md).
@@ -92,12 +92,16 @@ Some features have no capability:
 ## 3. `ext:settings`
 
 Defined in [EXTENSIONS.md](https://github.com/shazow/apron/blob/main/EXTENSIONS.md#extsettings):
-`server.ext.settings`, `{read_cursors?, private_rooms?}`.
+`server.ext.settings`, `{read_cursors?, read_receipts?, private_rooms?}`.
 
 ### 3.1 apron-web
 
 - With `read_cursors: false`, apron-web keeps read cursors in the browser
   only, and sends no `read_message_id`. It still sends `typing`.
+- With `read_receipts: "private"`, apron-web shows in a private room how far
+  each other member has read. Preferences offers Read Receipts, on by default:
+  turned off, the device neither sends the user's read cursor in private rooms
+  nor shows the others'. Without it, apron-web shows no receipts.
 - It ignores a `private_rooms` that is not a non-negative integer.
 - It counts the private rooms that the user joined, without the threads of
   private rooms. When it starts a private room, it shows "N of M", and at the
@@ -197,6 +201,8 @@ Defined in [EXTENSIONS.md](https://github.com/shazow/apron/blob/main/EXTENSIONS.
   of 2048 pixels and `max_side`, and steps the quality down to fit
   `max_bytes`. It crops an avatar to a square of 512 pixels, or 256 when 512
   does not fit, no larger than `max_side`.
+- apron-web sends an animated image (GIF, APNG, or animated WebP) without
+  re-encoding it, but drops its EXIF, XMP and text metadata from the file.
 - apron-web fits the file of a `/emoji add` command to `emoji`, and other
   attachments to `upload`. Without `emoji`, it fits that file to `upload`.
 - Without a category, or for a type without `max_bytes`, apron-web aims for

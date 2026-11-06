@@ -126,6 +126,34 @@ export async function saveView(server: string, userId: string, view: HeldSession
 	}
 }
 
+/**
+ * Removes the view kept for `server` if it is `userId`'s: their history deleted from this device, what it showed
+ * of it goes too, and another account's view stays.
+ */
+export async function clearViewOf(server: string, userId: string, databases?: Databases): Promise<void> {
+	try {
+		const db = await open(databases);
+		try {
+			await new Promise<void>((resolve, reject) => {
+				// Read and removed in one transaction, so a view kept meanwhile for another account isn't what goes.
+				const store = db.transaction(STORE, 'readwrite').objectStore(STORE);
+				const read = store.get(server);
+				read.onsuccess = () => {
+					if ((read.result as Partial<KeptView> | undefined)?.userId !== userId) return resolve();
+					const removed = store.delete(server);
+					removed.onsuccess = () => resolve();
+					removed.onerror = () => reject(removed.error);
+				};
+				read.onerror = () => reject(read.error);
+			});
+		} finally {
+			db.close();
+		}
+	} catch {
+		// Nothing to remove, or no IndexedDB.
+	}
+}
+
 /** Removes what is kept for `server` (a sign-out, or another account), or for every server. */
 export async function clearView(server?: string, databases?: Databases): Promise<void> {
 	try {
