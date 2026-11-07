@@ -8,7 +8,7 @@
 	 * A message held back because it mentions people who aren't in the room or thread: add them and send it, or send it
 	 * as it is. Escape puts it away, with the message still in the composer. As a Nudge, it leaves the focus where it
 	 * is, in the composer: adding someone can't be taken back, so no key typed on (Space, a second Enter) may do it. Its
-	 * buttons are a press, or Shift+Tab, away.
+	 * buttons are a press away, or Shift+Tab past the composer's own; the page reads it out as it arrives.
 	 */
 	interface Props {
 		/** Who isn't in it, by name, as mentioned. */
@@ -29,9 +29,9 @@
 	let detail = $derived(`You mentioned them, but they aren’t in this ${thread ? 'thread' : 'room'}.`);
 
 	function keydown(event: KeyboardEvent): void {
-		if (event.key !== 'Escape' || busy) return;
+		if (event.key !== 'Escape') return;
 		event.preventDefault();
-		oncancel();
+		if (!busy) oncancel();
 	}
 </script>
 

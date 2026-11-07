@@ -81,7 +81,7 @@
 		onrename: (id: string, title: string) => void;
 		/** Escape while replying (`reply`) cancels it too. */
 		oncancelreply: () => void;
-		/** Escape, before anything else takes it, such as to put away an ask about the draft. True when it did something. */
+		/** Escape no picker took, before a reply's cancel, such as to put away an ask about the draft. True when it did something. */
 		onescape?: () => boolean;
 		/** ↑ in the empty field: the keyboard goes up to the messages. True when there was one to go to. */
 		onup?: () => boolean;

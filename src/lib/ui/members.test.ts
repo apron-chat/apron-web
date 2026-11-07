@@ -57,10 +57,6 @@ describe('mentioning someone who isn’t in the room', () => {
 	const room = { members: [{ user_id: 'me' }, { user_id: 'ada' }] };
 	const skip = (userId: string) => userId === 'me' || userId.startsWith('guest_');
 
-	it('names who isn’t a member, once each, as mentioned, but those skipped', () => {
-		expect(absentMentions(['bob', 'ada', 'me', 'guest_9', 'carol', 'bob'], room, skip)).toEqual(['bob', 'carol']);
-		expect(absentMentions(['ada'], room, skip)).toEqual([]);
-	});
 
 	it('asks about a role’s holders only when no one else here holds it', () => {
 		const users = [{ user_id: 'me', roles: ['ops'] }, { user_id: 'ada', roles: ['admin'] }, { user_id: 'bob', roles: ['mod', 'admin'] }, { user_id: 'cy', roles: ['mod', 'ops'] }, { user_id: 'dee' }];
@@ -72,7 +68,9 @@ describe('mentioning someone who isn’t in the room', () => {
 		expect(unheldRoleHolders([], users, new Set(), isMe)).toEqual([]);
 	});
 
-	it('names no one while the members aren’t all known', () => {
+	it('names who isn’t a member, once each, as mentioned, but those skipped; no one while the members aren’t all known', () => {
+		expect(absentMentions(['bob', 'ada', 'me', 'guest_9', 'carol', 'bob'], room, skip)).toEqual(['bob', 'carol']);
+		expect(absentMentions(['ada'], room, skip)).toEqual([]);
 		expect(absentMentions(['bob'], {}, skip)).toEqual([]);
 		expect(absentMentions(['bob'], { ...room, memberCount: 40 }, skip)).toEqual([]);
 		expect(absentMentions(['bob'], { ...room, memberCount: 2 }, skip)).toEqual(['bob']);

@@ -57,11 +57,13 @@
 		const roles: PickPerson[] = roleSets(candidates, query, ROLES_SHOWN).map(({ role, userIds }) => ({
 			user_id: role, name: `@${role}`, group: userIds, detail: userIds.length === 1 ? '1 person with this role' : `${userIds.length} people with this role`
 		}));
-		const shown: PickPerson[] = [...roles, ...matching(candidates, query, PEOPLE_SHOWN).map((user) => faceOf(user))];
+		const named = matching(candidates, query, PEOPLE_SHOWN);
+		const shown: PickPerson[] = [...roles, ...named.map((user) => faceOf(user))];
 		// `@&role` names a role, never someone to add by ID. A guest's ID typed whole is still offered: telling guests
 		// apart is a guess (`isGuest`), and typing the exact ID is the way past a wrong one.
 		const typed = /^@?&/.test(query.trim()) ? undefined : userIdToAdd(query);
-		if (!shown.length && typed && !memberIds.has(typed) && !isSystemId(typed)) shown.push({ user_id: typed, name: typed, hue: hueOf(typed), detail: `Add by @user_id: @${typed}` });
+		// With no one named so, nor a role named exactly that: a role it starts (`@ops` for `ops_team`) doesn't hide it.
+		if (!named.length && typed && !roles.some((row) => row.user_id === typed) && !memberIds.has(typed) && !isSystemId(typed)) shown.push({ user_id: typed, name: typed, hue: hueOf(typed), detail: `Add by @user_id: @${typed}` });
 		return shown;
 	});
 	let chosen = $derived(chosenIds.map((id) => faceOf(directory.person({ user_id: id }) ?? { user_id: id })));
