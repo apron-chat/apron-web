@@ -6,7 +6,7 @@ import { shownPerson, withoutBidiOverrides } from '$lib/protocol/plain-text';
 import type { EmojiResolver, LinkResolver, MentionResolver, MentionTarget, RoomMentionResolver } from '$lib/protocol/markdown';
 import type { Identity } from '$lib/protocol/types';
 import { readPlaceLink, writeApronLink } from './apron-link';
-import { backendHost } from './connection';
+import { serverLabel } from './connection';
 import { customEmoji } from './custom-emoji.svelte';
 import { mediaSettings } from './media-settings.svelte';
 import type { KeyImage } from './reactions';
@@ -257,8 +257,9 @@ class Directory {
 	 * what it is, from what is known here (Appendix A.4): "Message in #general",
 	 * a room's name, a thread's name "in #general", a known user as `@name`. A
 	 * room not known here is its `room_id`. One to another server is nothing
-	 * here, and opening it switches servers, so it is no mention: its host
-	 * first, then "Message" or "Room", nothing looked up. Another server's
+	 * here, and opening it opens a new tab, so it is no mention: its server
+	 * (`serverLabel`: host and path, as many servers may share a host) first,
+	 * then "Message" or "Room", nothing looked up. Another server's
 	 * user stays a URL, as does any link not read strictly as a place
 	 * (`readPlaceLink`): one with a token, a key it doesn't know, or a
 	 * malformed part never looks like one. Under the chip is the link in its
@@ -272,9 +273,9 @@ class Directory {
 		const shared = writeApronLink({ server, room: link.room, message: link.message, user: link.user });
 		if (server !== this.server) {
 			if (link.user !== undefined) return undefined;
-			const host = backendHost(server) || server;
+			const label = serverLabel(server) || server;
 			const kind = link.message !== undefined ? 'message' : 'room';
-			return { kind, elsewhere: true, href: shared, label: host, detail: kind === 'message' ? ' · Message' : ' · Room', title: `A ${kind} on ${host}, another server: opening it asks to switch` };
+			return { kind, elsewhere: true, href: shared, label, detail: kind === 'message' ? ' · Message' : ' · Room', title: `A ${kind} on ${label}, another server: opens in a new tab` };
 		}
 		const room = this.resolveRoom(link.room)?.title ?? link.room;
 		// In a tooltip, as a room mention's: an untitled thread's room_id after its "Untitled".

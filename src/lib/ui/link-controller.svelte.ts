@@ -1,7 +1,7 @@
 import { untrack } from 'svelte';
 import type { ClientSnapshot } from '$lib/protocol/client';
 import type { Proposal, ProposalScheme } from '$lib/protocol/proposals';
-import { addError, backendHost } from './connection';
+import { addError, serverLabel } from './connection';
 import { askedLinkFailure, linkUse, runSignInLink, sessionSettled, type LinkUse, type SignInLink, type SignInLinkClient } from './sign-in-link';
 import { Task } from './task.svelte';
 
@@ -165,7 +165,7 @@ export class SignInLinks {
 		untrack(() => {
 			this.addition = undefined;
 			if (chat.url !== addition.server || signedInAs !== addition.account) {
-				this.host.feedback.error(`The link adds a sign-in to @${addition.account} on ${backendHost(addition.server) || addition.server}, which this page isn’t signed in as now. Sign in as @${addition.account} there, and add it again.`);
+				this.host.feedback.error(`The link adds a sign-in to @${addition.account} on ${serverLabel(addition.server) || addition.server}, which this page isn’t signed in as now. Sign in as @${addition.account} there, and add it again.`);
 				return;
 			}
 			this.#work('adding', () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { destinationUrl, readDestination } from './address';
+import { destinationUrl, elsewhereUrl, readDestination } from './address';
 
 const at = (url: string) => readDestination({ hash: new URL(url).hash });
 
@@ -32,5 +32,14 @@ describe('destination URLs', () => {
 		const written = destinationUrl('https://app.example/', { server: 'wss://ada:secret@chat.example.com/ws', room: 'r 1', thread: 't/2', message: 'm&3', user: 'a#4' }, home);
 		expect(written).not.toContain('secret');
 		expect(at(written)).toEqual({ server: 'wss://chat.example.com/ws', room: 'r 1', thread: 't/2', message: 'm&3', user: 'a#4' });
+	});
+
+	it('open a place on another server from this app in a new tab, keeping the path and query but none of this page\'s fragment', () => {
+		const home = 'wss://app.example/ws';
+		const location = { origin: 'https://app.example', pathname: '/chat/', search: '?x=1' };
+		expect(elsewhereUrl(location, { server: 'wss://scene.apron.chat/piper', room: 'eng', message: '12' }, home)).toBe('https://app.example/chat/?x=1#server=wss://scene.apron.chat/piper&room=eng&message=12');
+		expect(at(elsewhereUrl(location, { server: 'wss://scene.apron.chat/piper' }, home))).toEqual({ server: 'wss://scene.apron.chat/piper' });
+		// The page's own server, from a page on another: no `server`, as the new tab connects there anyway.
+		expect(elsewhereUrl(location, { server: home, room: 'eng' }, home)).toBe('https://app.example/chat/?x=1#room=eng');
 	});
 });

@@ -9,7 +9,7 @@
 	import { embedsLabel, serverOrigin } from '$lib/protocol/embeds';
 	import { withoutBidiOverrides } from '$lib/protocol/plain-text';
 	import { compareLogIds } from '$lib/protocol/reducer';
-	import { destinationUrl, readDestination, type Destination } from '$lib/ui/address';
+	import { destinationUrl, elsewhereUrl, readDestination, type Destination } from '$lib/ui/address';
 	import { readApronLink, writeApronLink, type ApronLink } from '$lib/ui/apron-link';
 	import type { Embed, MessageRecord } from '$lib/protocol/types';
 	import { isJsonObject, isSystemId } from '$lib/protocol/types';
@@ -53,7 +53,7 @@
 	import { faceOf, roomFaces } from '$lib/ui/faces';
 	import { receiptsByMessage, steadyReceipts } from '$lib/ui/receipts';
 	import { attachmentLimits, composerAction } from '$lib/ui/commands';
-	import { backendHost, statusLabel } from '$lib/ui/connection';
+	import { serverLabel, statusLabel } from '$lib/ui/connection';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { FeedbackState, type Feedback } from '$lib/ui/feedback.svelte';
 	import type { LiveComposer } from '$lib/ui/live-composer.svelte';
@@ -231,7 +231,7 @@
 	 */
 	let webPushHeldBy = $derived.by(() => {
 		const server = webPushActive ? pushSettings.heldBy(pushAccount, webPushServerKey) : undefined;
-		return server === undefined ? undefined : backendHost(server) || 'another server';
+		return server === undefined ? undefined : serverLabel(server) || 'another server';
 	});
 	/** Bumped when a choice of what to notify about is saved, here or in another tab, so it is read again. */
 	let notifyScopesSaved = $state(0);
@@ -621,16 +621,16 @@
 	let typingNames = $derived(session.typing
 		.filter((entry) => entry.room === paneRoom?.id && entry.from.user_id !== session.you?.user_id)
 		.map((entry) => directory.name(entry.from)));
-	// `server.agent` names the implementation, for debugging, not the server: the host is the label.
+	// `server.agent` names the implementation, for debugging, not the server: its host and path are the label.
 	/** What an archive's server says of it (`ext:archive`, ARCHIVE.md §4.1), while reading one. */
 	let archive = $derived(serverArchive(session.server));
-	let backendLabel = $derived(backendHost(archive?.server ?? serverInput) || 'Apron');
+	let backendLabel = $derived(serverLabel(archive?.server ?? serverInput) || 'Apron');
 	/** In place of the guest's read-only line, while reading an archive: whose it is, and from when. */
 	let archiveNote = $derived.by(() => {
 		if (!archive) return undefined;
 		const saved = new Date(archive.exportedAt ?? '');
 		const when = Number.isNaN(saved.getTime()) ? '' : `, saved ${saved.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}`;
-		return `An export from ${backendHost(archive.server ?? '') || 'an Apron server'}${when}. It’s read-only.`;
+		return `An export from ${serverLabel(archive.server ?? '') || 'an Apron server'}${when}. It’s read-only.`;
 	});
 	/** How the connected server shows itself (§3.1): its title and avatar, never what it is known by (§1). */
 	let currentLook = $derived(client && session.server ? serverLook(session.server, client.url) : {});
@@ -1762,9 +1762,10 @@
 	/**
 	 * Opens an Apron link from a message here, in place of the link.apron.chat
 	 * page (Appendix A.4). A link to this server, or one without a server, opens
-	 * its room, message or user. One to another server loads the page for it,
-	 * which asks before connecting to a server not used before. One with a token
-	 * asks before signing in, as a sign-in link does. Opening never acts.
+	 * its room, message or user. One to another server asks before switching
+	 * this tab to it (a plain click opens such a link in a new tab instead,
+	 * `apronLinkClicked`). One with a token asks before signing in, as a
+	 * sign-in link does. Opening never acts.
 	 */
 	function openApronLink(link: ApronLink): void {
 		if (!client || previewMode) return;
@@ -1794,13 +1795,21 @@
 		linked = { ...destination, server, room: destination.room };
 	}
 
-	/** A plain click on an Apron link anywhere on the page opens it here (`openApronLink`); a modified one is left to the browser. */
+	/**
+	 * A plain click on an Apron link anywhere on the page opens it here (`openApronLink`); a modified one is left to the browser.
+	 * A place on another server opens this app in a new tab instead (`elsewhereUrl`), so the connection here stays.
+	 * A token's link still opens here: signing in asks first, and a `state` is this tab's own.
+	 */
 	function apronLinkClicked(event: MouseEvent): void {
 		if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
 		const anchor = (event.target as Element | null)?.closest?.<HTMLAnchorElement>('a[href]');
 		const link = anchor ? readApronLink(anchor.getAttribute('href') ?? '') : undefined;
 		if (!link) return;
 		event.preventDefault();
+		if (client && !previewMode && !link.token && link.server !== undefined && link.server !== client.url) {
+			window.open(elsewhereUrl(window.location, link, homeServer()), '_blank', 'noopener');
+			return;
+		}
 		openApronLink(link);
 	}
 
