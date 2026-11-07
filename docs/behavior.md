@@ -604,8 +604,11 @@ here: no desktop notifications, chime or title flash, and mentions that
 arrive meanwhile don't alert once it ends. The server sends no pushes with
 messages.
 
-A `status` with a `room_id` mutes that room and its threads, mentions
-included: they don't notify, chime or flash the title. It applies whether or
+A `status` with a `room_id` mutes that room and its threads: what's said
+there doesn't notify or count in the tab title or the app badge, though the
+room still shows its unread count. Mentions of you get through, as in other
+chat apps: they notify (while Mentions is checked), chime, flash the title
+and count in it. It applies whether or
 not the room is joined, and `false` (or `0`) ends it. The client has no
 control for it yet, but follows mutes set elsewhere.
 

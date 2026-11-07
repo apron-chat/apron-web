@@ -76,8 +76,8 @@
 
 <RoomRow
 	{room} noun="room" label={shown} private={isPrivate} {muted} {active} {listed} {title} {onselect} {onleave} {keyshortcuts} lead={faces?.length ? lead : undefined} {lines} start={onnewthread || onexpand ? start : undefined}
-	class={[(unread || mentions) && !muted && 'ap-room-unread', faces?.length && 'ap-room-faced', className]}
+	class={[(mentions || (unread && !muted)) && 'ap-room-unread', faces?.length && 'ap-room-faced', className]}
 >
-	<UnreadCount unread={unread ?? 0} mentions={mentions ?? 0} quiet={muted} noun="message" testid={unreadTestid} />
+	<UnreadCount unread={unread ?? 0} mentions={mentions ?? 0} noun="message" testid={unreadTestid} />
 	{#if loading}<span class="ap-room-loading" aria-label="Loading history">…</span>{/if}
 </RoomRow>
