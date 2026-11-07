@@ -16,7 +16,7 @@ export interface WebPushPreference {
 	homeScreen: boolean;
 	/** On for this account, and notifications are allowed. */
 	enabled: boolean;
-	/** On, but this browser's subscription is another server's for now (its host): turning it on here moves it. */
+	/** On, but this browser's subscription is another server's for now (its host and path, `serverLabel`): turning it on here moves it. */
 	heldBy?: string;
 	/** The server offers push, but only to a signed-in account, and this is a guest. */
 	signIn?: boolean;

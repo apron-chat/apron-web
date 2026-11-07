@@ -3,7 +3,7 @@
 	import { serverLook, type ChatClient } from '$lib/protocol/client';
 	import { PROTOCOL_VERSION } from '$lib/protocol/client-internals';
 	import type { ServerParams } from '$lib/protocol/types';
-	import { backendHost } from '$lib/ui/connection';
+	import { serverLabel } from '$lib/ui/connection';
 	import { renderMarkdown } from '$lib/protocol/markdown';
 	import { directory } from '$lib/ui/directory.svelte';
 	import type { SessionView } from '$lib/ui/session.svelte';
@@ -47,19 +47,19 @@
 
 	let busy = $state(false);
 	let signIn = $state<ReturnType<typeof SignIn>>();
-	/** Each recent server by its title, else its host, with its address. */
-	let recent = $derived(recentServers.map((entry) => ({ url: entry.url, label: entry.title ?? (backendHost(entry.url) || entry.url), avatar: directory.avatarGateFor(entry.url).src(entry.avatar) })));
+	/** Each recent server by its title, else its host and path, with its address. */
+	let recent = $derived(recentServers.map((entry) => ({ url: entry.url, label: entry.title ?? (serverLabel(entry.url) || entry.url), avatar: directory.avatarGateFor(entry.url).src(entry.avatar) })));
 
 	/** CommonMark from a server (its welcome, its description), sanitized as a message is. */
 	function markdown(text: string | undefined): string {
 		return text ? renderMarkdown(text, directory.resolve, directory.resolveRoom, undefined, directory.resolveEmoji, directory.mediaGate) : '';
 	}
 
-	/** How the server that answered shows itself (§3.1): its title, else its host, always with its address beside it (§5.3). */
+	/** How the server that answered shows itself (§3.1): its title, else its host and path (`serverLabel`), always with its address beside it (§5.3). */
 	function shown(server: ServerParams, address: string) {
 		const look = serverLook(server, address);
 		const gate = address === client.url ? directory.avatarGate : directory.avatarGateFor(address);
-		return { name: look.title ?? (backendHost(address) || address), address, avatar: gate.src(look.avatar) };
+		return { name: look.title ?? (serverLabel(address) || address), address, avatar: gate.src(look.avatar) };
 	}
 </script>
 

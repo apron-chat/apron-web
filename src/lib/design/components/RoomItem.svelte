@@ -24,7 +24,7 @@
 		faces?: Face[];
 		/**
 		 * Muted (§4.5 `mute` with its `room_id`): a bell-off at the end of the row, before its count, and its news stays quiet: no bold name, and
-		 * a grey count, mentions too.
+		 * a grey count, but for a mention of you, which bolds it and shows the orange @ count as in a room that isn't muted.
 		 */
 		muted?: boolean;
 		/** Unread messages from others: a bold name and an ink count. */
@@ -76,8 +76,8 @@
 
 <RoomRow
 	{room} noun="room" label={shown} private={isPrivate} {muted} {active} {listed} {title} {onselect} {onleave} {keyshortcuts} lead={faces?.length ? lead : undefined} {lines} start={onnewthread || onexpand ? start : undefined}
-	class={[(unread || mentions) && !muted && 'ap-room-unread', faces?.length && 'ap-room-faced', className]}
+	class={[(mentions || (unread && !muted)) && 'ap-room-unread', faces?.length && 'ap-room-faced', className]}
 >
-	<UnreadCount unread={unread ?? 0} mentions={mentions ?? 0} quiet={muted} noun="message" testid={unreadTestid} />
+	<UnreadCount unread={unread ?? 0} mentions={mentions ?? 0} noun="message" testid={unreadTestid} />
 	{#if loading}<span class="ap-room-loading" aria-label="Loading history">…</span>{/if}
 </RoomRow>

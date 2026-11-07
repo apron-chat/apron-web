@@ -1,10 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { capabilitiesOf, type ClientSnapshot } from '$lib/protocol/client';
-import { addError, connectionStateOf, offeredSchemes, retryUntil, schemeUse, statusLabel, wayBackNudge, wayBackWords } from './connection';
+import { addError, connectionStateOf, offeredSchemes, retryUntil, schemeUse, serverLabel, statusLabel, wayBackNudge, wayBackWords } from './connection';
 import { retryAfterLabel } from '$lib/words';
 
 const snapshot = (fields: Partial<ClientSnapshot>): ClientSnapshot => ({
 	status: 'idle', authenticated: false, capabilities: capabilitiesOf(undefined), rooms: [], pending: [], typing: [], users: {}, recordedUsers: {}, userAliases: {}, uploads: {}, threadDirectory: {}, showReconnectDivider: false, ...fields
+});
+
+describe('server labels', () => {
+	it('name a server by its host and path, as many servers may share a host', () => {
+		expect(serverLabel('wss://scene.apron.chat/piper')).toBe('scene.apron.chat/piper');
+		expect(serverLabel('wss://scene.apron.chat/piper/')).toBe('scene.apron.chat/piper');
+		expect(serverLabel('wss://server.apron.chat/')).toBe('server.apron.chat');
+		expect(serverLabel('ws://localhost:8080/ws')).toBe('localhost:8080/ws');
+		expect(serverLabel('not a url')).toBe('');
+	});
 });
 
 describe('connection state', () => {

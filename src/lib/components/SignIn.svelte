@@ -12,7 +12,7 @@
 	 */
 	import { onDestroy, untrack, type Snippet } from 'svelte';
 	import { normalizeWebSocketUrl, type ChatClient } from '$lib/protocol/client';
-	import { backendHost, offeredSchemes, passkeyMessage, schemeUse } from '$lib/ui/connection';
+	import { offeredSchemes, serverLabel, passkeyMessage, schemeUse } from '$lib/ui/connection';
 	import { greetings } from '$lib/ui/greetings.svelte';
 	import { codeStillFor, returnUrl, type SentCode } from '$lib/ui/sign-in-link';
 	import type { SessionView } from '$lib/ui/session.svelte';
@@ -340,9 +340,9 @@
 		choosing = true;
 	}
 
-	/** A server by its title, else its host, as the connect screen shows it. */
+	/** A server by its title, else its host and path, as the connect screen shows it. */
 	function serverName(server: { title?: string }): string {
-		return server.title?.trim() || backendHost(normalizedInput) || 'This server';
+		return server.title?.trim() || serverLabel(normalizedInput) || 'This server';
 	}
 
 	/**

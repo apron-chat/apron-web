@@ -192,7 +192,7 @@
 						{#if detail}<span class="ap-search-detail" dir="auto">{detail}</span>{/if}
 					</span>
 					{#if result.muted}<BellOff class="ap-muted" role="img" aria-label="Muted" />{/if}
-					<UnreadCount unread={result.unread ?? 0} mentions={result.mentions ?? 0} quiet={result.muted} noun={result.thread ? 'reply' : 'message'} />
+					<UnreadCount unread={result.unread ?? 0} mentions={result.mentions ?? 0} noun={result.thread ? 'reply' : 'message'} />
 				</li>
 			{:else}
 				<!-- The field's combobox takes the keys for its options (↑ ↓, Enter), which keep the focus out of the list. -->

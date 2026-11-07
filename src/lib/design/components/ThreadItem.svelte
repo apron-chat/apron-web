@@ -27,7 +27,7 @@
 		unjoined?: boolean;
 		/**
 		 * Muted (§4.5 `mute` with its `room_id`, or its parent's): a bell-off at the end of the row, before its count, and its news stays quiet: no
-		 * bold name, no tint for a mention, and a grey count, mentions too.
+		 * bold name and a grey count, but for a mention of you, which bolds and tints it and shows the orange @ count as in a thread that isn't muted.
 		 */
 		muted?: boolean;
 		/** Unread replies from others: a bold name and an ink count. */
@@ -67,8 +67,8 @@
 	}: Props = $props();
 	const shown = $derived(roomName(name, thread, { thread: true }));
 	const tip = $derived(roomNameTip(name, thread, { thread: true }));
-	/** A joined thread: tinted with an unread mention, stepped back with nothing new. */
-	const mention = $derived(!active && !unjoined && !muted && Boolean(mentions));
+	/** A joined thread: tinted with an unread mention (one gets through a mute), stepped back with nothing new. */
+	const mention = $derived(!active && !unjoined && Boolean(mentions));
 	const quiet = $derived(!active && !unjoined && !unread && !mentions);
 </script>
 
@@ -76,9 +76,9 @@
 
 <RoomRow
 	room={thread} noun="thread" label={shown} {tip} private={isPrivate} {muted} {active} nested framed listed={unjoined} {title} {onselect} {onleave} {onjoin} {lines}
-	class={[(unread || mentions) && !muted && 'ap-room-unread', unjoined && 'ap-room-unjoined', mention && 'ap-room-mention', quiet && 'ap-room-quiet', className]}
+	class={[(mentions || (unread && !muted)) && 'ap-room-unread', unjoined && 'ap-room-unjoined', mention && 'ap-room-mention', quiet && 'ap-room-quiet', className]}
 >
-	<UnreadCount unread={unread ?? 0} mentions={mentions ?? 0} quiet={muted} noun="reply" testid={unreadTestid} />
+	<UnreadCount unread={unread ?? 0} mentions={mentions ?? 0} noun="reply" testid={unreadTestid} />
 	{#if count !== undefined}<small class="ap-room-count" aria-label={`${count} ${count === 1 ? 'message' : 'messages'}`}>{count}</small>
 	{:else if ago?.text}<time class="ap-room-ago" data-testid={agoTestid} datetime={ago.datetime} title={ago.title}>{ago.text}</time>{/if}
 </RoomRow>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { MessageRecord } from '$lib/protocol/types';
-import { UnreadTracker, countElsewhere, sameCounts } from './unread.svelte';
+import { UnreadTracker, countElsewhere, mutedMentions, sameCounts } from './unread.svelte';
 import { tabTitle } from './attention';
 import { messageRecord, roomSnapshot as room } from '$lib/test/builders';
 
@@ -37,6 +37,7 @@ describe('unread tracking', () => {
 		expect(tracker.byRoom).toEqual({ general: 1, random: 2, t1: 1 });
 		expect(tracker.total).toBe(4);
 		expect(tracker.alerting).toBe(1);
+		expect(tracker.muted).toEqual({ random: 2, t1: 1 });
 		// Unmuted, the room alerts again.
 		tracker.observe(rooms(false, arrived), me, undefined, false);
 		expect(tracker.alerting).toBe(4);
@@ -147,6 +148,13 @@ describe('unread tracking', () => {
 		expect(tracker.byRoom).toEqual({});
 	});
 
+});
+
+describe('mutedMentions', () => {
+	it('counts the unread mentions in muted rooms, never more than a room has unread', () => {
+		expect(mutedMentions({ random: 2, t1: 1 }, { random: 1, t1: 3, general: 5 })).toBe(2);
+		expect(mutedMentions({}, { general: 5 })).toBe(0);
+	});
 });
 
 describe('countElsewhere', () => {

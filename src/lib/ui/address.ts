@@ -73,6 +73,17 @@ export function destinationUrl(current: string, destination: Destination, defaul
 	return url.toString();
 }
 
+/**
+ * This app's URL for a place on another server, to open in a new tab and
+ * leave this one's connection as it is: the page's path and query, and a
+ * fragment naming only the place (`destinationUrl`), none of this page's
+ * own keys. The new tab offers to connect to that server as it would for a
+ * link opened there.
+ */
+export function elsewhereUrl(location: Pick<Location, 'origin' | 'pathname' | 'search'>, destination: Destination, defaultServer: string): string {
+	return destinationUrl(`${location.origin}${location.pathname}${location.search}`, destination, defaultServer);
+}
+
 function fragmentParams(hash: string): URLSearchParams {
 	return new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash);
 }

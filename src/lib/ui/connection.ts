@@ -109,9 +109,17 @@ export function addError(cause: unknown, scheme: 'email' | 'external' | 'link' =
 	return cause instanceof Error && cause.message ? cause.message : scheme === 'email' ? 'Unable to add the address' : 'Unable to add the sign-in';
 }
 
-export function backendHost(value: string): string {
+/**
+ * A server's address as people read it: its host and path, without the
+ * scheme or a trailing `/`, so `wss://scene.apron.chat/piper` is
+ * `scene.apron.chat/piper` and `wss://chat.example/` is `chat.example`.
+ * Many servers can share a host under different paths, so the path is kept.
+ * Empty for a value that isn't a URL.
+ */
+export function serverLabel(value: string): string {
 	try {
-		return new URL(value).host;
+		const url = new URL(value);
+		return url.host ? `${url.host}${url.pathname.replace(/\/+$/, '')}` : '';
 	} catch {
 		return '';
 	}

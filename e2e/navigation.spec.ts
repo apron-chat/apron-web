@@ -256,3 +256,26 @@ test.describe('Preferences in the address', () => {
 		await at(preview, 'engineering', /#room=engineering$/);
 	});
 });
+
+test.describe('a link to another server', () => {
+	test.use(DEVICES.desktop);
+
+	const link = 'https://link.apron.chat/#server=wss://scene.apron.chat/piper&room=eng';
+	const history = [{ log_id: '1001', message_id: '1001', room_id: 'general', from: { user_id: 'ada', name: 'Ada' }, body: { text: `Over here: ${link}` } }];
+
+	test('names the server by its host and path, and opens in a new tab, leaving this one where it was', async ({ preview, page }) => {
+		await preview.openRoot({ history });
+		await expect(preview.heading()).toHaveText('General');
+		const chip = page.locator('article[data-message-id="1001"] a.ap-linkchip-elsewhere');
+		await expect(chip).toHaveText('scene.apron.chat/piper · Room');
+		await expect(chip).toHaveAttribute('title', 'A room on scene.apron.chat/piper, another server: opens in a new tab');
+		const url = page.url();
+		const [popup] = await Promise.all([page.context().waitForEvent('page'), chip.click()]);
+		await expect(popup).toHaveURL(/#server=wss:\/\/scene\.apron\.chat\/piper&room=eng$/);
+		expect(new URL(popup.url()).origin).toBe(new URL(url).origin);
+		await popup.close();
+		await expect(page).toHaveURL(url);
+		await expect(preview.heading()).toHaveText('General');
+		await expect(page.getByRole('dialog')).toHaveCount(0);
+	});
+});

@@ -175,14 +175,15 @@ describe('directory', () => {
 		expect(directory.resolveLink('apron:?room=lobby&user=bo')).toEqual({ kind: 'user', href: https('room=lobby&user=bo'), label: '@Bo', title: 'Bo in #Lobby' });
 		// No form but those two (Appendix A.4).
 		expect(directory.resolveLink('web+apron:?room=lobby')).toBeUndefined();
-		// Another server's is no mention of a place here: its host and what it is, nothing looked up, whatever this one knows.
+		// Another server's is no mention of a place here: its server and what it is, nothing looked up, whatever this one knows.
 		const other = 'wss://other.example/';
 		expect(directory.resolveLink(https('room=lobby&message=12', other))).toEqual({
-			kind: 'message', elsewhere: true, href: https('room=lobby&message=12', other), label: 'other.example', detail: ' · Message', title: 'A message on other.example, another server: opening it asks to switch'
+			kind: 'message', elsewhere: true, href: https('room=lobby&message=12', other), label: 'other.example', detail: ' · Message', title: 'A message on other.example, another server: opens in a new tab'
 		});
 		expect(directory.resolveLink(`apron:?server=${other}&room=t1`)).toMatchObject({ kind: 'room', elsewhere: true, label: 'other.example', detail: ' · Room' });
-		// Another endpoint on the same host is another server too.
+		// Another endpoint on the same host is another server too, named by its path as well as its host.
 		expect(directory.resolveLink(https('room=lobby', 'wss://chat.example/'))).toMatchObject({ elsewhere: true, label: 'chat.example' });
+		expect(directory.resolveLink(https('room=eng', 'wss://chat.example/piper'))).toMatchObject({ elsewhere: true, label: 'chat.example/piper', title: 'A room on chat.example/piper, another server: opens in a new tab' });
 		for (const href of ['apron:?room=lobby&user=zed', `apron:?server=${other}&room=lobby&user=bo`, `apron:?server=${server}&token=inv_1&room=lobby`, `apron:?server=${server}`, 'https://example.com/']) {
 			expect(directory.resolveLink(href), href).toBeUndefined();
 		}
