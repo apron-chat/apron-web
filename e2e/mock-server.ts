@@ -11,6 +11,10 @@ export const OFFSITE = /^https?:\/\/(?!127\.0\.0\.1[:/]|localhost[:/])/;
  */
 export type MockOptions = {
 	server?: Record<string, unknown>;
+	/** What the server at an address says in its `server` frame, over `server`, for a link or a typed address to another server. */
+	servers?: Record<string, Record<string, unknown>>;
+	/** Every address the page opened a WebSocket to, in order. */
+	opened?: string[];
 	you?: Record<string, unknown>;
 	token?: string;
 	sent?: Record<string, any>[];
@@ -33,6 +37,7 @@ export async function mockServer(page: Page, options: MockOptions = {}): Promise
 	await page.route(OFFSITE, (route) => route.abort());
 	let auths = 0;
 	await page.routeWebSocket(/.*/, (ws) => {
+		options.opened?.push(ws.url());
 		let you: Record<string, unknown> = { user_id: 'guest_1', name: 'Guest 1', status: 'online', ...options.you };
 		// Complete objects, as the listing carries them: the shown status, and `seen` with a shown `offline`.
 		const ada = { user_id: 'ada', name: 'Ada', status: 'offline', seen: String(NOW.getTime() - 2 * 60 * 60 * 1000) };
@@ -67,6 +72,6 @@ export async function mockServer(page: Page, options: MockOptions = {}): Promise
 					if (frame.id !== undefined) ws.send(JSON.stringify({ id: frame.id, error: { code: -32601, message: `Not in the mock: ${frame.method}` } }));
 			}
 		});
-		ws.send(JSON.stringify({ method: 'server', params: { apron: 10, agent: 'apron-e2e-mock', auth: ['guest', 'webauthn', 'email'], signup: ['guest', 'webauthn'], ping: 60, capabilities: ['history', 'rooms', 'status'], ...options.server } }));
+		ws.send(JSON.stringify({ method: 'server', params: { apron: 10, agent: 'apron-e2e-mock', auth: ['guest', 'webauthn', 'email'], signup: ['guest', 'webauthn'], ping: 60, capabilities: ['history', 'rooms', 'status'], ...options.server, ...options.servers?.[ws.url()] } }));
 	});
 }

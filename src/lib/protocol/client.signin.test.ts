@@ -994,3 +994,61 @@ describe('accounts and their ways back in', () => {
 		expect(snapshot.signInCode).toBeUndefined();
 	});
 });
+
+/** Reading another server's greeting before signing in there (`greet`), for the connect screen. */
+describe('greet', () => {
+	beforeEach(() => {
+		start();
+	});
+
+	it('reads the greeting on a connection of its own that sends nothing, closes it, and leaves this connection as it was', async () => {
+		const main = latest();
+		const greeted = client.greet('wss://other.test/piper');
+		const side = latest();
+		expect(side).not.toBe(main);
+		expect(side.url).toBe('wss://other.test/piper');
+		side.open();
+		side.receive({ method: 'server', params: { apron: 10, auth: ['guest'], title: 'Pied Piper', unknown: true } });
+		await expect(greeted).resolves.toEqual({ apron: 10, auth: ['guest'], capabilities: [], title: 'Pied Piper' });
+		expect(side.sent).toEqual([]);
+		expect(side.readyState).toBe(FakeSocket.CLOSED);
+		expect(client.url).toBe('ws://fake.test/');
+	});
+
+	it('says an address that answers without a usable greeting isn’t an Apron server', async () => {
+		const greeted = client.greet('wss://other.test/');
+		const side = latest();
+		side.open();
+		side.receive({ hello: 'world' });
+		const failed = expect(greeted).rejects.toThrow('not as an Apron server');
+		await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
+		await failed;
+		// A greeting with no scheme to sign in with is no more use.
+		const empty = client.greet('wss://other.test/');
+		const next = latest();
+		next.open();
+		next.receive({ method: 'server', params: { apron: 10, auth: [] } });
+		await expect(empty).rejects.toThrow('not as an Apron server');
+	});
+
+	it('says an address that can’t be reached, or never answers, so', async () => {
+		const unreachable = client.greet('wss://down.test/');
+		latest().onerror?.();
+		await expect(unreachable).rejects.toThrow('Can’t reach the server');
+		const silent = client.greet('wss://silent.test/');
+		latest().open();
+		const failed = expect(silent).rejects.toThrow('The server didn’t answer');
+		await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
+		await failed;
+	});
+
+	it('closes its connection when cancelled', async () => {
+		const abort = new AbortController();
+		const greeted = client.greet('wss://other.test/', abort.signal);
+		const side = latest();
+		side.open();
+		abort.abort();
+		await expect(greeted).rejects.toThrow('Cancelled');
+		expect(side.readyState).toBe(FakeSocket.CLOSED);
+	});
+});

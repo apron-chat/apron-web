@@ -192,6 +192,8 @@ export class RequestTimeout extends Error {
 		this.name = 'RequestTimeout';
 	}
 }
+/** The protocol version this client speaks (PROTOCOL.md front matter): a server whose `apron` differs gets a warning, never a refusal (§3.1). */
+export const PROTOCOL_VERSION = 10;
 /** This implementation and its version, sent as `agent` with `auth` (§3.2), for the server's debugging. */
 export const AGENT = 'apron-web/0.4';
 /** The `unsupported` error code (§1.1): a method or an optional parameter the server does not implement. */

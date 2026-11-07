@@ -320,6 +320,8 @@
 	let disconnected = $state(false);
 	/** The sign-in scheme the connect screen opens with, when something asked for one. */
 	let connectScheme = $state<Scheme | undefined>();
+	/** The connect screen opens at choosing a server (a new one, or a link's), rather than at signing in to the one in it. */
+	let connectChoosing = $state(false);
 	let recentServers = $state<RecentServer[]>([]);
 	let passkeyUnavailable = $state<string | undefined>();
 	let highlightedId = $state<string | undefined>();
@@ -353,6 +355,7 @@
 			// The connect screen can start again, on the link's server, which is not remembered unless that works.
 			serverInput = server;
 			connectScheme = scheme;
+			connectChoosing = false;
 			connectOpen = true;
 		}
 	});
@@ -1243,6 +1246,8 @@
 		const any = [...offered, ...(session.server?.signup ?? [])];
 		const passkeyFirst = offered.includes('webauthn') ? offered.includes('guest') || !offered.includes('email') : !any.includes('email');
 		connectScheme = options.scheme ?? (options.signIn ? (passkeyFirst ? 'webauthn' : 'email') : undefined);
+		// Asked to sign in here, it opens at signing in; otherwise at choosing the server (another, a link's, or this one again).
+		connectChoosing = !options.scheme && !options.signIn;
 		links.failure = undefined;
 		if (options.name) displayName = options.name;
 		connectOpen = true;
@@ -3233,7 +3238,7 @@
 	<ConnectScreen
 		{client} {session} bind:serverInput bind:displayName {passkeyUnavailable} {recentServers}
 		canCancel={!disconnected && (session.rooms.length > 0 || session.ready || offeringLink)} initialScheme={connectScheme}
-		initialError={links.failure?.error}
+		initialError={links.failure?.error} initialChoosing={connectChoosing} linked={offeringLink && linked ? { server: linked.server, room: linked.room } : undefined}
 		onconnect={leaveBackend} onconnected={connected} oncancel={() => { connectOpen = false; offeringLink = false; if (client) serverInput = client.url; }} onsignout={signedOut}
 	/>
 {:else}

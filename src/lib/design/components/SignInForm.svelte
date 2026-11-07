@@ -21,8 +21,10 @@
 		phase?: string;
 		/** Shown at the top of the card, such as a ConnectHeader (the title, the welcome and the Server field). */
 		header?: Snippet;
-		/** The sign-in schemes to offer (§3.1 `auth`, then the rest of `signup`), in order; an unknown one shows by its name. */
+		/** The sign-in schemes to offer (§3.1 `auth`, then the rest of `signup`), in order; an unknown one shows by its name. With one, there is nothing to choose and no Sign in with row. */
 		schemes: string[];
+		/** Shows the chosen scheme's fields; off before the server has said which schemes it offers, when the card is its address alone. */
+		fields?: boolean;
 		/** The scheme shown; its fields follow (Token a token, Email an address). */
 		scheme: string;
 		onscheme?: (scheme: string) => void;
@@ -73,7 +75,7 @@
 		class?: ClassValue;
 	}
 	let {
-		header, schemes, scheme, onscheme, passkeyChoice = false, passkeyMode = 'login', onpasskeymode, passkeyNudge, token = $bindable(''), email = $bindable(''), code = $bindable(''), name = $bindable(''),
+		header, schemes, fields = true, scheme, onscheme, passkeyChoice = false, passkeyMode = 'login', onpasskeymode, passkeyNudge, token = $bindable(''), email = $bindable(''), code = $bindable(''), name = $bindable(''),
 		askName = true, sent, onrestart, hint, hintStatus = false, error, busy = false, submit, secondary,
 		submitTestid, tokenTestid, emailTestid, codeTestid, nameTestid, passkeyChoiceTestid, pageLinkTestid, onsubmit, label, phase, class: className
 	}: Props = $props();
@@ -81,44 +83,48 @@
 
 <form aria-label={label} data-phase={phase} class={['ap-connect-card', className]} {onsubmit}>
 	{@render header?.()}
-	<div class="ap-fieldlabel">Sign in with
-		<div class="ap-seg" role="radiogroup" aria-label="Sign in with">
-			{#each schemes as candidate (candidate)}
-				<button class="ap-seg-item" class:ap-seg-on={scheme === candidate} type="button" role="radio" aria-checked={scheme === candidate} disabled={busy} onclick={() => onscheme?.(candidate)}>{LABELS[candidate] ?? candidate}</button>
-			{/each}
-		</div>
-	</div>
-	{#if passkeyChoice}
-		<div class="ap-choice" role="radiogroup" aria-label="Passkey" data-testid={passkeyChoiceTestid}>
-			{#each PASSKEY_CHOICES as [value, title, text] (value)}
-				<button class="ap-choice-item" class:ap-choice-on={passkeyMode === value} class:ap-choice-nudge={passkeyNudge === value && passkeyMode !== value} type="button" role="radio" aria-checked={passkeyMode === value} data-testid={passkeyChoiceTestid ? `${passkeyChoiceTestid}-${value}` : undefined} disabled={busy} onclick={() => onpasskeymode?.(value)}>
-					<span class="ap-choice-title">{title}</span>
-					<span class="ap-choice-text">{text}</span>
-				</button>
-			{/each}
+	{#if fields && schemes.length > 1}
+		<div class="ap-fieldlabel">Sign in with
+			<div class="ap-seg" role="radiogroup" aria-label="Sign in with">
+				{#each schemes as candidate (candidate)}
+					<button class="ap-seg-item" class:ap-seg-on={scheme === candidate} type="button" role="radio" aria-checked={scheme === candidate} disabled={busy} onclick={() => onscheme?.(candidate)}>{LABELS[candidate] ?? candidate}</button>
+				{/each}
+			</div>
 		</div>
 	{/if}
-	{#if scheme === 'token'}
-		<label class="ap-fieldlabel">Token
-			<input class="ap-field ap-field-mono" data-testid={tokenTestid} type="password" bind:value={token} placeholder="From the server" disabled={busy} autocomplete="off" spellcheck="false" />
-		</label>
-		{#if askName}
-			{@render nameField()}
+	{#if fields}
+		{#if passkeyChoice}
+			<div class="ap-choice" role="radiogroup" aria-label="Passkey" data-testid={passkeyChoiceTestid}>
+				{#each PASSKEY_CHOICES as [value, title, text] (value)}
+					<button class="ap-choice-item" class:ap-choice-on={passkeyMode === value} class:ap-choice-nudge={passkeyNudge === value && passkeyMode !== value} type="button" role="radio" aria-checked={passkeyMode === value} data-testid={passkeyChoiceTestid ? `${passkeyChoiceTestid}-${value}` : undefined} disabled={busy} onclick={() => onpasskeymode?.(value)}>
+						<span class="ap-choice-title">{title}</span>
+						<span class="ap-choice-text">{text}</span>
+					</button>
+				{/each}
+			</div>
 		{/if}
-	{:else}
-		{#if scheme === 'email'}
-			<label class="ap-fieldlabel">Email
-				<input class="ap-field" data-testid={emailTestid} type="email" bind:value={email} placeholder="you@example.com" disabled={busy || Boolean(sent)} autocomplete="email" spellcheck="false" />
+		{#if scheme === 'token'}
+			<label class="ap-fieldlabel">Token
+				<input class="ap-field ap-field-mono" data-testid={tokenTestid} type="password" bind:value={token} placeholder="From the server" disabled={busy} autocomplete="off" spellcheck="false" />
 			</label>
-		{/if}
-		{#if sent}
-			<label class="ap-fieldlabel">Code
-				<!-- svelte-ignore a11y_autofocus -->
-				<input class="ap-field ap-field-mono" data-testid={codeTestid} bind:value={code} placeholder={sent.scheme === 'email' ? 'From the email' : 'From the sign-in page'} disabled={busy} inputmode={sent.scheme === 'email' ? 'numeric' : 'text'} autocomplete="one-time-code" spellcheck="false" autofocus />
-			</label>
-		{/if}
-		{#if askName}
-			{@render nameField()}
+			{#if askName}
+				{@render nameField()}
+			{/if}
+		{:else}
+			{#if scheme === 'email'}
+				<label class="ap-fieldlabel">Email
+					<input class="ap-field" data-testid={emailTestid} type="email" bind:value={email} placeholder="you@example.com" disabled={busy || Boolean(sent)} autocomplete="email" spellcheck="false" />
+				</label>
+			{/if}
+			{#if sent}
+				<label class="ap-fieldlabel">Code
+					<!-- svelte-ignore a11y_autofocus -->
+					<input class="ap-field ap-field-mono" data-testid={codeTestid} bind:value={code} placeholder={sent.scheme === 'email' ? 'From the email' : 'From the sign-in page'} disabled={busy} inputmode={sent.scheme === 'email' ? 'numeric' : 'text'} autocomplete="one-time-code" spellcheck="false" autofocus />
+				</label>
+			{/if}
+			{#if askName}
+				{@render nameField()}
+			{/if}
 		{/if}
 	{/if}
 	{#if sent?.scheme === 'email'}
@@ -130,7 +136,7 @@
 			<a href={sent.page} target="_blank" rel="noopener noreferrer" data-testid={pageLinkTestid}>Open the sign-in page</a>, sign in there, then enter the code it shows you.
 		</p>
 		<button class="ap-link ap-connect-other" type="button" disabled={busy} onclick={onrestart}>Start again</button>
-	{:else}
+	{:else if hint}
 		<p class="ap-form-hint" role={hintStatus ? 'status' : undefined}>{#each hint?.split('`') ?? [] as part, index (index)}{#if index % 2}<code>{part}</code>{:else}{part}{/if}{/each}</p>
 	{/if}
 	{#if error}<p class="ap-form-note ap-tone-danger" role="alert">{error}</p>{/if}

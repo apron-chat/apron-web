@@ -18,8 +18,17 @@
 		description?: Snippet;
 		/** `data-testid` on the server's row. */
 		serverTestid?: string;
+		/**
+		 * Goes back to choosing the server: shown as Change beside the server, which then stands in for the Server
+		 * field. Without it, the field shows under the server.
+		 */
+		onchange?: () => void;
+		/** Where a link leads on the server in the field, such as `#eng`, before it is contacted. */
+		linked?: string;
+		/** Something to know before signing in that stops nothing, such as another protocol version (§3.1): a bold title, then the text. */
+		warning?: { title: string; text: string };
 	}
-	let { url = $bindable(''), welcome, busy = false, urlTestid, server, description, serverTestid }: Props = $props();
+	let { url = $bindable(''), welcome, busy = false, urlTestid, server, description, serverTestid, onchange, linked, warning }: Props = $props();
 </script>
 
 <!--
@@ -35,10 +44,15 @@
 			<span class="ap-connect-server-name">{server.name}</span>
 			<span class="ap-connect-address">{server.address}</span>
 		</span>
+		{#if onchange}<button class="ap-link ap-connect-change" type="button" disabled={busy} onclick={onchange}>Change</button>{/if}
 	</div>
 	{#if description}<div class="ap-connect-server-desc ap-msg-text">{@render description()}</div>{/if}
 {/if}
+{#if warning}<p class="ap-connect-warn"><strong>{warning.title}</strong> {warning.text}</p>{/if}
 {#if welcome}<div class="ap-welcome ap-msg-text">{@render welcome()}</div>{/if}
-<label class="ap-fieldlabel">Server
-	<input class="ap-field ap-field-mono" data-testid={urlTestid} type="text" inputmode="url" bind:value={url} placeholder="wss://server.apron.chat/" disabled={busy} autocomplete="url" spellcheck="false" />
-</label>
+{#if linked && !server}<p class="ap-connect-intent">A link opened this page to <strong>{linked}</strong> on this server.</p>{/if}
+{#if !(server && onchange)}
+	<label class="ap-fieldlabel">Server
+		<input class="ap-field ap-field-mono" data-testid={urlTestid} type="text" inputmode="url" bind:value={url} placeholder="wss://server.apron.chat/" disabled={busy} autocomplete="url" spellcheck="false" />
+	</label>
+{/if}

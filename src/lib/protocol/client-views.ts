@@ -2,7 +2,7 @@
 import { parseOrigins, safeAvatar, serverOrigin } from './embeds';
 import { cleanPlainText, withoutBidiOverrides } from './plain-text';
 import { timelineEvents } from './reducer';
-import { isJsonObject } from './types';
+import { isJsonObject, isString } from './types';
 import type {
 	JsonObject,
 	Capability,
@@ -13,6 +13,34 @@ import type {
 import type { Capabilities, ClientSnapshot, RoomSnapshot } from './client-types';
 
 const CAPABILITIES: Capability[] = ['history', 'edit', 'rooms', 'reactions', 'activity', 'embed:upload', 'embed:append', 'embed:terminal', 'command', 'status', 'ext', 'ext:settings', 'ext:limits', 'ext:media', 'ext:permissions', 'ext:bio', 'ext:archive'];
+
+/**
+ * A `server` frame's params as this client keeps them (§3.1), or undefined
+ * for one it can't use: no `apron` version, or no sign-in scheme in `auth`.
+ * The client reads its own connection's greeting with this, and so does the
+ * connect screen, which looks a server's greeting up before signing in.
+ */
+export function parseServerParams(params: JsonObject | undefined): ServerParams | undefined {
+	if (!params || typeof params.apron !== 'number' || !Array.isArray(params.auth)) return undefined;
+	const auth = params.auth.filter(isString);
+	if (!auth.length) return undefined;
+	return {
+		apron: params.apron,
+		...(typeof params.agent === 'string' ? { agent: params.agent } : {}),
+		capabilities: Array.isArray(params.capabilities) ? params.capabilities.filter(isString) : [],
+		auth,
+		...(Array.isArray(params.signup) ? { signup: params.signup.filter(isString) } : {}),
+		...(typeof params.welcome === 'string' && params.welcome.trim() ? { welcome: params.welcome } : {}),
+		// How it shows itself (§3.1): never what it is known by, its address (§1).
+		...(typeof params.title === 'string' ? { title: params.title } : {}),
+		...(typeof params.description === 'string' ? { description: params.description } : {}),
+		...(typeof params.avatar === 'string' ? { avatar: params.avatar } : {}),
+		...(isJsonObject(params.ext) ? { ext: params.ext } : {}),
+		...(isJsonObject(params.push) ? { push: params.push } : {}),
+		...(Array.isArray(params.status) ? { status: params.status.filter(isString) } : {}),
+		...(typeof params.ping === 'number' && Number.isFinite(params.ping) && params.ping > 0 ? { ping: params.ping } : {})
+	};
+}
 
 /**
  * How to render a user (§3.3): field by field, the kept object for its

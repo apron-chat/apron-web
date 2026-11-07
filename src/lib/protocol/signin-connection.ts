@@ -32,6 +32,8 @@ export class SignInConnection {
 	server?: JsonObject;
 	/** Why it closed, once it has. */
 	closed?: Error;
+	/** Something arrived on it, a `server` frame or not: an address that answers but never greets isn't an Apron server. */
+	heard = false;
 	/** Called once, when it closes or is closed (not when detached). */
 	onClose?: () => void;
 	private readonly pending = new Map<string, { resolve: (result: JsonObject) => void; reject: (cause: Error) => void; timer: ReturnType<typeof setTimeout> }>();
@@ -122,6 +124,7 @@ export class SignInConnection {
 	}
 
 	private receive(data: unknown): void {
+		this.heard = true;
 		if (this.buffered) {
 			this.buffered.push(data);
 			return;

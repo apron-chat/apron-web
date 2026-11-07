@@ -430,7 +430,13 @@ export const SCENES: Scene[] = [
 			await look();
 			await page.getByTestId('server-pane').getByRole('button', { name: 'Connect to another server…', exact: true }).click();
 			await expect(card).toBeVisible();
-			// Another server: Done becomes Connect.
+			// It opens at choosing the server; Continue on this one shows what it offers, beside Change.
+			await look();
+			await card.getByRole('button', { name: 'Continue', exact: true }).click();
+			await expect(page.getByTestId('connect-server')).toBeVisible();
+			await look();
+			await page.getByTestId('connect-server').getByRole('button', { name: 'Change', exact: true }).click();
+			// Another server: its address alone until Continue.
 			await page.getByTestId('server-url-input').fill('ws://127.0.0.1:9/ws');
 			await look();
 		}
