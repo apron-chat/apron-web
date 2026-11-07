@@ -25,5 +25,4 @@ describe('UnreadCount', () => {
 		const edited = render({ unread: 0, mentions: 1, noun: 'reply' })!;
 		expect([edited.textContent, edited.getAttribute('aria-label')]).toEqual(['@ 1', '1 unread reply, a mention of you']);
 	});
-
 });

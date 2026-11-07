@@ -27,7 +27,7 @@
 		unjoined?: boolean;
 		/**
 		 * Muted (§4.5 `mute` with its `room_id`, or its parent's): a bell-off at the end of the row, before its count, and its news stays quiet: no
-		 * bold name, no tint for a mention, and a grey count, mentions too.
+		 * bold name and a grey count, but for a mention of you, which bolds and tints it and shows the orange @ count as in a thread that isn't muted.
 		 */
 		muted?: boolean;
 		/** Unread replies from others: a bold name and an ink count. */
