@@ -23,6 +23,11 @@ export class UnreadTracker {
 	/** Unread arrivals per room (threads are rooms of their own). */
 	byRoom = $state<Record<string, number>>({});
 	total = $derived(Object.values(this.byRoom).reduce((sum, count) => sum + count, 0));
+	/**
+	 * The unread count outside the rooms you muted (§4.5), and threads of them: what the
+	 * tab title and the app badge show. A muted room keeps its own count in `byRoom`.
+	 */
+	alerting = $state(0);
 	private readonly shown = new Map<string, Set<string>>();
 	private readonly watermarks = new Map<string, string>();
 	private readonly arrivals = new Map<string, string[]>();
@@ -39,6 +44,7 @@ export class UnreadTracker {
 	 */
 	reset(): void {
 		this.byRoom = {};
+		this.alerting = 0;
 		this.shown.clear();
 		this.watermarks.clear();
 		this.arrivals.clear();
@@ -108,6 +114,8 @@ export class UnreadTracker {
 			if (count > 0) next[room.id] = count;
 		}
 		if (!sameCounts(this.byRoom, next)) this.byRoom = next;
+		const alerting = heardCount(next, rooms);
+		if (alerting !== this.alerting) this.alerting = alerting;
 	}
 
 	/**
@@ -143,6 +151,18 @@ function joinOf(room: RoomSnapshot, userId: string): string | undefined {
 		if (entry) return entry.joined ? records[index].log_id : undefined;
 	}
 	return undefined;
+}
+
+/** A per-room count added up over every room but those you muted (§4.5), and threads of them. */
+function heardCount(byRoom: Record<string, number>, rooms: readonly RoomSnapshot[]): number {
+	const muted = new Set(rooms.filter((room) => room.mutedUntil !== undefined).map((room) => room.id));
+	let total = 0;
+	for (const room of rooms) {
+		const count = byRoom[room.id];
+		if (count === undefined || muted.has(room.id) || (room.parentRoomId !== undefined && muted.has(room.parentRoomId))) continue;
+		total += count;
+	}
+	return total;
 }
 
 /** A per-room count added up over every room but `pane`, the one being read. */
