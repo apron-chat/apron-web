@@ -17,7 +17,7 @@
 	import { codeStillFor, returnUrl, type SentCode } from '$lib/ui/sign-in-link';
 	import type { SessionView } from '$lib/ui/session.svelte';
 	import {
-		CANCELLED_TRY_CREATE, UNUSABLE_VIEW, chooseView, firstScheme, passkeyChoice, passkeyMode, signInHint, signInView, signOutThen, unusableMessage, usableSchemes,
+		CANCELLED_TRY_CREATE, UNUSABLE_VIEW, chooseView, firstScheme, passkeyChoice, readsOnly, passkeyMode, signInHint, signInView, signOutThen, unusableMessage, usableSchemes,
 		type ConnectStep, type PasskeyMode, type SignOutHandler, type Scheme
 	} from '$lib/ui/sign-in';
 	import { loadLastSignIn, saveDisplayName, saveServerUrl } from '$lib/ui/storage';
@@ -124,6 +124,8 @@
 	/** Those this client can drive here (passkeys only where the browser has them); none, and there is no way in. */
 	let schemes = $derived(usableSchemes(offered, passkeyUnavailable));
 	let unusable = $derived(step === 'sign-in' && schemes.length === 0);
+	/** A server that only reads (a served archive): no name to ask, since it signs everyone in as its own. */
+	let reader = $derived(readsOnly(known));
 	/** How the server in the field was last signed in to here, if it offers that still: shown first, and marked. */
 	let lastUsed = $derived.by(() => {
 		const last = loadLastSignIn(normalizedInput);
@@ -168,6 +170,7 @@
 	let hint = $derived.by(() => {
 		if (step === 'choose') return greeting?.status === 'contacting' ? `Connecting to ${host ?? 'the server'}…` : '';
 		if (unusable) return '';
+		if (reader && chosen === 'guest') return 'Read-only: everyone reads here as the same guest, and nothing can be posted.';
 		return signInHint({ scheme: chosen, use, passkey: passkeyChosen, registered, phase: view.phase, here, guest: here && !registered, guestReadOnly, host });
 	});
 	$effect(() => {
@@ -282,7 +285,7 @@
 				finish();
 				return;
 			case 'connect':
-				connect(normalized);
+				connect(normalized, undefined, reader ? '' : displayName);
 				return;
 		}
 	}
@@ -319,13 +322,19 @@
 		error = '';
 		const normalized = checkedUrl();
 		if (!normalized) return;
-		if (normalized === client.url && session.server) {
-			choosing = false;
-			return;
+		let server = normalized === client.url ? session.server : undefined;
+		if (!server) {
+			const looked = await greetings.look(client, normalized);
+			// The field moved on meanwhile: what it names now is for another tap.
+			if (looked.status !== 'known' || normalizedInput !== normalized) return;
+			server = looked.server;
 		}
-		const looked = await greetings.look(client, normalized);
-		// The field moved on meanwhile: what it names now is for another tap.
-		if (looked.status === 'known' && normalizedInput === normalized) choosing = false;
+		choosing = false;
+		// A server that only reads asks nothing more: Continue was the tap that joins it, as a guest, with no name.
+		if (readsOnly(server)) {
+			if (here) finish();
+			else if (serverUrl()) connect(normalized, undefined, '');
+		}
 	}
 
 	/** Change: back to choosing the server, from its address; a code asked for there is given up. */
@@ -363,9 +372,13 @@
 		connect(normalized, action);
 	}
 
-	/** Opens the socket to the server in the form; the effect above carries on once it has settled, with `then` if given. */
-	function connect(normalized: string, then?: 'login' | 'register'): void {
-		client.setDisplayName(displayName);
+	/**
+	 * Opens the socket to the server in the form, named `name` (the display
+	 * name by default); the effect above carries on once it has settled, with
+	 * `then` if given.
+	 */
+	function connect(normalized: string, then?: 'login' | 'register', name = displayName): void {
+		client.setDisplayName(name);
 		joinedAsGuest = false;
 		intent = then;
 		// A session held for a sign-in reconnects in place, keeping what the page holds for it.
@@ -551,7 +564,7 @@
 	label="Sign in" phase={view.phase} onsubmit={submit}
 	header={top} {schemes} {lastUsed} fields={step === 'sign-in' && !unusable} scheme={chosen} onscheme={(candidate) => (scheme = candidate as Scheme)}
 	passkeyChoice={chosen === 'webauthn' && passkeyChoice(use) && !(here && registered)} passkeyMode={passkeyChosen} onpasskeymode={(value) => { passkeyChosen = value; error = ''; notice = ''; }} passkeyNudge={error === CANCELLED_TRY_CREATE ? 'register' : undefined}
-	bind:token bind:email bind:code bind:name={() => (chosen === 'token' ? tokenName : displayName), (value) => (chosen === 'token' ? (tokenName = value) : (displayName = value))} askName={!passkeyLogin}
+	bind:token bind:email bind:code bind:name={() => (chosen === 'token' ? tokenName : displayName), (value) => (chosen === 'token' ? (tokenName = value) : (displayName = value))} askName={!passkeyLogin && !reader}
 	sent={codeSentTo} onrestart={() => { codeSent = undefined; code = ''; error = ''; client.cancelSignInCode(); }}
 	hint={view.phase === 'ready' && notice ? notice : hint} hintStatus={view.phase === 'ready'} error={errorText} {busy}
 	submit={view.primary.label} submitTestid={view.primary.action}

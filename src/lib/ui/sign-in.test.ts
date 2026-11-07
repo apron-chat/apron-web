@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { chooseView, firstScheme, passkeyChoice, signedInScheme, passkeyMode, signInHint, signInView, signOutThen, unusableMessage, usableSchemes, versionWarning, type SignInInput } from './sign-in';
+import { chooseView, firstScheme, passkeyChoice, readsOnly, signedInScheme, passkeyMode, signInHint, signInView, signOutThen, unusableMessage, usableSchemes, versionWarning, type SignInInput } from './sign-in';
 
 /** Connected to the server in the form as a guest, with passkeys that both sign in and sign up. */
 const guestHere: SignInInput = {
@@ -187,5 +187,14 @@ describe('the scheme shown first', () => {
 		expect(signedInScheme({ authenticated: true, passkeySession: true, signedInWith: 'email' })).toBe('email');
 		expect(signedInScheme({ authenticated: true, passkeySession: true, signedInWith: 'link' })).toBeUndefined();
 		expect(signedInScheme({ authenticated: true, passkeySession: true })).toBeUndefined();
+	});
+});
+
+describe('a server that only reads', () => {
+	it('is a served archive offering guests (ARCHIVE.md §4), as its greeting says; nothing else is known to be before signing in', () => {
+		expect(readsOnly({ apron: 10, auth: ['guest'], capabilities: ['rooms', 'ext:permissions', 'ext:archive'] })).toBe(true);
+		expect(readsOnly({ apron: 10, auth: ['guest'], capabilities: ['rooms', 'ext:permissions'] })).toBe(false);
+		expect(readsOnly({ apron: 10, auth: ['token'], capabilities: ['ext:archive'] })).toBe(false);
+		expect(readsOnly(undefined)).toBe(false);
 	});
 });

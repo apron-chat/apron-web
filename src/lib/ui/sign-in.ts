@@ -225,6 +225,16 @@ export function firstScheme(schemes: readonly Scheme[], asked: Scheme | undefine
 }
 
 /**
+ * A server that only reads, as its greeting says: a served archive
+ * (`ext:archive`, ARCHIVE.md §4), which signs every guest in as the
+ * archive's own `you`, allowed only to read. Nothing typed here would be
+ * used, so Continue joins it as a guest without asking anything more.
+ */
+export function readsOnly(server: ServerParams | undefined): boolean {
+	return Boolean(server?.capabilities?.includes('ext:archive') && server.auth.includes('guest'));
+}
+
+/**
  * What to say about a server speaking another version of the protocol
  * (`apron`, §3.1): some features may not work, and the client carries on.
  */

@@ -253,6 +253,20 @@ test.describe('a link to a server not used here', () => {
 		expect(await page.evaluate(() => JSON.parse(localStorage.getItem('apron.lastSignIn') ?? '{}'))).toMatchObject({ [PIPER]: 'guest' });
 	});
 
+	test('joins a server that only reads (a served archive) on Continue, asking no name and sending none', async ({ preview, page }) => {
+		const sent: Record<string, any>[] = [];
+		await openLink(preview, { sent, servers: { [PIPER]: { auth: ['guest'], signup: undefined, title: 'Pied Piper', capabilities: ['history', 'rooms', 'ext:permissions', 'ext:archive'], ext: { archive: { server: PIPER } } } } });
+		const form = page.getByRole('form', { name: 'Sign in' });
+		await expect(page.getByTestId('connect-name-input')).toHaveCount(0);
+		const before = sent.length;
+		await form.getByRole('button', { name: 'Continue', exact: true }).click();
+		await expect(form).toHaveCount(0);
+		await expect(page.getByTestId('connection-status')).toHaveText('Connected');
+		const after = sent.slice(before);
+		expect(after.filter((frame) => frame.method === 'auth').map((frame) => frame.params.scheme)).toEqual(['guest']);
+		expect(after.filter((frame) => frame.method === 'me')).toEqual([]);
+	});
+
 	test('says when the address isn’t an Apron server, and Cancel stays where the page was', async ({ preview, page }) => {
 		await openLink(preview, { servers: { [PIPER]: { auth: [] } } });
 		const form = page.getByRole('form', { name: 'Sign in' });

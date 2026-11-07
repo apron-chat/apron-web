@@ -1759,7 +1759,10 @@ way this device last signed in to that server, guest included and kept through s
 else the server's first;
 Passkey, below; Email, External and Token, further down) that this app can use here: with one there is no
 **Sign in with** row, and with none (only passkeys in a browser without them, or schemes this app doesn't know) it
-says which the server asks for and offers **Change server**. A server speaking another protocol version gets a
+says which the server asks for and offers **Change server**. A server whose greeting says it only reads, a served
+archive (`ext:archive` with `guest`, [ARCHIVE.md §4](../ARCHIVE.md#4-serving)), which signs every guest in as its own
+`you`, asks nothing more: **Continue** joins it as a guest, with no display name and no `me` after. Whether any other
+server lets a guest write is only known once signed in (`you.ext.permissions`), so the name is asked there as usual. A server speaking another protocol version gets a
 warning, and signing in goes on. Asked to sign in (the profile, the read-only bar, a held session), the screen opens
 at this second step for the connected server. Once the server in the field
 has answered, the top of the form shows it as it shows itself
