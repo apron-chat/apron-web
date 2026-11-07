@@ -181,6 +181,32 @@ describe('persisted session tokens', () => {
 		expect(snapshot.rooms.find((room) => room.id === 'general')?.notices).toEqual([]);
 	});
 
+	it('keeps each server its own session across switching servers, and resumes it on switching back', async () => {
+		const { client } = startClient({ storage, onSnapshot: (next) => (snapshot = next) });
+		await latest().greet([], { auth: ['token', 'guest'], token: 'here-1', you: { user_id: 'ada' } });
+		expect(storage.get('apron.session:ws://fake.test/')).toBe('here-1');
+
+		// To another server: signed in there anew, and this one's token stays where it was, and isn't sent there.
+		client.setUrl('ws://other.test/');
+		await vi.advanceTimersByTimeAsync(0);
+		expect(latest().url).toBe('ws://other.test/');
+		await latest().greet([], { auth: ['token', 'guest'], token: 'there-1', you: { user_id: 'bob' } });
+		expect(authParams()).toEqual(expect.objectContaining({ scheme: 'guest' }));
+		expect(authParams()).not.toHaveProperty('token');
+		expect(storage.get('apron.session:ws://other.test/')).toBe('there-1');
+		expect(storage.get('apron.session:ws://fake.test/')).toBe('here-1');
+
+		// Back again: resumed with its own token, as its own account.
+		client.setUrl('ws://fake.test/');
+		await vi.advanceTimersByTimeAsync(0);
+		expect(latest().url).toBe('ws://fake.test/');
+		await latest().greet([], { auth: ['token', 'guest'], you: { user_id: 'ada' } });
+		expect(authParams()).toEqual(expect.objectContaining({ scheme: 'token', token: 'here-1' }));
+		expect(snapshot.you?.user_id).toBe('ada');
+		expect(storage.get('apron.session:ws://other.test/')).toBe('there-1');
+		client.stop();
+	});
+
 	it('forgets a stored token the server rejects and on sign-out', async () => {
 		storage.set('apron.session:ws://fake.test/', 'stale');
 		const { client } = startClient({ storage, onSnapshot: (next) => (snapshot = next) });
