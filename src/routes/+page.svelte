@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { installNudge, messageEditor, newPrivateDialog, newThreadDialog, profileCardHost, reactorsPopover, roomEditor, searchDialog, selectionBar, serverPaneHost, shortcutsDialog, signInLinkDialog } from '$lib/components/lazy';
+	import { installNudge, mentionAddNudge, messageEditor, newPrivateDialog, newThreadDialog, profileCardHost, reactorsPopover, roomEditor, searchDialog, selectionBar, serverPaneHost, shortcutsDialog, signInLinkDialog } from '$lib/components/lazy';
 	import { onMount, tick, untrack } from 'svelte';
 	import { fromAction } from 'svelte/attachments';
 	import { pushState, replaceState } from '$app/navigation';
@@ -12,7 +12,8 @@
 	import { destinationUrl, readDestination, type Destination } from '$lib/ui/address';
 	import { readApronLink, writeApronLink, type ApronLink } from '$lib/ui/apron-link';
 	import type { Embed, MessageRecord } from '$lib/protocol/types';
-	import { isJsonObject } from '$lib/protocol/types';
+	import { isJsonObject, isSystemId } from '$lib/protocol/types';
+	import { markdownRoles } from '$lib/protocol/markdown';
 	import Composer from '$lib/components/Composer.svelte';
 	import ReadOnlyBar from '$lib/components/ReadOnlyBar.svelte';
 	import ConnectScreen from '$lib/components/ConnectScreen.svelte';
@@ -48,7 +49,7 @@
 	import PrivateIntro from '$lib/design/components/PrivateIntro.svelte';
 	import AddedBanner from '$lib/design/components/AddedBanner.svelte';
 	import { ArrivalWatch, addRoomMembers, othersIn, reachesStart } from '$lib/ui/private-rooms';
-	import { couldNotAdd } from '$lib/ui/members';
+	import { absentMentions, addMembers, couldNotAdd, isGuest, unheldRoleHolders } from '$lib/ui/members';
 	import { faceOf, roomFaces } from '$lib/ui/faces';
 	import { receiptsByMessage, steadyReceipts } from '$lib/ui/receipts';
 	import { attachmentLimits, composerAction } from '$lib/ui/commands';
@@ -308,6 +309,12 @@
 	let displayName = $state('');
 	/** The `user_id`s the composer's chips mention (§3.5), sent as `body.mentions`. */
 	let composerMentions = $state<string[]>([]);
+	/**
+	 * A message held back at Send because it mentions people who aren't in the room or thread it goes to: the ask to
+	 * add them first (MentionAddPrompt), until it's answered, put away, the draft changes, or the pane does. `text` and
+	 * `files` (the staged files' ids): the draft it asked about, which Add and send sends only if it is still that draft.
+	 */
+	let mentionAsk = $state<{ roomId: string; userIds: string[]; busy: boolean; text: string; files: string } | undefined>();
 	let connectOpen = $state(false);
 	/** Disconnected from the server pane: the connect screen can't be cancelled back to it. */
 	let disconnected = $state(false);
@@ -1850,6 +1857,7 @@
 		selection.leave();
 		if (typingIn && typingIn.room !== (thread ?? roomId)) stopTyping();
 		composer?.reset();
+		if (!mentionAsk?.busy) mentionAsk = undefined;
 		mentions.clearUnseen();
 		mentions.clearRoom(roomId);
 		if (thread) mentions.clearRoom(thread);
@@ -1962,6 +1970,8 @@
 	// --- Composing ---
 
 	function composerInput(): void {
+		// The draft changed under the ask: Send asks again about what it mentions then.
+		if (mentionAsk && !mentionAsk.busy) mentionAsk = undefined;
 		if (!client || !paneRoom) return;
 		drafts.saveText();
 		// A live message shows itself as it is typed: no typing indicator besides.
@@ -1987,15 +1997,74 @@
 	}
 
 	/**
+	 * Holds the draft back when it mentions people who aren't in the open room or thread, and you may add them: asks
+	 * whether to first (`mentionAsk`). Those it mentions are the people its chips name; a role (`@&role`) mentions
+	 * those here who hold it, so it asks about no one, unless no one else here holds it: then about everyone the
+	 * session knows with it. Never for a command, which says itself what it does with whom it names: only a draft that
+	 * goes as a message. True when it asked, and the draft waits.
+	 */
+	function askToAddMentioned(room: RoomSnapshot, text: string): boolean {
+		if (!canAddMembers || session.snapshot.memberChangesUnsupported) return false;
+		const action = composerAction(text, { command: session.capabilities.command, rooms: false });
+		if (action.kind !== 'message') return false;
+		const skip = (userId: string) => directory.isMe(userId) || isSystemId(userId) || isGuest(directory.person({ user_id: userId }) ?? { user_id: userId });
+		const memberIds = new Set((room.members ?? []).map((member) => member.user_id));
+		const withRoles = unheldRoleHolders(markdownRoles(action.text), Object.values(session.snapshot.users), memberIds, (userId) => directory.isMe(userId));
+		const userIds = absentMentions([...composerMentions, ...withRoles], room, skip);
+		if (!userIds.length) return false;
+		mentionAsk = { roomId: room.id, userIds, busy: false, text, files: stagedIds() };
+		return true;
+	}
+
+	/** The draft's staged files, as `mentionAsk.files` keeps them. */
+	function stagedIds(): string {
+		return drafts.files.map((file) => file.id).join(' ');
+	}
+
+	/**
+	 * The ask's Add and send: adds them (`room_join`, §4.2.2), then sends the draft, saying who the server wouldn't add.
+	 * Send waits meanwhile in that pane (`holdSend`). The draft goes only if, once they're in, its pane is open and it
+	 * is still the draft asked about; else it waits there to be sent, and asked about, again.
+	 */
+	async function addMentionedAndSend(): Promise<void> {
+		const ask = mentionAsk;
+		if (!client || !ask || ask.busy) return;
+		mentionAsk = { ...ask, busy: true };
+		const refused = await addMembers(client, ask.roomId, ask.userIds);
+		if (mentionAsk?.roomId === ask.roomId) mentionAsk = undefined;
+		if (refused.length) feedback.error(couldNotAdd(refused, (userId) => directory.name({ user_id: userId })));
+		if (paneRoom?.id !== ask.roomId) return;
+		composer?.focus();
+		if (drafts.text !== ask.text || stagedIds() !== ask.files) return;
+		// It goes, whoever was added, and mentions them, so a role no one here held mentions its holders now that
+		// they're here.
+		sendMessage(true, ask.userIds.filter((userId) => !refused.some((refusal) => refusal.userId === userId)));
+	}
+
+	/** Escape: an ask that isn't adding yet goes away, the draft unsent. True when there was one. */
+	function dismissMentionAsk(): boolean {
+		if (!mentionAsk || mentionAsk.busy) return false;
+		mentionAsk = undefined;
+		return true;
+	}
+
+	/**
 	 * Sends the composer's text: a message with the draft's mentions (§3.5) and
 	 * previews of its GitHub links as `link` embeds (§4.8.1), or
 	 * with capability `command` a command (§4.1), which `/nick`, `/join`, `/leave`,
 	 * `/topic`, `/kick` and `/invite` turn into the requests they spell. A
 	 * command's failure shows as a local notice in the pane, where its replies
 	 * land too.
+	 *
+	 * `asked`: the ask to add who it mentions was answered (MentionAddPrompt), so it goes as it is; `added`, whom that
+	 * added, which it mentions besides its chips, such as the holders of a role no one here held when it was written.
 	 */
-	function sendMessage(): void {
+	function sendMessage(asked = false, added: readonly string[] = []): void {
 		if (!client || !paneRoom || !canCompose) return;
+		// Adding who it mentions: it goes once they're in (`addMentionedAndSend`).
+		if (mentionAsk?.busy && mentionAsk.roomId === paneRoom.id) return;
+		// An ask adding elsewhere carries on there.
+		if (!mentionAsk?.busy) mentionAsk = undefined;
 		if (composingLive) {
 			liveComposer?.send();
 			composer?.focus();
@@ -2017,16 +2086,18 @@
 			return;
 		}
 		if (drafts.files.length) {
-			void sendFiles();
+			if (!asked && askToAddMentioned(paneRoom, drafts.text)) return;
+			void sendFiles(added);
 			return;
 		}
 		if (!drafts.text.trim()) return;
+		if (!asked && askToAddMentioned(paneRoom, drafts.text)) return;
 		const chat = client;
 		const draft = drafts.text;
 		const roomId = paneRoom.id;
 		const reply = drafts.reply;
 		const originKey = draftKey(roomId);
-		const mentions = composerMentions;
+		const mentions = [...new Set([...composerMentions, ...added])];
 		const dismissed = drafts.dismissed;
 		const action = composerAction(draft, { command: snapshot.capabilities.command, rooms: session.canManageRooms, members: !snapshot.memberChangesUnsupported, append: snapshot.capabilities['embed:append'] }, mentions);
 		if (action.kind === 'live') {
@@ -2152,6 +2223,8 @@
 			});
 		}
 		drafts.stage(staged);
+		// The draft changed under the ask: Send asks again about what it mentions then.
+		if (!mentionAsk?.busy) mentionAsk = undefined;
 		composer?.focus();
 	}
 
@@ -2162,7 +2235,8 @@
 	 * takes them as arguments instead (§4.1). A failed send gives the draft
 	 * back, files and all.
 	 */
-	async function sendFiles(): Promise<void> {
+	/** `added`: whom the ask to add who it mentions added, which it mentions besides its chips (`sendMessage`). */
+	async function sendFiles(added: readonly string[] = []): Promise<void> {
 		if (!client || !paneRoom || !canCompose || !session.snapshot.capabilities['embed:upload']) return;
 		const chat = client;
 		const room = paneRoom;
@@ -2178,7 +2252,7 @@
 		const limits = attachmentLimits(action, media);
 		const refit = limits !== media.upload ? staged.map(({ file }) => prepareUpload(file, { limits })) : undefined;
 		const text = action.kind === 'message' ? action.text : draft;
-		const mentions = composerMentions;
+		const mentions = [...new Set([...composerMentions, ...added])];
 		const dismissed = drafts.dismissed;
 		const embeds = command ? [] : linkPreviews.embeds(text, dismissed);
 		const options = { ...(reply ? { replyTo: reply } : {}), ...(mentions.length ? { mentions } : {}), ...(embeds.length ? { embeds } : {}) };
@@ -2946,6 +3020,7 @@
 		if (!paneRoom || !canSelect(event)) return;
 		editingId = undefined;
 		composer?.reset();
+		if (!mentionAsk?.busy) mentionAsk = undefined;
 		selection.begin(paneRoom.id, event.message_id);
 	}
 
@@ -3366,6 +3441,20 @@
 			{:else if session.readOnly}
 				<ReadOnlyBar guest={!session.passkeySession} {passkeyUnavailable} archive={archiveNote} onsignin={() => openConnect({ signIn: true })} />
 			{:else}
+				<!--
+					The draft Send held back, for mentioning people who aren't here: add them first, or send it as it is. Here,
+					not beside the timeline's floating notices, which a scroll redraws (perf budget: scroll-timeline). A live
+					region that stays, so the ask is read out as it arrives while the focus stays in the composer.
+				-->
+				<div class="ap-shell-ask" aria-live="polite">
+					{#if mentionAsk && mentionAsk.roomId === paneRoom?.id && mentionAddNudge.component}
+						{@const MentionAddPrompt = mentionAddNudge.component}
+						<MentionAddPrompt
+							names={mentionAsk.userIds.map((userId) => directory.name({ user_id: userId }))} place={activeThread ? threadTitle(activeThread) : activeRoom.title} thread={Boolean(activeThread)}
+							busy={mentionAsk.busy} onadd={() => void addMentionedAndSend()} onsend={() => { sendMessage(true); composer?.focus(); }} oncancel={() => { dismissMentionAsk(); composer?.focus(); }}
+						/>
+					{/if}
+				</div>
 				<Composer
 					bind:this={composer}
 					bind:value={drafts.text}
@@ -3373,7 +3462,7 @@
 					bind:dismissed={drafts.dismissed}
 					placeholder={activeThread ? `Reply in ${threadTitle(activeThread)}` : `Message ${activeRoom.title}`}
 					disabled={!paneSteady || session.readOnly}
-					holdSend={!canCompose}
+					holdSend={!canCompose || (mentionAsk?.busy === true && mentionAsk.roomId === paneRoom?.id)}
 					canUpload={session.capabilities['embed:upload'] && !composingLive}
 					live={composingLive}
 					uploadLimits={serverMedia(session.server).upload}
@@ -3381,7 +3470,7 @@
 					{people}
 					rooms={roomSuggestions}
 					reply={drafts.reply ? replyPreview(drafts.reply) : undefined}
-					oninput={composerInput} onsend={sendMessage} files={drafts.files} onfiles={stageFiles} onunstage={(id) => drafts.unstage(id)} onrename={(id, title) => drafts.rename(id, title)} oncancelreply={cancelReply} onup={focusNewestMessage}
+					oninput={composerInput} onsend={() => sendMessage()} files={drafts.files} onfiles={stageFiles} onunstage={(id) => { drafts.unstage(id); if (!mentionAsk?.busy) mentionAsk = undefined; }} onrename={(id, title) => drafts.rename(id, title)} oncancelreply={cancelReply} onescape={dismissMentionAsk} onup={focusNewestMessage}
 					onmention={() => { if (!paneRoom?.joined) listMembers(MEMBERS_FRESH_MS); }}
 					waitUntil={composerWait}
 				/>

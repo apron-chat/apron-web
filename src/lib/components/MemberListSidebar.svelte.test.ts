@@ -252,4 +252,45 @@ describe('MemberListSidebar', () => {
 		render([ada]);
 		expect(dom.queryByRole('button', 'Add member')).toBeNull();
 	});
+
+	it('adds everyone with a role by @role, leaving guests out while Hide guests is ticked, the box shown only with guests to hide', async () => {
+		const joinRoom = vi.fn(() => ({ promise: Promise.resolve({}) }));
+		const known = [ada, { user_id: 'cy', name: 'Cy', roles: ['mod'] }, { user_id: 'guest_7', name: 'Visitor', roles: ['mod'] }, { user_id: 'di', name: 'Di', roles: ['ops_team'] }];
+		render([ada], { users: Object.fromEntries(known.map((user) => [user.user_id, user])) }, true, { joinRoom });
+		document.querySelector<HTMLButtonElement>('.ap-memberlist-addtoggle')!.click();
+		flushSync();
+		const names = () => [...document.querySelectorAll('[data-testid="add-people"] .ap-pick-who-name')].map((name) => name.textContent);
+		const chips = () => [...document.querySelectorAll('.ap-pick-chip-name')].map((chip) => chip.textContent);
+		const field = byLabel('Add');
+		expect(names()).toEqual(['Cy', 'Di']);
+		const hide = byLabel('Hide guests') as HTMLInputElement;
+		expect(hide.checked).toBe(true);
+		// It sits at the footer's start, before Cancel and Add.
+		expect(hide.closest('.ap-dialog-foot')?.firstElementChild).toBe(hide.closest('label'));
+		// @mod's row picks its holders but the guest, together.
+		dom.type(field, '@mod');
+		expect(names()).toEqual(['@mod']);
+		dom.press(field, 'Enter');
+		flushSync();
+		expect(chips()).toEqual(['Cy']);
+		// Shown again, the guest is offered, and picking the role again adds them after.
+		hide.click();
+		flushSync();
+		expect(names()).toEqual(['Cy', 'Di', 'Visitor']);
+		dom.type(field, '@mod');
+		dom.press(field, 'Enter');
+		flushSync();
+		expect(chips()).toEqual(['Cy', 'Visitor']);
+		// A role that starts with what's typed doesn't hide adding someone by that exact @user_id.
+		dom.type(field, '@ops');
+		expect(names()).toEqual(['@ops_team', 'ops']);
+		dom.type(field, '');
+		await dom.submit(document.querySelector<HTMLFormElement>('dialog form')!);
+		expect(joinRoom.mock.calls).toEqual([['general', 'cy'], ['general', 'guest_7']]);
+		dom.unmount();
+		render([ada], { users: Object.fromEntries([ada, { user_id: 'cy', name: 'Cy' }].map((user) => [user.user_id, user])) }, true, { joinRoom });
+		document.querySelector<HTMLButtonElement>('.ap-memberlist-addtoggle')!.click();
+		flushSync();
+		expect(queryByText('Hide guests')).toBeNull();
+	});
 });

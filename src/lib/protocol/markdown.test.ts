@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import type { MediaCheck } from './sanitize';
-import { markdownText, renderBio, renderMarkdown, renderPlain, type EmojiResolver, type LinkResolver, type MentionResolver, mentionSegments } from './markdown';
+import { markdownRoles, markdownText, renderBio, renderMarkdown, renderPlain, type EmojiResolver, type LinkResolver, type MentionResolver, mentionSegments } from './markdown';
 
 const resolve: MentionResolver = (id) => {
 	if (id === 'alice') return { kind: 'user', id, name: 'Alice Chen' };
@@ -99,6 +99,14 @@ describe('mentions (Appendix A.3)', () => {
 		// A plain body is escaped around its mentions, and without a resolver there are none.
 		expect(renderPlain('<b>@alice</b>', resolve)).toBe('&lt;b&gt;<button type="button" class="ap-mention" data-user-id="alice" title="@alice">@Alice Chen</button>&lt;/b&gt;');
 		expect(renderMarkdown('@alice is here')).toBe('<p>@alice is here</p>\n');
+	});
+});
+
+describe('the roles a message mentions', () => {
+	it('finds them where they render: outside code and links, once each, in order', () => {
+		expect(markdownRoles('@&mod and @&admin, again @&mod, not a@&ops nor @ada')).toEqual(['mod', 'admin']);
+		expect(markdownRoles('Type `@&admin` to reach them, or [@&ops](https://example.com)\n\n```\n@&mod\n```\n\n**@&oncall**')).toEqual(['oncall']);
+		expect(markdownRoles('no roles here')).toEqual([]);
 	});
 });
 

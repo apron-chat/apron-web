@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Check from '@lucide/svelte/icons/check';
+	import Users from '@lucide/svelte/icons/users';
 	import X from '@lucide/svelte/icons/x';
 	import Avatar from './Avatar.svelte';
 	import type { PickPerson } from './types';
@@ -7,7 +8,9 @@
 	/**
 	 * Picking people, for a Dialog's form (PrivateRoomForm, AddMembersForm): a field holding them as chips, with the
 	 * people who match what's typed below it as a listbox (↑ ↓ move, Enter picks, Backspace in an empty field takes the
-	 * last chip back). Enter with no option under the keyboard submits the form around it.
+	 * last chip back). Enter with no option under the keyboard submits the form around it. A row can be a set of people
+	 * (`group`), such as everyone with a role: picking it is the form's to say, and it has a check once all of them are
+	 * chips.
 	 */
 	interface Props {
 		/** The field's label, such as "To". */
@@ -41,6 +44,8 @@
 	const uid = $props.id();
 	const listId = `${uid}-people`;
 	const picked = $derived(new Set(chosen.map((person) => person.user_id)));
+	/** A row's key: a set's has a space, which no `user_id` has (§2.4), so a set never shares one with a person. */
+	const keyOf = (person: PickPerson) => (person.group ? `group ${person.user_id}` : person.user_id);
 	/** The option the keyboard is on; none until an arrow moves to one, or something is typed. */
 	let active = $state(-1);
 	let input = $state<HTMLInputElement | undefined>();
@@ -110,15 +115,19 @@
 </div>
 {#if listed}
 	<ul class="ap-pick-list" id={listId} role="listbox" aria-label="People" aria-multiselectable="true" data-testid={listTestid} bind:this={list}>
-		{#each people as person, i (person.user_id)}
-			{@const chosenHere = picked.has(person.user_id)}
+		{#each people as person, i (keyOf(person))}
+			{@const chosenHere = person.group ? person.group.length > 0 && person.group.every((id) => picked.has(id)) : picked.has(person.user_id)}
 			<!-- The field's combobox takes the keys for its options (↑ ↓, Enter), which keep the focus out of the list. -->
 			<!-- svelte-ignore a11y_click_events_have_key_events -->
 			<li
 				id="{listId}-{i}" role="option" aria-selected={chosenHere} class={['ap-pick-row', i === active && 'ap-pick-row-active', chosenHere && 'ap-pick-row-on']}
 				onmousedown={(event) => event.preventDefault()} onclick={() => choose(person)} onmouseenter={() => (active = i)}
 			>
-				<Avatar name={person.name || person.user_id} src={person.src} hue={person.hue} size="md" status={person.status} statusLabel={person.statusLabel} />
+				{#if person.group}
+					<span class="ap-pick-group-glyph" aria-hidden="true"><Users size={18} /></span>
+				{:else}
+					<Avatar name={person.name || person.user_id} src={person.src} hue={person.hue} size="md" status={person.status} statusLabel={person.statusLabel} />
+				{/if}
 				<span class="ap-pick-who"><bdi class="ap-pick-who-name">{person.name || person.user_id}</bdi><small>{person.detail ?? `@${person.user_id}`}</small></span>
 				{#if chosenHere}<Check class="ap-pick-check" size={16} aria-hidden="true" />{:else if person.tag}<span class="ap-pick-tag">{person.tag}</span>{/if}
 			</li>

@@ -154,6 +154,24 @@ function markdown(source: string): string {
 }
 
 /**
+ * The roles a markdown body mentions (`@&role`, Appendix A.3) where it renders them: outside code and links, as
+ * `linkText` skips them. Once each, in order. A role typed whole counts though no chip names it.
+ */
+export function markdownRoles(source: string): string[] {
+	const roles = new Set<string>();
+	let codeDepth = 0;
+	for (const part of markdown(withoutBidiOverrides(source)).split(/(<[^>]*>)/)) {
+		if (part.startsWith('<')) {
+			if (/^<(code|pre|a)[\s>]/i.test(part)) codeDepth += 1;
+			else if (/^<\/(code|pre|a)\s*>$/i.test(part) && codeDepth > 0) codeDepth -= 1;
+		} else if (codeDepth === 0) {
+			for (const match of part.matchAll(ESCAPED_MENTION)) if (match[1] !== undefined) roles.add(match[1]);
+		}
+	}
+	return [...roles];
+}
+
+/**
  * Markdown rendering with raw HTML and unsafe URL schemes disabled, keeping
  * typed line breaks. Without a DOM to sanitize with (tests, prerendering) the
  * body is rendered as plain text instead, which needs no sanitizing. Like
