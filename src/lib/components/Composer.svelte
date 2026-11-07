@@ -10,6 +10,7 @@
 	import { loadableOg } from './embeds/og';
 	import { pastedFiles } from '$lib/ui/file-transfer';
 	import { clockLabel } from '$lib/ui/time';
+	import { handheld } from '$lib/ui/handheld';
 	import type { StagedFile as Staged } from '$lib/ui/pane-drafts.svelte';
 	import MentionText from './MentionText.svelte';
 	import Embed from './embeds/Embed.svelte';
@@ -106,7 +107,8 @@
 	let previewing = $state(false);
 	/** Ctrl or ⌘, for the full panel's keys as this platform writes them. */
 	const mod = /Mac|iPhone|iPad/.test(globalThis.navigator?.platform ?? '') ? '⌘' : 'Ctrl';
-	const sendKeys = [mod, 'Enter'];
+	/** Shown at the full panel's foot; not on a phone or tablet, whose keyboard has no Ctrl and whose Enter starts a line anyway. */
+	const sendKeys = handheld() ? undefined : [mod, 'Enter'];
 
 	let recording = $derived(recorder.phase === 'recording');
 	/** The file picker's `accept`: the patterns the server takes, unless one is any type. */
