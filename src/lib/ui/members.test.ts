@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { addMembers, couldNotAdd, memberSections, userIdToAdd } from './members';
+import { addMembers, couldNotAdd, isGuest, memberSections, roleSets, userIdToAdd } from './members';
 
 describe('adding a member', () => {
 	it('takes exactly the user_id typed, with or without @, and never a display name, which isn’t unique', () => {
@@ -21,6 +21,35 @@ describe('adding a member', () => {
 		expect(refused).toEqual([{ userId: 'carol', message: 'In too many private rooms.' }]);
 		expect(couldNotAdd([...refused, { userId: 'dev', message: 'Unknown user' }], (id) => id.toUpperCase()))
 			.toBe('Couldn’t add CAROL: In too many private rooms. Couldn’t add DEV: Unknown user.');
+	});
+});
+
+describe('who is offered to add', () => {
+	it('leaves out guests: a guest_ user_id (§3.2) or the guest role', () => {
+		expect(isGuest({ user_id: 'guest_1234' })).toBe(true);
+		expect(isGuest({ user_id: 'ada', roles: ['guest'] })).toBe(true);
+		expect(isGuest({ user_id: 'ada', roles: ['admin'] })).toBe(false);
+		expect(isGuest({ user_id: 'guestbook' })).toBe(false);
+		expect(isGuest({ user_id: 'preview_guest' })).toBe(false);
+	});
+
+	it('offers everyone with a role an @ names, the role named exactly first, then the most held', () => {
+		const people = [
+			{ user_id: 'ada', roles: ['mod', 'admin'] },
+			{ user_id: 'bob', roles: ['moderator', 'mod', 'mod'] },
+			{ user_id: 'cy', roles: ['moderator', 'night shift'] },
+			{ user_id: 'dee', roles: ['moderator'] },
+			{ user_id: 'eve' }
+		];
+		expect(roleSets(people, '@mod', 5)).toEqual([{ role: 'mod', userIds: ['ada', 'bob'] }, { role: 'moderator', userIds: ['bob', 'cy', 'dee'] }]);
+		expect(roleSets(people, '@MO', 5)).toEqual([{ role: 'moderator', userIds: ['bob', 'cy', 'dee'] }, { role: 'mod', userIds: ['ada', 'bob'] }]);
+		expect(roleSets(people, '@&admin', 5)).toEqual([{ role: 'admin', userIds: ['ada'] }]);
+		expect(roleSets(people, ' &admin ', 5)).toEqual([{ role: 'admin', userIds: ['ada'] }]);
+		expect(roleSets(people, '@mod', 1)).toEqual([{ role: 'mod', userIds: ['ada', 'bob'] }]);
+		// A name without an @ names no role; nor does a bare @, and one with a space can't be written @&role.
+		expect(roleSets(people, 'mod', 5)).toEqual([]);
+		expect(roleSets(people, '@', 5)).toEqual([]);
+		expect(roleSets(people, '@night', 5)).toEqual([]);
 	});
 });
 

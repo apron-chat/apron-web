@@ -1,4 +1,6 @@
 import type { ChatClient } from '$lib/protocol/client';
+import { isMentionableRole } from '$lib/protocol/markdown';
+import type { Identity } from '$lib/protocol/types';
 
 /**
  * The `user_id` typed to add someone to a room (§4.2.2): exactly that ID,
@@ -10,6 +12,48 @@ import type { ChatClient } from '$lib/protocol/client';
 export function userIdToAdd(typed: string): string | undefined {
 	const id = typed.trim().replace(/^@/, '');
 	return id && !/[\s\p{Cc}]/u.test(id) ? id : undefined;
+}
+
+/**
+ * Whether `user` signed in as a guest, as far as a client can tell: the server gives them a `user_id` by the
+ * suggested convention, `guest_` and a counter (§3.2), or labels them `guest` (§3.3). A guest's `user_id` lasts as
+ * long as their connection, and servers may not let guests be added at all, so they aren't offered to add.
+ */
+export function isGuest(user: Identity): boolean {
+	return user.user_id.startsWith('guest_') || (Array.isArray(user.roles) && user.roles.includes('guest'));
+}
+
+/** Everyone with a role, to add together: `@mod` adds each of them. */
+export interface RoleSet {
+	role: string;
+	/** Their `user_id`s, in the order the people came in. */
+	userIds: string[];
+}
+
+/**
+ * The roles held by `people` that `typed` starts to name, as a mention does: after an `@` (or `@&`, or `&`), in any
+ * case. Each comes with who holds it: one named exactly first, then by how many hold it, then by name; at most
+ * `limit`. A plain name names no role, so typing someone's name lists people alone. A role that can't be written
+ * `@&role` (Appendix A.3), such as one with a space, is left out, as the composer leaves it.
+ */
+export function roleSets(people: readonly Identity[], typed: string, limit: number): RoleSet[] {
+	const mention = /^(?:@&?|&)(.+)$/.exec(typed.trim());
+	if (!mention) return [];
+	const wanted = mention[1].toLowerCase();
+	const byRole = new Map<string, string[]>();
+	for (const person of people) {
+		for (const role of new Set(Array.isArray(person.roles) ? person.roles : [])) {
+			if (typeof role !== 'string' || !isMentionableRole(role) || !role.toLowerCase().startsWith(wanted)) continue;
+			const userIds = byRole.get(role);
+			if (userIds) userIds.push(person.user_id);
+			else byRole.set(role, [person.user_id]);
+		}
+	}
+	const rank = (role: string) => (role.toLowerCase() === wanted ? 0 : 1);
+	return [...byRole]
+		.map(([role, userIds]) => ({ role, userIds }))
+		.sort((a, b) => rank(a.role) - rank(b.role) || b.userIds.length - a.userIds.length || a.role.localeCompare(b.role))
+		.slice(0, limit);
 }
 
 /** A section of the member list: everyone online, or everyone offline. */

@@ -8,7 +8,8 @@
 
 	/**
 	 * Adding people to a room or thread (`room_join` with each `user_id`, §4.2.2), in a centered Dialog: a PeoplePicker
-	 * of the people you could add, as New private conversation picks them, and Add.
+	 * of the people you could add, as New private conversation picks them, or sets of them, such as everyone with a role,
+	 * and Add.
 	 */
 	interface Props {
 		/** Shown as a centered modal while true; bindable, and set false however it closes. */
@@ -28,6 +29,8 @@
 		disabled?: boolean;
 		/** Toggles a person in or out of the chips. */
 		onpick?: (userId: string) => void;
+		/** A set's row (`group`) picked: its people go in the chips, or, once all of them are, out. */
+		onpickgroup?: (userIds: string[]) => void;
 		onremove?: (userId: string) => void;
 		onsubmit?: () => void;
 		/** It closed, whichever way. */
@@ -38,7 +41,7 @@
 		listTestid?: string;
 	}
 	let {
-		open = $bindable(false), room, people, chosen, query = $bindable(''), status = 'idle', error, disabled = false, onpick, onremove, onsubmit, onclose, class: className, listTestid
+		open = $bindable(false), room, people, chosen, query = $bindable(''), status = 'idle', error, disabled = false, onpick, onpickgroup, onremove, onsubmit, onclose, class: className, listTestid
 	}: Props = $props();
 	const saving = $derived(status === 'saving');
 	const action = $derived(saving ? 'Adding…' : chosen.length === 1 ? `Add ${chosen[0].name || chosen[0].user_id}` : chosen.length ? `Add ${chosen.length} people` : 'Add');
@@ -51,9 +54,9 @@
 </script>
 
 <!-- Escape, the close button and Cancel do nothing while it adds. -->
-<Dialog class={['ap-pick', className]} bind:open size="md" title={room ? `Add people to ${room}` : 'Add people'} subtitle="Pick people by name, or type their @user_id." locked={saving} {error} {onclose}
+<Dialog class={['ap-pick', className]} bind:open size="md" title={room ? `Add people to ${room}` : 'Add people'} subtitle="Pick people by name or @user_id, or everyone with a role by @role." locked={saving} {error} {onclose}
 	onsubmit={(event) => { event.preventDefault(); if (!saving && !disabled && chosen.length) onsubmit?.(); }}>
-	<PeoplePicker bind:this={picker} label="Add" {people} {chosen} bind:query empty="No one else to add yet" busy={saving} onchoose={(person) => onpick?.(person.user_id)} {onremove} {listTestid} />
+	<PeoplePicker bind:this={picker} label="Add" {people} {chosen} bind:query empty="No one else to add yet" busy={saving} onchoose={(person) => (person.group ? onpickgroup?.(person.group) : onpick?.(person.user_id))} {onremove} {listTestid} />
 	{#snippet footer()}
 		<Button variant="ghost" size="sm" onclick={() => (open = false)} disabled={saving} label="Cancel" />
 		<Button type="submit" variant="primary" size="sm" disabled={saving || disabled || !chosen.length} label={action} />

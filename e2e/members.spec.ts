@@ -28,6 +28,20 @@ test('Add member adds everyone picked, and keeps who the server refused picked, 
 	await expect(page.getByTestId('room-member-list').getByRole('status')).toHaveCount(0);
 });
 
+test('Add member adds everyone with a role by @role', async ({ preview, page }) => {
+	await preview.open();
+	await preview.openRoom('engineering');
+	await page.getByRole('button', { name: 'Add member', exact: true }).click();
+	const dialog = page.getByRole('dialog', { name: 'Add people to engineering' });
+	const field = dialog.getByRole('combobox', { name: 'Add', exact: true });
+	await field.fill('@mod');
+	await expect(dialog.getByRole('option').first()).toHaveText(/@moderator\s*1 person with this role/);
+	await page.keyboard.press('Enter');
+	await expect(dialog.locator('.ap-pick-chip-name')).toHaveText(['Margaret Hamilton']);
+	await dialog.getByRole('button', { name: 'Add Margaret Hamilton', exact: true }).click();
+	await expect(page.getByRole('complementary', { name: 'Room member list' }).locator('li.ap-member[data-user="margaret"]')).toBeVisible();
+});
+
 test('a second click on a member closes their profile, on their name or anywhere else on their row', async ({ preview, page }) => {
 	await preview.open();
 	const list = await preview.showMembers();

@@ -50,6 +50,26 @@ describe('AddMembersForm', () => {
 		expect(ids()).toEqual(['bob']);
 	});
 
+	it('picks everyone in a set, such as a role, together, and puts them back together once all are picked', () => {
+		const mods: PickPerson = { user_id: 'mod', name: '@mod', group: ['bob', 'carol'], detail: '2 people with this role' };
+		const { state, list } = render({ people: [mods, bob, carol] });
+		state.onpickgroup = vi.fn((userIds: string[]) => {
+			const ids = (state.chosen as PickPerson[]).map((person) => person.user_id);
+			state.chosen = userIds.every((id) => ids.includes(id)) ? [] : [bob, carol];
+		});
+		flushSync();
+		const row = () => list.querySelectorAll('[role="option"]')[0];
+		expect(row().querySelector('.ap-pick-group-glyph')).not.toBeNull();
+		expect(row().textContent).toContain('2 people with this role');
+		expect(row().getAttribute('aria-selected')).toBe('false');
+		(row() as HTMLElement).click();
+		flushSync();
+		expect(state.onpickgroup).toHaveBeenCalledWith(['bob', 'carol']);
+		expect(state.onpick).not.toHaveBeenCalled();
+		expect(row().getAttribute('aria-selected')).toBe('true');
+		expect(dom.button('Add 2 people')).toBeTruthy();
+	});
+
 	it('says it is adding, and what went wrong', () => {
 		render({ chosen: [bob, carol], status: 'saving', error: 'Couldn’t add Carol: Denied.' });
 		expect(dom.button('Adding…').disabled).toBe(true);
