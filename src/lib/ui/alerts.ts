@@ -2,7 +2,7 @@ import type { RoomSnapshot } from '$lib/protocol/client';
 import type { Identity, MessageRecord } from '$lib/protocol/types';
 import { notificationsByRoom } from './incoming-messages';
 import { senderName } from './messages';
-import { inMutedRoom, inNotifyScopes } from './notify-scopes';
+import { inNotifyScopes } from './notify-scopes';
 
 /**
  * What the page alerts about as messages arrive: the mentions you'd hear
@@ -48,7 +48,7 @@ export interface AlertSettings {
 }
 
 export interface Alerts {
-	/** Mentions of you that arrived outside the rooms you muted. */
+	/** Mentions of you that arrived, in rooms you muted too. */
 	audible: number;
 	/** Offer notifications, naming the first of those mentions. */
 	offer?: { from: string; room: string };
@@ -61,8 +61,8 @@ const NOTHING: Alerts = { audible: 0, notify: [] };
 /**
  * Observes the arrivals in `view` and says what to alert about. A held view
  * alerts about nothing, and isn't observed: what it shows is from before, so
- * the live rooms that replace it count from where they are. A mention in a
- * room you muted (§4.5), or a thread of one, isn't heard. Desktop
+ * the live rooms that replace it count from where they are. A mention gets
+ * through a mute (§4.5), as in other chat apps: it is heard there too. Desktop
  * notifications go out only while they are on, nobody is looking and the
  * page isn't silenced, for what the checked scopes cover (an edit that adds
  * you counts as a mention), one per room.
@@ -71,12 +71,11 @@ export function arrivalAlerts(view: AlertView, trackers: ArrivalTrackers, settin
 	if (view.held) return NOTHING;
 	const mentions = trackers.mentions.observe(view.rooms, view.you, view.pane, view.latestVisible, view.readThrough);
 	const messages = trackers.messages.observe(view.rooms, view.you);
-	const heard = mentions.filter((event) => !inMutedRoom(event, view.rooms));
-	const first = heard[0];
+	const first = mentions[0];
 	const offer = first && settings.offerable
 		? { from: senderName(first), room: view.rooms.find((room) => room.id === first.room_id)?.title ?? first.room_id }
 		: undefined;
-	const alerts: Alerts = { audible: heard.length, ...(offer ? { offer } : {}), notify: [] };
+	const alerts: Alerts = { audible: mentions.length, ...(offer ? { offer } : {}), notify: [] };
 	if (!settings.active || !settings.away || settings.silenced) return alerts;
 	const mentioned = new Set(mentions.map((event) => event.message_id));
 	const context = { me: view.you, rooms: view.rooms };

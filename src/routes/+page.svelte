@@ -60,7 +60,7 @@
 	import { prepareUpload } from '$lib/ui/images';
 	import { MentionTracker } from '$lib/ui/mentions.svelte';
 	import { IncomingMessageTracker } from '$lib/ui/incoming-messages';
-	import { UnreadTracker, countElsewhere } from '$lib/ui/unread.svelte';
+	import { UnreadTracker, countElsewhere, mutedMentions } from '$lib/ui/unread.svelte';
 	import { ReadPositions } from '$lib/ui/read-positions';
 	import { RoomOrder } from '$lib/ui/room-order.svelte';
 	import { embedsOf, isOwn, mayMove, mentionsMe, peopleIn, messageSnippet, plainTextOf, senderName, textOf } from '$lib/ui/messages';
@@ -147,7 +147,7 @@
 	/** The connection error closed from its toast; one that clears and comes back shows again. */
 	let dismissedError = $state<string | undefined>();
 	const mentions = new MentionTracker();
-	/** How many mentions of you have arrived outside the rooms you muted: each new one can alert the tab. */
+	/** How many mentions of you have arrived, muted rooms included: each new one can alert the tab. */
 	let audibleMentions = $state(0);
 	const incomingMessages = new IncomingMessageTracker();
 	const unread = new UnreadTracker();
@@ -513,6 +513,8 @@
 	let olderSource = $derived(activeThread ? threadRoom : session.activeRoomHeld ? undefined : session.room(session.activeRoomId));
 	/** What's new in the rooms and threads other than the one being read, as the rooms list counts it: the phone header's back button shows it. */
 	let unreadElsewhere = $derived(countElsewhere(unread.byRoom, paneRoom?.id));
+	/** What the tab title and the app badge count: unread messages outside muted rooms, and mentions of you in them. */
+	let unreadAlerting = $derived(unread.alerting + mutedMentions(unread.muted, mentions.byRoom));
 	let mentionsElsewhere = $derived(countElsewhere(mentions.byRoom, paneRoom?.id));
 	/** The waits the server asked for (`retry_after`) that are on, as the client holds them. */
 	let limits = $derived(session.limits ?? {});
@@ -823,9 +825,9 @@
 		untrack(() => void pushSettings.keepOff(chat));
 	});
 
-	// While Apron is in view, the app badge shows its own unread count (not muted rooms'); away, pushes' `unread` sets it.
+	// While Apron is in view, the app badge shows its own unread count (in muted rooms, only mentions); away, pushes' `unread` sets it.
 	$effect(() => {
-		const total = unread.alerting;
+		const total = unreadAlerting;
 		if (presence.visible && !previewMode) untrack(() => void setAppBadge(navigator, total));
 	});
 
@@ -3207,7 +3209,7 @@
 <svelte:document onclick={mediaAskClick} onvisibilitychange={() => { presence.visibilityChanged(); refreshNotificationPermission(); if (document.visibilityState === 'hidden') { keepView(); void historyKeeper?.flush(); } }} />
 
 <svelte:head>
-	<title>{tabTitle(unread.alerting, presence.titleFlash)}</title>
+	<title>{tabTitle(unreadAlerting, presence.titleFlash)}</title>
 	<meta name="description" content="Apron, a chat frontend for the Apron Chat Protocol." />
 	<!-- Link previews. og.png is apron.chat's `npm run screenshot -- og`; absolute, as crawlers require. -->
 	<meta property="og:type" content="website" />

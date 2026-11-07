@@ -11,12 +11,17 @@ function render(props: Record<string, unknown>) {
 const states = (row: HTMLElement) => ['ap-room-unread', 'ap-room-mention', 'ap-room-quiet', 'ap-room-unjoined'].filter((name) => row.classList.contains(name));
 
 describe('ThreadItem', () => {
-	it('marks a muted thread with a bell-off at the end of its row, before its count or time, its news quiet: no bold name, no tint for a mention, and a grey count', () => {
-		let row = render({ muted: true, unread: 2, mentions: 1 });
+	it('marks a muted thread with a bell-off at the end of its row, before its count or time, its news quiet: no bold name and a grey count, but for mentions', () => {
+		let row = render({ muted: true, unread: 2 });
 		const bell = row.querySelector('.ap-muted')!;
 		expect([bell.getAttribute('aria-label'), bell.nextElementSibling?.classList.contains('ap-count')]).toEqual(['Muted', true]);
 		expect(states(row)).toEqual([]);
 		expect(row.querySelector('.ap-count')?.classList.contains('ap-count-quiet')).toBe(true);
+		dom.unmount();
+		// A mention gets through the mute: bold, tinted, and an orange @ count.
+		row = render({ muted: true, unread: 2, mentions: 1 });
+		expect(states(row)).toEqual(['ap-room-unread', 'ap-room-mention']);
+		expect(row.querySelector('.ap-count')?.classList.contains('ap-count-at')).toBe(true);
 		dom.unmount();
 		row = render({ muted: true, unjoined: true, ago: { text: '2h' } });
 		expect(row.querySelector('.ap-muted')?.nextElementSibling?.tagName).toBe('TIME');

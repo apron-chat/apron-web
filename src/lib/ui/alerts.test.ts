@@ -55,11 +55,13 @@ describe('alerts as messages arrive', () => {
 		expect(notified(own)).toEqual([]);
 	});
 
-	it('neither hears nor notifies about a room you muted, or a thread of one', () => {
+	it('hears and notifies about mentions through a mute, in the room or a thread of it, but not other messages', () => {
 		const muted = { mutedUntil: true as const };
 		const thread = (messages: MessageRecord[] = []) => roomSnapshot('t1', messages, { parentRoomId: 'general', latestLogId: '100' });
-		const { alerts } = alertsFor([general([], muted), thread()], [general([mention(101)], muted), thread([mention(102, 't1')])], { settings: { offerable: true } });
-		expect(alerts).toEqual({ audible: 0, notify: [] });
+		const { alerts } = alertsFor([general([], muted), thread()], [general([mention(101), message(103)], muted), thread([mention(102, 't1'), message(104, 't1')])], { settings: { offerable: true, scopes: ['mentions', 'joined'] } });
+		expect(alerts.audible).toBe(2);
+		expect(alerts.offer).toBeDefined();
+		expect(notified(alerts)).toEqual([['101', true], ['102', true]]);
 	});
 
 	it('chimes but shows no notification while notifications are off, someone is looking, or they are paused or on do not disturb', () => {

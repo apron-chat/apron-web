@@ -57,12 +57,12 @@ export function inMutedRoom(event: Pick<MessageRecord, 'room_id'>, rooms: readon
  * `mentions`, it mentions you; `replies`, it replies to one of your messages
  * that is loaded here; `private`, its room (or a thread's room) is private;
  * `joined`, its room (or a thread's room) is joined. A room you muted, or a
- * thread of one, notifies nothing.
+ * thread of one, notifies only about mentions, as in other chat apps.
  */
 export function inNotifyScopes(event: MessageRecord, scopes: readonly string[], context: NotifyContext): boolean {
 	if (!context.me || isOwn(event, context.me) || event.deleted) return false;
-	// A room you muted (§4.5 `mute` with its `room_id`), or a thread of one, notifies nothing, mentions included.
-	if (inMutedRoom(event, context.rooms)) return false;
+	// A room you muted (§4.5 `mute` with its `room_id`), or a thread of one, notifies only about mentions.
+	if (inMutedRoom(event, context.rooms)) return context.mentioned && scopes.includes('mentions');
 	const room = context.rooms.find((candidate) => candidate.id === event.room_id);
 	const parent = room?.parentRoomId === undefined ? undefined : context.rooms.find((candidate) => candidate.id === room.parentRoomId);
 	return scopes.some((scope) => {
