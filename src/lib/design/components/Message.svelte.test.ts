@@ -626,12 +626,14 @@ describe('task list checkboxes', () => {
 		await tick();
 		expect(toggled).toEqual([[0, true]]);
 		expect(box().checked).toBe(true);
+		expect(box().parentElement!.classList.contains('ap-task-done')).toBe(true);
 		result = false;
 		box().click();
 		await Promise.resolve();
 		await tick();
 		expect(toggled).toEqual([[0, true], [0, false]]);
 		expect(box().checked).toBe(true);
+		expect(box().parentElement!.classList.contains('ap-task-done')).toBe(true);
 		dom.cleanup();
 	});
 });

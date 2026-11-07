@@ -262,8 +262,13 @@
 			const line = Number(box.dataset.taskLine);
 			const checked = box.checked;
 			if (!Number.isInteger(line)) return;
+			// Its item looks done (or not) at once; the saved body, drawn again, says the same.
+			const item = box.closest('.ap-task-item');
+			item?.classList.toggle('ap-task-done', checked);
 			void Promise.resolve(toggle(view, line, checked)).then((saved) => {
-				if (!saved && box.isConnected && box.checked === checked) box.checked = !checked;
+				if (saved || !box.isConnected || box.checked !== checked) return;
+				box.checked = !checked;
+				item?.classList.toggle('ap-task-done', !checked);
 			});
 		};
 		node.addEventListener('change', change);

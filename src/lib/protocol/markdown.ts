@@ -46,7 +46,7 @@ md.core.ruler.after('inline', 'task_lists', (state) => {
 		const box = new state.Token('html_inline', '', 0);
 		box.content = `<input type="checkbox" class="ap-task" data-task-line="${line}"${marker[1] === ' ' ? '' : ' checked'} disabled>`;
 		children.unshift(box);
-		item.attrJoin('class', 'ap-task-item');
+		item.attrJoin('class', marker[1] === ' ' ? 'ap-task-item' : 'ap-task-item ap-task-done');
 	}
 });
 // Wide tables scroll inside the message rather than widening it.

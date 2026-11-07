@@ -478,7 +478,7 @@ describe('task lists', () => {
 	it('draws `[ ]` and `[x]` items as disabled checkboxes, each with its source line', () => {
 		const html = renderMarkdown('Todo:\n\n- [ ] Foo\n- [x] Bar\n- [X] Baz');
 		expect(html).toContain('<li class="ap-task-item"><input type="checkbox" class="ap-task" data-task-line="2" disabled="">Foo</li>');
-		expect(html).toContain('<li class="ap-task-item"><input type="checkbox" class="ap-task" data-task-line="3" checked="" disabled="">Bar</li>');
+		expect(html).toContain('<li class="ap-task-item ap-task-done"><input type="checkbox" class="ap-task" data-task-line="3" checked="" disabled="">Bar</li>');
 		expect(html).toContain('data-task-line="4" checked=""');
 	});
 
