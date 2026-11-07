@@ -294,14 +294,16 @@ test.describe('the full panel', () => {
 		await page.keyboard.press('Shift+Enter');
 		await page.keyboard.type('second line');
 
-		await test.step('Expand opens the panel over the conversation, below the room header, the caret where it was', async () => {
+		await test.step('Expand opens the panel under a strip of the conversation, the caret where it was', async () => {
 			await page.keyboard.press('ControlOrMeta+Home');
 			await page.getByTestId('composer-expand').click();
 			await expect(panel(preview)).toBeVisible();
 			await expect(preview.composer()).toBeFocused();
-			const header = await page.locator('.ap-roomhead').boundingBox();
-			const box = await panel(preview).boundingBox();
-			expect(Math.round(box!.y)).toBe(Math.round(header!.y + header!.height));
+			const header = (await page.locator('.ap-roomhead').boundingBox())!;
+			const timeline = (await page.getByTestId('message-list').boundingBox())!;
+			const box = (await panel(preview).boundingBox())!;
+			expect(timeline.y).toBeGreaterThanOrEqual(header.y + header.height - 1);
+			expect(box.y).toBeGreaterThanOrEqual(timeline.y + timeline.height - 1);
 			// The same field: typing goes in at the start, where the caret was before it opened.
 			await page.keyboard.type('The ');
 			await expect.poll(() => written(preview)).toBe('The first @Ada Lovelace line\nsecond line');
@@ -352,38 +354,47 @@ test.describe('the full panel', () => {
 		});
 	});
 
-	test('leaves what arrives while it is open unread, until it closes on it', async ({ preview, page }) => {
+	test('takes three quarters of the pane, the latest messages in view above it, and what arrives there is read', async ({ preview, page }) => {
 		const unread = page.locator('[data-testid="room-list"] button[data-room="general"]').getByTestId('room-unread');
-		const writeAtLength = async () => {
-			await preview.composer().click();
-			await page.keyboard.type('one');
-			await page.keyboard.press('Shift+Enter');
-			await page.keyboard.type('two');
-			await page.getByTestId('composer-expand').click();
-			await expect(panel(preview)).toBeVisible();
-		};
 		await preview.open();
+		await preview.post('general', 'ada', 'Before writing');
+		await expect(preview.message('Before writing')).toBeInViewport();
+		await preview.composer().click();
+		await page.keyboard.type('one');
+		await page.keyboard.press('Shift+Enter');
+		await page.keyboard.type('two');
+		await page.getByTestId('composer-expand').click();
+		await expect(panel(preview)).toBeVisible();
 
-		await test.step('closed on it, what came is read', async () => {
-			await writeAtLength();
+		await test.step('the timeline stays at its latest above the panel', async () => {
+			const pane = (await page.locator('main.ap-shell-main').boundingBox())!;
+			const box = (await panel(preview).boundingBox())!;
+			expect(Math.abs(box.height - pane.height * 0.75)).toBeLessThan(2);
+			await expect(preview.message('Before writing')).toBeInViewport();
+		});
+
+		await test.step('what arrives shows above it, read, as anywhere at the latest', async () => {
 			await preview.post('general', 'ada', 'Arrived while writing');
-			await expect(preview.message('Arrived while writing')).toHaveCount(1);
-			await page.keyboard.press('Escape');
-			await expect(panel(preview)).toBeHidden();
+			await expect(preview.message('Arrived while writing')).toBeInViewport();
 			await preview.openRoom('engineering');
 			await expect(unread).toHaveCount(0);
-			await preview.openRoom('general');
 		});
+	});
 
-		await test.step('left while it was open, what came stays unread', async () => {
-			await page.keyboard.press('ControlOrMeta+A');
-			await page.keyboard.press('Delete');
-			await writeAtLength();
-			await preview.post('general', 'ada', 'Arrived under the panel');
-			await expect(preview.message('Arrived under the panel')).toHaveCount(1);
-			await preview.openRoom('engineering');
-			await expect(unread).toHaveText('1');
-		});
+	test('leaves a few lines of the timeline in a short pane', async ({ preview, page }) => {
+		await page.setViewportSize({ width: 1280, height: 420 });
+		await preview.open();
+		await preview.composer().click();
+		await page.keyboard.type('one');
+		await page.keyboard.press('Shift+Enter');
+		await page.keyboard.type('two');
+		await page.getByTestId('composer-expand').click();
+		const pane = (await page.locator('main.ap-shell-main').boundingBox())!;
+		const header = (await page.locator('.ap-roomhead').boundingBox())!;
+		const box = (await panel(preview).boundingBox())!;
+		// Capped at the pane less its header and three 32px lines, short of three quarters here.
+		expect(box.height).toBeLessThan(pane.height * 0.75);
+		expect(Math.round(pane.height - header.height - box.height)).toBeGreaterThanOrEqual(96);
 	});
 
 	test('Esc closes it with the draft kept', async ({ preview, page }) => {

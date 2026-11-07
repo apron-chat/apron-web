@@ -439,12 +439,13 @@ a.ap-embed-card:hover { background: var(--hover); }
 /* What holds the composer's parts adds nothing to the layout, until it is the full panel. */
 .ap-composer-box { display: contents; }
 /*
- * The full panel, for writing at length: the composer covers its pane below the pane's header (the main pane is the
- * box it is placed in), the timeline kept as it was underneath, so closing it is back where the reader was. The same
- * form, laid out on a grid: its head (formatting, Write and Preview, Collapse) on top, the field filling the middle,
- * and the attach, microphone and emoji buttons, the keys that send and Send at its foot.
+ * The full panel, for writing at length: the composer takes three quarters of its pane, in the flow, and the timeline
+ * the rest above it, at its latest, with the notices and asks between them as ever; at least a few lines of it, where
+ * the pane is short (a phone's keyboard up). The same form, laid out on a grid: its head (formatting, Write and
+ * Preview, Collapse) on top, the field filling the middle, and the attach, microphone and emoji buttons, the keys that
+ * send and Send at its foot.
  */
-.ap-composer-full { position: absolute; inset: var(--header-h) 0 0; z-index: var(--z-head); display: flex; flex-direction: column; background: var(--bg-100); }
+.ap-composer-full { flex: none; display: flex; flex-direction: column; height: 75%; max-height: calc(100% - var(--header-h) - 3 * var(--space-8)); }
 .ap-composer-full > .ap-composer-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .ap-composer-full .ap-composer { flex: 1; min-height: 0; display: grid; grid-template: "head head head head" auto "body body body body" minmax(0, 1fr) "start end keys send" auto / auto auto minmax(0, 1fr) auto; align-items: center; gap: 0; padding: 0; overflow: hidden; }
 .ap-composer-head { grid-area: head; display: flex; align-items: center; gap: var(--space-0_5); padding: var(--space-1_5) var(--space-2); border-bottom: 1px solid var(--line); }
@@ -466,8 +467,6 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-composer-full .ap-composer-tools-end { grid-area: end; }
 .ap-composer-full .ap-composer-cmdtag { grid-area: keys; justify-self: start; margin-left: var(--space-2); }
 .ap-composer-full .ap-composer > .ap-btn-primary { grid-area: send; margin: var(--space-1_5) var(--space-2); }
-/* An autocomplete opens under the panel's head, over the text, rather than above the panel. */
-.ap-composer-full .ap-mpick { top: var(--header-h); bottom: auto; }
 .ap-composer-keys { grid-area: keys; justify-self: end; display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
 .ap-composer-keys kbd { font: inherit; font-size: var(--text-xs); padding: 0 var(--space-1_5); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); }
 

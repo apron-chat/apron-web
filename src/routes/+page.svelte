@@ -415,8 +415,6 @@
 	let memberRowsKept = false;
 	let memberRowsDrawn = $derived(firstScreenDrawn || (memberRowsKept ||= memberListOpen));
 	let composer = $state<Composer | undefined>();
-	/** The composer is the full panel, over the timeline: what arrives meanwhile isn't read (`readingLatest`). */
-	let composerExpanded = $state(false);
 	let memberListToggle = $state<PanelToggle | undefined>();
 	/** The room your typing indicator shows in, and the timer that ends it there 5 s after the last keystroke. */
 	let typingIn: { room: string; timer: ReturnType<typeof setTimeout> } | undefined;
@@ -654,11 +652,8 @@
 	let threadReplyCount = $derived(threadRoom?.loaded || threadRoom?.resumed ? messages.length : undefined);
 	/** The conversation shows: not behind the phone's rooms list, where only a faded sliver of it peeks out. */
 	let paneShown = $derived(!(narrow && mobilePane === 'rooms'));
-	/**
-	 * You are reading the open pane's latest message: it shows, and the viewport says you are (`readingLatest`), and the
-	 * composer's full panel isn't covering it.
-	 */
-	let readingLatest = $derived(paneShown && viewport.readingLatest && !composerExpanded);
+	/** You are reading the open pane's latest message: it shows, and the viewport says you are (`readingLatest`). */
+	let readingLatest = $derived(paneShown && viewport.readingLatest);
 	/** The pane's messages this viewer may pick, in order: what shift-click ranges run along. */
 	let selectableOrder = $derived(messages.filter(canSelect).map((event) => event.message_id));
 	/** Picked messages move with `message` requests (capability `edit`), which a reader who may not write makes none of. */
@@ -2040,8 +2035,6 @@
 		const userIds = absentMentions([...composerMentions, ...withRoles], room, skip);
 		if (!userIds.length) return false;
 		mentionAsk = { roomId: room.id, userIds, busy: false, text, files: stagedIds() };
-		// The ask shows above the compact composer, which the full panel would cover: back to it, the draft kept.
-		composerExpanded = false;
 		return true;
 	}
 
@@ -3486,7 +3479,6 @@
 				</div>
 				<Composer
 					bind:this={composer}
-					bind:expanded={composerExpanded}
 					bind:value={drafts.text}
 					bind:mentions={composerMentions}
 					bind:dismissed={drafts.dismissed}

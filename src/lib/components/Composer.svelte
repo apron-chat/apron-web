@@ -92,19 +92,18 @@
 		onmention?: () => void;
 		/** Sending waits until then, as the server asked (`retry_after`, epoch milliseconds): Send counts down, and the draft stays. */
 		waitUntil?: number;
-		/**
-		 * The full panel, for writing at length, over the timeline; `bind:expanded`. Expand offers it once the draft has a
-		 * second line. Its formatting and Preview load on demand as it opens, and it closes again as the draft is sent or
-		 * the pane changes.
-		 */
-		expanded?: boolean;
 	}
-	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled, holdSend = false, canUpload, files = [], uploadLimits, canCommand = false, live, people, rooms = [], reply, oninput, onsend, onfiles, onunstage, onrename, oncancelreply, onescape, onup, onmention, waitUntil, expanded = $bindable(false) }: Props = $props();
+	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled, holdSend = false, canUpload, files = [], uploadLimits, canCommand = false, live, people, rooms = [], reply, oninput, onsend, onfiles, onunstage, onrename, oncancelreply, onescape, onup, onmention, waitUntil }: Props = $props();
 
 	/** The field: chips and autocomplete, as in the message editor. */
 	let field = $state<MessageField | undefined>();
 	let emojiButton = $state<HTMLButtonElement | undefined>();
 	const recorder = new VoiceRecorder();
+	/**
+	 * The full panel, for writing at length: Expand offers it once the draft has a second line. Its formatting and
+	 * Preview load on demand as it opens, and it closes again as the draft is sent or the pane changes.
+	 */
+	let expanded = $state(false);
 	/** The full panel's Write or Preview. */
 	let previewing = $state(false);
 	/** Shown at the full panel's foot; not on a phone or tablet, whose keyboard has no Ctrl and whose Enter starts a line anyway. */

@@ -109,10 +109,10 @@
 		 */
 		onexpand?: () => void;
 		/**
-		 * The full panel, for writing at length: the Composer covers its pane below the pane's header (it is placed
-		 * against the nearest positioned box, the main pane in the app), with `toolbar` along its top, the field filling
-		 * the rest, and the attach, microphone and emoji buttons beside Send at its foot. It is the same form, laid out
-		 * anew, so the field and its caret stay as they were as it opens and closes.
+		 * The full panel, for writing at length: the Composer takes three quarters of its pane (the box it sits in, a
+		 * column with the timeline above it), with `toolbar` along its top, the field filling the rest, and the attach,
+		 * microphone and emoji buttons beside Send at its foot. It is the same form, laid out anew, so the field and its
+		 * caret stay as they were as it opens and closes.
 		 */
 		expanded?: boolean;
 		/** The full panel's Collapse button, back to the compact composer with the same draft. */
