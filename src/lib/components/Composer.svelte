@@ -129,8 +129,11 @@
 	let canRecord = $derived(canUpload && voice !== undefined && Boolean(navigator.mediaDevices?.getUserMedia));
 	let command = $derived(canCommand && isCommand(value) && !live);
 	let emojiOpen = $derived(emojiPicker.isOpenFor(emojiButton));
-	/** Expand is offered for a draft of more than one line that is a message (not a command, not live) and can be written. */
-	let canExpand = $derived(!expanded && value.includes('\n') && !command && !live && !disabled);
+	/**
+	 * Expand is offered for a draft of more than one line that is a message (not a command, not live) and can be
+	 * written. The field says when the draft gains or loses a line (`multiline`), so typing on a line doesn't ask again.
+	 */
+	let canExpand = $derived(!expanded && (field?.multiline() ?? false) && !command && !live && !disabled);
 	/** Bumped when a fetched preview arrives, so the previews below are redrawn. */
 	let previewsArrived = $state(0);
 	/** The link embeds the draft will be sent with (a command takes none). */
@@ -189,6 +192,8 @@
 		// Sent, the draft is emptied, and the panel closes with it; kept (not sent after all), the panel stays.
 		if (expanded) void tick().then(() => { if (!value.trim()) setExpanded(false); });
 	}
+
+	const expand = (): void => setExpanded(true);
 
 	/** Opens or closes the full panel, its field drawn anew in place, and puts the keyboard back in the field. */
 	function setExpanded(open: boolean): void {
@@ -294,7 +299,7 @@
 	liveTestid="live-tag"
 	emojiTestid="emoji-button"
 	sendTestid="send-button"
-	onexpand={canExpand ? () => setExpanded(true) : undefined}
+	onexpand={canExpand ? expand : undefined}
 	{expanded}
 	oncollapse={() => setExpanded(false)}
 	toolbar={formatting}
