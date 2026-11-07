@@ -18,6 +18,7 @@
 	import ReadOnlyBar from '$lib/components/ReadOnlyBar.svelte';
 	import ConnectScreen from '$lib/components/ConnectScreen.svelte';
 	import { SettleFlag } from '$lib/ui/settle-flag';
+	import { onMac } from '$lib/ui/handheld';
 	import { signedInScheme, type Scheme } from '$lib/ui/sign-in';
 	import JumpBar from '$lib/components/JumpBar.svelte';
 	import TimelineMessage from '$lib/components/TimelineMessage.svelte';
@@ -1625,7 +1626,7 @@
 	/** Search can be opened: signed in, with rooms listed. */
 	let canSearch = $derived(Boolean(client) && session.ready);
 	/** Search's shortcut, as this platform writes it; none on a touch screen, which has no keys for it. */
-	const searchHint = globalThis.matchMedia?.('(pointer: coarse)').matches ? undefined : /Mac/.test(globalThis.navigator?.platform ?? '') ? '⌘F' : 'Ctrl+F';
+	const searchHint = globalThis.matchMedia?.('(pointer: coarse)').matches ? undefined : onMac() ? '⌘F' : 'Ctrl+F';
 	/** The shortcuts of search's two modes, beside their names; none on a touch screen. */
 	const searchKeys = searchHint === undefined ? undefined : searchHint === '⌘F' ? { rooms: '⌘K', messages: '⌘F' } : { rooms: 'Ctrl K', messages: 'Ctrl F' };
 

@@ -10,6 +10,7 @@ import type { EmojiMartData } from '@emoji-mart/data';
 import { loadEmojiData } from './emoji-picker.svelte';
 import { directory } from './directory.svelte';
 import { enterAction, handheld } from './handheld';
+import type { TextEdit } from './text-edit';
 
 /**
  * Where a message is written, the composer's and the message editor's
@@ -48,8 +49,15 @@ export interface DraftHost {
 	 * ↑ in an empty composer. True when it took it. Typing doesn't ask.
 	 */
 	key?(event: KeyboardEvent): boolean;
+	/**
+	 * Enter starts a new line, and Ctrl+Enter or ⌘+Enter sends: for writing at length (the composer's full panel),
+	 * where a message has many lines. Unset, Enter sends (`enterAction`).
+	 */
+	readonly newlineOnEnter?: boolean;
 	/** The draft changed by typing or a pick, not set from outside. */
 	oninput?(): void;
+	/** The draft was emptied from outside, as sending it does: not by typing. */
+	oncleared?(): void;
 	/** The mention picker opened: a moment to refresh who can be named. */
 	onmention?(): void;
 	/**
@@ -67,6 +75,12 @@ export class DraftField {
 	element = $state<HTMLDivElement | undefined>();
 	/** Nothing is in the field: its placeholder shows. */
 	empty = $state(true);
+	/**
+	 * The draft has more than one line: set only as that changes, so what reads it (the composer's Expand) isn't asked
+	 * again on every key, as it would be reading the draft itself.
+	 */
+	multiline = $state(false);
+	private wasMultiline = false;
 	/** The text after `@` at the caret, or undefined when the picker is closed. */
 	query = $state<string | undefined>();
 	/** The `:shortcode` or `#room` at the caret, while its picker is open. */
@@ -139,11 +153,13 @@ export class DraftField {
 			const text = this.host.value;
 			if (!current || (this.shown?.field === current && this.shown.text === text)) return;
 			untrack(() => {
+				const cleared = !text && Boolean(this.shown?.text);
 				this.lastSelection = undefined;
 				// Nobody typed it: its `@user_id`s become chips, the last one too, and a name in plain text stays text.
 				const collapsed = collapseMentions([text], this.host.people, { caret: text.length, final: true, names: false, isUser: this.isUser, rooms: this.roomIds, roles: this.roleIds });
 				this.draw(current, collapsed.parts, document.activeElement === current ? collapsed.caret : undefined);
 				this.commit(current, collapsed.parts, false);
+				if (cleared) this.host.oncleared?.();
 			});
 		});
 	}
@@ -190,6 +206,32 @@ export class DraftField {
 		this.refreshQuery();
 	}
 
+	/**
+	 * Makes a formatting change (`markdown-format.ts`) to the draft and its selection: the field is drawn anew from the
+	 * changed draft, its `@user_id`s, `#room_id`s and `@&role`s as chips, as a draft set from outside is, and the
+	 * change's selection is set. The browser's Undo doesn't take it back (as it doesn't a picked mention); pressing the
+	 * format again does. Out of the field (a toolbar button reached with Tab), it reads the selection the field had as it
+	 * lost focus. False when the change has nothing to do.
+	 */
+	apply(change: (edit: TextEdit) => TextEdit | undefined): boolean {
+		const field = this.element;
+		if (!field || this.host.disabled) return false;
+		const { parts, caret, anchor } = readDraft(field);
+		const kept = caret === undefined ? this.lastSelection : undefined;
+		const focus = caret ?? kept?.end ?? draftLength(parts);
+		const other = anchor ?? kept?.start ?? focus;
+		const changed = change({ text: positionText(parts), start: Math.min(focus, other), end: Math.max(focus, other) });
+		if (!changed) return false;
+		this.closeCompletions();
+		this.lastSelection = undefined;
+		const next = collapseMentions([changed.text], this.host.people, { caret: changed.end, final: true, names: false, isUser: this.isUser, rooms: this.roomIds, roles: this.roleIds }).parts;
+		field.focus();
+		this.draw(field, next, undefined);
+		placeSelection(field, changed.start, changed.end);
+		this.commit(field, next, true);
+		return true;
+	}
+
 	/** Closes the picker and forgets where the caret was: the field is changing under it. */
 	reset(): void {
 		this.closeCompletions();
@@ -234,8 +276,9 @@ export class DraftField {
 		if (composing || (event.key.length > 1 && this.host.key?.(event))) return;
 		if (event.key === 'Enter') {
 			event.preventDefault();
-			if (enterAction(event, this.onHandheld) === 'newline') document.execCommand('insertText', false, '\n');
-			else this.host.submit();
+			const send = this.host.newlineOnEnter ? event.ctrlKey || event.metaKey : enterAction(event, this.onHandheld) === 'send';
+			if (send) this.host.submit();
+			else document.execCommand('insertText', false, '\n');
 		}
 	};
 
@@ -429,6 +472,9 @@ export class DraftField {
 		const text = draftText(parts);
 		this.shown = { field: root, text };
 		this.empty = parts.length === 0;
+		// Compared with a plain copy: reading the state itself would cost each key what this is here to save.
+		const multiline = text.includes('\n');
+		if (multiline !== this.wasMultiline) this.multiline = this.wasMultiline = multiline;
 		const mentioned = draftMentions(parts, this.roleMembers);
 		if (mentioned.join('\u0000') !== this.host.mentions.join('\u0000')) this.host.mentions = mentioned;
 		if (this.empty && root.childNodes.length > 0) root.replaceChildren();
@@ -544,33 +590,35 @@ function readDraft(root: HTMLElement): { parts: DraftPart[]; caret: number | und
 	return { parts: normalizeDraft(parts), caret, anchor };
 }
 
+/** The draft's text with each chip as it is written (`chipText`) and nothing added: one character per caret position. */
+function positionText(parts: DraftPart[]): string {
+	return parts.map((part) => (typeof part === 'string' ? part : chipText(part))).join('');
+}
+
 /** Puts the caret at a draft-text position; a position inside a chip lands after it. */
 function placeCaret(root: HTMLElement, caret: number): void {
+	placeSelection(root, caret, caret);
+}
+
+/** Selects the draft text from `start` to `end` in a field drawn from its parts (`draw`); equal, a bare caret. */
+function placeSelection(root: HTMLElement, start: number, end: number): void {
 	const selection = document.getSelection();
 	if (!selection) return;
-	const range = document.createRange();
+	const from = pointIn(root, start);
+	const to = start === end ? from : pointIn(root, end);
+	selection.setBaseAndExtent(from.node, from.offset, to.node, to.offset);
+}
+
+/** The point at a draft-text position among the field's text and chips; a position inside a chip lands after it. */
+function pointIn(root: HTMLElement, position: number): { node: Node; offset: number } {
 	let offset = 0;
-	let placed = false;
 	for (const [index, node] of [...root.childNodes].entries()) {
 		const chip = node instanceof HTMLElement ? chipOf(node) : undefined;
 		const length = node.nodeType === Node.TEXT_NODE ? (node.textContent ?? '').length : chip ? partLength(chip) : 0;
-		if (node.nodeType === Node.TEXT_NODE && caret <= offset + length) {
-			range.setStart(node, caret - offset);
-			placed = true;
-			break;
-		}
-		if (caret < offset + length) {
-			range.setStart(root, index + 1);
-			placed = true;
-			break;
-		}
+		if (node.nodeType === Node.TEXT_NODE && position <= offset + length) return { node, offset: position - offset };
+		if (position < offset + length) return { node: root, offset: index + 1 };
 		offset += length;
 	}
-	if (!placed) {
-		const last = root.lastChild;
-		range.setStart(root, last instanceof HTMLBRElement ? root.childNodes.length - 1 : root.childNodes.length);
-	}
-	range.collapse(true);
-	selection.removeAllRanges();
-	selection.addRange(range);
+	const last = root.lastChild;
+	return { node: root, offset: last instanceof HTMLBRElement ? root.childNodes.length - 1 : root.childNodes.length };
 }
