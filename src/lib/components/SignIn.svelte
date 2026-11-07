@@ -47,7 +47,8 @@
 		/** The form was submitted for another backend: the page drops whatever belonged to the previous one. */
 		onconnect: () => void;
 		/** The socket is up and signed in. */
-		onconnected: () => void;
+		/** Done: signed in, or signed out (`remember: false`, so the guest left behind isn't kept as the way in). */
+		onconnected: (options?: { remember?: boolean }) => void;
 		oncancel: () => void;
 		/** Signing out starts a different session: the page drops what it held from this one. */
 		onsignout: SignOutHandler;
@@ -58,8 +59,12 @@
 	}: Props = $props();
 
 	// The initial choice follows the request or the current session; the segmented control owns it from then on.
-	// The scheme asked for, then the one picked; unasked, `firstScheme` decides for each server in the field.
+	// The scheme asked for, then the one picked, for the server it was picked on (`schemeFor`, the first one's
+	// address until a pick); unasked, `firstScheme` decides for each server in the field.
 	let scheme = $state<Scheme | undefined>(untrack(() => initialScheme));
+	let schemeFor = $state<string | undefined>();
+	/** Signing out ended this panel's work: what is left is a guest, not a way in to remember. */
+	let signedOut = false;
 	/** On Passkey, Sign in or Create account: the viewer picks, the panel never guesses. */
 	let passkeyChosen = $state<PasskeyMode>('login');
 	/** Waiting for the connection this panel opened to the server in the form. */
@@ -129,9 +134,14 @@
 	/** How the server in the field was last signed in to here, if it offers that still: shown first, and marked. */
 	let lastUsed = $derived.by(() => {
 		const last = loadLastSignIn(normalizedInput);
+		// Signed in to an account here, Guest would be the way out of it (Sign out): not offered as the way in.
+		if (last === 'guest' && here && registered) return undefined;
 		return last && (schemes as string[]).includes(last) ? last : undefined;
 	});
-	let chosen = $derived(firstScheme(schemes, scheme, lastUsed, Boolean(sameServer && snapshot.passkeySession)));
+	/** The address the panel opened on: a scheme asked for with it belongs to it. */
+	const openedOn = untrack(() => normalizedInput);
+	let asked = $derived((schemeFor ?? openedOn) === normalizedInput ? scheme : undefined);
+	let chosen = $derived(firstScheme(schemes, asked, lastUsed, Boolean(sameServer && snapshot.passkeySession)));
 	/** The code asked for with the chosen scheme, while its field shows. */
 	let codeSentTo = $derived(codeSent && codeSent.scheme === chosen ? codeSent : undefined);
 	/** Whether the chosen scheme signs in, creates an account, or both (`server.signup`, §3.1); unknown servers get both. */
@@ -320,6 +330,7 @@
 	export async function continueTo(url?: string): Promise<void> {
 		if (url !== undefined) serverInput = url;
 		error = '';
+		dropAttempt();
 		const normalized = checkedUrl();
 		if (!normalized) return;
 		let server = normalized === client.url ? session.server : undefined;
@@ -341,12 +352,23 @@
 	function change(): void {
 		error = '';
 		notice = '';
+		dropAttempt();
 		if (codeSent) {
 			codeSent = undefined;
 			code = '';
 			client.cancelSignInCode();
 		}
 		choosing = true;
+	}
+
+	/**
+	 * Lets go of a connection this panel was waiting on (a Join that hasn't
+	 * settled, such as to a server that can't be reached): going back to
+	 * choosing a server, it mustn't finish the panel later, signed in there.
+	 */
+	function dropAttempt(): void {
+		pending = false;
+		intent = undefined;
 	}
 
 	/** A server by its title, else its host and path, as the connect screen shows it. */
@@ -543,6 +565,7 @@
 	async function signOut(): Promise<void> {
 		try {
 			await signOutThen(client, onsignout);
+			signedOut = true;
 			pending = true;
 		} catch (cause) {
 			error = cause instanceof Error ? cause.message : 'Unable to sign out';
@@ -552,7 +575,7 @@
 	function finish(): void {
 		pending = false;
 		joinedAsGuest = false;
-		onconnected();
+		onconnected(signedOut ? { remember: false } : undefined);
 	}
 </script>
 
@@ -562,7 +585,7 @@
 <!-- The design system's SignInForm draws the panel; this runs it. -->
 <SignInForm
 	label="Sign in" phase={view.phase} onsubmit={submit}
-	header={top} {schemes} {lastUsed} fields={step === 'sign-in' && !unusable} scheme={chosen} onscheme={(candidate) => (scheme = candidate as Scheme)}
+	header={top} {schemes} {lastUsed} fields={step === 'sign-in' && !unusable} scheme={chosen} onscheme={(candidate) => { scheme = candidate as Scheme; schemeFor = normalizedInput; }}
 	passkeyChoice={chosen === 'webauthn' && passkeyChoice(use) && !(here && registered)} passkeyMode={passkeyChosen} onpasskeymode={(value) => { passkeyChosen = value; error = ''; notice = ''; }} passkeyNudge={error === CANCELLED_TRY_CREATE ? 'register' : undefined}
 	bind:token bind:email bind:code bind:name={() => (chosen === 'token' ? tokenName : displayName), (value) => (chosen === 'token' ? (tokenName = value) : (displayName = value))} askName={!passkeyLogin && !reader}
 	sent={codeSentTo} onrestart={() => { codeSent = undefined; code = ''; error = ''; client.cancelSignInCode(); }}

@@ -218,7 +218,9 @@ export function signedInScheme(snapshot: { authenticated: boolean; passkeySessio
  * the server offers it here (`schemes`).
  */
 export function firstScheme(schemes: readonly Scheme[], asked: Scheme | undefined, last: string | undefined, passkeySession: boolean): Scheme {
-	for (const candidate of [asked, last, passkeySession ? 'webauthn' : undefined]) {
+	// Signed in to an account here, Guest is the way out of it (Sign out): never chosen for the viewer.
+	const remembered = passkeySession && last === 'guest' ? undefined : last;
+	for (const candidate of [asked, remembered, passkeySession ? 'webauthn' : undefined]) {
 		if (candidate && (schemes as readonly string[]).includes(candidate)) return candidate as Scheme;
 	}
 	return schemes[0] ?? 'guest';
@@ -231,7 +233,10 @@ export function firstScheme(schemes: readonly Scheme[], asked: Scheme | undefine
  * used, so Continue joins it as a guest without asking anything more.
  */
 export function readsOnly(server: ServerParams | undefined): boolean {
-	return Boolean(server?.capabilities?.includes('ext:archive') && server.auth.includes('guest'));
+	if (!server?.capabilities?.includes('ext:archive')) return false;
+	// Only guests, as an archive's server offers (§4): one with another way in has accounts to choose between.
+	const guestsOnly = (schemes: readonly string[]) => schemes.length > 0 && schemes.every((scheme) => scheme === 'guest');
+	return guestsOnly(server.auth) && (!server.signup || guestsOnly(server.signup));
 }
 
 /**

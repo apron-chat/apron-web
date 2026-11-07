@@ -34,8 +34,8 @@
 		linked?: { server: string; room: string };
 		/** The form was submitted for another backend: the page drops whatever belonged to the previous one. */
 		onconnect: () => void;
-		/** The socket is up and signed in. */
-		onconnected: () => void;
+		/** The socket is up and signed in, or signed out (`remember: false`). */
+		onconnected: (options?: { remember?: boolean }) => void;
 		oncancel: () => void;
 		/** Signing out starts a different session: the page drops what it held from this one. */
 		onsignout: SignOutHandler;

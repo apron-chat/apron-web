@@ -179,6 +179,9 @@ describe('the scheme shown first', () => {
 		expect(firstScheme([...offered], undefined, undefined, false)).toBe('guest');
 		expect(firstScheme(['email'], 'token', 'guest', true)).toBe('email');
 		expect(firstScheme([], undefined, undefined, false)).toBe('guest');
+		// Signed in to an account, Guest is Sign out: never chosen for the viewer, however it was last used.
+		expect(firstScheme([...offered], undefined, 'guest', true)).toBe('webauthn');
+		expect(firstScheme([...offered], undefined, 'guest', false)).toBe('guest');
 	});
 
 	it('remembers how a session signed in: guest, or its account’s method, never a link that doesn’t say', () => {
@@ -195,6 +198,9 @@ describe('a server that only reads', () => {
 		expect(readsOnly({ apron: 10, auth: ['guest'], capabilities: ['rooms', 'ext:permissions', 'ext:archive'] })).toBe(true);
 		expect(readsOnly({ apron: 10, auth: ['guest'], capabilities: ['rooms', 'ext:permissions'] })).toBe(false);
 		expect(readsOnly({ apron: 10, auth: ['token'], capabilities: ['ext:archive'] })).toBe(false);
+		// Another way in means accounts to choose between: the panel asks.
+		expect(readsOnly({ apron: 10, auth: ['guest', 'webauthn'], capabilities: ['ext:archive'] })).toBe(false);
+		expect(readsOnly({ apron: 10, auth: ['guest'], signup: ['email'], capabilities: ['ext:archive'] })).toBe(false);
 		expect(readsOnly(undefined)).toBe(false);
 	});
 });

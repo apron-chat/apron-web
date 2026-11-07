@@ -1521,12 +1521,12 @@
 		};
 	}
 
-	function connected(): void {
+	function connected(options: { remember?: boolean } = {}): void {
 		if (previewMode) return;
 		if (client) {
 			recentServers = rememberServer(recentServers, client.url, currentLook);
-			// How it signed in here is offered first next time, through signing out too.
-			const scheme = signedInScheme(client.snapshot());
+			// How it signed in here is offered first next time, through signing out too: a sign-out's guest isn't kept.
+			const scheme = options.remember === false ? undefined : signedInScheme(client.snapshot());
 			if (scheme) saveLastSignIn(client.url, scheme);
 		}
 		connectOpen = false;
