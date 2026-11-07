@@ -14,9 +14,9 @@
 	/**
 	 * The member list's +: adds the people picked to the open room or thread (`room_join` with each `user_id`, §4.2.2),
 	 * in the design system's AddMembersForm, from the people the session knows who aren't members yet, or by a
-	 * `@user_id` typed whole, or everyone with a role by `@role`. Guests aren't offered: a guest's `user_id` lasts only as
-	 * long as their connection, and a server may not let them be added at all. One the server refuses doesn't stop the
-	 * rest, and stays picked, with why. Those added show in the timeline as their joins do.
+	 * `@user_id` typed whole, or everyone with a role by `@role`. Guests aren't offered unless Hide guests is unticked: a
+	 * guest's `user_id` may last only as long as their session, and a server may not let them be added at all, but which
+	 * users are guests is a guess (`isGuest`). One the server refuses doesn't stop the rest, and stays picked, with why. Those added show in the timeline as their joins do.
 	 */
 	interface Props {
 		client: ChatClient;
@@ -35,13 +35,19 @@
 	// The caller mounts it each time, so the form starts empty.
 	let open = $state(true);
 	let query = $state('');
+	/** Hide guests, at the start of the footer: on each time it opens. */
+	let hideGuests = $state(true);
 	let chosenIds = $state<string[]>([]);
 	/** Adding them, and who wasn't added. */
 	const task = new Task<'saving', string>();
 
 	let memberIds = $derived(new Set((room.members ?? []).map((member) => member.user_id)));
-	/** People the session knows who aren't members yet, but you, the system identities and guests, by name. */
-	let candidates = $derived(pickable(Object.values(session.snapshot.users).filter((user) => !memberIds.has(user.user_id) && !isGuest(user))));
+	/** People the session knows who aren't members yet, but you and the system identities, by name. */
+	let others = $derived(pickable(Object.values(session.snapshot.users).filter((user) => !memberIds.has(user.user_id))));
+	/** Some of them look like guests: Hide guests is offered. */
+	let guests = $derived(others.some(isGuest));
+	/** Those offered: all of them, or, while Hide guests is ticked, all but the guests. */
+	let candidates = $derived(hideGuests ? others.filter((user) => !isGuest(user)) : others);
 	/**
 	 * The roles an `@` names, each picking those of the candidates who hold it; then those whose name or `@user_id`
 	 * holds what's typed; with none of either, the `@user_id` typed, as someone to add by it, since the client knows
@@ -93,6 +99,6 @@
 </script>
 
 <AddMembersForm
-	bind:open bind:query room={room.title} {people} {chosen} status={task.busy ? 'saving' : 'idle'} error={task.note} listTestid="add-people"
+	bind:open bind:query bind:hideGuests {guests} room={room.title} {people} {chosen} status={task.busy ? 'saving' : 'idle'} error={task.note} listTestid="add-people"
 	onpick={pick} onpickgroup={pickGroup} onremove={pick} onsubmit={add} {onclose}
 />

@@ -252,4 +252,25 @@ describe('MemberListSidebar', () => {
 		render([ada]);
 		expect(dom.queryByRole('button', 'Add member')).toBeNull();
 	});
+
+	it('leaves guests out of Add member while Hide guests is ticked, and offers the box only with guests to hide', () => {
+		const guest = { user_id: 'guest_7', name: 'Visitor' };
+		render([ada], { users: Object.fromEntries([ada, { user_id: 'cy', name: 'Cy' }, guest].map((user) => [user.user_id, user])) }, true, { joinRoom: vi.fn() });
+		document.querySelector<HTMLButtonElement>('.ap-memberlist-addtoggle')!.click();
+		flushSync();
+		const names = () => [...document.querySelectorAll('[data-testid="add-people"] .ap-pick-who-name')].map((name) => name.textContent);
+		expect(names()).toEqual(['Cy']);
+		const hide = byLabel('Hide guests') as HTMLInputElement;
+		expect(hide.checked).toBe(true);
+		// It sits at the footer's start, before Cancel and Add.
+		expect(hide.closest('.ap-dialog-foot')?.firstElementChild).toBe(hide.closest('label'));
+		hide.click();
+		flushSync();
+		expect(names()).toEqual(['Cy', 'Visitor']);
+		dom.unmount();
+		render([ada], { users: Object.fromEntries([ada, { user_id: 'cy', name: 'Cy' }].map((user) => [user.user_id, user])) }, true, { joinRoom: vi.fn() });
+		document.querySelector<HTMLButtonElement>('.ap-memberlist-addtoggle')!.click();
+		flushSync();
+		expect(queryByText('Hide guests')).toBeNull();
+	});
 });

@@ -27,6 +27,10 @@
 		error?: string;
 		/** The session can't take requests: the form stays open but won't submit. */
 		disabled?: boolean;
+		/** Offer Hide guests, at the start of the footer: there are guests to hide or show. */
+		guests?: boolean;
+		/** Guests are left out of `people`. `bind:hideGuests`. */
+		hideGuests?: boolean;
 		/** Toggles a person in or out of the chips. */
 		onpick?: (userId: string) => void;
 		/** A set's row (`group`) picked: its people go in the chips, or, once all of them are, out. */
@@ -41,7 +45,7 @@
 		listTestid?: string;
 	}
 	let {
-		open = $bindable(false), room, people, chosen, query = $bindable(''), status = 'idle', error, disabled = false, onpick, onpickgroup, onremove, onsubmit, onclose, class: className, listTestid
+		open = $bindable(false), room, people, chosen, query = $bindable(''), status = 'idle', error, disabled = false, guests = false, hideGuests = $bindable(true), onpick, onpickgroup, onremove, onsubmit, onclose, class: className, listTestid
 	}: Props = $props();
 	const saving = $derived(status === 'saving');
 	const action = $derived(saving ? 'Adding…' : chosen.length === 1 ? `Add ${chosen[0].name || chosen[0].user_id}` : chosen.length ? `Add ${chosen.length} people` : 'Add');
@@ -58,6 +62,7 @@
 	onsubmit={(event) => { event.preventDefault(); if (!saving && !disabled && chosen.length) onsubmit?.(); }}>
 	<PeoplePicker bind:this={picker} label="Add" {people} {chosen} bind:query empty="No one else to add yet" busy={saving} onchoose={(person) => (person.group ? onpickgroup?.(person.group) : onpick?.(person.user_id))} {onremove} {listTestid} />
 	{#snippet footer()}
+		{#if guests}<label class="ap-pref-check ap-pick-guests"><input class="ap-checklist-box" type="checkbox" bind:checked={hideGuests} disabled={saving} /> Hide guests</label>{/if}
 		<Button variant="ghost" size="sm" onclick={() => (open = false)} disabled={saving} label="Cancel" />
 		<Button type="submit" variant="primary" size="sm" disabled={saving || disabled || !chosen.length} label={action} />
 	{/snippet}
