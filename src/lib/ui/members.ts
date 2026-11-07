@@ -1,5 +1,5 @@
 import type { ChatClient } from '$lib/protocol/client';
-import { isMentionableRole } from '$lib/protocol/markdown';
+import { isMentionableRole, mentionSegments } from '$lib/protocol/markdown';
 import type { Identity } from '$lib/protocol/types';
 
 /**
@@ -33,6 +33,29 @@ export function absentMentions(mentions: readonly string[], room: { members?: re
 	if (!members || (room.memberCount !== undefined && room.memberCount > members.length)) return [];
 	const memberIds = new Set(members.map((member) => member.user_id));
 	return [...new Set(mentions)].filter((userId) => !memberIds.has(userId) && !skip(userId));
+}
+
+/**
+ * The roles `text` mentions (`@&role`, Appendix A.3), once each, in order: what a draft's role chips are sent as, and
+ * a role typed whole that no one here holds, which stays text in the field but is a mention all the same.
+ */
+export function mentionedRoles(text: string): string[] {
+	const roles = mentionSegments(text, () => undefined).flatMap((part) => (typeof part !== 'string' && part.target.kind === 'role' ? [part.target.id] : []));
+	return [...new Set(roles)];
+}
+
+/**
+ * Who to ask to add for the roles a message mentions: a role mentions those here who hold it (its chip names them), so
+ * one that someone here besides you holds asks about no one. A role no one else here holds would mention no one: it
+ * asks about everyone in `users` (those the session knows) who holds it, in the order `users` lists them.
+ */
+export function unheldRoleHolders(roles: readonly string[], users: readonly Identity[], memberIds: ReadonlySet<string>, isMe: (userId: string) => boolean): string[] {
+	const holds = (user: Identity, role: string) => Array.isArray(user.roles) && user.roles.includes(role);
+	const ids = roles.flatMap((role) => {
+		const holders = users.filter((user) => holds(user, role));
+		return holders.some((user) => memberIds.has(user.user_id) && !isMe(user.user_id)) ? [] : holders.map((user) => user.user_id);
+	});
+	return [...new Set(ids)];
 }
 
 /** Everyone with a role, to add together: `@mod` adds each of them. */

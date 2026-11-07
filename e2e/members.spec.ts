@@ -88,6 +88,39 @@ test('the ask to add who a message mentions can send it as it is, or go back to 
 	await expect(prompt).toHaveCount(0);
 });
 
+test('a role no one here holds asks to add everyone with it, and the message mentions them once added; one held here doesn’t ask', async ({ preview, page }) => {
+	await preview.open();
+	await preview.openRoom('engineering');
+	const prompt = page.getByTestId('mention-add-prompt');
+	await preview.composer().click();
+	// Ada, here, is an admin: the role mentions her, and there's no one to ask about.
+	await page.keyboard.type('@&admin hi ');
+	await page.keyboard.press('Enter');
+	const toAdmins = await preview.waitForSent('message', (p) => p.body?.text?.startsWith('@&admin hi'));
+	expect(toAdmins.body.mentions).toEqual(['ada']);
+	await expect(prompt).toHaveCount(0);
+
+	// No one here is a moderator: Margaret is, elsewhere.
+	await page.keyboard.type('@&moderator please review ');
+	await page.keyboard.press('Enter');
+	await expect(prompt).toContainText('Add Margaret Hamilton to engineering?');
+	await page.keyboard.press('Enter');
+	const toModerators = await preview.waitForSent('message', (p) => p.body?.text?.startsWith('@&moderator please review'));
+	expect(toModerators.body.mentions).toEqual(['margaret']);
+	await expect(page.getByRole('complementary', { name: 'Room member list' }).locator('li.ap-member[data-user="margaret"]')).toBeVisible();
+});
+
+test('a command never asks to add who it names', async ({ preview, page }) => {
+	await preview.open();
+	await preview.openRoom('engineering');
+	await preview.composer().click();
+	await page.keyboard.type('/shrug @grace ');
+	await page.keyboard.press('Enter');
+	await preview.waitForSent('command', (p) => p.body?.text?.startsWith('/shrug @grace'));
+	await expect(page.getByTestId('mention-add-prompt')).toHaveCount(0);
+	await expect(page.getByRole('complementary', { name: 'Room member list' }).locator('li.ap-member[data-user="grace"]')).toHaveCount(0);
+});
+
 test('a second click on a member closes their profile, on their name or anywhere else on their row', async ({ preview, page }) => {
 	await preview.open();
 	const list = await preview.showMembers();

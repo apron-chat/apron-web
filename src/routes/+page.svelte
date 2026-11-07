@@ -48,7 +48,7 @@
 	import PrivateIntro from '$lib/design/components/PrivateIntro.svelte';
 	import AddedBanner from '$lib/design/components/AddedBanner.svelte';
 	import { ArrivalWatch, addRoomMembers, othersIn, reachesStart } from '$lib/ui/private-rooms';
-	import { absentMentions, addMembers, couldNotAdd, isGuest } from '$lib/ui/members';
+	import { absentMentions, addMembers, couldNotAdd, isGuest, mentionedRoles, unheldRoleHolders } from '$lib/ui/members';
 	import { faceOf, roomFaces } from '$lib/ui/faces';
 	import { receiptsByMessage, steadyReceipts } from '$lib/ui/receipts';
 	import { attachmentLimits, composerAction } from '$lib/ui/commands';
@@ -1994,23 +1994,20 @@
 	}
 
 	/**
-	 * Sends the composer's text: a message with the draft's mentions (§3.5) and
-	 * previews of its GitHub links as `link` embeds (§4.8.1), or
-	 * with capability `command` a command (§4.1), which `/nick`, `/join`, `/leave`,
-	 * `/topic`, `/kick` and `/invite` turn into the requests they spell. A
-	 * command's failure shows as a local notice in the pane, where its replies
-	 * land too.
-	 */
-	/**
 	 * Holds the draft back when it mentions people who aren't in the open room or thread, and you may add them: asks
-	 * whether to first (`mentionAsk`). Not for a command, which says what it does with whom it names. True when it
-	 * asked, and the draft waits.
+	 * whether to first (`mentionAsk`). Those it mentions are the people its chips name; a role (`@&role`) mentions
+	 * those here who hold it, so it asks about no one, unless no one else here holds it: then about everyone the
+	 * session knows with it. Never for a command, which says itself what it does with whom it names: only a draft that
+	 * goes as a message. True when it asked, and the draft waits.
 	 */
 	function askToAddMentioned(room: RoomSnapshot, text: string): boolean {
 		if (!canAddMembers || session.snapshot.memberChangesUnsupported) return false;
-		if (composerAction(text, { command: session.capabilities.command, rooms: false }).kind !== 'message') return false;
+		const action = composerAction(text, { command: session.capabilities.command, rooms: false });
+		if (action.kind !== 'message') return false;
 		const skip = (userId: string) => directory.isMe(userId) || isSystemId(userId) || isGuest(directory.person({ user_id: userId }) ?? { user_id: userId });
-		const userIds = absentMentions(composerMentions, room, skip);
+		const memberIds = new Set((room.members ?? []).map((member) => member.user_id));
+		const withRoles = unheldRoleHolders(mentionedRoles(action.text), Object.values(session.snapshot.users), memberIds, (userId) => directory.isMe(userId));
+		const userIds = absentMentions([...composerMentions, ...withRoles], room, skip);
 		if (!userIds.length) return false;
 		mentionAsk = { roomId: room.id, userIds, busy: false };
 		return true;
@@ -2024,8 +2021,10 @@
 		const refused = await addMembers(client, ask.roomId, ask.userIds);
 		if (mentionAsk?.roomId === ask.roomId) mentionAsk = undefined;
 		if (refused.length) feedback.error(couldNotAdd(refused, (userId) => directory.name({ user_id: userId })));
-		// Still where the draft is: it goes, whoever was added. Elsewhere by now, it waits in its own room's draft.
-		if (paneRoom?.id === ask.roomId) sendMessage(true);
+		// Still where the draft is: it goes, whoever was added, and mentions them, so a role no one here held mentions
+		// its holders now that they're here. Elsewhere by now, it waits in its own room's draft.
+		const added = ask.userIds.filter((userId) => !refused.some((refusal) => refusal.userId === userId));
+		if (paneRoom?.id === ask.roomId) sendMessage(true, added);
 		composer?.focus();
 	}
 
@@ -2035,8 +2034,18 @@
 		composer?.focus();
 	}
 
-	/** Send. `asked`: the ask to add who it mentions was answered (MentionAddPrompt), so it goes as it is. */
-	function sendMessage(asked = false): void {
+	/**
+	 * Sends the composer's text: a message with the draft's mentions (§3.5) and
+	 * previews of its GitHub links as `link` embeds (§4.8.1), or
+	 * with capability `command` a command (§4.1), which `/nick`, `/join`, `/leave`,
+	 * `/topic`, `/kick` and `/invite` turn into the requests they spell. A
+	 * command's failure shows as a local notice in the pane, where its replies
+	 * land too.
+	 *
+	 * `asked`: the ask to add who it mentions was answered (MentionAddPrompt), so it goes as it is; `added`, whom that
+	 * added, which it mentions besides its chips, such as the holders of a role no one here held when it was written.
+	 */
+	function sendMessage(asked = false, added: readonly string[] = []): void {
 		if (!client || !paneRoom || !canCompose) return;
 		mentionAsk = undefined;
 		if (composingLive) {
@@ -2061,7 +2070,7 @@
 		}
 		if (drafts.files.length) {
 			if (!asked && askToAddMentioned(paneRoom, drafts.text)) return;
-			void sendFiles();
+			void sendFiles(added);
 			return;
 		}
 		if (!drafts.text.trim()) return;
@@ -2071,7 +2080,7 @@
 		const roomId = paneRoom.id;
 		const reply = drafts.reply;
 		const originKey = draftKey(roomId);
-		const mentions = composerMentions;
+		const mentions = [...new Set([...composerMentions, ...added])];
 		const dismissed = drafts.dismissed;
 		const action = composerAction(draft, { command: snapshot.capabilities.command, rooms: session.canManageRooms, members: !snapshot.memberChangesUnsupported, append: snapshot.capabilities['embed:append'] }, mentions);
 		if (action.kind === 'live') {
@@ -2207,7 +2216,8 @@
 	 * takes them as arguments instead (§4.1). A failed send gives the draft
 	 * back, files and all.
 	 */
-	async function sendFiles(): Promise<void> {
+	/** `added`: whom the ask to add who it mentions added, which it mentions besides its chips (`sendMessage`). */
+	async function sendFiles(added: readonly string[] = []): Promise<void> {
 		if (!client || !paneRoom || !canCompose || !session.snapshot.capabilities['embed:upload']) return;
 		const chat = client;
 		const room = paneRoom;
@@ -2223,7 +2233,7 @@
 		const limits = attachmentLimits(action, media);
 		const refit = limits !== media.upload ? staged.map(({ file }) => prepareUpload(file, { limits })) : undefined;
 		const text = action.kind === 'message' ? action.text : draft;
-		const mentions = composerMentions;
+		const mentions = [...new Set([...composerMentions, ...added])];
 		const dismissed = drafts.dismissed;
 		const embeds = command ? [] : linkPreviews.embeds(text, dismissed);
 		const options = { ...(reply ? { replyTo: reply } : {}), ...(mentions.length ? { mentions } : {}), ...(embeds.length ? { embeds } : {}) };

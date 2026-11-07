@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { absentMentions, addMembers, couldNotAdd, isGuest, memberSections, roleSets, userIdToAdd } from './members';
+import { absentMentions, addMembers, couldNotAdd, isGuest, memberSections, mentionedRoles, roleSets, unheldRoleHolders, userIdToAdd } from './members';
 
 describe('adding a member', () => {
 	it('takes exactly the user_id typed, with or without @, and never a display name, which isn’t unique', () => {
@@ -60,6 +60,18 @@ describe('mentioning someone who isn’t in the room', () => {
 	it('names who isn’t a member, once each, as mentioned, but those skipped', () => {
 		expect(absentMentions(['bob', 'ada', 'me', 'guest_9', 'carol', 'bob'], room, skip)).toEqual(['bob', 'carol']);
 		expect(absentMentions(['ada'], room, skip)).toEqual([]);
+	});
+
+	it('finds the roles a draft mentions, and who holds them', () => {
+		expect(mentionedRoles('@&mod and @&admin, again @&mod, not a@&ops nor @ada')).toEqual(['mod', 'admin']);
+		expect(mentionedRoles('no roles here')).toEqual([]);
+		const users = [{ user_id: 'me', roles: ['ops'] }, { user_id: 'ada', roles: ['admin'] }, { user_id: 'bob', roles: ['mod', 'admin'] }, { user_id: 'cy', roles: ['mod', 'ops'] }, { user_id: 'dee' }];
+		const isMe = (userId: string) => userId === 'me';
+		// Ada here holds admin, so it mentions her alone; no one here holds mod, so everyone with it is asked about.
+		expect(unheldRoleHolders(['admin', 'mod'], users, new Set(['me', 'ada']), isMe)).toEqual(['bob', 'cy']);
+		// Holding it yourself doesn't count: the mention leaves you out.
+		expect(unheldRoleHolders(['ops'], users, new Set(['me', 'ada']), isMe)).toEqual(['me', 'cy']);
+		expect(unheldRoleHolders([], users, new Set(), isMe)).toEqual([]);
 	});
 
 	it('names no one while the members aren’t all known', () => {
