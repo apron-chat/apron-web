@@ -816,9 +816,9 @@
 		untrack(() => void pushSettings.keepOff(chat));
 	});
 
-	// While Apron is in view, the app badge shows its own unread count; away, pushes' `unread` sets it.
+	// While Apron is in view, the app badge shows its own unread count (not muted rooms'); away, pushes' `unread` sets it.
 	$effect(() => {
-		const total = unread.total;
+		const total = unread.alerting;
 		if (presence.visible && !previewMode) untrack(() => void setAppBadge(navigator, total));
 	});
 
@@ -3123,7 +3123,7 @@
 <svelte:document onclick={mediaAskClick} onvisibilitychange={() => { presence.visibilityChanged(); refreshNotificationPermission(); if (document.visibilityState === 'hidden') { keepView(); void historyKeeper?.flush(); } }} />
 
 <svelte:head>
-	<title>{tabTitle(unread.total, presence.titleFlash)}</title>
+	<title>{tabTitle(unread.alerting, presence.titleFlash)}</title>
 	<meta name="description" content="Apron, a chat frontend for the Apron Chat Protocol." />
 	<!-- Link previews. og.png is apron.chat's `npm run screenshot -- og`; absolute, as crawlers require. -->
 	<meta property="og:type" content="website" />

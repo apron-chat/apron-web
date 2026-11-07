@@ -24,6 +24,24 @@ describe('unread tracking', () => {
 		expect(tracker.total).toBe(1);
 	});
 
+	it('leaves muted rooms, and threads of them, out of the count that alerts, while each keeps its own', () => {
+		const tracker = new UnreadTracker();
+		const rooms = (muted: boolean, messages: MessageRecord[][] = [[], [], []]) => [
+			room('general', messages[0], { latestLogId: '10' }),
+			room('random', messages[1], { latestLogId: '10', ...(muted ? { mutedUntil: true as const } : {}) }),
+			room('t1', messages[2], { latestLogId: '10', parentRoomId: 'random' })
+		];
+		tracker.observe(rooms(false), me, undefined, false);
+		const arrived = [[message(20, 'general')], [message(30, 'random'), message(31, 'random')], [message(40, 't1')]];
+		tracker.observe(rooms(true, arrived), me, undefined, false);
+		expect(tracker.byRoom).toEqual({ general: 1, random: 2, t1: 1 });
+		expect(tracker.total).toBe(4);
+		expect(tracker.alerting).toBe(1);
+		// Unmuted, the room alerts again.
+		tracker.observe(rooms(false, arrived), me, undefined, false);
+		expect(tracker.alerting).toBe(4);
+	});
+
 	it('starts over on another server, where a room of the same name is another room', () => {
 		const tracker = new UnreadTracker();
 		tracker.observe([room('random', [message(20, 'random')], { latestLogId: '20' })], me, 'general', true);
