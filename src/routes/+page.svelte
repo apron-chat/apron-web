@@ -23,7 +23,7 @@
 	import TimelineMessage from '$lib/components/TimelineMessage.svelte';
 	import EmbedItem from '$lib/components/embeds/Embed.svelte';
 	import type { Face, MessageEmbed, MessageHandlers, MessageTestids } from '$lib/design/components/types';
-	import { linkedRoomIn, messageView, sourceEmbed, type LinkedRoom, type MessageCaps, type MessageContext, type MessageView } from '$lib/ui/message-view';
+	import { linkedRoomIn, messageView, sourceEmbed, type LinkedRoom, type MessageCaps, type MessageContext, type MessageRow, type MessageView } from '$lib/ui/message-view';
 	import { decorateCode } from '$lib/ui/copy-code';
 	import { emojiAnchor, emojiPicker, type EmojiPickerRequest } from '$lib/ui/emoji-picker.svelte';
 	import { openProfileFrom, profileCard } from '$lib/ui/profile-card.svelte';
@@ -2896,8 +2896,25 @@
 		};
 	}
 
+	/** Where a message sits in the pane and what the viewer may do to it: whether it mentions them is worked out once, for both. */
+	function rowOf(event: MessageRecord, grouped: boolean): MessageRow {
+		const mention = mentionsMe(event, session.you);
+		return {
+			grouped,
+			reactions: reactionsFor(event),
+			mention,
+			pinged: mentions.pinged.includes(event.message_id),
+			highlighted: highlightedId === event.message_id,
+			selecting: selection.active,
+			selected: selection.has(event.message_id),
+			editing: editingId === event.message_id,
+			caps: capsFor(event, mention),
+			seenBy: receipts.get(event.message_id)
+		};
+	}
+
 	/** What the toolbar offers: only what the server can do, and only on messages this viewer may change. */
-	function capsFor(event: MessageRecord): MessageCaps {
+	function capsFor(event: MessageRecord, mention: boolean): MessageCaps {
 		// Edits, moves and deletes are `message` requests: a reader who may not write makes none (`ext:permissions`).
 		const own = session.canEdit && !session.readOnly && isOwn(event, session.you);
 		return {
@@ -2906,6 +2923,8 @@
 			startThread: canStartThreads && canCompose && !event.deleted && !activeThread && event.room_id === activeRoom?.id,
 			select: canSelect(event),
 			removeReply: own && Boolean(event.reply_to),
+			// Its author, or anyone it mentions, may tick its task list; the server decides whether another's edit stands.
+			check: !event.deleted && (own || (mention && session.canEdit && !session.readOnly)),
 			react: session.canReact && canCompose && !event.deleted,
 			link: !event.deleted
 		};
@@ -3410,18 +3429,7 @@
 								<TimelineDivider kind="new" testid="new-divider" />
 							{/if}
 							<TimelineMessage
-								row={() => messageView(item.event, {
-									grouped: item.grouped,
-									reactions: reactionsFor(item.event),
-									mention: mentionsMe(item.event, session.you),
-									pinged: mentions.pinged.includes(item.event.message_id),
-									highlighted: highlightedId === item.event.message_id,
-									selecting: selection.active,
-									selected: selection.has(item.event.message_id),
-									editing: editingId === item.event.message_id,
-									caps: capsFor(item.event),
-									seenBy: receipts.get(item.event.message_id)
-								}, messageContext)}
+								row={() => messageView(item.event, rowOf(item.event, item.grouped), messageContext)}
 								on={messageHandlers}
 								testids={MESSAGE_TESTIDS}
 								editor={(view) => (view.editing && messageEditor.component ? editMessage : undefined)}

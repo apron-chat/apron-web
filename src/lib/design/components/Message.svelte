@@ -247,13 +247,13 @@
 	}
 
 	/**
-	 * Its task list checkboxes, rendered disabled: enabled where you may edit the message (and `on.toggleTask` saves
-	 * them), again whenever the body changes. A box that fails to save goes back as it was.
+	 * Its task list checkboxes, rendered disabled: enabled where you may tick them (`caps.check`: yours, or one that
+	 * mentions you) and `on.toggleTask` saves them, again whenever the body changes. A box that fails to save goes back as it was.
 	 */
 	function tasks(node: HTMLElement): void | (() => void) {
 		void view.body?.html;
 		const toggle = on.toggleTask;
-		if (!toggle || !view.caps?.edit || view.deleted || view.selecting) return;
+		if (!toggle || !view.caps?.check || view.deleted || view.selecting) return;
 		const boxes = node.querySelectorAll<HTMLInputElement>('input.ap-task');
 		for (const box of boxes) box.disabled = false;
 		const change = (event: Event): void => {

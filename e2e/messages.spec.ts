@@ -63,10 +63,12 @@ test.describe('a message row', () => {
 test.describe('a task list', () => {
 	test.use(DEVICES.desktop);
 
-	test('checking a box in your message saves the edit; one in someone else\'s stays disabled', async ({ preview }) => {
+	test('checking a box in your message saves the edit; one in someone else\'s is yours to tick only where it mentions you', async ({ preview }) => {
 		await preview.open();
 		await preview.post('general', 'preview_guest', 'Ship it:\n\n- [ ] Foo\n- [x] Bar');
 		await preview.post('general', 'ada', 'Mine:\n\n- [ ] Theirs');
+		await preview.post('general', 'ada', { text: 'For @preview_guest:\n\n- [ ] Yours', format: 'markdown', mentions: ['preview_guest'] });
+		await expect(preview.message('For ').getByRole('checkbox')).toBeEnabled();
 		const mine = preview.message('Ship it:').getByRole('checkbox');
 		await expect(mine).toHaveCount(2);
 		await expect(mine.nth(0)).not.toBeChecked();

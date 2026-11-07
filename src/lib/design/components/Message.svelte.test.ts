@@ -611,16 +611,16 @@ describe('task list checkboxes', () => {
 	const html = '<ul><li class="ap-task-item"><input type="checkbox" class="ap-task" data-task-line="0" disabled="">Foo</li></ul>';
 	const box = () => document.querySelector<HTMLInputElement>('input.ap-task')!;
 
-	it('stay disabled on a message you may not edit', () => {
-		render({ body: { html, markdown: true, tasks: true }, caps: NONE }, { toggleTask: () => true });
+	it('stay disabled where you may not tick them, even on one you may edit', () => {
+		render({ body: { html, markdown: true, tasks: true }, caps: ALL }, { toggleTask: () => true });
 		expect(box().disabled).toBe(true);
 		dom.cleanup();
 	});
 
-	it('save a check on yours, and go back when it fails', async () => {
+	it('save a check where you may tick them, and go back when it fails', async () => {
 		let result = true;
 		const toggled: Array<[number, boolean]> = [];
-		render({ body: { html, markdown: true, tasks: true }, caps: ALL }, { toggleTask: (_view, line, checked) => (toggled.push([line, checked]), Promise.resolve(result)) });
+		render({ body: { html, markdown: true, tasks: true }, caps: { ...NONE, check: true } }, { toggleTask: (_view, line, checked) => (toggled.push([line, checked]), Promise.resolve(result)) });
 		expect(box().disabled).toBe(false);
 		box().click();
 		await tick();

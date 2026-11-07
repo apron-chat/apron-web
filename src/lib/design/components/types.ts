@@ -273,6 +273,11 @@ export interface MessageCaps {
 	react: boolean;
 	/** Copy link, under ⋯: a URL that opens this message where it is. */
 	link: boolean;
+	/**
+	 * Tick its task list checkboxes: on your own message, or one that mentions you. Saving it is an edit, which the
+	 * server may refuse for someone else's message; the box goes back if it does.
+	 */
+	check?: boolean;
 }
 
 /** Who sent a message, as its row shows them (§3.3): the kept user object, else the one it was posted under. */
@@ -452,7 +457,7 @@ export interface MessageHandlers {
 	/** Decorate the code blocks in a body (highlighting; `copy` adds Copy buttons, on a notice). Runs again when the body changes. */
 	code?: (body: HTMLElement, copy: boolean) => void | (() => void);
 	/**
-	 * A task list item's checkbox in your message was checked or unchecked: save the text with it so. `line` is its
+	 * A task list item's checkbox was checked or unchecked, on a message whose `caps.check` allows it: save the text with it so. `line` is its
 	 * `data-task-line`. Resolves whether it was saved (false puts the box back); offering it enables the boxes.
 	 */
 	toggleTask?: (view: MessageView, line: number, checked: boolean) => boolean | Promise<boolean>;
