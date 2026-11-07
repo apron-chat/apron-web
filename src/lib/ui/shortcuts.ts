@@ -30,6 +30,16 @@ export function shortcutGroups(mac: boolean): ShortcutGroup[] {
 			]
 		},
 		{
+			title: 'Full panel',
+			shortcuts: [
+				// DraftField's keydown (`newlineOnEnter`), and the full panel's keys (Composer.svelte's `key`, markdownKey).
+				{ label: 'Send', keys: [[mod, 'Enter']] },
+				{ label: 'Bold or italic', keys: [[mod, 'B'], [mod, 'I']] },
+				{ label: 'Indent or outdent a list item', where: 'In a list', keys: [['Tab'], [shift, 'Tab']] },
+				{ label: 'Back to the compact composer', keys: [['Esc']] }
+			]
+		},
+		{
 			title: 'Messages',
 			shortcuts: [
 				// The composer's ↑ (Composer.svelte's `key`), or windowKeydown's with nothing focused; then timelineKey.

@@ -10,6 +10,7 @@ import type { EmojiMartData } from '@emoji-mart/data';
 import { loadEmojiData } from './emoji-picker.svelte';
 import { directory } from './directory.svelte';
 import { enterAction, handheld } from './handheld';
+import type { TextEdit } from './text-edit';
 
 /**
  * Where a message is written, the composer's and the message editor's
@@ -44,10 +45,15 @@ export interface DraftHost {
 	/** Enter where it sends (or saves): `enterAction`, with no picker taking it. */
 	submit(): void;
 	/**
-	 * A key no picker took that types no character (Escape, an arrow, Enter), before Enter's: the caller's own, such as
-	 * ↑ in an empty composer. True when it took it. Typing doesn't ask.
+	 * A key no picker took that types no character (Escape, an arrow, Enter) or holds Ctrl or ⌘ (Ctrl+B), before
+	 * Enter's: the caller's own, such as ↑ in an empty composer. True when it took it. Typing doesn't ask.
 	 */
 	key?(event: KeyboardEvent): boolean;
+	/**
+	 * Enter starts a new line, and Ctrl+Enter or ⌘+Enter sends: for writing at length (the composer's full panel),
+	 * where a message has many lines. Unset, Enter sends (`enterAction`).
+	 */
+	readonly newlineOnEnter?: boolean;
 	/** The draft changed by typing or a pick, not set from outside. */
 	oninput?(): void;
 	/** The mention picker opened: a moment to refresh who can be named. */
@@ -83,6 +89,13 @@ export class DraftField {
 	private lastSelection: { start: number; end: number } | undefined;
 	/** A phone or tablet, where Enter starts a new line (`enterAction`). */
 	private readonly onHandheld = handheld();
+	/**
+	 * Formatting changes the field was drawn anew for (`apply`, where a chip stood in the browser's way), which the
+	 * browser's own Undo can't take back: Ctrl+Z (⌘Z) takes the last one back while the draft is as it left it, and
+	 * Ctrl+Shift+Z or Ctrl+Y makes it again. Once the draft is otherwise changed, Undo is the browser's again.
+	 */
+	private undoable: DrawnChange[] = [];
+	private redoable: DrawnChange[] = [];
 
 	matches: MentionMatch[];
 	/** The roles someone else here holds, which an `@` can name. */
@@ -190,6 +203,76 @@ export class DraftField {
 		this.refreshQuery();
 	}
 
+	/**
+	 * Makes a formatting change (`markdown-format.ts`) to the draft and its selection, as typing it would: the stretch of
+	 * text it changes goes through the browser's own editing, so its Undo takes it back, then the change's selection is
+	 * set. A stretch with a chip in it can't (the browser writes text only, and the chip drawn back would cut its Undo
+	 * off), so the field is drawn anew and Undo is this field's own (`undoable`). Out of the field (a toolbar button
+	 * reached with Tab), it reads the selection the field had as it lost focus. False when the change has nothing to do.
+	 */
+	apply(change: (edit: TextEdit) => TextEdit | undefined): boolean {
+		const field = this.element;
+		if (!field || this.host.disabled) return false;
+		const { parts, caret, anchor } = readDraft(field);
+		const text = positionText(parts);
+		const kept = caret === undefined ? this.lastSelection : undefined;
+		const focus = caret ?? kept?.end ?? text.length;
+		const other = anchor ?? kept?.start ?? focus;
+		const changed = change({ text, start: Math.min(focus, other), end: Math.max(focus, other) });
+		if (!changed) return false;
+		this.closeCompletions();
+		this.lastSelection = undefined;
+		field.focus();
+		// The one stretch that changed, between what stayed as it was at either end.
+		let head = 0;
+		while (head < text.length && head < changed.text.length && text[head] === changed.text[head]) head++;
+		let tail = 0;
+		while (tail < text.length - head && tail < changed.text.length - head && text[text.length - 1 - tail] === changed.text[changed.text.length - 1 - tail]) tail++;
+		const insert = changed.text.slice(head, changed.text.length - tail);
+		const to = text.length - tail;
+		if (head < to || insert) {
+			selectRange(field, head, to);
+			// The browser's editing: its `input` publishes the draft, as typing does. Not over a chip, nor without it (a test's DOM).
+			const typed = !chipWithin(parts, head, to) && typeof document.execCommand === 'function' && document.execCommand(insert ? 'insertText' : 'delete', false, insert);
+			if (!typed) {
+				const next = insertText(parts, head, to, insert);
+				this.draw(field, next.parts, undefined);
+				// Any `@user_id` it wrote becomes a chip again, and the draft is published.
+				this.collapse(false);
+				const before = { parts, start: Math.min(focus, other), end: Math.max(focus, other) };
+				this.undoable = [...this.undoable.slice(-(UNDO_MAX - 1)), { before, after: { parts: readDraft(field).parts, start: changed.start, end: changed.end } }];
+				this.redoable = [];
+			}
+		}
+		selectRange(field, changed.start, changed.end);
+		return true;
+	}
+
+	/** Ctrl+Z or Ctrl+Shift+Z (Ctrl+Y) for a change `apply` drew anew, while the draft is as that change left it (`undoable`). */
+	private undoDrawn(event: KeyboardEvent): boolean {
+		const field = this.element;
+		const key = event.key.toLowerCase();
+		const undo = key === 'z' && !event.shiftKey;
+		const redo = (key === 'z' && event.shiftKey) || (key === 'y' && event.ctrlKey && !event.shiftKey);
+		if (!field || event.altKey || (!undo && !redo)) return false;
+		const from = undo ? this.undoable : this.redoable;
+		const last = from.at(-1);
+		if (!last) return false;
+		const [shown, wanted] = undo ? [last.after, last.before] : [last.before, last.after];
+		if (positionText(readDraft(field).parts) !== positionText(shown.parts)) {
+			// Changed since, by typing: those changes are the browser's to undo, and these no longer apply.
+			this.undoable = [];
+			this.redoable = [];
+			return false;
+		}
+		from.pop();
+		(undo ? this.redoable : this.undoable).push(last);
+		this.draw(field, wanted.parts, undefined);
+		this.commit(field, wanted.parts, true);
+		selectRange(field, wanted.start, wanted.end);
+		return true;
+	}
+
 	/** Closes the picker and forgets where the caret was: the field is changing under it. */
 	reset(): void {
 		this.closeCompletions();
@@ -231,11 +314,16 @@ export class DraftField {
 				}
 			}
 		}
-		if (composing || (event.key.length > 1 && this.host.key?.(event))) return;
+		if (!composing && (event.ctrlKey || event.metaKey) && this.undoDrawn(event)) {
+			event.preventDefault();
+			return;
+		}
+		if (composing || ((event.key.length > 1 || event.ctrlKey || event.metaKey) && this.host.key?.(event))) return;
 		if (event.key === 'Enter') {
 			event.preventDefault();
-			if (enterAction(event, this.onHandheld) === 'newline') document.execCommand('insertText', false, '\n');
-			else this.host.submit();
+			const send = this.host.newlineOnEnter ? event.ctrlKey || event.metaKey : enterAction(event, this.onHandheld) === 'send';
+			if (send) this.host.submit();
+			else document.execCommand('insertText', false, '\n');
 		}
 	};
 
@@ -542,6 +630,105 @@ function readDraft(root: HTMLElement): { parts: DraftPart[]; caret: number | und
 	};
 	walk(root);
 	return { parts: normalizeDraft(parts), caret, anchor };
+}
+
+/** How many formatting changes drawn anew Undo can take back (`DraftField.undoable`). */
+const UNDO_MAX = 50;
+
+/** A draft and its selection, before or after a change. */
+interface DraftState {
+	parts: DraftPart[];
+	start: number;
+	end: number;
+}
+
+/** A formatting change the field was drawn anew for, which Undo takes back. */
+interface DrawnChange {
+	before: DraftState;
+	after: DraftState;
+}
+
+/** Whether a chip lies in the draft text from `start` to `end`, or a position between cuts into one. */
+function chipWithin(parts: DraftPart[], start: number, end: number): boolean {
+	let offset = 0;
+	for (const part of parts) {
+		const next = offset + partLength(part);
+		if (typeof part !== 'string' && next > start && offset < end) return true;
+		offset = next;
+	}
+	return false;
+}
+
+/** The draft's text with each chip as it is written (`chipText`) and nothing added: one character per caret position. */
+function positionText(parts: DraftPart[]): string {
+	return parts.map((part) => (typeof part === 'string' ? part : chipText(part))).join('');
+}
+
+/**
+ * The point in the field at a caret position, counted as `readDraft` counts: a chip as its text, a line break or a
+ * line's block (as the browser writes a typed line) as one; a position inside a chip lands after it.
+ */
+function pointAt(root: HTMLElement, position: number): { node: Node; offset: number } {
+	let length = 0;
+	let lastChar = '';
+	let found: { node: Node; offset: number } | undefined;
+	const walk = (node: Node): void => {
+		for (const [index, child] of [...node.childNodes].entries()) {
+			if (found) return;
+			if (child.nodeType === Node.TEXT_NODE) {
+				const text = child.textContent ?? '';
+				if (position <= length + text.length) {
+					found = { node: child, offset: position - length };
+					return;
+				}
+				length += text.length;
+				if (text) lastChar = text.slice(-1);
+				continue;
+			}
+			if (!(child instanceof HTMLElement)) continue;
+			if (position <= length) {
+				found = { node, offset: index };
+				return;
+			}
+			const chip = chipOf(child);
+			if (chip) {
+				length += partLength(chip);
+				lastChar = 'x';
+				if (position < length) found = { node, offset: index + 1 };
+			} else if (child.tagName === 'BR') {
+				if (index < node.childNodes.length - 1) {
+					length += 1;
+					lastChar = '\n';
+				}
+			} else {
+				const block = /^(DIV|P)$/.test(child.tagName);
+				// The line break `readDraft` counts before a block: a position up to it was found before the block.
+				if (block && length > 0 && lastChar !== '\n') {
+					length += 1;
+					lastChar = '\n';
+				}
+				const start = length;
+				walk(child);
+				if (!found && block && length === start && index < node.childNodes.length - 1) {
+					length += 1;
+					lastChar = '\n';
+				}
+			}
+		}
+	};
+	walk(root);
+	if (found) return found;
+	const last = root.lastChild;
+	return { node: root, offset: last instanceof HTMLBRElement ? root.childNodes.length - 1 : root.childNodes.length };
+}
+
+/** Selects the draft text from `start` to `end`, as `readDraft` counts it; equal, a bare caret. */
+function selectRange(root: HTMLElement, start: number, end: number): void {
+	const selection = document.getSelection();
+	if (!selection) return;
+	const from = pointAt(root, start);
+	const to = start === end ? from : pointAt(root, end);
+	selection.setBaseAndExtent(from.node, from.offset, to.node, to.offset);
 }
 
 /** Puts the caret at a draft-text position; a position inside a chip lands after it. */

@@ -4,6 +4,8 @@
 	 * and its links' previews, and an autocomplete picker. The field is a textarea, or your own (`field`).
 	 */
 	import Hourglass from '@lucide/svelte/icons/hourglass';
+	import Maximize from '@lucide/svelte/icons/maximize-2';
+	import Minimize from '@lucide/svelte/icons/minimize-2';
 	import Mic from '@lucide/svelte/icons/mic';
 	import Paperclip from '@lucide/svelte/icons/paperclip';
 	import Smile from '@lucide/svelte/icons/smile';
@@ -101,11 +103,39 @@
 		sendTestid?: string;
 		/** Classes for the default field, the textarea, added to its own; a `field` of your own takes its own. */
 		class?: ClassValue;
+		/**
+		 * Offers the full panel: an Expand button beside the field, for a draft long enough to want the room (the app
+		 * offers it once a draft has a second line). Omit to hide it.
+		 */
+		onexpand?: () => void;
+		/**
+		 * The full panel, for writing at length: the Composer covers its pane below the pane's header (it is placed
+		 * against the nearest positioned box, the main pane in the app), with `toolbar` along its top, the field filling
+		 * the rest, and the attach, microphone and emoji buttons beside Send at its foot. The field is drawn anew as it
+		 * opens and closes.
+		 */
+		expanded?: boolean;
+		/** The full panel's Collapse button, back to the compact composer with the same draft. */
+		oncollapse?: () => void;
+		/** The full panel's formatting buttons, at its top. */
+		toolbar?: Snippet;
+		/** The draft as it will show once sent, which the full panel's Preview shows in place of the field. Omit for no Preview. */
+		rendered?: Snippet;
+		/** The full panel shows `rendered`, not the field: Write and Preview switch it (`onpreview`). */
+		previewing?: boolean;
+		onpreview?: (previewing: boolean) => void;
+		/** The keys that send from the full panel, shown at its foot, such as `['Ctrl', 'Enter']`. */
+		sendKeys?: string[];
+		/** `data-testid` on the Expand button. */
+		expandTestid?: string;
+		/** `data-testid` on the full panel. */
+		panelTestid?: string;
 	}
 	let {
 		room, placeholder, value = $bindable(''), oninput, onsend, canSend, waitUntil, canUpload, onfiles, accept, disabled, canRecord, onrecord, onstoprecording, recording, recordingTime, thread, canCommand, live,
 		field, onemoji, emojiOpen, emojiButton = $bindable(), reply, replyText, oncancelreply, attachments, previews, preview, onremovepreview, picker,
-		replyTestid, attachmentsTestid, previewsTestid, fileInputTestid, commandTestid, liveTestid, emojiTestid, sendTestid, class: className
+		replyTestid, attachmentsTestid, previewsTestid, fileInputTestid, commandTestid, liveTestid, emojiTestid, sendTestid, class: className,
+		onexpand, expanded = false, oncollapse, toolbar, rendered, previewing = false, onpreview, sendKeys, expandTestid, panelTestid
 	}: Props = $props();
 
 	const ph = $derived(placeholder || (thread ? `Reply in ${roomName(thread.name, thread.thread, { thread: true })}` : `Message ${room || ''}`));
@@ -115,6 +145,11 @@
 	const waitLeft = $derived(waitUntil === undefined ? 0 : Math.max(0, waitUntil - secondNow()));
 	let fileInput = $state<HTMLInputElement>();
 
+	function submit(event: SubmitEvent): void {
+		event.preventDefault();
+		if (waitLeft <= 0) onsend?.();
+	}
+
 	function picked(input: HTMLInputElement): void {
 		const list = [...(input.files ?? [])];
 		input.value = '';
@@ -122,61 +157,131 @@
 	}
 </script>
 
-{#if reply}
-	<div class="ap-composer-reply" data-testid={replyTestid} role="status">
-		<span class="ap-composer-reply-text">Replying to {#if reply.name}<bdi>{reply.name}</bdi>: <bdi>{#if replyText}{@render replyText()}{:else}{reply.text}{/if}</bdi>{:else}<bdi>{reply.text}</bdi>{/if}</span>
-		<Button variant="ghost" size="sm" aria-label="Cancel reply" onclick={oncancelreply} label="Cancel reply" />
-	</div>
-{/if}
-{#if attachments}<Attachments testid={attachmentsTestid}>{@render attachments()}</Attachments>{/if}
-{#if previews && previews.length > 0}
-	<div class="ap-composer-previews" data-testid={previewsTestid} aria-label="Link previews to send">
-		{#each previews as embed, index (embed.url ?? index)}
-			<div class="ap-composer-preview">
-				{#if preview}{@render preview(index)}{:else}<!-- spread: an embed record; its fields are Embed's own props --><Embed {...embed} />{/if}
-				{#if onremovepreview}<EmbedRemove label="Remove preview" onremove={() => onremovepreview(index)} />{/if}
-			</div>
-		{/each}
-	</div>
-{/if}
-<!-- The picker anchors to the field's row and grows upward. -->
-<div class="ap-composer-wrap">
-	{@render picker?.()}
-	<form class={['ap-composer', disabled && 'ap-composer-disabled', cmd && 'ap-composer-cmd']} aria-label="Send a message" onsubmit={(e) => { e.preventDefault(); if (waitLeft <= 0) onsend?.(); }}>
-		{#if canUpload}
-			<span class="ap-composer-tools">
-				<button type="button" class="ap-iconbtn" onclick={() => fileInput?.click()} disabled={disabled || recording} aria-label="Attach a file" title="Attach a file">
-					<Paperclip size={18} aria-hidden="true" />
+{#snippet replyBar()}
+	{#if reply}
+		<div class="ap-composer-reply" data-testid={replyTestid} role="status">
+			<span class="ap-composer-reply-text">Replying to {#if reply.name}<bdi>{reply.name}</bdi>: <bdi>{#if replyText}{@render replyText()}{:else}{reply.text}{/if}</bdi>{:else}<bdi>{reply.text}</bdi>{/if}</span>
+			<Button variant="ghost" size="sm" aria-label="Cancel reply" onclick={oncancelreply} label="Cancel reply" />
+		</div>
+	{/if}
+{/snippet}
+{#snippet staged()}
+	{#if attachments}<Attachments testid={attachmentsTestid}>{@render attachments()}</Attachments>{/if}
+	{#if previews && previews.length > 0}
+		<div class="ap-composer-previews" data-testid={previewsTestid} aria-label="Link previews to send">
+			{#each previews as embed, index (embed.url ?? index)}
+				<div class="ap-composer-preview">
+					{#if preview}{@render preview(index)}{:else}<!-- spread: an embed record; its fields are Embed's own props --><Embed {...embed} />{/if}
+					{#if onremovepreview}<EmbedRemove label="Remove preview" onremove={() => onremovepreview(index)} />{/if}
+				</div>
+			{/each}
+		</div>
+	{/if}
+{/snippet}
+{#snippet uploadTools()}
+	{#if canUpload}
+		<span class="ap-composer-tools">
+			<button type="button" class="ap-iconbtn" onclick={() => fileInput?.click()} disabled={disabled || recording} aria-label="Attach a file" title="Attach a file">
+				<Paperclip size={18} aria-hidden="true" />
+			</button>
+			{#if canRecord !== false}
+				<button type="button" class={['ap-iconbtn', recording && 'ap-iconbtn-rec']} onclick={recording ? onstoprecording : onrecord} {disabled} aria-label={recording ? 'Stop recording' : 'Record a voice message'} aria-pressed={!!recording} title={recording ? 'Stop recording' : 'Record a voice message'}>
+					{#if recording}<Square size={12} fill="currentColor" stroke="currentColor" strokeWidth={0} aria-hidden="true" />
+					{:else}<Mic size={18} aria-hidden="true" />{/if}
 				</button>
-				{#if canRecord !== false}
-					<button type="button" class={['ap-iconbtn', recording && 'ap-iconbtn-rec']} onclick={recording ? onstoprecording : onrecord} {disabled} aria-label={recording ? 'Stop recording' : 'Record a voice message'} aria-pressed={!!recording} title={recording ? 'Stop recording' : 'Record a voice message'}>
-						{#if recording}<Square size={12} fill="currentColor" stroke="currentColor" strokeWidth={0} aria-hidden="true" />
-						{:else}<Mic size={18} aria-hidden="true" />{/if}
+			{/if}
+		</span>
+		{#if onfiles}<input class="ap-sr" type="file" multiple {accept} tabindex="-1" aria-hidden="true" data-testid={fileInputTestid} bind:this={fileInput} onchange={(e) => picked(e.currentTarget)} />{/if}
+	{/if}
+{/snippet}
+{#snippet recordingLine()}
+	<span class="ap-composer-recording" role="status"><span class="ap-composer-recdot" aria-hidden="true"></span>Recording <span class="ap-composer-rectime">{recordingTime || '0:00'}</span></span>
+{/snippet}
+{#snippet tags()}
+	{#if cmd}<span class="ap-composer-cmdtag" data-testid={commandTestid} title="Sent to the server, not posted">Command</span>{/if}
+	{#if live}<span class="ap-composer-cmdtag ap-composer-livetag" data-testid={liveTestid} title="Everyone sees this message as you type it; Send finishes it"><span class="ap-composer-livedot" aria-hidden="true"></span>Live</span>{/if}
+{/snippet}
+{#snippet theField()}
+	{#if field}{@render field({ placeholder: ph, disabled: !!disabled, command: cmd })}
+	{:else}
+		<textarea rows="1" dir="auto" placeholder={ph} {disabled} aria-label={cmd ? 'Command' : 'Message'} class={['ap-composer-field', className]} bind:value={() => value, (v) => { value = v; oninput?.(v); }}></textarea>
+	{/if}
+{/snippet}
+{#snippet emojiTool()}
+	{#if onemoji}
+		<button type="button" class={['ap-iconbtn', emojiOpen && 'ap-iconbtn-on']} data-testid={emojiTestid} aria-label="Insert emoji" title="Insert emoji" aria-haspopup="dialog" aria-expanded={!!emojiOpen} disabled={disabled || recording} bind:this={emojiButton} onclick={onemoji}>
+			<Smile size={18} aria-hidden="true" />
+		</button>
+	{/if}
+{/snippet}
+{#snippet sendButton()}
+	<!-- Pressing Send leaves the focus in the field, so a phone's keyboard stays up between messages rather than dropping and coming back. -->
+	<Button type="submit" size="sm" variant="primary" class={waitLeft > 0 ? 'ap-composer-wait' : undefined} data-testid={sendTestid} onmousedown={(e) => e.preventDefault()} aria-label={waitLeft > 0 ? `Send again in ${waitWords(waitLeft, waitLeft >= LONG_WAIT_MS)}` : cmd ? 'Run command' : 'Send message'} disabled={disabled || recording || !sendable || waitLeft > 0}>
+		{#snippet children()}{#if waitLeft > 0}<Hourglass size={14} aria-hidden="true" />{waitLabel(waitLeft, waitLeft >= LONG_WAIT_MS)}{:else}{cmd ? 'Run' : 'Send'}{/if}{/snippet}
+	</Button>
+{/snippet}
+
+{#if expanded}
+	<!-- The full panel: one box over the pane below its header, the draft's reply, files and previews inside it. -->
+	<div class="ap-composer-full" data-testid={panelTestid}>
+		<form class={['ap-composer', 'ap-composer-panel', disabled && 'ap-composer-disabled', cmd && 'ap-composer-cmd']} aria-label="Send a message" onsubmit={submit}>
+			<div class="ap-composer-head">
+				{#if !previewing}{@render toolbar?.()}{/if}
+				<span class="ap-composer-grow"></span>
+				{#if rendered}
+					<div class="ap-seg ap-composer-views" role="radiogroup" aria-label="View">
+						<button type="button" role="radio" aria-checked={!previewing} class={['ap-seg-item', !previewing && 'ap-seg-on']} onclick={() => onpreview?.(false)}>Write</button>
+						<button type="button" role="radio" aria-checked={previewing} class={['ap-seg-item', previewing && 'ap-seg-on']} onclick={() => onpreview?.(true)}>Preview</button>
+					</div>
+				{/if}
+				{#if oncollapse}
+					<button type="button" class="ap-iconbtn" aria-label="Collapse composer" title="Collapse (Esc)" onclick={oncollapse}>
+						<Minimize size={16} aria-hidden="true" />
 					</button>
 				{/if}
-			</span>
-			{#if onfiles}<input class="ap-sr" type="file" multiple {accept} tabindex="-1" aria-hidden="true" data-testid={fileInputTestid} bind:this={fileInput} onchange={(e) => picked(e.currentTarget)} />{/if}
-		{/if}
-		{#if recording}
-			<span class="ap-composer-recording" role="status"><span class="ap-composer-recdot" aria-hidden="true"></span>Recording <span class="ap-composer-rectime">{recordingTime || '0:00'}</span></span>
-		{:else}
-			{#if cmd}<span class="ap-composer-cmdtag" data-testid={commandTestid} title="Sent to the server, not posted">Command</span>{/if}
-			{#if live}<span class="ap-composer-cmdtag ap-composer-livetag" data-testid={liveTestid} title="Everyone sees this message as you type it; Send finishes it"><span class="ap-composer-livedot" aria-hidden="true"></span>Live</span>{/if}
-			{#if field}{@render field({ placeholder: ph, disabled: !!disabled, command: cmd })}
+			</div>
+			{@render replyBar()}
+			<!-- The field stays while previewing, hidden, so the draft and its place in it are kept. -->
+			<div class="ap-composer-body" hidden={previewing && !!rendered}>
+				{@render picker?.()}
+				{@render theField()}
+			</div>
+			{#if previewing && rendered}<div class="ap-composer-rendered">{@render rendered()}</div>{/if}
+			{@render staged()}
+			<div class="ap-composer-foot">
+				{@render uploadTools()}
+				<span class="ap-composer-tools">{@render emojiTool()}</span>
+				{#if recording}{@render recordingLine()}{:else}{@render tags()}{/if}
+				<span class="ap-composer-grow"></span>
+				{#if sendKeys?.length && !recording}<span class="ap-composer-keys">{#each sendKeys as key, index (index)}<kbd>{key}</kbd>{/each} to send</span>{/if}
+				{@render sendButton()}
+			</div>
+		</form>
+	</div>
+{:else}
+	{@render replyBar()}
+	{@render staged()}
+	<!-- The picker anchors to the field's row and grows upward. -->
+	<div class="ap-composer-wrap">
+		{@render picker?.()}
+		<form class={['ap-composer', disabled && 'ap-composer-disabled', cmd && 'ap-composer-cmd']} aria-label="Send a message" onsubmit={submit}>
+			{@render uploadTools()}
+			{#if recording}{@render recordingLine()}
 			{:else}
-				<textarea rows="1" dir="auto" placeholder={ph} {disabled} aria-label={cmd ? 'Command' : 'Message'} class={['ap-composer-field', className]} bind:value={() => value, (v) => { value = v; oninput?.(v); }}></textarea>
+				{@render tags()}
+				{@render theField()}
 			{/if}
-		{/if}
-		{#if onemoji}
-			<span class="ap-composer-tools">
-				<button type="button" class={['ap-iconbtn', emojiOpen && 'ap-iconbtn-on']} data-testid={emojiTestid} aria-label="Insert emoji" title="Insert emoji" aria-haspopup="dialog" aria-expanded={!!emojiOpen} disabled={disabled || recording} bind:this={emojiButton} onclick={onemoji}>
-					<Smile size={18} aria-hidden="true" />
-				</button>
-			</span>
-		{/if}
-		<!-- Pressing Send leaves the focus in the field, so a phone's keyboard stays up between messages rather than dropping and coming back. -->
-		<Button type="submit" size="sm" variant="primary" class={waitLeft > 0 ? 'ap-composer-wait' : undefined} data-testid={sendTestid} onmousedown={(e) => e.preventDefault()} aria-label={waitLeft > 0 ? `Send again in ${waitWords(waitLeft, waitLeft >= LONG_WAIT_MS)}` : cmd ? 'Run command' : 'Send message'} disabled={disabled || recording || !sendable || waitLeft > 0}>
-			{#snippet children()}{#if waitLeft > 0}<Hourglass size={14} aria-hidden="true" />{waitLabel(waitLeft, waitLeft >= LONG_WAIT_MS)}{:else}{cmd ? 'Run' : 'Send'}{/if}{/snippet}
-		</Button>
-	</form>
-</div>
+			{#if onemoji || (onexpand && !recording)}
+				<span class="ap-composer-tools">
+					{#if onexpand && !recording}
+						<Button variant="ghost" size="sm" class="ap-composer-expand" data-testid={expandTestid} aria-label="Expand composer" title="Expand to the full panel" onmousedown={(e) => e.preventDefault()} onclick={onexpand}>
+							{#snippet children()}<Maximize size={14} aria-hidden="true" /><span class="ap-composer-expand-label">Expand</span>{/snippet}
+						</Button>
+					{/if}
+					{@render emojiTool()}
+				</span>
+			{/if}
+			{@render sendButton()}
+		</form>
+	</div>
+{/if}
