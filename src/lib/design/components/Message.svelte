@@ -237,6 +237,41 @@
 		void view.body?.html;
 		return on.code?.(node, Boolean(view.system && view.scope));
 	}
+
+	/** A message's body: its code blocks and its task list checkboxes, in one attachment, so a row with neither runs none. */
+	function decorate(node: HTMLElement): () => void {
+		const undo = [view.body?.code && code(node), view.body?.tasks && tasks(node)];
+		return () => {
+			for (const done of undo) if (typeof done === 'function') done();
+		};
+	}
+
+	/**
+	 * Its task list checkboxes, rendered disabled: enabled where you may edit the message (and `on.toggleTask` saves
+	 * them), again whenever the body changes. A box that fails to save goes back as it was.
+	 */
+	function tasks(node: HTMLElement): void | (() => void) {
+		void view.body?.html;
+		const toggle = on.toggleTask;
+		if (!toggle || !view.caps?.edit || view.deleted || view.selecting) return;
+		const boxes = node.querySelectorAll<HTMLInputElement>('input.ap-task');
+		for (const box of boxes) box.disabled = false;
+		const change = (event: Event): void => {
+			const box = event.target as HTMLInputElement;
+			if (!box.matches?.('input.ap-task')) return;
+			const line = Number(box.dataset.taskLine);
+			const checked = box.checked;
+			if (!Number.isInteger(line)) return;
+			void Promise.resolve(toggle(view, line, checked)).then((saved) => {
+				if (!saved && box.isConnected && box.checked === checked) box.checked = !checked;
+			});
+		};
+		node.addEventListener('change', change);
+		return () => {
+			node.removeEventListener('change', change);
+			for (const box of boxes) box.disabled = true;
+		};
+	}
 </script>
 
 <!-- Every row marks itself a timeline item, for whoever scrolls the timeline. -->
@@ -298,7 +333,7 @@
 			{:else if editor}{@render editor(view)}
 			{:else}
 				<!-- An absent format is plain (§3.5); only an explicit `markdown` body is rendered as Markdown. -->
-				{#if view.body}<div class={['ap-msg-text', view.body.markdown ? 'ap-msg-markdown' : 'ap-msg-plain']} {@attach view.body.code && code}>{@html view.body.html}</div>{/if}
+				{#if view.body}<div class={['ap-msg-text', view.body.markdown ? 'ap-msg-markdown' : 'ap-msg-plain']} {@attach (view.body.code || view.body.tasks) && decorate}>{@html view.body.html}</div>{/if}
 				{#if view.writing}<div class="ap-msg-writing" role="status" data-testid={testids?.writing}><TypingDots />Writing…</div>
 				{:else if view.waiting}<div class="ap-msg-writing" role="status" data-testid={testids?.waiting}>Waiting to stream…</div>{/if}
 				{#if view.linkCards?.length}<div class="ap-msg-linkcards">{#each view.linkCards as card (card.href)}<LinkCard {card} data-testid={testids?.linkCard} />{/each}</div>{/if}

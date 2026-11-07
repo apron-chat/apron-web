@@ -2619,7 +2619,14 @@
 		// A user mention, or the sender's name or avatar, opens their profile card.
 		openProfile: openProfileFrom,
 		jump: jumpToMessage,
-		code: decorateCode
+		code: decorateCode,
+		toggleTask: (view, line, checked) => {
+			if (!client || !session.canEdit || !view.id) return false;
+			const handle = client.toggleTask(view.id, line, checked);
+			if (!handle) return false;
+			feedback.track(handle, 'Saving edit…');
+			return handle.promise.then(() => true, () => false);
+		}
 	};
 
 	// --- Reading ---

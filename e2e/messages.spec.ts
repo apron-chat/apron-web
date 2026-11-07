@@ -60,6 +60,27 @@ test.describe('a message row', () => {
 	});
 });
 
+test.describe('a task list', () => {
+	test.use(DEVICES.desktop);
+
+	test('checking a box in your message saves the edit; one in someone else\'s stays disabled', async ({ preview }) => {
+		await preview.open();
+		await preview.post('general', 'preview_guest', 'Ship it:\n\n- [ ] Foo\n- [x] Bar');
+		await preview.post('general', 'ada', 'Mine:\n\n- [ ] Theirs');
+		const mine = preview.message('Ship it:').getByRole('checkbox');
+		await expect(mine).toHaveCount(2);
+		await expect(mine.nth(0)).not.toBeChecked();
+		await expect(mine.nth(1)).toBeChecked();
+		await expect(preview.message('Mine:').getByRole('checkbox')).toBeDisabled();
+
+		await mine.nth(0).check();
+		const edit = await preview.waitForSent('message', (params) => params.message_id !== undefined);
+		expect(edit.body).toMatchObject({ text: 'Ship it:\n\n- [x] Foo\n- [x] Bar', format: 'markdown' });
+		await expect(mine.nth(0)).toBeChecked();
+		await expect(mine.nth(0)).toBeEnabled();
+	});
+});
+
 test.describe('a shared name', () => {
 	test.use({ ...DEVICES.desktop, knobs: { seed: 'rich' } });
 

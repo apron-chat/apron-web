@@ -28,7 +28,7 @@ export const NOWHERE: MediaCheck = { key: 'none', src: () => undefined };
 
 /**
  * `message`: what a body holds once rendered, what CommonMark produces plus the links, mention chips and custom
- * emoji added to it; raw HTML never gets this far, and sanitizing last also covers everything done after rendering.
+ * emoji added to it, and task lists' checkboxes; raw HTML never gets this far, and sanitizing last also covers everything done after rendering.
  * `embed`: an HTML embed (§4.8), as its server sent it: text, tables, lists, links and media, without scripts,
  * styles, forms or anything but HTML. Nothing in it names the page's own parts (`class`, `id`, `role`, ARIA) or
  * shows itself on its own (`open`, `hidden`, `popover`, a dialog), so it can't wear the app's classes to draw
@@ -36,8 +36,9 @@ export const NOWHERE: MediaCheck = { key: 'none', src: () => undefined };
  */
 const CONFIGS: Record<'message' | 'embed', Config> = {
 	message: {
-		ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 's', 'code', 'pre', 'blockquote', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'a', 'img', 'div', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'span', 'button'],
-		ALLOWED_ATTR: ['href', 'title', 'src', 'alt', 'start', 'class', 'rel', 'target', 'type', 'data-user-id', 'data-room-id'],
+		ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 's', 'code', 'pre', 'blockquote', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'a', 'img', 'div', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'span', 'button', 'input'],
+		// `input`, `checked`, `disabled` and `data-task-line`: a task list item's checkbox, as `markdown.ts` writes it.
+		ALLOWED_ATTR: ['href', 'title', 'src', 'alt', 'start', 'class', 'rel', 'target', 'type', 'checked', 'disabled', 'data-user-id', 'data-room-id', 'data-task-line'],
 		ALLOW_DATA_ATTR: false,
 		// DOMPurify's own list of URL schemes, and Apron links' (Appendix A.4), which the page opens itself.
 		ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|matrix|apron):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i

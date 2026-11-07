@@ -305,6 +305,10 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-msg-text th { font-weight: 600; background: var(--bg-200); }
 .ap-msg-text .ap-align-center { text-align: center; }
 .ap-msg-text .ap-align-right { text-align: right; }
+/* A task list item (`- [ ]`, `- [x]`): its checkbox in its bullet's place, clickable where you may edit the message. */
+.ap-task-item { list-style: none; }
+.ap-task { margin: 0; margin-inline: -1.25em 0.375em; vertical-align: -0.125em; accent-color: var(--accent); }
+.ap-task:enabled { cursor: pointer; }
 .ap-msg-tomb { font-style: italic; color: var(--ink-muted); }
 .ap-msg-embeds { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); margin-top: var(--space-2); }
 /* An absent format is plain (§3.5): its line breaks kept. A Markdown body's quotes set apart on a muted ground. */

@@ -606,3 +606,32 @@ describe('test ids', () => {
 		expect(ids('writing')).toEqual([row.querySelector('.ap-msg-writing')]);
 	});
 });
+
+describe('task list checkboxes', () => {
+	const html = '<ul><li class="ap-task-item"><input type="checkbox" class="ap-task" data-task-line="0" disabled="">Foo</li></ul>';
+	const box = () => document.querySelector<HTMLInputElement>('input.ap-task')!;
+
+	it('stay disabled on a message you may not edit', () => {
+		render({ body: { html, markdown: true, tasks: true }, caps: NONE }, { toggleTask: () => true });
+		expect(box().disabled).toBe(true);
+		dom.cleanup();
+	});
+
+	it('save a check on yours, and go back when it fails', async () => {
+		let result = true;
+		const toggled: Array<[number, boolean]> = [];
+		render({ body: { html, markdown: true, tasks: true }, caps: ALL }, { toggleTask: (_view, line, checked) => (toggled.push([line, checked]), Promise.resolve(result)) });
+		expect(box().disabled).toBe(false);
+		box().click();
+		await tick();
+		expect(toggled).toEqual([[0, true]]);
+		expect(box().checked).toBe(true);
+		result = false;
+		box().click();
+		await Promise.resolve();
+		await tick();
+		expect(toggled).toEqual([[0, true], [0, false]]);
+		expect(box().checked).toBe(true);
+		dom.cleanup();
+	});
+});
