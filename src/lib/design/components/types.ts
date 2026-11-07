@@ -528,6 +528,11 @@ export interface PickPerson extends Face {
 	tag?: string;
 	/** You already have a conversation with just them: picking them alone opens it ("Already talking · Open"). */
 	existing?: boolean;
+	/**
+	 * A set of people rather than one, such as everyone with a role (`@mod`): the `user_id`s it picks together, and its
+	 * row has a check once they're all picked. Its own `user_id` names the set, such as the role, and is no one's.
+	 */
+	group?: string[];
 }
 
 /** A message a SearchPanel found: where and when, by whom, and a line of it with the words searched for marked. */

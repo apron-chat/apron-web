@@ -1,4 +1,6 @@
 import type { ChatClient } from '$lib/protocol/client';
+import { isMentionableRole } from '$lib/protocol/markdown';
+import type { Identity } from '$lib/protocol/types';
 
 /**
  * The `user_id` typed to add someone to a room (§4.2.2): exactly that ID,
@@ -10,6 +12,76 @@ import type { ChatClient } from '$lib/protocol/client';
 export function userIdToAdd(typed: string): string | undefined {
 	const id = typed.trim().replace(/^@/, '');
 	return id && !/[\s\p{Cc}]/u.test(id) ? id : undefined;
+}
+
+/**
+ * Whether `user` looks like a guest, which the protocol doesn't say outright: a `user_id` by the suggested convention
+ * for guest sign-in, `guest_` and a counter (§3.2), or a `guest` label in `roles`, which some servers give though §3.3
+ * names none. A guest who never signs in to an account keeps their `user_id` only as long as their session, and a
+ * server may not let guests be added at all, so they aren't offered to add. A heuristic: a server that names lasting
+ * accounts `guest_…` has them left out too.
+ */
+export function isGuest(user: Identity): boolean {
+	return user.user_id.startsWith('guest_') || (Array.isArray(user.roles) && user.roles.includes('guest'));
+}
+
+/**
+ * Who of `mentions` (a draft's `body.mentions`, §3.5) isn't a member of `room`, once each, in the order mentioned, but
+ * those `skip` names (such as you, the system identities and guests). None while the members aren't all known: before
+ * any listing, or when the server listed only some of them (`memberCount`, §4.2.1), since then anyone could be one.
+ */
+export function absentMentions(mentions: readonly string[], room: { members?: readonly Identity[]; memberCount?: number }, skip: (userId: string) => boolean): string[] {
+	const members = room.members;
+	if (!members || (room.memberCount !== undefined && room.memberCount > members.length)) return [];
+	const memberIds = new Set(members.map((member) => member.user_id));
+	return [...new Set(mentions)].filter((userId) => !memberIds.has(userId) && !skip(userId));
+}
+
+/**
+ * Who to ask to add for the roles a message mentions: a role mentions those here who hold it (its chip names them), so
+ * one that someone here besides you holds asks about no one. A role no one else here holds would mention no one: it
+ * asks about everyone in `users` (those the session knows) who holds it, in the order `users` lists them.
+ */
+export function unheldRoleHolders(roles: readonly string[], users: readonly Identity[], memberIds: ReadonlySet<string>, isMe: (userId: string) => boolean): string[] {
+	const holds = (user: Identity, role: string) => Array.isArray(user.roles) && user.roles.includes(role);
+	const ids = roles.flatMap((role) => {
+		const holders = users.filter((user) => holds(user, role));
+		return holders.some((user) => memberIds.has(user.user_id) && !isMe(user.user_id)) ? [] : holders.map((user) => user.user_id);
+	});
+	return [...new Set(ids)];
+}
+
+/** Everyone with a role, to add together: `@mod` adds each of them. */
+export interface RoleSet {
+	role: string;
+	/** Their `user_id`s, in the order the people came in. */
+	userIds: string[];
+}
+
+/**
+ * The roles held by `people` that `typed` starts to name, as a mention does: after an `@` (or `@&`, or `&`), in any
+ * case. Each comes with who holds it: one named exactly first, then by how many hold it, then by name; at most
+ * `limit`. A plain name names no role, so typing someone's name lists people alone. A role that can't be written
+ * `@&role` (Appendix A.3), such as one with a space, is left out, as the composer leaves it.
+ */
+export function roleSets(people: readonly Identity[], typed: string, limit: number): RoleSet[] {
+	const mention = /^(?:@&?|&)(.+)$/.exec(typed.trim());
+	if (!mention) return [];
+	const wanted = mention[1].toLowerCase();
+	const byRole = new Map<string, string[]>();
+	for (const person of people) {
+		for (const role of new Set(Array.isArray(person.roles) ? person.roles : [])) {
+			if (typeof role !== 'string' || !isMentionableRole(role) || !role.toLowerCase().startsWith(wanted)) continue;
+			const userIds = byRole.get(role);
+			if (userIds) userIds.push(person.user_id);
+			else byRole.set(role, [person.user_id]);
+		}
+	}
+	const rank = (role: string) => (role.toLowerCase() === wanted ? 0 : 1);
+	return [...byRole]
+		.map(([role, userIds]) => ({ role, userIds }))
+		.sort((a, b) => rank(a.role) - rank(b.role) || b.userIds.length - a.userIds.length || a.role.localeCompare(b.role))
+		.slice(0, limit);
 }
 
 /** A section of the member list: everyone online, or everyone offline. */

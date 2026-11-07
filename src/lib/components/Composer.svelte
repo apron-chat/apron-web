@@ -81,6 +81,8 @@
 		onrename: (id: string, title: string) => void;
 		/** Escape while replying (`reply`) cancels it too. */
 		oncancelreply: () => void;
+		/** Escape no picker took, before a reply's cancel, such as to put away an ask about the draft. True when it did something. */
+		onescape?: () => boolean;
 		/** ↑ in the empty field: the keyboard goes up to the messages. True when there was one to go to. */
 		onup?: () => boolean;
 		/** The mention picker opened: a moment to refresh who can be named. */
@@ -88,7 +90,7 @@
 		/** Sending waits until then, as the server asked (`retry_after`, epoch milliseconds): Send counts down, and the draft stays. */
 		waitUntil?: number;
 	}
-	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled, holdSend = false, canUpload, files = [], uploadLimits, canCommand = false, live, people, rooms = [], reply, oninput, onsend, onfiles, onunstage, onrename, oncancelreply, onup, onmention, waitUntil }: Props = $props();
+	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled, holdSend = false, canUpload, files = [], uploadLimits, canCommand = false, live, people, rooms = [], reply, oninput, onsend, onfiles, onunstage, onrename, oncancelreply, onescape, onup, onmention, waitUntil }: Props = $props();
 
 	/** The field: chips and autocomplete, as in the message editor. */
 	let field = $state<MessageField | undefined>();
@@ -174,7 +176,9 @@
 	/** The field's keys no picker took: Escape cancels a reply, and ↑ in the empty field goes up to the messages. */
 	function key(event: KeyboardEvent): boolean {
 		if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return false;
-		if (event.key === 'Escape' && reply) oncancelreply();
+		if (event.key === 'Escape' && onescape?.()) {
+			// Taken: an ask about the draft went away, and the reply stays.
+		} else if (event.key === 'Escape' && reply) oncancelreply();
 		else if (!(event.key === 'ArrowUp' && !value && files.length === 0 && onup?.())) return false;
 		event.preventDefault();
 		return true;
