@@ -14,7 +14,7 @@
   function noop() {}
   var draft = '### Rollout plan for worker 1.9.1\n\n1. **Canary**: deploy to `worker-canary` only\n2. **Migration**: run 0042 with the lock timeout at 5s\n\n> If the error rate goes over 1%, roll back.';
   A.render(A.Composer, $('compact'), { room: 'Ops', canUpload: true, onemoji: noop, value: 'Rollout plan for worker 1.9.1\n1. Canary', onexpand: noop });
-  var tools = ['Heading', 'Bold', 'Italic', 'Link', 'Bulleted list', 'Numbered list', 'Quote', 'Code block'].map(function (label) {
+  var tools = ['Bold', 'Italic', 'Strikethrough', 'Link', 'Bulleted list', 'Numbered list', 'Quote', 'Inline code', 'Code block'].map(function (label) {
     return '<button type="button" class="ap-iconbtn" aria-label="' + label + '" title="' + label + '">' + label.charAt(0) + '</button>';
   }).join('');
   A.render(A.Composer, $('full'), {

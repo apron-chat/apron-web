@@ -67,13 +67,14 @@ describe('Composer', () => {
 		expect(document.querySelector('[data-testid="composer-expand"]')).toBeNull();
 		dom.unmount();
 
-		const { onsend } = render({ value: 'Plan\n- canary' });
+		const { onsend, field: compact } = render({ value: 'Plan\n- canary' });
 		document.querySelector<HTMLButtonElement>('[data-testid="composer-expand"]')!.click();
 		flushSync();
 		await tick();
 		expect(panel()).not.toBeNull();
 		expect(document.querySelector('[data-testid="composer-expand"]')).toBeNull();
-		// The same draft, in a field drawn anew in the panel.
+		// The same field, the draft in it as it was.
+		expect(field()).toBe(compact);
 		expect(field().textContent).toBe('Plan\n- canary');
 		document.execCommand = vi.fn(() => true);
 		dom.press(field(), 'Enter', { shiftKey: true });

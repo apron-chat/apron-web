@@ -156,14 +156,6 @@ describe('DraftField', () => {
 		f.done();
 	});
 
-	it('passes keys held with Ctrl or ⌘ to the caller, as Ctrl+B for bold', () => {
-		const f = field({ value: true });
-		f.draft.keydown(new KeyboardEvent('keydown', { key: 'b', ctrlKey: true, cancelable: true }));
-		f.draft.keydown(new KeyboardEvent('keydown', { key: 'i', metaKey: true, cancelable: true }));
-		expect(f.key.mock.calls.map(([event]) => event.key)).toEqual(['b', 'i']);
-		f.done();
-	});
-
 	it('with `newlineOnEnter`, Enter starts a line and Ctrl+Enter or ⌘+Enter sends', () => {
 		const f = field({ value: true }, { newlineOnEnter: true });
 		document.execCommand = vi.fn(() => true);
@@ -210,31 +202,6 @@ describe('DraftField', () => {
 		flushSync();
 		expect(f.value()).toBe('**bold** me');
 		expect(f.selected()).toEqual([2, 6]);
-		f.done();
-	});
-
-	it('takes a change it drew anew back with Ctrl+Z, and makes it again with Ctrl+Shift+Z, while the draft is as it left it', () => {
-		const f = field({ value: true });
-		f.type('ask @alan \nthen go');
-		const press = (init: KeyboardEventInit) => {
-			const event = new KeyboardEvent('keydown', { cancelable: true, ...init });
-			f.draft.keydown(event);
-			flushSync();
-			return event.defaultPrevented;
-		};
-		f.draft.apply((edit) => ({ text: `> ${edit.text.replace('\n', '\n> ')}`, start: 0, end: 22 }));
-		flushSync();
-		expect(f.value()).toBe('> ask @alan \n> then go');
-		expect(press({ key: 'z', ctrlKey: true })).toBe(true);
-		expect(f.value()).toBe('ask @alan \nthen go');
-		expect(f.element.querySelector('[data-user-id="alan"]')).not.toBeNull();
-		expect(press({ key: 'z', metaKey: true, shiftKey: true })).toBe(true);
-		expect(f.value()).toBe('> ask @alan \n> then go');
-		expect(f.selected()).toEqual([0, 22]);
-		// Typed over since: Undo is the browser's again.
-		f.type('!');
-		expect(press({ key: 'z', ctrlKey: true })).toBe(false);
-		expect(f.value()).toBe('> ask @alan \n> then go!');
 		f.done();
 	});
 });

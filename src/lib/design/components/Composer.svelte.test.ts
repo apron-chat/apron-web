@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { createRawSnippet } from 'svelte';
+import { createRawSnippet, flushSync } from 'svelte';
 import { describe, expect, it, vi } from 'vitest';
 import Composer from './Composer.svelte';
 import ComposerEditable from './ComposerEditable.svelte';
@@ -176,10 +176,26 @@ describe('Composer', () => {
 		dom.unmount();
 		render({ value: 'one\ntwo', expanded: true, previewing: true, onpreview, rendered: dom.html('<p>rendered</p>'), toolbar: dom.html('<div role="toolbar" aria-label="Formatting">B</div>') });
 		expect(document.querySelector('.ap-composer-rendered')?.textContent).toBe('rendered');
-		expect(document.querySelector<HTMLElement>('.ap-composer-body')!.hidden).toBe(true);
+		// The field stays, hidden by the stylesheet, so the draft and its place in it are kept.
+		expect(document.querySelector('form')!.classList.contains('ap-composer-previewing')).toBe(true);
+		expect(dom.byRole('textbox', 'Message')).toBeDefined();
 		// Formatting has nothing to do with the draft out of sight.
 		expect(document.querySelector('[role="toolbar"]')).toBeNull();
 		dom.byRole('radio', 'Write').click();
 		expect(onpreview).toHaveBeenCalledWith(false);
+	});
+
+	it('opens and closes the full panel around the same field, so what is typed and the caret stay put', () => {
+		const props = $state<Record<string, unknown>>({ room: 'Ops', value: 'one\ntwo', panelTestid: 'panel' });
+		dom.render(Composer, props);
+		const field = dom.byRole<HTMLTextAreaElement>('textbox', 'Message');
+		expect(document.querySelector('[data-testid="panel"]')).toBeNull();
+		props.expanded = true;
+		flushSync();
+		expect(document.querySelector('[data-testid="panel"]')).not.toBeNull();
+		expect(dom.byRole('textbox', 'Message')).toBe(field);
+		props.expanded = false;
+		flushSync();
+		expect(dom.byRole('textbox', 'Message')).toBe(field);
 	});
 });

@@ -83,7 +83,7 @@
 		"type-composer": {
 			"layouts": 36,
 			"styleRecalcs": 6,
-			"calls": 41469
+			"calls": 41536
 		},
 		"hover-messages": {
 			"layouts": 7,
@@ -92,12 +92,12 @@
 		}
 	},
 	"bundle": {
-		"jsGzipKB": 591.6,
-		"cssGzipKB": 27
+		"jsGzipKB": 589.9,
+		"cssGzipKB": 27.1
 	},
 	"production": {
 		"startupFiles": 13,
-		"startupJsKB": 815.9,
-		"startupJsBrotliKB": 230.5
+		"startupJsKB": 813.2,
+		"startupJsBrotliKB": 229.7
 	}
 }

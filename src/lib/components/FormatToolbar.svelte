@@ -1,11 +1,9 @@
 <script lang="ts">
 	import Bold from '@lucide/svelte/icons/bold';
 	import Code from '@lucide/svelte/icons/code';
-	import Heading from '@lucide/svelte/icons/heading';
 	import Italic from '@lucide/svelte/icons/italic';
 	import Link from '@lucide/svelte/icons/link';
 	import List from '@lucide/svelte/icons/list';
-	import ListChecks from '@lucide/svelte/icons/list-checks';
 	import ListOrdered from '@lucide/svelte/icons/list-ordered';
 	import SquareCode from '@lucide/svelte/icons/square-code';
 	import Strikethrough from '@lucide/svelte/icons/strikethrough';
@@ -19,32 +17,27 @@
 	interface Props {
 		/** Makes a change in the field (`MessageField.apply`). */
 		apply: (change: (edit: TextEdit) => TextEdit | undefined) => boolean;
-		/** Ctrl or ⌘, as the keys for bold and italic are written on this platform. */
-		mod: string;
 		disabled?: boolean;
 	}
-	let { apply, mod, disabled = false }: Props = $props();
+	let { apply, disabled = false }: Props = $props();
 
-	interface Tool { label: string; keys?: string; icon: typeof Bold; change: (edit: TextEdit) => TextEdit | undefined }
-	const groups: Tool[][] = $derived([
+	const groups = [
 		[
-			{ label: 'Heading', icon: Heading, change: (edit: TextEdit) => prefixLines(edit, 'heading') },
-			{ label: 'Bold', keys: `${mod}+B`, icon: Bold, change: (edit: TextEdit) => wrap(edit, '**') },
-			{ label: 'Italic', keys: `${mod}+I`, icon: Italic, change: (edit: TextEdit) => wrap(edit, '_') },
+			{ label: 'Bold', icon: Bold, change: (edit: TextEdit) => wrap(edit, '**') },
+			{ label: 'Italic', icon: Italic, change: (edit: TextEdit) => wrap(edit, '_') },
 			{ label: 'Strikethrough', icon: Strikethrough, change: (edit: TextEdit) => wrap(edit, '~~') },
 			{ label: 'Link', icon: Link, change: link }
 		],
 		[
 			{ label: 'Bulleted list', icon: List, change: (edit: TextEdit) => prefixLines(edit, 'bullet') },
 			{ label: 'Numbered list', icon: ListOrdered, change: (edit: TextEdit) => prefixLines(edit, 'number') },
-			{ label: 'Checklist', icon: ListChecks, change: (edit: TextEdit) => prefixLines(edit, 'task') },
 			{ label: 'Quote', icon: TextQuote, change: (edit: TextEdit) => prefixLines(edit, 'quote') }
 		],
 		[
 			{ label: 'Inline code', icon: Code, change: (edit: TextEdit) => wrap(edit, '`') },
 			{ label: 'Code block', icon: SquareCode, change: codeBlock }
 		]
-	]);
+	];
 </script>
 
 <div class="ap-composer-format" role="toolbar" aria-label="Formatting">
@@ -52,7 +45,7 @@
 		{#if index > 0}<span class="ap-composer-format-sep" aria-hidden="true"></span>{/if}
 		{#each tools as tool (tool.label)}
 			<!-- Pressing one leaves the focus, and the selection, in the field. -->
-			<button type="button" class="ap-iconbtn" aria-label={tool.label} title={tool.keys ? `${tool.label} (${tool.keys})` : tool.label} aria-keyshortcuts={tool.keys?.replace('⌘', 'Meta')} {disabled} onmousedown={(event) => event.preventDefault()} onclick={() => apply(tool.change)}>
+			<button type="button" class="ap-iconbtn" aria-label={tool.label} title={tool.label} {disabled} onmousedown={(event) => event.preventDefault()} onclick={() => apply(tool.change)}>
 				<tool.icon size={18} aria-hidden="true" />
 			</button>
 		{/each}

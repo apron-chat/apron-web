@@ -281,7 +281,7 @@ test.describe('the full panel', () => {
 	/** The field's text, its line breaks included (an element, which textContent leaves out). */
 	const written = (preview: Preview) => preview.composer().evaluate((el) => (el as HTMLElement).innerText.replace(/\n$/, ''));
 
-	test('opens from Expand once a draft has two lines, formats with its toolbar and keys, previews, and sends with Ctrl+Enter', async ({ preview, page }) => {
+	test('opens from Expand once a draft has two lines, keeps the caret, formats with its toolbar, previews, and sends with Ctrl+Enter', async ({ preview, page }) => {
 		await preview.open();
 		await preview.composer().click();
 		await page.keyboard.type('first @ad');
@@ -294,44 +294,41 @@ test.describe('the full panel', () => {
 		await page.keyboard.press('Shift+Enter');
 		await page.keyboard.type('second line');
 
-		await test.step('Expand opens the panel over the conversation, below the room header', async () => {
+		await test.step('Expand opens the panel over the conversation, below the room header, the caret where it was', async () => {
+			await page.keyboard.press('ControlOrMeta+Home');
 			await page.getByTestId('composer-expand').click();
 			await expect(panel(preview)).toBeVisible();
 			await expect(preview.composer()).toBeFocused();
 			const header = await page.locator('.ap-roomhead').boundingBox();
 			const box = await panel(preview).boundingBox();
 			expect(Math.round(box!.y)).toBe(Math.round(header!.y + header!.height));
-			expect(await written(preview)).toBe('first @Ada Lovelace line\nsecond line');
+			// The same field: typing goes in at the start, where the caret was before it opened.
+			await page.keyboard.type('The ');
+			await expect.poll(() => written(preview)).toBe('The first @Ada Lovelace line\nsecond line');
 		});
 
-		await test.step('Quote prefixes every selected line, keeps the mention a chip, and Undo takes it back', async () => {
+		await test.step('Quote prefixes every selected line and keeps the mention a chip; pressed again, it takes the quote off', async () => {
 			await page.keyboard.press('ControlOrMeta+A');
 			await panel(preview).getByRole('button', { name: 'Quote' }).click();
-			await expect.poll(() => written(preview)).toBe('> first @Ada Lovelace line\n> second line');
+			await expect.poll(() => written(preview)).toBe('> The first @Ada Lovelace line\n> second line');
 			await expect(chip(preview)).toHaveAttribute('data-user-id', 'ada');
-			// The lines stay selected: a second press takes the quote off again.
+			// The lines stay selected: a second press takes the quote off, a third puts it back.
 			await panel(preview).getByRole('button', { name: 'Quote' }).click();
-			await expect.poll(() => written(preview)).toBe('first @Ada Lovelace line\nsecond line');
-			await page.keyboard.press('ControlOrMeta+Z');
-			await expect.poll(() => written(preview)).toBe('> first @Ada Lovelace line\n> second line');
+			await expect.poll(() => written(preview)).toBe('The first @Ada Lovelace line\nsecond line');
+			await panel(preview).getByRole('button', { name: 'Quote' }).click();
+			await expect.poll(() => written(preview)).toBe('> The first @Ada Lovelace line\n> second line');
 		});
 
-		await test.step('Enter carries a quote or list on, ends it on an empty item, and Ctrl+B makes bold', async () => {
+		await test.step('Enter starts a line rather than sending, and Bold wraps the selection', async () => {
 			await page.keyboard.press('ControlOrMeta+End');
 			await page.keyboard.press('Enter');
-			await expect.poll(() => written(preview)).toBe('> first @Ada Lovelace line\n> second line\n> ');
 			await page.keyboard.press('Enter');
 			await page.keyboard.type('- canary');
 			await page.keyboard.press('Enter');
-			await page.keyboard.type('fleet');
+			await page.keyboard.type('- fleet');
 			for (let i = 0; i < 'fleet'.length; i++) await page.keyboard.press('Shift+ArrowLeft');
-			await page.keyboard.press('ControlOrMeta+B');
-			await expect.poll(() => written(preview)).toBe('> first @Ada Lovelace line\n> second line\n- canary\n- **fleet**');
-			// No chip in its way, the change went through the browser's own editing, which its Undo and Redo take back and make again.
-			await page.keyboard.press('ControlOrMeta+Z');
-			await expect.poll(() => written(preview)).toBe('> first @Ada Lovelace line\n> second line\n- canary\n- fleet');
-			await page.keyboard.press('ControlOrMeta+Shift+Z');
-			await expect.poll(() => written(preview)).toBe('> first @Ada Lovelace line\n> second line\n- canary\n- **fleet**');
+			await panel(preview).getByRole('button', { name: 'Bold' }).click();
+			await expect.poll(() => written(preview)).toBe('> The first @Ada Lovelace line\n> second line\n\n- canary\n- **fleet**');
 			expect(await sentWithText(preview, 'first')).toEqual([]);
 		});
 
@@ -349,9 +346,43 @@ test.describe('the full panel', () => {
 			await preview.composer().click();
 			await page.keyboard.press('ControlOrMeta+Enter');
 			const sent = await preview.waitForSent('message', (p) => p.body?.text?.endsWith('**fleet**'));
-			expect(sent.body).toMatchObject({ text: '> first @ada line\n> second line\n- canary\n- **fleet**', mentions: ['ada'] });
+			expect(sent.body).toMatchObject({ text: '> The first @ada line\n> second line\n\n- canary\n- **fleet**', mentions: ['ada'] });
 			await expect(panel(preview)).toBeHidden();
 			await expect(preview.composer()).toHaveText('');
+		});
+	});
+
+	test('leaves what arrives while it is open unread, until it closes on it', async ({ preview, page }) => {
+		const unread = page.locator('[data-testid="room-list"] button[data-room="general"]').getByTestId('room-unread');
+		const writeAtLength = async () => {
+			await preview.composer().click();
+			await page.keyboard.type('one');
+			await page.keyboard.press('Shift+Enter');
+			await page.keyboard.type('two');
+			await page.getByTestId('composer-expand').click();
+			await expect(panel(preview)).toBeVisible();
+		};
+		await preview.open();
+
+		await test.step('closed on it, what came is read', async () => {
+			await writeAtLength();
+			await preview.post('general', 'ada', 'Arrived while writing');
+			await expect(preview.message('Arrived while writing')).toHaveCount(1);
+			await page.keyboard.press('Escape');
+			await expect(panel(preview)).toBeHidden();
+			await preview.openRoom('engineering');
+			await expect(unread).toHaveCount(0);
+			await preview.openRoom('general');
+		});
+
+		await test.step('left while it was open, what came stays unread', async () => {
+			await page.keyboard.press('ControlOrMeta+A');
+			await page.keyboard.press('Delete');
+			await writeAtLength();
+			await preview.post('general', 'ada', 'Arrived under the panel');
+			await expect(preview.message('Arrived under the panel')).toHaveCount(1);
+			await preview.openRoom('engineering');
+			await expect(unread).toHaveText('1');
 		});
 	});
 

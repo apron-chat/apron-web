@@ -10,7 +10,7 @@
 	import { loadableOg } from './embeds/og';
 	import { pastedFiles } from '$lib/ui/file-transfer';
 	import { clockLabel } from '$lib/ui/time';
-	import { handheld } from '$lib/ui/handheld';
+	import { handheld, onMac } from '$lib/ui/handheld';
 	import type { StagedFile as Staged } from '$lib/ui/pane-drafts.svelte';
 	import MentionText from './MentionText.svelte';
 	import Embed from './embeds/Embed.svelte';
@@ -20,7 +20,7 @@
 	import { VoiceRecorder, type VoiceFormat } from '$lib/ui/voice-recorder.svelte';
 	import type { ComposerField } from '$lib/design/components/types';
 	import type { TextEdit } from '$lib/ui/text-edit';
-	import { draftPreview, formatToolbar, markdownKeys } from './lazy';
+	import { draftPreview, formatToolbar } from './lazy';
 
 	/** How long typing pauses before the draft's links are looked up; a paste looks them up at once. */
 	const PREVIEW_TYPING_PAUSE_MS = 800;
@@ -92,23 +92,23 @@
 		onmention?: () => void;
 		/** Sending waits until then, as the server asked (`retry_after`, epoch milliseconds): Send counts down, and the draft stays. */
 		waitUntil?: number;
+		/**
+		 * The full panel, for writing at length, over the timeline; `bind:expanded`. Expand offers it once the draft has a
+		 * second line. Its formatting and Preview load on demand as it opens, and it closes again as the draft is sent or
+		 * the pane changes.
+		 */
+		expanded?: boolean;
 	}
-	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled, holdSend = false, canUpload, files = [], uploadLimits, canCommand = false, live, people, rooms = [], reply, oninput, onsend, onfiles, onunstage, onrename, oncancelreply, onescape, onup, onmention, waitUntil }: Props = $props();
+	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled, holdSend = false, canUpload, files = [], uploadLimits, canCommand = false, live, people, rooms = [], reply, oninput, onsend, onfiles, onunstage, onrename, oncancelreply, onescape, onup, onmention, waitUntil, expanded = $bindable(false) }: Props = $props();
 
 	/** The field: chips and autocomplete, as in the message editor. */
 	let field = $state<MessageField | undefined>();
 	let emojiButton = $state<HTMLButtonElement | undefined>();
 	const recorder = new VoiceRecorder();
-	/**
-	 * The full panel, for writing at length: Expand offers it once the draft has a second line. Its formatting, keys
-	 * and Preview load on demand as it opens, and it closes again as the draft is sent or the pane changes.
-	 */
-	let expanded = $state(false);
+	/** The full panel's Write or Preview. */
 	let previewing = $state(false);
-	/** Ctrl or ⌘, for the full panel's keys as this platform writes them. */
-	const mod = /Mac|iPhone|iPad/.test(globalThis.navigator?.platform ?? '') ? '⌘' : 'Ctrl';
 	/** Shown at the full panel's foot; not on a phone or tablet, whose keyboard has no Ctrl and whose Enter starts a line anyway. */
-	const sendKeys = handheld() ? undefined : [mod, 'Enter'];
+	const sendKeys = handheld() ? undefined : [onMac() ? '⌘' : 'Ctrl', 'Enter'];
 
 	let recording = $derived(recorder.phase === 'recording');
 	/** The file picker's `accept`: the patterns the server takes, unless one is any type. */
@@ -197,7 +197,7 @@
 
 	const expand = (): void => setExpanded(true);
 
-	/** Opens or closes the full panel, its field drawn anew in place, and puts the keyboard back in the field. */
+	/** Opens or closes the full panel around the same field, and puts the keyboard back in it, where it was. */
 	function setExpanded(open: boolean): void {
 		expanded = open;
 		previewing = false;
@@ -210,22 +210,16 @@
 	}
 
 	/**
-	 * The field's keys no picker took. In the full panel, Escape closes it and its Markdown keys come first
-	 * (`markdownKey`: lists, Tab, bold and italic). Otherwise Escape cancels a reply, and ↑ in the empty field goes up
-	 * to the messages.
+	 * The field's keys no picker took: Escape puts away an ask about the draft, else closes the full panel, else cancels
+	 * a reply, and ↑ in the empty compact field goes up to the messages.
 	 */
 	function key(event: KeyboardEvent): boolean {
-		if (expanded) {
-			const plain = !(event.ctrlKey || event.metaKey || event.altKey || event.shiftKey);
-			if (plain && event.key === 'Escape') setExpanded(false);
-			else if (!markdownKeys.component?.(event, apply)) return false;
-			event.preventDefault();
-			return true;
-		}
 		if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return false;
 		if (event.key === 'Escape' && onescape?.()) {
 			// Taken: an ask about the draft went away, and the reply stays.
-		} else if (event.key === 'Escape' && reply) oncancelreply();
+		} else if (event.key === 'Escape' && expanded) setExpanded(false);
+		else if (expanded) return false;
+		else if (event.key === 'Escape' && reply) oncancelreply();
 		else if (!(event.key === 'ArrowUp' && !value && files.length === 0 && onup?.())) return false;
 		event.preventDefault();
 		return true;
@@ -317,7 +311,7 @@
 	<MessageField bind:this={field} bind:value bind:mentions {people} {rooms} {placeholder} {disabled} newlineOnEnter={expanded} id="message-input" data-testid="message-input" pickerTestid="mention-picker" onsubmit={send} onkey={key} {oninput} {onmention} onpaste={paste} />
 {/snippet}
 <!-- The full panel's parts, loaded on demand as it first opens: until they come, it is a tall field with Send. -->
-{#snippet formatting()}{#if formatToolbar.component}{@const FormatToolbar = formatToolbar.component}<FormatToolbar {apply} {mod} {disabled} />{/if}{/snippet}
+{#snippet formatting()}{#if formatToolbar.component}{@const FormatToolbar = formatToolbar.component}<FormatToolbar {apply} {disabled} />{/if}{/snippet}
 {#snippet rendered()}{#if draftPreview.component}{@const DraftPreview = draftPreview.component}<DraftPreview text={value} />{/if}{/snippet}
 {#snippet replyText()}<MentionText text={reply?.text ?? ''} />{/snippet}
 {#snippet staged()}

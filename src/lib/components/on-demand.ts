@@ -29,6 +29,5 @@ export { exportArchive } from '$lib/archive/archive';
 // The composer's full panel: its formatting buttons and keys, and its Preview.
 export { default as FormatToolbar } from './FormatToolbar.svelte';
 export { default as DraftPreview } from './DraftPreview.svelte';
-export { markdownKey } from '$lib/ui/markdown-format';
 // Dragging a room in the sidebar (Sidebar's `reorderable`), which waits for this chunk rather than asking for it.
 export { dragRooms } from '$lib/ui/room-drag';

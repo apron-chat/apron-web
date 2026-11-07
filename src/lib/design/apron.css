@@ -436,35 +436,39 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-btn.ap-composer-expand { gap: var(--space-1); height: var(--control-md); padding: 0 var(--space-2); }
 /* A narrow pane keeps the field's room: the glyph alone, named by its label. */
 @container (max-width: 480px) { .ap-composer-expand-label { display: none; } }
+/* What holds the composer's parts adds nothing to the layout, until it is the full panel. */
+.ap-composer-box { display: contents; }
 /*
  * The full panel, for writing at length: the composer covers its pane below the pane's header (the main pane is the
- * box it is placed in), the timeline kept as it was underneath, so closing it is back where the reader was. Its
- * formatting along the top, the field filling the rest, and the attach, microphone and emoji buttons and Send at its foot.
+ * box it is placed in), the timeline kept as it was underneath, so closing it is back where the reader was. The same
+ * form, laid out on a grid: its head (formatting, Write and Preview, Collapse) on top, the field filling the middle,
+ * and the attach, microphone and emoji buttons, the keys that send and Send at its foot.
  */
 .ap-composer-full { position: absolute; inset: var(--header-h) 0 0; z-index: var(--z-head); display: flex; flex-direction: column; background: var(--bg-100); }
-.ap-composer.ap-composer-panel { flex: 1; min-height: 0; flex-direction: column; align-items: stretch; gap: 0; padding: 0; overflow: hidden; }
-.ap-composer-head, .ap-composer-foot { display: flex; align-items: center; gap: var(--space-0_5); padding: var(--space-1_5) var(--space-2); }
-.ap-composer-foot { flex-wrap: wrap; }
-.ap-composer-head { border-bottom: 1px solid var(--line); }
-.ap-composer-foot { border-top: 1px solid var(--line); }
+.ap-composer-full > .ap-composer-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.ap-composer-full .ap-composer { flex: 1; min-height: 0; display: grid; grid-template: "head head head head" auto "body body body body" minmax(0, 1fr) "start end keys send" auto / auto auto minmax(0, 1fr) auto; align-items: center; gap: 0; padding: 0; overflow: hidden; }
+.ap-composer-head { grid-area: head; display: flex; align-items: center; gap: var(--space-0_5); padding: var(--space-1_5) var(--space-2); border-bottom: 1px solid var(--line); }
+.ap-composer-head > :not(.ap-composer-format, .ap-composer-grow) { flex: none; }
 .ap-composer-grow { flex: 1; }
-.ap-composer-head > :not(.ap-composer-format) { flex: none; }
 .ap-seg.ap-composer-views { margin: 0; padding: var(--space-0_5); }
 .ap-composer-views .ap-seg-item { flex: none; padding: 0 var(--space-3); }
 /* One row, which scrolls sideways where the pane is too narrow for every button (a phone), rather than wrapping under the view switch. */
 .ap-composer-format { display: flex; align-items: center; gap: var(--space-0_5); min-width: 0; overflow-x: auto; scrollbar-width: none; }
 .ap-composer-format > * { flex: none; }
 .ap-composer-format-sep { width: 1px; height: var(--space-4); margin: 0 var(--space-1); background: var(--line); }
-/* The field fills the panel and scrolls in it; an autocomplete opens at its foot, over the text, rather than above the panel. */
-.ap-composer-body { position: relative; flex: 1; min-height: 0; display: flex; }
-.ap-composer-body[hidden] { display: none; }
-.ap-composer-panel .ap-composer-field { flex: 1; height: auto; min-height: 0; max-height: none; overflow-y: auto; padding: var(--space-3) var(--space-4); }
-.ap-composer-body > .ap-mpick { bottom: var(--space-2); }
-.ap-composer-rendered { flex: 1; min-height: 0; overflow-y: auto; padding: var(--space-3) var(--space-4); background: var(--bg-100); }
+.ap-composer-full :is(.ap-composer-field, .ap-composer-recording, .ap-composer-rendered) { grid-area: body; align-self: stretch; min-height: 0; border-bottom: 1px solid var(--line); }
+.ap-composer-full .ap-composer-field { height: auto; max-height: none; overflow-y: auto; padding: var(--space-3) var(--space-4); }
+.ap-composer-full .ap-composer-recording { height: auto; padding: 0 var(--space-4); }
+.ap-composer-previewing .ap-composer-field { display: none; }
+.ap-composer-rendered { overflow-y: auto; padding: var(--space-3) var(--space-4); background: var(--bg-100); }
 .ap-composer-rendered-empty { margin: 0; color: var(--ink-muted); font-size: var(--text-field); }
-.ap-composer-panel .ap-composer-reply { border-bottom: 1px solid var(--line); }
-.ap-composer-panel :is(.ap-attachments, .ap-composer-previews) { border-top: 1px solid var(--line); }
-.ap-composer-keys { display: inline-flex; align-items: center; gap: var(--space-1); margin-right: var(--space-2); font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
+.ap-composer-full .ap-composer-tools-start { grid-area: start; padding-left: var(--space-2); }
+.ap-composer-full .ap-composer-tools-end { grid-area: end; }
+.ap-composer-full .ap-composer-cmdtag { grid-area: keys; justify-self: start; margin-left: var(--space-2); }
+.ap-composer-full .ap-composer > .ap-btn-primary { grid-area: send; margin: var(--space-1_5) var(--space-2); }
+/* An autocomplete opens under the panel's head, over the text, rather than above the panel. */
+.ap-composer-full .ap-mpick { top: var(--header-h); bottom: auto; }
+.ap-composer-keys { grid-area: keys; justify-self: end; display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
 .ap-composer-keys kbd { font: inherit; font-size: var(--text-xs); padding: 0 var(--space-1_5); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); }
 
 /* RoomItem */

@@ -6,5 +6,10 @@ export function handheld(): boolean {
 	return typeof matchMedia === 'function' && matchMedia('(hover: none) and (pointer: coarse)').matches;
 }
 
+/** A Mac, whose keyboard marks the command key ⌘ where others write Ctrl. */
+export function onMac(): boolean {
+	return /Mac/.test(globalThis.navigator?.platform ?? '');
+}
+
 /** What Enter does in the composer and the message editor: the design system's rule, which both follow. */
 export { enterAction } from '$lib/design/components/compose';

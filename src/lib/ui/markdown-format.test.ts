@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { codeBlock, continueBlock, indent, inList, link, markdownKey, prefixLines, wrap, type TextEdit } from './markdown-format';
+import { codeBlock, link, prefixLines, wrap, type TextEdit } from './markdown-format';
 
 /** A draft with its selection marked: `[` and `]` around it, or `|` for a bare caret. */
 function draft(marked: string): TextEdit {
@@ -75,15 +75,8 @@ describe('prefixLines', () => {
 		expect(marked(prefixLines(draft('[- a\n\n- b\nc]'), 'number'))).toBe('[1. a\n\n2. b\n3. c]');
 	});
 
-	it('tells a checklist from a bulleted list', () => {
-		const whole = (text: string): TextEdit => ({ text, start: 0, end: text.length });
-		expect(prefixLines(whole('- [ ] a'), 'bullet').text).toBe('- a');
-		expect(prefixLines(whole('- a'), 'task').text).toBe('- [ ] a');
-		expect(prefixLines(whole('- [x] a'), 'task').text).toBe('a');
-	});
-
 	it('keeps a bare caret’s place in its line', () => {
-		expect(marked(prefixLines(draft('one\ntw|o'), 'heading'))).toBe('one\n### tw|o');
+		expect(marked(prefixLines(draft('one\ntw|o'), 'number'))).toBe('one\n1. tw|o');
 		expect(marked(prefixLines(draft('> tw|o'), 'quote'))).toBe('tw|o');
 		expect(marked(prefixLines(draft('|two'), 'bullet'))).toBe('- |two');
 	});
@@ -96,70 +89,5 @@ describe('codeBlock', () => {
 
 	it('opens an empty block at a bare caret on an empty line', () => {
 		expect(marked(codeBlock(draft('run:\n|')))).toBe('run:\n```\n|\n```');
-	});
-});
-
-describe('continueBlock', () => {
-	it('carries a list on, counting up and unticking boxes', () => {
-		expect(marked(continueBlock(draft('- a|')))).toBe('- a\n- |');
-		expect(marked(continueBlock(draft('  9. a|')))).toBe('  9. a\n  10. |');
-		expect(marked(continueBlock(draft('- [x] done|')))).toBe('- [x] done\n- [ ] |');
-		expect(marked(continueBlock(draft('> said|')))).toBe('> said\n> |');
-	});
-
-	it('ends the list on an empty item', () => {
-		expect(marked(continueBlock(draft('- a\n- |')))).toBe('- a\n|');
-		expect(marked(continueBlock(draft('> a\n> |')))).toBe('> a\n|');
-	});
-
-	it('breaks splitting an item in two', () => {
-		expect(marked(continueBlock(draft('- ab|cd')))).toBe('- ab\n- |cd');
-	});
-
-	it('leaves Enter alone outside a list, before an item’s text, and over a selection', () => {
-		expect(continueBlock(draft('plain|'))).toBeUndefined();
-		expect(continueBlock(draft('-| a'))).toBeUndefined();
-		expect(continueBlock(draft('- [a]'))).toBeUndefined();
-	});
-});
-
-describe('indent', () => {
-	it('indents and outdents the lines, the selection moving with its text', () => {
-		expect(marked(indent(draft('- a\n- [b\n- c]')))).toBe('- a\n  - [b\n  - c]');
-		expect(marked(indent(draft('  - [b\n- c]'), true))).toBe('- [b\n- c]');
-	});
-
-	it('tells a list from other lines', () => {
-		expect(inList(draft('- a\n1. [b'))).toBe(true);
-		expect(inList(draft('- [a\nb]'))).toBe(false);
-	});
-});
-
-describe('markdownKey', () => {
-	function press(init: KeyboardEventInit, start: TextEdit): { taken: boolean; result?: TextEdit } {
-		let result: TextEdit | undefined;
-		const event = { key: '', ctrlKey: false, metaKey: false, shiftKey: false, altKey: false, ...init } as KeyboardEvent;
-		const taken = markdownKey(event, (change) => {
-			result = change(start);
-			return result !== undefined;
-		});
-		return { taken, result };
-	}
-
-	it('makes bold and italic with Ctrl or ⌘', () => {
-		expect(marked(press({ key: 'b', ctrlKey: true }, draft('[x]')).result)).toBe('**[x]**');
-		expect(marked(press({ key: 'i', metaKey: true }, draft('[x]')).result)).toBe('_[x]_');
-	});
-
-	it('carries a list on with Enter, but leaves Shift+Enter and Ctrl+Enter to the field', () => {
-		expect(press({ key: 'Enter' }, draft('- a|')).taken).toBe(true);
-		expect(press({ key: 'Enter', shiftKey: true }, draft('- a|')).taken).toBe(false);
-		expect(press({ key: 'Enter', ctrlKey: true }, draft('- a|')).taken).toBe(false);
-		expect(press({ key: 'Enter' }, draft('plain|')).taken).toBe(false);
-	});
-
-	it('takes Tab only in a list, so it moves focus elsewhere', () => {
-		expect(press({ key: 'Tab' }, draft('- a|')).taken).toBe(true);
-		expect(press({ key: 'Tab' }, draft('plain|')).taken).toBe(false);
 	});
 });
