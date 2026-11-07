@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { absentMentions, addMembers, couldNotAdd, isGuest, memberSections, mentionedRoles, roleSets, unheldRoleHolders, userIdToAdd } from './members';
+import { absentMentions, addMembers, couldNotAdd, isGuest, memberSections, roleSets, unheldRoleHolders, userIdToAdd } from './members';
 
 describe('adding a member', () => {
 	it('takes exactly the user_id typed, with or without @, and never a display name, which isn’t unique', () => {
@@ -62,9 +62,7 @@ describe('mentioning someone who isn’t in the room', () => {
 		expect(absentMentions(['ada'], room, skip)).toEqual([]);
 	});
 
-	it('finds the roles a draft mentions, and who holds them', () => {
-		expect(mentionedRoles('@&mod and @&admin, again @&mod, not a@&ops nor @ada')).toEqual(['mod', 'admin']);
-		expect(mentionedRoles('no roles here')).toEqual([]);
+	it('asks about a role’s holders only when no one else here holds it', () => {
 		const users = [{ user_id: 'me', roles: ['ops'] }, { user_id: 'ada', roles: ['admin'] }, { user_id: 'bob', roles: ['mod', 'admin'] }, { user_id: 'cy', roles: ['mod', 'ops'] }, { user_id: 'dee' }];
 		const isMe = (userId: string) => userId === 'me';
 		// Ada here holds admin, so it mentions her alone; no one here holds mod, so everyone with it is asked about.

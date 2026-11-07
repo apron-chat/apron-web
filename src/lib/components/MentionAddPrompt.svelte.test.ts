@@ -12,12 +12,12 @@ function render(props: Record<string, unknown> = {}) {
 }
 
 describe('MentionAddPrompt', () => {
-	it('asks to add who isn’t here, by name, with the focus on Add and send', () => {
+	it('asks to add who isn’t here, by name, leaving the focus where it was', () => {
 		const { prompt, onadd, onsend } = render();
 		expect(prompt.getAttribute('role')).toBe('dialog');
 		expect(document.getElementById(prompt.getAttribute('aria-labelledby')!)?.textContent).toBe('Add Grace to engineering?');
 		expect(document.getElementById(prompt.getAttribute('aria-describedby')!)?.textContent).toBe('You mentioned them, but they aren’t in this room.');
-		expect(document.activeElement).toBe(dom.button('Add and send'));
+		expect(document.activeElement).toBe(document.body);
 		dom.button('Add and send').click();
 		expect(onadd).toHaveBeenCalledOnce();
 		dom.button('Send without adding').click();

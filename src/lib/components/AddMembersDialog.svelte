@@ -52,7 +52,9 @@
 			user_id: role, name: `@${role}`, group: userIds, detail: userIds.length === 1 ? '1 person with this role' : `${userIds.length} people with this role`
 		}));
 		const shown: PickPerson[] = [...roles, ...matching(candidates, query, PEOPLE_SHOWN).map((user) => faceOf(user))];
-		const typed = userIdToAdd(query);
+		// `@&role` names a role, never someone to add by ID. A guest's ID typed whole is still offered: telling guests
+		// apart is a guess (`isGuest`), and typing the exact ID is the way past a wrong one.
+		const typed = /^@?&/.test(query.trim()) ? undefined : userIdToAdd(query);
 		if (!shown.length && typed && !memberIds.has(typed) && !isSystemId(typed)) shown.push({ user_id: typed, name: typed, hue: hueOf(typed), detail: `Add by @user_id: @${typed}` });
 		return shown;
 	});

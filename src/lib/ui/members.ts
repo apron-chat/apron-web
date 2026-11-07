@@ -1,5 +1,5 @@
 import type { ChatClient } from '$lib/protocol/client';
-import { isMentionableRole, mentionSegments } from '$lib/protocol/markdown';
+import { isMentionableRole } from '$lib/protocol/markdown';
 import type { Identity } from '$lib/protocol/types';
 
 /**
@@ -15,9 +15,11 @@ export function userIdToAdd(typed: string): string | undefined {
 }
 
 /**
- * Whether `user` signed in as a guest, as far as a client can tell: the server gives them a `user_id` by the
- * suggested convention, `guest_` and a counter (§3.2), or labels them `guest` (§3.3). A guest's `user_id` lasts as
- * long as their connection, and servers may not let guests be added at all, so they aren't offered to add.
+ * Whether `user` looks like a guest, which the protocol doesn't say outright: a `user_id` by the suggested convention
+ * for guest sign-in, `guest_` and a counter (§3.2), or a `guest` label in `roles`, which some servers give though §3.3
+ * names none. A guest who never signs in to an account keeps their `user_id` only as long as their session, and a
+ * server may not let guests be added at all, so they aren't offered to add. A heuristic: a server that names lasting
+ * accounts `guest_…` has them left out too.
  */
 export function isGuest(user: Identity): boolean {
 	return user.user_id.startsWith('guest_') || (Array.isArray(user.roles) && user.roles.includes('guest'));
@@ -33,15 +35,6 @@ export function absentMentions(mentions: readonly string[], room: { members?: re
 	if (!members || (room.memberCount !== undefined && room.memberCount > members.length)) return [];
 	const memberIds = new Set(members.map((member) => member.user_id));
 	return [...new Set(mentions)].filter((userId) => !memberIds.has(userId) && !skip(userId));
-}
-
-/**
- * The roles `text` mentions (`@&role`, Appendix A.3), once each, in order: what a draft's role chips are sent as, and
- * a role typed whole that no one here holds, which stays text in the field but is a mention all the same.
- */
-export function mentionedRoles(text: string): string[] {
-	const roles = mentionSegments(text, () => undefined).flatMap((part) => (typeof part !== 'string' && part.target.kind === 'role' ? [part.target.id] : []));
-	return [...new Set(roles)];
 }
 
 /**
