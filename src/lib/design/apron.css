@@ -1529,12 +1529,21 @@ label.ap-pref-setting-title { color: var(--ink); font-weight: 600; cursor: point
 .ap-font-status { margin: 0; padding: var(--space-2); color: var(--ap-tone, var(--ink-muted)); font-size: var(--text-sm); line-height: var(--leading-sm); }
 
 /* Mention — the @name chip inside message text */
-.ap-mention { display: inline; padding: 1px 6px; border-radius: var(--radius-sm); background: var(--denim-soft); color: var(--denim); font-weight: 600; white-space: nowrap; }
+/* A mention, room link or link chip is --control-sm tall, as a pick chip is, around running text's 15px: a span or link
+   is its font's box (19px in Inter) and 2.5px above and below, a button its own line height and 3px. Taller than the
+   22px line it sits in, a chip on the line under another overlaps it by a pixel or two, its padding past the line. */
+.ap-mention { display: inline; padding: 2.5px 6px; border-radius: var(--radius-sm); background: var(--denim-soft); color: var(--denim); font-weight: 600; white-space: nowrap; }
 .ap-mention-me { background: var(--accent); color: var(--on-accent); }
-/* A button is laid out as a box, the line's full height: a line height of its own keeps the highlight inside the line, a little wider than tall around the name, as a span's would be. */
-button.ap-mention { font-family: inherit; font-size: inherit; line-height: var(--leading-ui); border: 0; cursor: pointer; }
-/* In a heading, set larger than running text, the heading's own line height fits the name. */
+/* A button is laid out as a box: a line height of its own sizes the highlight as a span's would be around the name, and
+   a margin as deep as its padding takes the padding back, so it spills past its line as a span's does and never makes
+   that line taller, whatever the line's height. */
+button.ap-mention { padding-block: 3px; margin-block: -3px; font-family: inherit; font-size: inherit; line-height: var(--leading-ui); border: 0; cursor: pointer; }
+/* In a heading, set larger than running text, the heading's own line height. */
 :is(h1, h2, h3, h4, h5, h6) button.ap-mention { line-height: inherit; }
+/* Where small text is cut off at its box (a reply's quote, a link card's or preview's clamped text, a description held
+   to three lines), a chip keeps a pixel of padding above and below, so its edges aren't the part cut off. */
+:is(.ap-reply-text, .ap-linkcard-text, .ap-embed-desc, .ap-description-text) .ap-mention { padding-block: 1px; }
+:is(.ap-reply-text, .ap-linkcard-text, .ap-embed-desc, .ap-description-text) button.ap-mention { margin-block: -1px; }
 .ap-msg-mention .ap-mention-me { box-shadow: 0 0 0 1px var(--bg-100); }
 /* Inline chips (inline code, mentions, room links): one that wraps is drawn on each line as a chip of its own, padding
    and corners on every piece, rather than one box cut open at the line ends. A chip that is a button (a mention or room
@@ -1738,9 +1747,9 @@ a.ap-linkchip { text-decoration: none; }
 .ap-linkchip-detail { font-weight: 400; opacity: var(--opacity-dim); }
 /* One to another server isn't a place here, so it isn't a mention: outlined rather than filled, in the ink of text, a
    globe (Lucide's) before its host, and an arrow after, since opening it leaves this server (the connect screen asks
-   first). It has the height of a mention, its border in place of a pixel of padding. */
+   first). It has the height of a mention, its border in place of a pixel of padding, and the same 6px to its sides. */
 a.ap-linkchip-elsewhere { --ap-linkchip-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20M2 12h20'/%3E%3C/svg%3E");
-	padding: 0 4px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); color: var(--ink); font-weight: 600; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+	padding: 1.5px 5px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); color: var(--ink); font-weight: 600; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 a.ap-linkchip-elsewhere::after { content: " \2197"; font-weight: 400; color: var(--ink-muted); }
 a.ap-linkchip-elsewhere:hover { background: var(--hover); }
 .ap-status-retry { color: var(--ink-muted); font-variant-numeric: tabular-nums; }
