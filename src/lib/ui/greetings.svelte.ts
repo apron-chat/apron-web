@@ -1,4 +1,3 @@
-import { SvelteMap } from 'svelte/reactivity';
 import type { ServerParams } from '$lib/protocol/types';
 
 /**
@@ -25,17 +24,18 @@ export interface Greeter {
  * brings the server's current frame, which the client keeps as its own.
  */
 export class Greetings {
-	readonly #entries = new SvelteMap<string, Greeting>();
+	/** Replaced whole on each change, so what reads it updates (a plain record: `svelte/reactivity` would load with the app). */
+	#entries = $state<Record<string, Greeting>>({});
 	readonly #pending = new Map<string, { promise: Promise<Greeting>; abort: AbortController }>();
 
 	/** The greeting for `url`, if it was looked up. */
 	get(url: string): Greeting | undefined {
-		return this.#entries.get(url);
+		return this.#entries[url];
 	}
 
 	/** The server at `url`, once its greeting is known. */
 	server(url: string): ServerParams | undefined {
-		const greeting = this.#entries.get(url);
+		const greeting = this.#entries[url];
 		return greeting?.status === 'known' ? greeting.server : undefined;
 	}
 
@@ -44,20 +44,19 @@ export class Greetings {
 	 * already. Resolves with how it went; a cancelled lookup leaves nothing behind.
 	 */
 	look(greeter: Greeter, url: string): Promise<Greeting> {
-		const known = this.#entries.get(url);
+		const known = this.#entries[url];
 		if (known?.status === 'known') return Promise.resolve(known);
 		const pending = this.#pending.get(url);
 		if (pending) return pending.promise;
 		const abort = new AbortController();
-		this.#entries.set(url, { status: 'contacting' });
+		this.#set(url, { status: 'contacting' });
 		const promise = greeter.greet(url, abort.signal).then(
 			(server): Greeting => ({ status: 'known', server }),
 			(cause): Greeting => ({ status: 'failed', error: cause instanceof Error ? cause.message : 'Can’t reach the server.' })
 		).then((greeting) => {
 			if (this.#pending.get(url)?.abort !== abort) return greeting;
 			this.#pending.delete(url);
-			if (abort.signal.aborted) this.#entries.delete(url);
-			else this.#entries.set(url, greeting);
+			this.#set(url, abort.signal.aborted ? undefined : greeting);
 			return greeting;
 		});
 		this.#pending.set(url, { promise, abort });
@@ -69,8 +68,13 @@ export class Greetings {
 		for (const [url, pending] of this.#pending) {
 			pending.abort.abort();
 			this.#pending.delete(url);
-			this.#entries.delete(url);
+			this.#set(url, undefined);
 		}
+	}
+
+	#set(url: string, greeting: Greeting | undefined): void {
+		const { [url]: _, ...rest } = this.#entries;
+		this.#entries = greeting ? { ...rest, [url]: greeting } : rest;
 	}
 }
 
