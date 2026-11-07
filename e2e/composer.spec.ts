@@ -397,6 +397,24 @@ test.describe('the full panel', () => {
 		expect(Math.round(pane.height - header.height - box.height)).toBeGreaterThanOrEqual(96);
 	});
 
+	test('shows the ask to add who a draft mentions above it, and closes once the draft is sent from the ask', async ({ preview, page }) => {
+		await preview.open();
+		await preview.openRoom('engineering');
+		await preview.composer().click();
+		await page.keyboard.type('@grace hi');
+		await page.keyboard.press('Shift+Enter');
+		await page.keyboard.type('the plan is below');
+		await page.getByTestId('composer-expand').click();
+		await expect(panel(preview)).toBeVisible();
+		await page.keyboard.press('ControlOrMeta+Enter');
+		const prompt = page.getByTestId('mention-add-prompt');
+		await expect(prompt).toBeInViewport();
+		await prompt.getByRole('button', { name: 'Send without adding' }).click();
+		await preview.waitForSent('message', (p) => p.body?.text === '@grace hi\nthe plan is below');
+		await expect(panel(preview)).toBeHidden();
+		await expect(preview.composer()).toHaveText('');
+	});
+
 	test('Esc closes it with the draft kept', async ({ preview, page }) => {
 		await preview.open();
 		await preview.composer().click();

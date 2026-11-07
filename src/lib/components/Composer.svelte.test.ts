@@ -90,4 +90,30 @@ describe('Composer', () => {
 		flushSync();
 		expect(panel()).toBeNull();
 	});
+
+	it('closes the full panel once the draft is emptied from outside (sent, from here or an ask), not by typing', async () => {
+		const props = $state<Record<string, unknown>>({ value: 'one\ntwo', placeholder: 'Message General', disabled: false, canUpload: false, people: [], oninput: vi.fn(), onsend: vi.fn(), onfiles: vi.fn(), onunstage: vi.fn(), onrename: vi.fn(), oncancelreply: vi.fn() });
+		dom.render(Composer, props as never);
+		flushSync();
+		const panel = () => document.querySelector('[data-testid="composer-panel"]');
+		document.querySelector<HTMLButtonElement>('[data-testid="composer-expand"]')!.click();
+		flushSync();
+		await tick();
+		expect(panel()).not.toBeNull();
+		// Emptied by typing: the panel stays, to write in.
+		const field = document.querySelector<HTMLElement>('[data-testid="message-input"]')!;
+		field.replaceChildren();
+		field.dispatchEvent(new InputEvent('input', { bubbles: true }));
+		flushSync();
+		expect(props.value).toBe('');
+		expect(panel()).not.toBeNull();
+		// Typed again, then emptied from outside, as a send empties it: the panel closes.
+		field.append('three');
+		field.dispatchEvent(new InputEvent('input', { bubbles: true }));
+		flushSync();
+		expect(props.value).toBe('three');
+		props.value = '';
+		flushSync();
+		expect(panel()).toBeNull();
+	});
 });

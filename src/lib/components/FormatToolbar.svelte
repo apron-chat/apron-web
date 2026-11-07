@@ -24,7 +24,7 @@
 	const groups = [
 		[
 			{ label: 'Bold', icon: Bold, change: (edit: TextEdit) => wrap(edit, '**') },
-			{ label: 'Italic', icon: Italic, change: (edit: TextEdit) => wrap(edit, '_') },
+			{ label: 'Italic', icon: Italic, change: (edit: TextEdit) => wrap(edit, '*') },
 			{ label: 'Strikethrough', icon: Strikethrough, change: (edit: TextEdit) => wrap(edit, '~~') },
 			{ label: 'Link', icon: Link, change: link }
 		],

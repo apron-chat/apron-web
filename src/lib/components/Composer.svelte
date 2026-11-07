@@ -182,6 +182,13 @@
 	}
 
 	$effect(() => () => stopRecording(false));
+	/**
+	 * The draft was emptied from outside, as sending it does (Send, Ctrl+Enter, or the ask to add who it mentions): the
+	 * full panel closes with it. Emptied by typing, the panel stays, to write in.
+	 */
+	function cleared(): void {
+		if (expanded) setExpanded(false);
+	}
 	// The emoji picker lets go of its button when the button goes (`emojiAnchor`, as on a message's React).
 	$effect(() => (emojiButton ? emojiAnchor(emojiButton) : undefined));
 
@@ -190,8 +197,6 @@
 		if (holdSend || (waitUntil !== undefined && waitUntil > Date.now())) return;
 		field?.finish();
 		onsend();
-		// Sent, the draft is emptied, and the panel closes with it; kept (not sent after all), the panel stays.
-		if (expanded) void tick().then(() => { if (!value.trim()) setExpanded(false); });
 	}
 
 	const expand = (): void => setExpanded(true);
@@ -307,7 +312,7 @@
 />
 
 {#snippet editable({ placeholder, disabled }: ComposerField)}
-	<MessageField bind:this={field} bind:value bind:mentions {people} {rooms} {placeholder} {disabled} newlineOnEnter={expanded} id="message-input" data-testid="message-input" pickerTestid="mention-picker" onsubmit={send} onkey={key} {oninput} {onmention} onpaste={paste} />
+	<MessageField bind:this={field} bind:value bind:mentions {people} {rooms} {placeholder} {disabled} newlineOnEnter={expanded} id="message-input" data-testid="message-input" pickerTestid="mention-picker" onsubmit={send} onkey={key} {oninput} oncleared={cleared} {onmention} onpaste={paste} />
 {/snippet}
 <!-- The full panel's parts, loaded on demand as it first opens: until they come, it is a tall field with Send. -->
 {#snippet formatting()}{#if formatToolbar.component}{@const FormatToolbar = formatToolbar.component}<FormatToolbar {apply} {disabled} />{/if}{/snippet}

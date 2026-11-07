@@ -32,6 +32,16 @@ describe('wrap', () => {
 		expect(marked(wrap(draft('a [**bold**] word'), '**'))).toBe('a [bold] word');
 	});
 
+	it('tells italic from bold by the run of stars, so each comes off bold italic alone', () => {
+		expect(marked(wrap(draft('a [word] b'), '*'))).toBe('a *[word]* b');
+		expect(marked(wrap(draft('a *[word]* b'), '*'))).toBe('a [word] b');
+		// Italic on bold adds to it, rather than taking a star off.
+		expect(marked(wrap(draft('a **[word]** b'), '*'))).toBe('a ***[word]*** b');
+		expect(marked(wrap(draft('a ***[word]*** b'), '*'))).toBe('a **[word]** b');
+		expect(marked(wrap(draft('a ***[word]*** b'), '**'))).toBe('a *[word]* b');
+		expect(marked(wrap(draft('a [*word*] b'), '*'))).toBe('a [word] b');
+	});
+
 	it('puts the caret between the pair at a bare caret', () => {
 		expect(marked(wrap(draft('say |'), '`'))).toBe('say `|`');
 	});
@@ -43,6 +53,13 @@ describe('link', () => {
 		const result = link({ text, start: 4, end: 12 });
 		expect(result.text).toBe('see [the docs](url) here');
 		expect(result.text.slice(result.start, result.end)).toBe('url');
+	});
+
+	it('takes a link off with its URL selected, as a new link leaves it, or its label', () => {
+		const made = link({ text: 'see the docs here', start: 4, end: 12 });
+		expect(link(made)).toEqual({ text: 'see the docs here', start: 4, end: 12 });
+		const label = 'see [the docs](https://x.test) here';
+		expect(link({ text: label, start: 5, end: 13 })).toEqual({ text: 'see the docs here', start: 4, end: 12 });
 	});
 
 	it('labels a link at a bare caret “link”', () => {
@@ -75,6 +92,16 @@ describe('prefixLines', () => {
 		expect(marked(prefixLines(draft('[- a\n\n- b\nc]'), 'number'))).toBe('[1. a\n\n2. b\n3. c]');
 	});
 
+	it('takes a list off with blank lines between its items', () => {
+		const whole = (text: string): TextEdit => ({ text, start: 0, end: text.length });
+		expect(prefixLines(whole('- a\n\n- b'), 'bullet').text).toBe('a\n\nb');
+		expect(prefixLines(whole('1. a\n\n2. b'), 'number').text).toBe('a\n\nb');
+		// Only blank lines: nothing to take off, so it is put on (none of them takes it).
+		expect(prefixLines(whole('\n'), 'bullet').text).toBe('\n');
+		// A draft starting with a blank line, the caret at its very start.
+		expect(marked(prefixLines(draft('|\nnext'), 'quote'))).toBe('>|\nnext');
+	});
+
 	it('keeps a bare caret’s place in its line', () => {
 		expect(marked(prefixLines(draft('one\ntw|o'), 'number'))).toBe('one\n1. tw|o');
 		expect(marked(prefixLines(draft('> tw|o'), 'quote'))).toBe('tw|o');
@@ -85,6 +112,13 @@ describe('prefixLines', () => {
 describe('codeBlock', () => {
 	it('fences the selected lines and keeps them selected', () => {
 		expect(marked(codeBlock(draft('run:\n[npm test\nnpm run check]\ndone')))).toBe('run:\n```\n[npm test\nnpm run check]\n```\ndone');
+	});
+
+	it('takes a block off again, with its lines selected inside it or with its fences', () => {
+		const made = codeBlock(draft('run:\n[npm test]\ndone'));
+		expect(marked(codeBlock(made))).toBe('run:\n[npm test]\ndone');
+		expect(marked(codeBlock(draft('run:\n[```\nnpm test\n```]\ndone')))).toBe('run:\n[npm test]\ndone');
+		expect(marked(codeBlock(codeBlock(draft('run:\n|'))))).toBe('run:\n|');
 	});
 
 	it('opens an empty block at a bare caret on an empty line', () => {

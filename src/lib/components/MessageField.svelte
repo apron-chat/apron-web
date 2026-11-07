@@ -33,12 +33,14 @@
 		onkey?: (event: KeyboardEvent) => boolean;
 		/** The draft changed by typing or a pick, not set from outside. */
 		oninput?: () => void;
+		/** The draft was emptied from outside, as sending it does (`DraftHost.oncleared`). */
+		oncleared?: () => void;
 		/** The mention picker opened: a moment to refresh who can be named. */
 		onmention?: () => void;
 		/** A `data-testid` for the people's picker. */
 		pickerTestid?: string;
 	}
-	let { value = $bindable(), mentions = $bindable([]), people, rooms = [], known, disabled = false, onsubmit, newlineOnEnter = false, onkey, oninput, onmention, pickerTestid, ...rest }: Props = $props();
+	let { value = $bindable(), mentions = $bindable([]), people, rooms = [], known, disabled = false, onsubmit, newlineOnEnter = false, onkey, oninput, oncleared, onmention, pickerTestid, ...rest }: Props = $props();
 
 	/** Unique per field, for its picker's ID. */
 	const uid = $props.id();
@@ -55,6 +57,7 @@
 		submit: () => onsubmit(),
 		key: (event) => onkey?.(event) ?? false,
 		oninput: () => oninput?.(),
+		oncleared: () => oncleared?.(),
 		onmention: () => onmention?.(),
 		// Read once a picker would open, which is what asks for its code (`autocompletePicker`): until it has come, none shows.
 		get pickerShown() { return autocompletePicker.component !== undefined; }

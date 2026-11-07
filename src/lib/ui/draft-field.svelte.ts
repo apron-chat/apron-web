@@ -56,6 +56,8 @@ export interface DraftHost {
 	readonly newlineOnEnter?: boolean;
 	/** The draft changed by typing or a pick, not set from outside. */
 	oninput?(): void;
+	/** The draft was emptied from outside, as sending it does: not by typing. */
+	oncleared?(): void;
 	/** The mention picker opened: a moment to refresh who can be named. */
 	onmention?(): void;
 	/**
@@ -151,11 +153,13 @@ export class DraftField {
 			const text = this.host.value;
 			if (!current || (this.shown?.field === current && this.shown.text === text)) return;
 			untrack(() => {
+				const cleared = !text && Boolean(this.shown?.text);
 				this.lastSelection = undefined;
 				// Nobody typed it: its `@user_id`s become chips, the last one too, and a name in plain text stays text.
 				const collapsed = collapseMentions([text], this.host.people, { caret: text.length, final: true, names: false, isUser: this.isUser, rooms: this.roomIds, roles: this.roleIds });
 				this.draw(current, collapsed.parts, document.activeElement === current ? collapsed.caret : undefined);
 				this.commit(current, collapsed.parts, false);
+				if (cleared) this.host.oncleared?.();
 			});
 		});
 	}
