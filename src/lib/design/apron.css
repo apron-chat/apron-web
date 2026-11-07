@@ -1602,8 +1602,9 @@ button.ap-mention, a.ap-linkchip { max-width: 100%; white-space: normal; overflo
 .ap-embed-failed { border-style: solid; border-color: var(--line); opacity: var(--opacity-dim); }
 .ap-embed-progress { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--bg-300); }
 .ap-embed-progress i { display: block; height: 100%; background: var(--accent); }
-.ap-embed-audiocard { gap: var(--space-2); }
-.ap-embed-audiocard .ap-embed-audio { width: 100%; }
+/* An audio clip takes the width other media may, so its scrubber is long enough to seek a voice note by */
+.ap-embed-audiocard { gap: var(--space-2); width: var(--embed-max-w); }
+.ap-embed-audiocard .ap-embed-audio { display: block; width: 100%; }
 /* An embed's (x), on the corner of the slot holding it (position: relative): shows while the slot is hovered or it has focus, and always on touch screens */
 .ap-embed-remove { position: absolute; top: calc(-1 * var(--space-2)); inset-inline-end: calc(-1 * var(--space-2)); display: grid; place-items: center; width: var(--control-xs); height: var(--control-xs); padding: 0; border: 1px solid var(--line-strong); border-radius: var(--radius-full); background: var(--bg-100); color: var(--ink-muted); cursor: pointer; opacity: 0; transition: opacity var(--duration-fast); }
 :hover > .ap-embed-remove, .ap-embed-remove:focus-visible { opacity: 1; }
@@ -1613,6 +1614,8 @@ button.ap-mention, a.ap-linkchip { max-width: 100%; white-space: normal; overflo
 .ap-attachments { display: flex; align-items: flex-end; gap: var(--space-3); overflow-x: auto; padding: var(--space-3) var(--space-4) var(--space-2); }
 .ap-attachment { position: relative; flex: none; max-width: 320px; }
 .ap-attachment .ap-embed-card { min-width: 200px; }
+/* An audio clip on a draft takes the widest a tile does, so its player keeps its times and scrubber */
+.ap-attachment .ap-embed-audiocard { width: 320px; }
 .ap-attachment-thumb { position: relative; display: block; margin: 0; height: 96px; min-width: 96px; max-width: 200px; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--bg-200); }
 .ap-attachment-thumb img { display: block; height: 100%; width: auto; min-width: 96px; max-width: 200px; object-fit: cover; }
 .ap-attachment-label { position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; padding: 3px var(--space-2) var(--space-1); background: color-mix(in srgb, var(--bg-100) 88%, transparent); backdrop-filter: blur(6px); font-size: var(--text-xs); line-height: var(--leading-xs); color: var(--ink); }
