@@ -1755,9 +1755,10 @@
 	/**
 	 * Opens an Apron link from a message here, in place of the link.apron.chat
 	 * page (Appendix A.4). A link to this server, or one without a server, opens
-	 * its room, message or user. One to another server loads the page for it,
-	 * which asks before connecting to a server not used before. One with a token
-	 * asks before signing in, as a sign-in link does. Opening never acts.
+	 * its room, message or user. One to another server asks before switching
+	 * this tab to it (a plain click opens such a link in a new tab instead,
+	 * `apronLinkClicked`). One with a token asks before signing in, as a
+	 * sign-in link does. Opening never acts.
 	 */
 	function openApronLink(link: ApronLink): void {
 		if (!client || previewMode) return;
