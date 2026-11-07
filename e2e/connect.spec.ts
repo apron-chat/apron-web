@@ -201,6 +201,20 @@ test.describe('the server pane', () => {
 	});
 });
 
+test.describe('the way last used to sign in', () => {
+	test.use(DEVICES.desktop);
+
+	test('is chosen first, and marked', async ({ preview, page }) => {
+		await page.addInitScript(() => localStorage.setItem('apron.lastSignIn', JSON.stringify({ 'wss://server.apron.chat/': 'email' })));
+		await preview.openRoot();
+		await preview.openConnect({ signIn: true });
+		const schemes = page.getByRole('form', { name: 'Sign in' }).getByRole('radiogroup', { name: 'Sign in with' });
+		await expect(schemes.getByRole('radio', { name: 'Email', exact: true })).toBeChecked();
+		await expect(page.getByRole('form', { name: 'Sign in' })).toContainText('Sign in with · last used: Email');
+		await expect(page.getByTestId('connect-email-input')).toBeVisible();
+	});
+});
+
 test.describe('a link to a server not used here', () => {
 	test.use(DEVICES.desktop);
 
@@ -235,6 +249,8 @@ test.describe('a link to a server not used here', () => {
 		await form.getByRole('button', { name: 'Join', exact: true }).click();
 		await expect(form).toHaveCount(0);
 		await expect(page.getByTestId('connection-status')).toHaveText('Connected');
+		// How it signed in is kept for next time.
+		expect(await page.evaluate(() => JSON.parse(localStorage.getItem('apron.lastSignIn') ?? '{}'))).toMatchObject({ [PIPER]: 'guest' });
 	});
 
 	test('says when the address isn’t an Apron server, and Cancel stays where the page was', async ({ preview, page }) => {

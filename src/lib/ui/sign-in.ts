@@ -200,6 +200,31 @@ function listed(names: readonly string[]): string {
 }
 
 /**
+ * The scheme a session signed in with, to remember for the next sign-in to
+ * its server: a registered session's `signedInWith` (not a link, which
+ * doesn't say which), else `guest`. None before signing in.
+ */
+export function signedInScheme(snapshot: { authenticated: boolean; passkeySession?: boolean; signedInWith?: string }): Scheme | undefined {
+	if (!snapshot.authenticated) return undefined;
+	if (!snapshot.passkeySession) return 'guest';
+	const method = snapshot.signedInWith;
+	return method && method !== 'link' && (KNOWN_SCHEMES as readonly string[]).includes(method) ? method as Scheme : undefined;
+}
+
+/**
+ * The scheme the panel shows first: the one asked for or picked (`asked`),
+ * else the way this server was last signed in to here (`last`), else a
+ * passkey for a passkey session, else the server's first. Each only where
+ * the server offers it here (`schemes`).
+ */
+export function firstScheme(schemes: readonly Scheme[], asked: Scheme | undefined, last: string | undefined, passkeySession: boolean): Scheme {
+	for (const candidate of [asked, last, passkeySession ? 'webauthn' : undefined]) {
+		if (candidate && (schemes as readonly string[]).includes(candidate)) return candidate as Scheme;
+	}
+	return schemes[0] ?? 'guest';
+}
+
+/**
  * What to say about a server speaking another version of the protocol
  * (`apron`, §3.1): some features may not work, and the client carries on.
  */

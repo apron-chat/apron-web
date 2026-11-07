@@ -1751,7 +1751,9 @@ An address that can't be reached, doesn't answer, or answers but not as an Apron
 scheme in `auth`) says so, with **Try again**. The greeting is kept for as long as the page is open, so going back
 (**Change**, beside the server) or opening the screen again offers the same schemes without contacting the server
 again, and the connected server's own frame stands in for it. Then the form offers a display name and a sign-in
-choice among the schemes the server advertises (`auth`, then the rest of `signup`, in its order, the first chosen;
+choice among the schemes the server advertises (`auth`, then the rest of `signup`, in its order; chosen first is the
+way this device last signed in to that server, guest included and kept through signing out, marked "last used",
+else the server's first;
 Passkey, below; Email, External and Token, further down) that this app can use here: with one there is no
 **Sign in with** row, and with none (only passkeys in a browser without them, or schemes this app doesn't know) it
 says which the server asks for and offers **Change server**. A server speaking another protocol version gets a

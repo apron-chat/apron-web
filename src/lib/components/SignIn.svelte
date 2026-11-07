@@ -17,10 +17,10 @@
 	import { codeStillFor, returnUrl, type SentCode } from '$lib/ui/sign-in-link';
 	import type { SessionView } from '$lib/ui/session.svelte';
 	import {
-		CANCELLED_TRY_CREATE, UNUSABLE_VIEW, chooseView, passkeyChoice, passkeyMode, signInHint, signInView, signOutThen, unusableMessage, usableSchemes,
+		CANCELLED_TRY_CREATE, UNUSABLE_VIEW, chooseView, firstScheme, passkeyChoice, passkeyMode, signInHint, signInView, signOutThen, unusableMessage, usableSchemes,
 		type ConnectStep, type PasskeyMode, type SignOutHandler, type Scheme
 	} from '$lib/ui/sign-in';
-	import { saveDisplayName, saveServerUrl } from '$lib/ui/storage';
+	import { loadLastSignIn, saveDisplayName, saveServerUrl } from '$lib/ui/storage';
 	import SignInForm from '$lib/design/components/SignInForm.svelte';
 
 	interface Props {
@@ -58,8 +58,8 @@
 	}: Props = $props();
 
 	// The initial choice follows the request or the current session; the segmented control owns it from then on.
-	// Unasked, the server's first scheme (its order is its preference, §3.1), or a passkey for a passkey session.
-	let scheme = $state<Scheme | undefined>(untrack(() => initialScheme ?? (session.snapshot.passkeySession ? 'webauthn' : undefined)));
+	// The scheme asked for, then the one picked; unasked, `firstScheme` decides for each server in the field.
+	let scheme = $state<Scheme | undefined>(untrack(() => initialScheme));
 	/** On Passkey, Sign in or Create account: the viewer picks, the panel never guesses. */
 	let passkeyChosen = $state<PasskeyMode>('login');
 	/** Waiting for the connection this panel opened to the server in the form. */
@@ -124,7 +124,12 @@
 	/** Those this client can drive here (passkeys only where the browser has them); none, and there is no way in. */
 	let schemes = $derived(usableSchemes(offered, passkeyUnavailable));
 	let unusable = $derived(step === 'sign-in' && schemes.length === 0);
-	let chosen = $derived<Scheme>(scheme && schemes.includes(scheme) ? scheme : schemes[0] ?? 'guest');
+	/** How the server in the field was last signed in to here, if it offers that still: shown first, and marked. */
+	let lastUsed = $derived.by(() => {
+		const last = loadLastSignIn(normalizedInput);
+		return last && (schemes as string[]).includes(last) ? last : undefined;
+	});
+	let chosen = $derived(firstScheme(schemes, scheme, lastUsed, Boolean(sameServer && snapshot.passkeySession)));
 	/** The code asked for with the chosen scheme, while its field shows. */
 	let codeSentTo = $derived(codeSent && codeSent.scheme === chosen ? codeSent : undefined);
 	/** Whether the chosen scheme signs in, creates an account, or both (`server.signup`, §3.1); unknown servers get both. */
@@ -544,7 +549,7 @@
 <!-- The design system's SignInForm draws the panel; this runs it. -->
 <SignInForm
 	label="Sign in" phase={view.phase} onsubmit={submit}
-	header={top} {schemes} fields={step === 'sign-in' && !unusable} scheme={chosen} onscheme={(candidate) => (scheme = candidate as Scheme)}
+	header={top} {schemes} {lastUsed} fields={step === 'sign-in' && !unusable} scheme={chosen} onscheme={(candidate) => (scheme = candidate as Scheme)}
 	passkeyChoice={chosen === 'webauthn' && passkeyChoice(use) && !(here && registered)} passkeyMode={passkeyChosen} onpasskeymode={(value) => { passkeyChosen = value; error = ''; notice = ''; }} passkeyNudge={error === CANCELLED_TRY_CREATE ? 'register' : undefined}
 	bind:token bind:email bind:code bind:name={() => (chosen === 'token' ? tokenName : displayName), (value) => (chosen === 'token' ? (tokenName = value) : (displayName = value))} askName={!passkeyLogin}
 	sent={codeSentTo} onrestart={() => { codeSent = undefined; code = ''; error = ''; client.cancelSignInCode(); }}

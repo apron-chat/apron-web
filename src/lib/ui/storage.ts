@@ -45,6 +45,11 @@ const KEY = {
 	media: 'apron.media',
 	/** Read Receipts (`ext.settings.read_receipts`) turned off on this device: `'off'`, else absent. */
 	readReceipts: 'apron.readReceipts',
+	/**
+	 * How each server was last signed in to on this device (a scheme, §3.2: `guest`, `webauthn`, `email`, `external`,
+	 * `token`), by its address: chosen first on its connect screen next time. Kept through signing out.
+	 */
+	lastSignIn: 'apron.lastSignIn',
 	/** app.html reads this one too, to apply the theme before the app loads. */
 	appearance: 'apron.appearance'
 } as const;
@@ -65,6 +70,8 @@ const THREAD_FOLDS_MAX = 200;
 const HIDDEN_DESCRIPTIONS_MAX = 200;
 /** The most read positions kept; the ones moved longest ago go first. */
 const READ_POSITIONS_MAX = 500;
+/** The most servers whose last sign-in is kept; the ones signed in to longest ago go first. */
+const LAST_SIGN_IN_MAX = 50;
 
 function read(key: string): string | null {
 	try {
@@ -114,6 +121,31 @@ function addressOf(url: string): string | undefined {
 	} catch {
 		return undefined;
 	}
+}
+
+/** The ways servers were last signed in to, by address, oldest first. */
+function lastSignIns(): Record<string, string> {
+	try {
+		const parsed: unknown = JSON.parse(read(KEY.lastSignIn) ?? '{}');
+		if (!isJsonObject(parsed)) return {};
+		return Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[1] === 'string'));
+	} catch {
+		return {};
+	}
+}
+
+/** How the server at `url` was last signed in to on this device, if it was. */
+export function loadLastSignIn(url: string): string | undefined {
+	const address = addressOf(url);
+	return address ? lastSignIns()[address] : undefined;
+}
+
+/** Remembers `scheme` as how the server at `url` was last signed in to, as the newest of those kept. */
+export function saveLastSignIn(url: string, scheme: string): void {
+	const address = addressOf(url);
+	if (!address) return;
+	const { [address]: _, ...rest } = lastSignIns();
+	write(KEY.lastSignIn, JSON.stringify(Object.fromEntries([...Object.entries(rest), [address, scheme]].slice(-LAST_SIGN_IN_MAX))));
 }
 
 /**

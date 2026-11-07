@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { chooseView, passkeyChoice, passkeyMode, signInHint, signInView, signOutThen, unusableMessage, usableSchemes, versionWarning, type SignInInput } from './sign-in';
+import { chooseView, firstScheme, passkeyChoice, signedInScheme, passkeyMode, signInHint, signInView, signOutThen, unusableMessage, usableSchemes, versionWarning, type SignInInput } from './sign-in';
 
 /** Connected to the server in the form as a guest, with passkeys that both sign in and sign up. */
 const guestHere: SignInInput = {
@@ -167,5 +167,25 @@ describe('what a server offers', () => {
 		expect(versionWarning(10, 10)).toBeUndefined();
 		expect(versionWarning(11, 10)).toEqual({ title: 'Newer protocol.', text: 'This server speaks Apron v11 and this app speaks v10, so some features may not work.' });
 		expect(versionWarning(9, 10)?.title).toBe('Older protocol.');
+	});
+});
+
+describe('the scheme shown first', () => {
+	it('is the one asked for, else the one last used here, else a passkey for a passkey session, else the server’s first: each only where offered', () => {
+		const offered = ['guest', 'webauthn', 'email'] as const;
+		expect(firstScheme([...offered], 'email', 'webauthn', true)).toBe('email');
+		expect(firstScheme([...offered], undefined, 'email', true)).toBe('email');
+		expect(firstScheme([...offered], undefined, 'token', true)).toBe('webauthn');
+		expect(firstScheme([...offered], undefined, undefined, false)).toBe('guest');
+		expect(firstScheme(['email'], 'token', 'guest', true)).toBe('email');
+		expect(firstScheme([], undefined, undefined, false)).toBe('guest');
+	});
+
+	it('remembers how a session signed in: guest, or its account’s method, never a link that doesn’t say', () => {
+		expect(signedInScheme({ authenticated: false })).toBeUndefined();
+		expect(signedInScheme({ authenticated: true })).toBe('guest');
+		expect(signedInScheme({ authenticated: true, passkeySession: true, signedInWith: 'email' })).toBe('email');
+		expect(signedInScheme({ authenticated: true, passkeySession: true, signedInWith: 'link' })).toBeUndefined();
+		expect(signedInScheme({ authenticated: true, passkeySession: true })).toBeUndefined();
 	});
 });
