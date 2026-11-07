@@ -198,13 +198,18 @@ export class Preview {
 
 	/**
 	 * Opens the connect screen as people reach it: the server pane's Connect to another server…, from the rooms list's head (on a
-	 * narrow viewport, from the rooms pane). Only on `/` (`openRoot`): the preview has no connect screen.
+	 * narrow viewport, from the rooms pane). Only on `/` (`openRoot`): the preview has no connect screen. It opens at
+	 * choosing the server; with `signIn`, Continue goes on to signing in to the connected one, which shows how it shows itself.
 	 */
-	async openConnect(): Promise<void> {
+	async openConnect(options: { signIn?: boolean } = {}): Promise<void> {
 		await this.roomsPane();
 		await this.press(this.page.getByRole('button', { name: /^Server: / }));
 		await this.press(this.page.getByTestId('server-pane').getByRole('button', { name: 'Connect to another server…', exact: true }));
-		await expect(this.page.getByRole('form', { name: 'Sign in' })).toBeVisible();
+		const form = this.page.getByRole('form', { name: 'Sign in' });
+		await expect(form).toBeVisible();
+		if (!options.signIn) return;
+		await form.getByRole('button', { name: 'Continue', exact: true }).click();
+		await expect(this.page.getByTestId('connect-server')).toBeVisible();
 	}
 
 	/**

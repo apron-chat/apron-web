@@ -262,8 +262,7 @@ test.describe('on a phone', () => {
 		const backBox = (await back.boundingBox())!;
 		expect(name.x + name.width).toBeLessThanOrEqual(backBox.x);
 		await expect(head(preview).locator('.ap-shell-sidehead-host')).toHaveText('server.apron.chat');
-		await preview.openConnect();
-		await page.getByRole('form', { name: 'Sign in' }).getByRole('button', { name: 'Continue', exact: true }).click();
+		await preview.openConnect({ signIn: true });
 		await expect(page.getByTestId('connect-server')).toContainText(LONG);
 	});
 });
