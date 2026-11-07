@@ -18,7 +18,7 @@
 	import ReadOnlyBar from '$lib/components/ReadOnlyBar.svelte';
 	import ConnectScreen from '$lib/components/ConnectScreen.svelte';
 	import { SettleFlag } from '$lib/ui/settle-flag';
-	import type { Scheme } from '$lib/ui/sign-in';
+	import { signedInScheme, type Scheme } from '$lib/ui/sign-in';
 	import JumpBar from '$lib/components/JumpBar.svelte';
 	import TimelineMessage from '$lib/components/TimelineMessage.svelte';
 	import EmbedItem from '$lib/components/embeds/Embed.svelte';
@@ -71,7 +71,7 @@
 	import { SessionView } from '$lib/ui/session.svelte';
 	import { MEMBER_LIST_WIDTHS, ROOMS_LIST_WIDTHS, SidebarLayout } from '$lib/ui/sidebar.svelte';
 	import { NARROW_MAX, WIDE_MIN } from '$lib/ui/breakpoints';
-	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, installOfferAnswered, answerInstallOffer, loadRecentServers, loadServerUrl, loadSidebarPrefs, refreshRecentServer, rememberServer, saveDisplayName, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, HIDDEN_DESCRIPTIONS_KEY, INSTALL_OFFER_KEY, loadAddedRooms, saveAddedRooms, loadHiddenDescriptions, hideDescription, showDescription, descriptionHidden, type RecentServer } from '$lib/ui/storage';
+	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, installOfferAnswered, answerInstallOffer, loadRecentServers, loadServerUrl, loadSidebarPrefs, refreshRecentServer, rememberServer, saveDisplayName, saveLastSignIn, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, HIDDEN_DESCRIPTIONS_KEY, INSTALL_OFFER_KEY, loadAddedRooms, saveAddedRooms, loadHiddenDescriptions, hideDescription, showDescription, descriptionHidden, type RecentServer } from '$lib/ui/storage';
 	import TimelineLoading from '$lib/design/components/TimelineLoading.svelte';
 	import RateLimitNotice from '$lib/design/components/RateLimitNotice.svelte';
 	import SystemLine from '$lib/design/components/SystemLine.svelte';
@@ -320,6 +320,8 @@
 	let disconnected = $state(false);
 	/** The sign-in scheme the connect screen opens with, when something asked for one. */
 	let connectScheme = $state<Scheme | undefined>();
+	/** The connect screen opens at choosing a server (a new one, or a link's), rather than at signing in to the one in it. */
+	let connectChoosing = $state(false);
 	let recentServers = $state<RecentServer[]>([]);
 	let passkeyUnavailable = $state<string | undefined>();
 	let highlightedId = $state<string | undefined>();
@@ -353,6 +355,7 @@
 			// The connect screen can start again, on the link's server, which is not remembered unless that works.
 			serverInput = server;
 			connectScheme = scheme;
+			connectChoosing = false;
 			connectOpen = true;
 		}
 	});
@@ -1245,6 +1248,8 @@
 		const any = [...offered, ...(session.server?.signup ?? [])];
 		const passkeyFirst = offered.includes('webauthn') ? offered.includes('guest') || !offered.includes('email') : !any.includes('email');
 		connectScheme = options.scheme ?? (options.signIn ? (passkeyFirst ? 'webauthn' : 'email') : undefined);
+		// Asked to sign in here, it opens at signing in; otherwise at choosing the server (another, a link's, or this one again).
+		connectChoosing = !options.scheme && !options.signIn;
 		links.failure = undefined;
 		if (options.name) displayName = options.name;
 		connectOpen = true;
@@ -1516,9 +1521,14 @@
 		};
 	}
 
-	function connected(): void {
+	function connected(options: { remember?: boolean } = {}): void {
 		if (previewMode) return;
-		if (client) recentServers = rememberServer(recentServers, client.url, currentLook);
+		if (client) {
+			recentServers = rememberServer(recentServers, client.url, currentLook);
+			// How it signed in here is offered first next time, through signing out too: a sign-out's guest isn't kept.
+			const scheme = options.remember === false ? undefined : signedInScheme(client.snapshot());
+			if (scheme) saveLastSignIn(client.url, scheme);
+		}
 		connectOpen = false;
 		offeringLink = false;
 		disconnected = false;
@@ -3244,7 +3254,7 @@
 	<ConnectScreen
 		{client} {session} bind:serverInput bind:displayName {passkeyUnavailable} {recentServers}
 		canCancel={!disconnected && (session.rooms.length > 0 || session.ready || offeringLink)} initialScheme={connectScheme}
-		initialError={links.failure?.error}
+		initialError={links.failure?.error} initialChoosing={connectChoosing} linked={offeringLink && linked ? { server: linked.server, room: linked.room } : undefined}
 		onconnect={leaveBackend} onconnected={connected} oncancel={() => { connectOpen = false; offeringLink = false; if (client) serverInput = client.url; }} onsignout={signedOut}
 	/>
 {:else}

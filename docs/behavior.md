@@ -1311,7 +1311,9 @@ this app never learns which server, room or message anyone opens:
 leaving out `server` when it is the one the page connects to anyway, and
 `thread`, `message` and `user` (whose profile card opens) without a room.
 Opening one, or pasting one into an open tab, goes there; one on another server
-opens the connect screen for it first. Each room or thread opened is a browser
+opens the connect screen for it first, at its address and where the link leads
+("A link opened this page to #general on this server."), contacting it only on
+**Continue**. Each room or thread opened is a browser
 history entry, so Back returns to the previous room or thread, and Forward the
 other way, until Back leaves the page from the first room opened. A room left since stays put
 for that step, and a thread left since is read without joining.
@@ -1742,9 +1744,27 @@ session, its history) stays, so connecting to it again doesn't ask to sign in
 again; a reload connects to it again too. In the preview and an export read on
 `/archive`, the pane has neither.
 
-The connect screen (**Connect to another server…**, for guests and accounts alike) takes a WebSocket URL or an HTTP(S) server
-base URL, a display name, and a sign-in choice among the schemes the server
-advertises (Guest by default; Passkey, below; Email, External and Token, further down). Once the server in the field
+The connect screen (**Connect to another server…**, for guests and accounts alike) works in two steps, so it only
+ever offers what the server offers. First it takes a WebSocket URL or an HTTP(S) server base URL, alone: no sign-in
+choice shows, since nothing is known of a server that hasn't answered, and nothing contacts it yet (a link to it, or
+an address typed, reaches no one). **Continue** (or picking a recent server) reads that server's `server` frame
+([PROTOCOL.md §3.1](https://github.com/shazow/apron/blob/main/PROTOCOL.md#31-server-frame)) on a connection of its
+own that sends nothing and closes once greeted, leaving the current session as it is, so Cancel still returns to it.
+An address that can't be reached, doesn't answer, or answers but not as an Apron server (no `apron` version, or no
+scheme in `auth`) says so, with **Try again**. The greeting is kept for as long as the page is open, so going back
+(**Change**, beside the server) or opening the screen again offers the same schemes without contacting the server
+again, and the connected server's own frame stands in for it. Then the form offers a display name and a sign-in
+choice among the schemes the server advertises (`auth`, then the rest of `signup`, in its order; chosen first is the
+way this device last signed in to that server, guest included and kept through signing out, marked "last used",
+else the server's first;
+Passkey, below; Email, External and Token, further down) that this app can use here: with one there is no
+**Sign in with** row, and with none (only passkeys in a browser without them, or schemes this app doesn't know) it
+says which the server asks for and offers **Change server**. A server whose greeting says it only reads, a served
+archive (`ext:archive` with `guest`, [ARCHIVE.md §4](../ARCHIVE.md#4-serving)), which signs every guest in as its own
+`you`, asks nothing more: **Continue** joins it as a guest, with no display name and no `me` after. Whether any other
+server lets a guest write is only known once signed in (`you.ext.permissions`), so the name is asked there as usual. A server speaking another protocol version gets a
+warning, and signing in goes on. Asked to sign in (the profile, the read-only bar, a held session), the screen opens
+at this second step for the connected server. Once the server in the field
 has answered, the top of the form shows it as it shows itself
 ([PROTOCOL.md §3.1](https://github.com/shazow/apron/blob/main/PROTOCOL.md#31-server-frame)):
 its `avatar` (or its initials) and its `title` (or its host), always above
@@ -1845,7 +1865,7 @@ sheet only ever opens for a tap:
   asked. A browser may refuse a sheet that long after the tap: the panel
   then says "Connected. Tap again to continue with your passkey.", ready
   on that connection. Connected as a guest, **Stay a guest** leaves the
-  panel as it is. On Guest, **Connect** connects without a ceremony.
+  panel as it is. On Guest, **Join** connects without a ceremony.
 - Connected, the sign-in hint says each server has its own accounts, and
   names the server in the form by its host (as code): a passkey saved for
   another server is no account here. A sign-in whose sheet is dismissed

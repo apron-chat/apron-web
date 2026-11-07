@@ -2,21 +2,26 @@
 	/**
 	 * The one sign-in panel: picks a scheme the server offers, connects to the
 	 * server in `serverInput` when it isn't the connected one, and runs one
-	 * explicit action per tap (see `$lib/ui/sign-in`). Every way into signing
-	 * in (the connect screen, the profile, the read-only bar, a session held
-	 * for a sign-in) lands here, so there is one flow to keep right.
+	 * explicit action per tap (see `$lib/ui/sign-in`). A server other than the
+	 * connected one shows as its address alone until Continue reads its
+	 * greeting (`$lib/ui/greetings`): only then are its schemes known, so
+	 * nothing is offered that it doesn't offer, and nothing contacts it
+	 * first. Every way into signing in (the connect screen, the profile, the
+	 * read-only bar, a session held for a sign-in) lands here, so there is
+	 * one flow to keep right.
 	 */
 	import { onDestroy, untrack, type Snippet } from 'svelte';
 	import { normalizeWebSocketUrl, type ChatClient } from '$lib/protocol/client';
-	import { offeredSchemes, passkeyMessage, schemeUse } from '$lib/ui/connection';
+	import { offeredSchemes, serverLabel, passkeyMessage, schemeUse } from '$lib/ui/connection';
+	import { greetings } from '$lib/ui/greetings.svelte';
 	import { codeStillFor, returnUrl, type SentCode } from '$lib/ui/sign-in-link';
 	import type { SessionView } from '$lib/ui/session.svelte';
-	import { CANCELLED_TRY_CREATE, passkeyChoice, passkeyMode, signInHint, signInView, signOutThen, type PasskeyMode, type SignOutHandler, type Scheme } from '$lib/ui/sign-in';
-	import { saveDisplayName, saveServerUrl } from '$lib/ui/storage';
+	import {
+		CANCELLED_TRY_CREATE, UNUSABLE_VIEW, chooseView, firstScheme, passkeyChoice, readsOnly, passkeyMode, signInHint, signInView, signOutThen, unusableMessage, usableSchemes,
+		type ConnectStep, type PasskeyMode, type SignOutHandler, type Scheme
+	} from '$lib/ui/sign-in';
+	import { loadLastSignIn, saveDisplayName, saveServerUrl } from '$lib/ui/storage';
 	import SignInForm from '$lib/design/components/SignInForm.svelte';
-
-	/** Every scheme this client can drive, in the order shown when the server's list isn't known yet. */
-	const KNOWN_SCHEMES: Scheme[] = ['guest', 'webauthn', 'email', 'external', 'token'];
 
 	interface Props {
 		client: ChatClient;
@@ -35,23 +40,31 @@
 		initialEmail?: string;
 		/** Shows an error to start with, e.g. why a sign-in link failed. */
 		initialError?: string;
-		/** Shown at the top of the form, such as the host's title and server field. */
-		header?: Snippet;
+		/** Shown at the top of the form, such as the host's title and server field, told where the panel stands (`ConnectStep`). */
+		header?: Snippet<[ConnectStep]>;
+		/** Opens at choosing the server (Connect to another server…, a link's server), even one whose greeting is known. */
+		initialChoosing?: boolean;
 		/** The form was submitted for another backend: the page drops whatever belonged to the previous one. */
 		onconnect: () => void;
 		/** The socket is up and signed in. */
-		onconnected: () => void;
+		/** Done: signed in, or signed out (`remember: false`, so the guest left behind isn't kept as the way in). */
+		onconnected: (options?: { remember?: boolean }) => void;
 		oncancel: () => void;
 		/** Signing out starts a different session: the page drops what it held from this one. */
 		onsignout: SignOutHandler;
 	}
 	let {
 		client, session, serverInput = $bindable(), displayName = $bindable(), busy = $bindable(false), passkeyUnavailable, canCancel,
-		initialScheme, initialEmail, initialError, header, onconnect, onconnected, oncancel, onsignout
+		initialScheme, initialEmail, initialError, header, initialChoosing = false, onconnect, onconnected, oncancel, onsignout
 	}: Props = $props();
 
 	// The initial choice follows the request or the current session; the segmented control owns it from then on.
-	let scheme = $state<Scheme>(untrack(() => initialScheme ?? (session.snapshot.passkeySession ? 'webauthn' : 'guest')));
+	// The scheme asked for, then the one picked, for the server it was picked on (`schemeFor`, the first one's
+	// address until a pick); unasked, `firstScheme` decides for each server in the field.
+	let scheme = $state<Scheme | undefined>(untrack(() => initialScheme));
+	let schemeFor = $state<string | undefined>();
+	/** Signing out ended this panel's work: what is left is a guest, not a way in to remember. */
+	let signedOut = false;
 	/** On Passkey, Sign in or Create account: the viewer picks, the panel never guesses. */
 	let passkeyChosen = $state<PasskeyMode>('login');
 	/** Waiting for the connection this panel opened to the server in the form. */
@@ -100,29 +113,44 @@
 	/** Signed in to the server in the form, so sign-in can happen in place. */
 	let here = $derived(sameServer && snapshot.status === 'connected' && snapshot.authenticated);
 	let registered = $derived(!!snapshot.passkeySession);
+	/** Back at choosing the server (Change), until Continue. */
+	let choosing = $state(untrack(() => initialChoosing));
+	/** The greeting looked up for the server in the field, if any. */
+	let greeting = $derived(greetings.get(normalizedInput));
 	/**
-	 * The sign-in schemes the server in the field advertises, in its order,
-	 * that this client can drive (passkeys only where the browser has them).
-	 * Until that server has answered, every scheme the client knows.
+	 * The server in the field, once it has answered: the connected one's own
+	 * `server` frame, else the greeting Continue read (kept for the page).
 	 */
-	let schemes = $derived.by((): Scheme[] => {
-		const offered = sameServer && session.server ? offeredSchemes(session.server) : undefined;
-		const listed = offered ? offered.filter((candidate): candidate is Scheme => (KNOWN_SCHEMES as string[]).includes(candidate)) : KNOWN_SCHEMES;
-		const usable = listed.filter((candidate) => candidate !== 'webauthn' || !passkeyUnavailable);
-		return usable.length ? usable : ['guest'];
+	let known = $derived((sameServer ? session.server : undefined) ?? (greeting?.status === 'known' ? greeting.server : undefined));
+	/** Choosing the server: its address alone, and Continue. Then signing in, with what it offers. */
+	let step = $derived<'choose' | 'sign-in'>(choosing || !known ? 'choose' : 'sign-in');
+	/** What the server offers for signing in or creating an account, in its order. */
+	let offered = $derived(known ? offeredSchemes(known) : []);
+	/** Those this client can drive here (passkeys only where the browser has them); none, and there is no way in. */
+	let schemes = $derived(usableSchemes(offered, passkeyUnavailable));
+	let unusable = $derived(step === 'sign-in' && schemes.length === 0);
+	/** A server that only reads (a served archive): no name to ask, since it signs everyone in as its own. */
+	let reader = $derived(readsOnly(known));
+	/** How the server in the field was last signed in to here, if it offers that still: shown first, and marked. */
+	let lastUsed = $derived.by(() => {
+		const last = loadLastSignIn(normalizedInput);
+		// Signed in to an account here, Guest would be the way out of it (Sign out): not offered as the way in.
+		if (last === 'guest' && here && registered) return undefined;
+		return last && (schemes as string[]).includes(last) ? last : undefined;
 	});
-	let chosen = $derived(schemes.includes(scheme) ? scheme : schemes[0]);
+	/** The address the panel opened on: a scheme asked for with it belongs to it. */
+	const openedOn = untrack(() => normalizedInput);
+	let asked = $derived((schemeFor ?? openedOn) === normalizedInput ? scheme : undefined);
+	let chosen = $derived(firstScheme(schemes, asked, lastUsed, Boolean(sameServer && snapshot.passkeySession)));
 	/** The code asked for with the chosen scheme, while its field shows. */
 	let codeSentTo = $derived(codeSent && codeSent.scheme === chosen ? codeSent : undefined);
-	/** The server in the field, once it has answered. */
-	let known = $derived(sameServer ? session.server : undefined);
 	/** Whether the chosen scheme signs in, creates an account, or both (`server.signup`, §3.1); unknown servers get both. */
 	let use = $derived(known ? schemeUse(known, chosen) : { signIn: true, signUp: true });
 	/** Signed in here as a guest who only reads (`ext:permissions` with `write: false`). */
 	let guestReadOnly = $derived(here && !registered && Boolean(snapshot.readOnly));
 	/** The passkey action a tap runs: the one chosen, where the server lets passkeys do it. */
 	let mode = $derived(passkeyMode(use, passkeyChosen));
-	let view = $derived(signInView({
+	let view = $derived(step === 'choose' ? chooseView({ contacting: greeting?.status === 'contacting', failed: greeting?.status === 'failed' }) : unusable ? UNUSABLE_VIEW : signInView({
 		scheme: chosen,
 		use,
 		passkey: passkeyChosen,
@@ -149,12 +177,19 @@
 			return undefined;
 		}
 	});
-	let hint = $derived(signInHint({ scheme: chosen, use, passkey: passkeyChosen, registered, phase: view.phase, here, guest: here && !registered, guestReadOnly, host }));
+	let hint = $derived.by(() => {
+		if (step === 'choose') return greeting?.status === 'contacting' ? `Connecting to ${host ?? 'the server'}…` : '';
+		if (unusable) return '';
+		if (reader && chosen === 'guest') return 'Read-only: everyone reads here as the same guest, and nothing can be posted.';
+		return signInHint({ scheme: chosen, use, passkey: passkeyChosen, registered, phase: view.phase, here, guest: here && !registered, guestReadOnly, host });
+	});
 	$effect(() => {
 		busy = view.phase === 'busy' || view.phase === 'connecting';
 	});
 	let errorText = $derived.by(() => {
 		if (error) return error;
+		if (step === 'choose' && greeting?.status === 'failed') return greeting.error;
+		if (unusable && known) return unusableMessage(serverName(known), offered, passkeyUnavailable);
 		if (!pending || !snapshot.error) return '';
 		return snapshot.error === 'WebSocket connection error' ? 'Can’t reach the server. Check the address and try again.' : snapshot.error;
 	});
@@ -176,8 +211,11 @@
 		});
 	});
 
-	// Closing the panel, however it closes, gives up a code still waiting: nothing here could take it any more.
-	onDestroy(() => client.cancelSignInCode());
+	// Closing the panel, however it closes, gives up a code still waiting, and a greeting being read: nothing here could use them any more.
+	onDestroy(() => {
+		client.cancelSignInCode();
+		greetings.cancel();
+	});
 
 	// A short code works only on the connection that asked for it (§4.11.2): once that closes (expired, dropped),
 	// there is nowhere to type it. The proposal outlives the connection, so an emailed link still works.
@@ -216,6 +254,14 @@
 		event.preventDefault();
 		error = '';
 		const action = view.primary.action;
+		if (action === 'continue') {
+			void continueTo();
+			return;
+		}
+		if (action === 'change') {
+			change();
+			return;
+		}
 		if (action === 'passkey-login' || action === 'passkey-register') {
 			startPasskey(action === 'passkey-login' ? 'login' : 'register');
 			return;
@@ -249,24 +295,85 @@
 				finish();
 				return;
 			case 'connect':
-				connect(normalized);
+				connect(normalized, undefined, reader ? '' : displayName);
 				return;
 		}
 	}
 
-	/** The Server field as a `ws:`/`wss:` URL, normalized and remembered; or the error says why it isn't one. */
-	function serverUrl(): string | undefined {
+	/** The Server field as a `ws:`/`wss:` URL, normalized; or the error says why it isn't one. */
+	function checkedUrl(): string | undefined {
 		try {
 			const normalized = normalizeWebSocketUrl(serverInput, window.location);
 			const parsed = new URL(normalized);
 			if (parsed.protocol !== 'ws:' && parsed.protocol !== 'wss:') throw new Error('Use a ws:// or wss:// URL');
 			serverInput = normalized;
-			saveServerUrl(normalized);
 			return normalized;
 		} catch (cause) {
 			error = cause instanceof Error ? cause.message : 'Invalid server URL';
 			return undefined;
 		}
+	}
+
+	/** The Server field as `checkedUrl` has it, remembered as the server to start with: only once signing in there starts. */
+	function serverUrl(): string | undefined {
+		const normalized = checkedUrl();
+		if (normalized) saveServerUrl(normalized);
+		return normalized;
+	}
+
+	/**
+	 * Continue: reads the greeting of the server in the field (or of `url`,
+	 * a recent server picked, put in the field first), unless it is the
+	 * connected server's or was read before, then offers what it offers.
+	 * This is the first the server hears of the viewer.
+	 */
+	export async function continueTo(url?: string): Promise<void> {
+		if (url !== undefined) serverInput = url;
+		error = '';
+		dropAttempt();
+		const normalized = checkedUrl();
+		if (!normalized) return;
+		let server = normalized === client.url ? session.server : undefined;
+		if (!server) {
+			const looked = await greetings.look(client, normalized);
+			// The field moved on meanwhile: what it names now is for another tap.
+			if (looked.status !== 'known' || normalizedInput !== normalized) return;
+			server = looked.server;
+		}
+		choosing = false;
+		// A server that only reads asks nothing more: Continue was the tap that joins it, as a guest, with no name.
+		if (readsOnly(server)) {
+			if (here) finish();
+			else if (serverUrl()) connect(normalized, undefined, '');
+		}
+	}
+
+	/** Change: back to choosing the server, from its address; a code asked for there is given up. */
+	function change(): void {
+		error = '';
+		notice = '';
+		dropAttempt();
+		if (codeSent) {
+			codeSent = undefined;
+			code = '';
+			client.cancelSignInCode();
+		}
+		choosing = true;
+	}
+
+	/**
+	 * Lets go of a connection this panel was waiting on (a Join that hasn't
+	 * settled, such as to a server that can't be reached): going back to
+	 * choosing a server, it mustn't finish the panel later, signed in there.
+	 */
+	function dropAttempt(): void {
+		pending = false;
+		intent = undefined;
+	}
+
+	/** A server by its title, else its host and path, as the connect screen shows it. */
+	function serverName(server: { title?: string }): string {
+		return server.title?.trim() || serverLabel(normalizedInput) || 'This server';
 	}
 
 	/**
@@ -287,9 +394,13 @@
 		connect(normalized, action);
 	}
 
-	/** Opens the socket to the server in the form; the effect above carries on once it has settled, with `then` if given. */
-	function connect(normalized: string, then?: 'login' | 'register'): void {
-		client.setDisplayName(displayName);
+	/**
+	 * Opens the socket to the server in the form, named `name` (the display
+	 * name by default); the effect above carries on once it has settled, with
+	 * `then` if given.
+	 */
+	function connect(normalized: string, then?: 'login' | 'register', name = displayName): void {
+		client.setDisplayName(name);
 		joinedAsGuest = false;
 		intent = then;
 		// A session held for a sign-in reconnects in place, keeping what the page holds for it.
@@ -454,6 +565,7 @@
 	async function signOut(): Promise<void> {
 		try {
 			await signOutThen(client, onsignout);
+			signedOut = true;
 			pending = true;
 		} catch (cause) {
 			error = cause instanceof Error ? cause.message : 'Unable to sign out';
@@ -463,19 +575,22 @@
 	function finish(): void {
 		pending = false;
 		joinedAsGuest = false;
-		onconnected();
+		onconnected(signedOut ? { remember: false } : undefined);
 	}
 </script>
+
+<!-- The header, told the server it shows once it has answered, and how to go back to choosing one. -->
+{#snippet top()}{@render header?.({ server: step === 'sign-in' ? known : undefined, address: normalizedInput, onchange: step === 'sign-in' ? change : undefined })}{/snippet}
 
 <!-- The design system's SignInForm draws the panel; this runs it. -->
 <SignInForm
 	label="Sign in" phase={view.phase} onsubmit={submit}
-	{header} {schemes} scheme={chosen} onscheme={(candidate) => (scheme = candidate as Scheme)}
+	header={top} {schemes} {lastUsed} fields={step === 'sign-in' && !unusable} scheme={chosen} onscheme={(candidate) => { scheme = candidate as Scheme; schemeFor = normalizedInput; }}
 	passkeyChoice={chosen === 'webauthn' && passkeyChoice(use) && !(here && registered)} passkeyMode={passkeyChosen} onpasskeymode={(value) => { passkeyChosen = value; error = ''; notice = ''; }} passkeyNudge={error === CANCELLED_TRY_CREATE ? 'register' : undefined}
-	bind:token bind:email bind:code bind:name={() => (chosen === 'token' ? tokenName : displayName), (value) => (chosen === 'token' ? (tokenName = value) : (displayName = value))} askName={!passkeyLogin}
+	bind:token bind:email bind:code bind:name={() => (chosen === 'token' ? tokenName : displayName), (value) => (chosen === 'token' ? (tokenName = value) : (displayName = value))} askName={!passkeyLogin && !reader}
 	sent={codeSentTo} onrestart={() => { codeSent = undefined; code = ''; error = ''; client.cancelSignInCode(); }}
 	hint={view.phase === 'ready' && notice ? notice : hint} hintStatus={view.phase === 'ready'} error={errorText} {busy}
 	submit={view.primary.label} submitTestid={view.primary.action}
 	tokenTestid="connect-token-input" emailTestid="connect-email-input" codeTestid="connect-code-input" nameTestid="connect-name-input" passkeyChoiceTestid="passkey-choice" pageLinkTestid="external-page-link"
-	secondary={joinedAsGuest && view.phase === 'ready' ? { label: 'Stay a guest', onclick: finish } : canCancel ? { label: 'Cancel', onclick: () => { client.cancelPasskeyPrompt(); oncancel(); } } : undefined}
+	secondary={joinedAsGuest && view.phase === 'ready' ? { label: 'Stay a guest', onclick: finish } : canCancel ? { label: 'Cancel', onclick: () => { client.cancelPasskeyPrompt(); greetings.cancel(); oncancel(); } } : undefined}
 />

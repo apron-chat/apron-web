@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { pushIdFor, loadRecentServers, refreshRecentServer, rememberServer, hideDescription, loadAppearance, loadShutMemberSections, saveShutMemberSections, loadSidebarFolds, saveSidebarFolds, loadHiddenDescriptions, loadAddedRooms, saveAddedRooms, loadThreadFolds, saveThreadFolds, loadRoomOrder, saveRoomOrder, showDescription, descriptionHidden, loadNotificationsEnabled, loadNotifyScopes, loadWebPushAccounts, notificationsChosen, loadWebPushOwner, saveAppearance, saveNotificationsEnabled, saveNotifyScopes, saveWebPushEnabled, saveWebPushOwner } from './storage';
+import { pushIdFor, loadLastSignIn, saveLastSignIn, loadRecentServers, refreshRecentServer, rememberServer, hideDescription, loadAppearance, loadShutMemberSections, saveShutMemberSections, loadSidebarFolds, saveSidebarFolds, loadHiddenDescriptions, loadAddedRooms, saveAddedRooms, loadThreadFolds, saveThreadFolds, loadRoomOrder, saveRoomOrder, showDescription, descriptionHidden, loadNotificationsEnabled, loadNotifyScopes, loadWebPushAccounts, notificationsChosen, loadWebPushOwner, saveAppearance, saveNotificationsEnabled, saveNotifyScopes, saveWebPushEnabled, saveWebPushOwner } from './storage';
 import { notifyAccount } from './notify-scopes';
 import { memoryStorage } from '$lib/test/storage';
 
@@ -70,6 +70,19 @@ describe('preference storage', () => {
 		expect(loadShutMemberSections()).toEqual([]);
 	});
 
+
+	it('keeps how each server was last signed in to, by its address, the newest last, and ignores what isn’t a scheme', () => {
+		expect(loadLastSignIn('wss://chat.example/')).toBeUndefined();
+		saveLastSignIn('WSS://Chat.Example:443', 'email');
+		expect(loadLastSignIn('wss://chat.example/')).toBe('email');
+		saveLastSignIn('wss://other.example/', 'guest');
+		saveLastSignIn('wss://chat.example/', 'webauthn');
+		expect(JSON.parse(values.get('apron.lastSignIn')!)).toEqual({ 'wss://other.example/': 'guest', 'wss://chat.example/': 'webauthn' });
+		values.set('apron.lastSignIn', '{"wss://chat.example/":7}');
+		expect(loadLastSignIn('wss://chat.example/')).toBeUndefined();
+		values.set('apron.lastSignIn', 'not json');
+		expect(loadLastSignIn('wss://chat.example/')).toBeUndefined();
+	});
 
 	it('keeps notifications off until chosen', () => {
 		expect(loadNotificationsEnabled()).toBe(false);

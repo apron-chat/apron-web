@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { passkeyChoice, passkeyMode, signInHint, signInView, signOutThen, type SignInInput } from './sign-in';
+import { chooseView, firstScheme, passkeyChoice, readsOnly, signedInScheme, passkeyMode, signInHint, signInView, signOutThen, unusableMessage, usableSchemes, versionWarning, type SignInInput } from './sign-in';
 
 /** Connected to the server in the form as a guest, with passkeys that both sign in and sign up. */
 const guestHere: SignInInput = {
@@ -61,7 +61,7 @@ describe('the passkey step', () => {
 		const failed = { ...guestHere, pending: true, authenticated: false, status: 'reconnecting', connectionError: true };
 		expect(signInView(failed).phase).toBe('idle');
 		expect(signInView(failed).primary.action).toBe('passkey-login');
-		expect(signInView({ ...failed, scheme: 'guest' })).toEqual({ phase: 'idle', primary: { action: 'connect', label: 'Connect' } });
+		expect(signInView({ ...failed, scheme: 'guest' })).toEqual({ phase: 'idle', primary: { action: 'connect', label: 'Join' } });
 	});
 
 	it('is busy from the tap until the ceremony ends', () => {
@@ -137,5 +137,70 @@ describe('signOutThen', () => {
 		const client = { signOut: async () => { throw new Error('Wait for pending requests to finish, then try again'); } };
 		await expect(signOutThen(client, () => off)).rejects.toThrow(/pending requests/);
 		expect(off).not.toHaveBeenCalled();
+	});
+});
+
+describe('before the server has answered', () => {
+	it('offers only Continue, waits while the greeting is read, and offers Try again once it failed', () => {
+		expect(chooseView({ contacting: false, failed: false })).toEqual({ phase: 'idle', primary: { action: 'continue', label: 'Continue' } });
+		expect(chooseView({ contacting: true, failed: false })).toEqual({ phase: 'connecting', primary: { action: 'continue', label: 'Continue' } });
+		expect(chooseView({ contacting: false, failed: true })).toEqual({ phase: 'idle', primary: { action: 'continue', label: 'Try again' } });
+	});
+});
+
+describe('what a server offers', () => {
+	it('is the schemes it lists that this client can drive, in its order, passkeys only where the browser has them', () => {
+		expect(usableSchemes(['guest'])).toEqual(['guest']);
+		expect(usableSchemes(['webauthn', 'oauth2', 'email', 'guest'])).toEqual(['webauthn', 'email', 'guest']);
+		expect(usableSchemes(['webauthn', 'token'], 'Passkeys require HTTPS or a localhost connection.')).toEqual(['token']);
+	});
+
+	it('says why there is no way in, naming the server and what it asks for', () => {
+		const reason = 'Passkeys require HTTPS or a localhost connection.';
+		expect(unusableMessage('Acme', ['webauthn'], reason)).toBe(`Acme signs in only with a passkey, and this browser can’t use one here. ${reason}`);
+		expect(unusableMessage('Acme', ['webauthn', 'oauth2'], reason)).toBe(`Acme signs in only with a passkey, and this browser can’t use one here. ${reason}`);
+		expect(unusableMessage('Acme', ['oauth2'])).toBe('Acme signs in with oauth2, which this app doesn’t support.');
+		expect(unusableMessage('Acme', ['oauth2', 'saml', 'magic'])).toBe('Acme signs in with oauth2, saml or magic, which this app doesn’t support.');
+	});
+
+	it('warns of another protocol version without refusing it', () => {
+		expect(versionWarning(10, 10)).toBeUndefined();
+		expect(versionWarning(11, 10)).toEqual({ title: 'Newer protocol.', text: 'This server speaks Apron v11 and this app speaks v10, so some features may not work.' });
+		expect(versionWarning(9, 10)?.title).toBe('Older protocol.');
+	});
+});
+
+describe('the scheme shown first', () => {
+	it('is the one asked for, else the one last used here, else a passkey for a passkey session, else the server’s first: each only where offered', () => {
+		const offered = ['guest', 'webauthn', 'email'] as const;
+		expect(firstScheme([...offered], 'email', 'webauthn', true)).toBe('email');
+		expect(firstScheme([...offered], undefined, 'email', true)).toBe('email');
+		expect(firstScheme([...offered], undefined, 'token', true)).toBe('webauthn');
+		expect(firstScheme([...offered], undefined, undefined, false)).toBe('guest');
+		expect(firstScheme(['email'], 'token', 'guest', true)).toBe('email');
+		expect(firstScheme([], undefined, undefined, false)).toBe('guest');
+		// Signed in to an account, Guest is Sign out: never chosen for the viewer, however it was last used.
+		expect(firstScheme([...offered], undefined, 'guest', true)).toBe('webauthn');
+		expect(firstScheme([...offered], undefined, 'guest', false)).toBe('guest');
+	});
+
+	it('remembers how a session signed in: guest, or its account’s method, never a link that doesn’t say', () => {
+		expect(signedInScheme({ authenticated: false })).toBeUndefined();
+		expect(signedInScheme({ authenticated: true })).toBe('guest');
+		expect(signedInScheme({ authenticated: true, passkeySession: true, signedInWith: 'email' })).toBe('email');
+		expect(signedInScheme({ authenticated: true, passkeySession: true, signedInWith: 'link' })).toBeUndefined();
+		expect(signedInScheme({ authenticated: true, passkeySession: true })).toBeUndefined();
+	});
+});
+
+describe('a server that only reads', () => {
+	it('is a served archive offering guests (ARCHIVE.md §4), as its greeting says; nothing else is known to be before signing in', () => {
+		expect(readsOnly({ apron: 10, auth: ['guest'], capabilities: ['rooms', 'ext:permissions', 'ext:archive'] })).toBe(true);
+		expect(readsOnly({ apron: 10, auth: ['guest'], capabilities: ['rooms', 'ext:permissions'] })).toBe(false);
+		expect(readsOnly({ apron: 10, auth: ['token'], capabilities: ['ext:archive'] })).toBe(false);
+		// Another way in means accounts to choose between: the panel asks.
+		expect(readsOnly({ apron: 10, auth: ['guest', 'webauthn'], capabilities: ['ext:archive'] })).toBe(false);
+		expect(readsOnly({ apron: 10, auth: ['guest'], signup: ['email'], capabilities: ['ext:archive'] })).toBe(false);
+		expect(readsOnly(undefined)).toBe(false);
 	});
 });

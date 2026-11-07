@@ -1285,6 +1285,13 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 :where([dir='rtl']) .ap-connect-address { text-align: right; }
 .ap-connect-server-desc { font-size: var(--text-ui); color: var(--ink-muted); }
 .ap-connect-server-desc :where(p) { margin: 0; }
+/* Change, beside the server once it has answered: back to choosing one. */
+.ap-connect-change { flex: none; margin-inline-start: auto; font-size: var(--text-ui); }
+/* Where a link leads, before its server is contacted: a quiet box like the welcome. */
+.ap-connect-intent { margin: 0; padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); background: var(--bg-200); font-size: var(--text-ui); line-height: var(--leading-ui); color: var(--ink); overflow-wrap: anywhere; }
+/* Something to know that stops nothing, such as another protocol version: a warn outline, its title in warn. */
+.ap-connect-warn { margin: 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--warn); border-radius: var(--radius-md); font-size: var(--text-ui); line-height: var(--leading-ui); color: var(--ink); }
+.ap-connect-warn strong { color: var(--warn); }
 
 /* Dialog — a modal panel: a title with an optional subtitle and a close button, a body, and an optional footer of actions */
 .ap-dialog { --dialog-w: 420px; width: min(var(--dialog-w), calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 32px); box-sizing: border-box; margin: auto; padding: 0; color: var(--ink); background: var(--bg-100); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-popover); }
