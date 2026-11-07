@@ -202,3 +202,51 @@ test('search finds a message only this device still has, and opens it where it i
 	// Paged back from this device, not the server.
 	expect(frames.filter((frame) => frame.method === 'history' && frame.params?.before !== undefined)).toEqual([]);
 });
+
+test('an unsent draft comes back after a reload, until it is sent, and not when history isn’t kept', async ({ page }) => {
+	const base = process.env.E2E_URL;
+	await page.clock.setFixedTime(NOW);
+	const start = NOW.getTime() - 2 * DAY;
+	const messages = Array.from({ length: 5 }, (_, n) => ({ message_id: String(start + n * 1000), log_id: String(start + n * 1000), room_id: 'general', from: ada, body: { text: `Message ${n}` } }));
+	const frames: Frame[] = [];
+	await keptServer(page, messages, frames);
+	const composer = page.getByTestId('message-input');
+	const written = () => composer.evaluate((el) => (el as HTMLElement).innerText.replace(/\n$/, ''));
+	const reload = async () => {
+		await page.reload();
+		await expect(page.getByText('Message 4', { exact: true })).toBeVisible();
+	};
+	await page.goto(`${base}/`);
+	await expect(page.getByText('Message 4', { exact: true })).toBeVisible();
+
+	await test.step('a draft, two lines of it, comes back after a reload', async () => {
+		await composer.click();
+		await page.keyboard.type('half-written');
+		await page.keyboard.press('Shift+Enter');
+		await page.keyboard.type('second line');
+		await reload();
+		await expect.poll(written).toBe('half-written\nsecond line');
+	});
+
+	await test.step('sent, it doesn’t come back', async () => {
+		await composer.click();
+		await page.keyboard.press('Enter');
+		await expect.poll(() => frames.some((frame) => frame.method === 'message' && frame.params?.body?.text === 'half-written\nsecond line')).toBe(true);
+		await expect.poll(written).toBe('');
+		await reload();
+		await expect.poll(written).toBe('');
+	});
+
+	await test.step('with history not kept here, drafts aren’t either', async () => {
+		await page.getByRole('button', { name: /^Open preferences/ }).click();
+		const preferences = page.getByRole('dialog', { name: 'Preferences' });
+		await preferences.getByRole('navigation').getByRole('button', { name: 'History' }).click();
+		await preferences.getByTestId('history-retention').selectOption('off');
+		await page.keyboard.press('Escape');
+		await composer.click();
+		await page.keyboard.type('not kept');
+		await reload();
+		await expect.poll(written).toBe('');
+		expect(await page.evaluate(() => localStorage.getItem('apron.drafts'))).toBeNull();
+	});
+});

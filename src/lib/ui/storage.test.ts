@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { pushIdFor, loadLastSignIn, saveLastSignIn, loadRecentServers, refreshRecentServer, rememberServer, hideDescription, loadAppearance, loadShutMemberSections, saveShutMemberSections, loadSidebarFolds, saveSidebarFolds, loadHiddenDescriptions, loadAddedRooms, saveAddedRooms, loadThreadFolds, saveThreadFolds, loadRoomOrder, saveRoomOrder, showDescription, descriptionHidden, loadNotificationsEnabled, loadNotifyScopes, loadWebPushAccounts, notificationsChosen, loadWebPushOwner, saveAppearance, saveNotificationsEnabled, saveNotifyScopes, saveWebPushEnabled, saveWebPushOwner } from './storage';
+import { forgetDrafts, loadDrafts, saveDrafts, pushIdFor, loadLastSignIn, saveLastSignIn, loadRecentServers, refreshRecentServer, rememberServer, hideDescription, loadAppearance, loadShutMemberSections, saveShutMemberSections, loadSidebarFolds, saveSidebarFolds, loadHiddenDescriptions, loadAddedRooms, saveAddedRooms, loadThreadFolds, saveThreadFolds, loadRoomOrder, saveRoomOrder, showDescription, descriptionHidden, loadNotificationsEnabled, loadNotifyScopes, loadWebPushAccounts, notificationsChosen, loadWebPushOwner, saveAppearance, saveNotificationsEnabled, saveNotifyScopes, saveWebPushEnabled, saveWebPushOwner } from './storage';
 import { notifyAccount } from './notify-scopes';
 import { memoryStorage } from '$lib/test/storage';
 
@@ -219,3 +219,46 @@ describe('preference storage', () => {
 		expect(Object.keys(loadHiddenDescriptions())).toEqual(['general']);
 	});
 });
+
+describe('drafts', () => {
+	const ada = 'wss://chat.example\nada';
+	const bob = 'wss://chat.example\nbob';
+	const other = 'wss://other.example\nada';
+
+	it('keeps each account\'s by room, merges what changed over what is kept, and drops what was sent', () => {
+		saveDrafts(ada, { general: { text: 'hi', reply: '17' } });
+		saveDrafts(ada, { ops: { text: 'deploy plan' } });
+		expect(loadDrafts(ada)).toEqual({ general: { text: 'hi', reply: '17' }, ops: { text: 'deploy plan' } });
+		expect(loadDrafts(bob)).toEqual({});
+		saveDrafts(ada, { general: undefined });
+		expect(loadDrafts(ada)).toEqual({ ops: { text: 'deploy plan' } });
+		saveDrafts(ada, { ops: undefined });
+		expect(values.has('apron.drafts')).toBe(false);
+	});
+
+	it('keeps the 50 changed most recently per account', () => {
+		for (let n = 0; n < 55; n++) saveDrafts(ada, { [`room${n}`]: { text: `draft ${n}` } });
+		const kept = Object.keys(loadDrafts(ada));
+		expect(kept).toHaveLength(50);
+		expect(kept[0]).toBe('room5');
+		expect(kept.at(-1)).toBe('room54');
+	});
+
+	it('forgets one account\'s, a server\'s, or everyone\'s, with the history they belong to', () => {
+		for (const account of [ada, bob, other]) saveDrafts(account, { general: { text: 'hi' } });
+		forgetDrafts('wss://chat.example', 'ada');
+		expect([loadDrafts(ada), loadDrafts(bob), loadDrafts(other)].map((drafts) => Object.keys(drafts).length)).toEqual([0, 1, 1]);
+		forgetDrafts('wss://chat.example');
+		expect(Object.keys(loadDrafts(bob))).toHaveLength(0);
+		expect(Object.keys(loadDrafts(other))).toHaveLength(1);
+		forgetDrafts();
+		expect(values.has('apron.drafts')).toBe(false);
+	});
+
+	it('reads nothing from what isn\'t a draft', () => {
+		values.set('apron.drafts', JSON.stringify({ [ada]: { general: { text: 5 }, ops: 'x', dev: { text: 'ok', reply: 3 } }, [bob]: [] }));
+		expect(loadDrafts(ada)).toEqual({ dev: { text: 'ok' } });
+		expect(loadDrafts(bob)).toEqual({});
+	});
+});
+

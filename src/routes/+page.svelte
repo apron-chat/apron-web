@@ -104,6 +104,8 @@
 	import { linkPreviews } from '$lib/ui/link-previews';
 	import { carriesFiles, fileDrop, pastedFiles } from '$lib/ui/file-transfer';
 	import { PaneDrafts, pageDrafts, type StagedFile } from '$lib/ui/pane-drafts.svelte';
+	import { DraftKeeper } from '$lib/ui/draft-keeper';
+	import type { SavedDraft } from '$lib/ui/storage';
 	import { PagePresence } from '$lib/ui/presence.svelte';
 	import { JUMP_WAIT_MS, TimelineViewport, until } from '$lib/ui/timeline-viewport.svelte';
 	import { setAppBadge, closeReadNotifications, messageNotificationTag, notificationBody, notificationClickTarget, notificationGroup, notificationTitle, notificationPermission, pushClickTarget, PUSH_ID_PARAM, PUSH_ID_QUERY, PUSH_MESSAGE_PARAM, PUSH_ROOM_PARAM, pushRoute, offersAtSignIn, offersNotifications, requestNotificationPermission, showNotification, type PushTarget, type NotificationPermissionState, type NotificationTarget, type NotificationTestResult } from '$lib/ui/notifications';
@@ -195,6 +197,37 @@
 	 * connection, so there is no one to push to. A reconnect keeps it.
 	 */
 	let pushAccount = $derived(session.you && (session.snapshot.passkeySession || session.snapshot.keptSession) ? webPushAccount(serverUrl, session.you.user_id) : undefined);
+	/**
+	 * Drafts kept on this device (`DraftKeeper`), so a reload or a closed tab gives them back: for an account whose
+	 * session is kept here (`pushAccount`), while history is (Don't keep keeps no drafts either).
+	 */
+	const draftKeeper = new DraftKeeper();
+	/** The account whose drafts `draftKeeper` keeps, as `followDrafts` was last told. */
+	let draftAccount: string | undefined;
+	/** Keeps `account`'s drafts from now on, giving back the ones it kept; none for undefined. Run by the account's effect. */
+	function followDrafts(account: string | undefined): void {
+		if (account === draftAccount) return;
+		draftAccount = account;
+		draftKeeper.stop();
+		drafts.kept = account !== undefined;
+		if (account === undefined) return;
+		const server = account.slice(0, account.lastIndexOf('\n'));
+		// A room's draft in this tab already wins over the one kept.
+		for (const [roomId, saved] of draftKeeper.start(account)) drafts.restore(JSON.stringify([server, roomId]), saved.text, saved.reply);
+	}
+	/** Keeps the drafts on this device: as the tab hides or goes, and once one is sent, not as it is typed. */
+	function keepDrafts(): void {
+		const server = client?.url;
+		if (!draftKeeper.active || server === undefined) return;
+		draftKeeper.keep(roomDrafts(server));
+	}
+	/** This server's drafts, by `room_id` (keys are `draftKey`s). */
+	function* roomDrafts(server: string): Generator<[string, SavedDraft]> {
+		for (const [key, draft] of drafts.entries()) {
+			const [keyServer, roomId] = JSON.parse(key) as [string, string];
+			if (keyServer === server) yield [roomId, draft];
+		}
+	}
 	/** The server's VAPID key, offered to a signed-in account. */
 	let webPushServerKey = $derived(pushAccount ? webPushKey(session.server) : undefined);
 	let webPushActive = $derived(pushSettings.isOn(pushAccount) && notificationState === 'granted');
@@ -801,10 +834,15 @@
 		if (offersAtSignIn({ installed: runsInstalled, push: webPushAvailable && Boolean(webPushServerKey), chosen: notificationsChoiceMade, active: notificationsActive, permission: notificationState, silenced })) notifyOffer = {};
 	});
 
-	// The account's `push_id`, made and kept in storage the first time: here, not in a derivation.
+	// The account's `push_id`, made and kept in storage the first time: here, not in a derivation. Its drafts, kept
+	// while history is (Don't keep keeps none), follow it in the same effect: one fewer to visit as the page updates.
 	$effect(() => {
 		const account = pushAccount;
-		untrack(() => pushSettings.follow(account));
+		const keepsDrafts = historySettings.retention !== 'off';
+		untrack(() => {
+			pushSettings.follow(account);
+			followDrafts(keepsDrafts ? account : undefined);
+		});
 	});
 
 	// While push is on for this account (§4.9), keep this browser subscribed with the server's
@@ -2193,7 +2231,10 @@
 				paneKey: () => (paneRoom ? draftKey(paneRoom.id) : undefined),
 				draft: () => ({ text: drafts.text, mentions: composerMentions, reply: drafts.reply }),
 				canEdit: () => session.canEdit,
-				forget: (forgotten) => drafts.forget(forgotten),
+				forget: (forgotten) => {
+					drafts.forget(forgotten);
+					keepDrafts();
+				},
 				restore: (restored, text, replyTo) => {
 					if (drafts.restore(restored, text, replyTo)) composer?.focus();
 				},
@@ -2475,6 +2516,8 @@
 
 	function clearComposer(roomId: string): void {
 		drafts.clear(draftKey(roomId));
+		// Sent: it mustn't come back after a reload.
+		keepDrafts();
 	}
 
 	function beginReply(event: MessageRecord): void {
@@ -3216,8 +3259,8 @@
 	}
 </script>
 
-<svelte:window onkeydown={windowKeydown} onpointerdowncapture={() => (tabbing = false)} onpaste={windowPaste} ondragover={refuseDrop} ondrop={refuseDrop} onfocus={() => { presence.focus(); refreshNotificationPermission(); }} onblur={() => presence.blur()} />
-<svelte:document onclick={mediaAskClick} onvisibilitychange={() => { presence.visibilityChanged(); refreshNotificationPermission(); if (document.visibilityState === 'hidden') { keepView(); void historyKeeper?.flush(); } }} />
+<svelte:window onpagehide={keepDrafts} onkeydown={windowKeydown} onpointerdowncapture={() => (tabbing = false)} onpaste={windowPaste} ondragover={refuseDrop} ondrop={refuseDrop} onfocus={() => { presence.focus(); refreshNotificationPermission(); }} onblur={() => presence.blur()} />
+<svelte:document onclick={mediaAskClick} onvisibilitychange={() => { presence.visibilityChanged(); refreshNotificationPermission(); if (document.visibilityState === 'hidden') { keepView(); keepDrafts(); void historyKeeper?.flush(); } }} />
 
 <svelte:head>
 	<title>{tabTitle(unreadAlerting, presence.titleFlash)}</title>

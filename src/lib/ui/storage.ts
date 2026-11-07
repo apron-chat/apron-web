@@ -37,6 +37,11 @@ const KEY = {
 	threadFolds: 'apron.threadFolds',
 	/** The order of the sidebar's top-level rooms, per account (`notifyAccount`): as they were first listed, then as you dragged them. */
 	roomOrder: 'apron.roomOrder',
+	/**
+	 * Unsent drafts, per account (`webPushAccount`: a session kept here) and then by `room_id`: their text and the
+	 * message they reply to (`DraftKeeper`). Local history, kept and deleted with it.
+	 */
+	drafts: 'apron.drafts',
 	/** How far you have read each room and thread, by `readPositionKey`: the `message_id` read through. */
 	readPositions: 'apron.readPositions',
 	/** How long history is kept on this device (`$lib/history/retention`). */
@@ -70,6 +75,8 @@ const THREAD_FOLDS_MAX = 200;
 const HIDDEN_DESCRIPTIONS_MAX = 200;
 /** The most read positions kept; the ones moved longest ago go first. */
 const READ_POSITIONS_MAX = 500;
+/** The most drafts kept per account; the ones changed longest ago go first. */
+const DRAFTS_MAX = 50;
 /** The most servers whose last sign-in is kept; the ones signed in to longest ago go first. */
 const LAST_SIGN_IN_MAX = 50;
 
@@ -451,6 +458,64 @@ function remove(key: string): void {
 	} catch {
 		// As `write`.
 	}
+}
+
+/** An unsent draft as kept on this device: its text, and the `message_id` it replies to. */
+export type SavedDraft = { text: string; reply?: string };
+
+/** Every account's kept drafts, by account and then by `room_id`, each account's changed longest ago first. */
+function allDrafts(): Record<string, Record<string, SavedDraft>> {
+	try {
+		const parsed: unknown = JSON.parse(read(KEY.drafts) ?? '{}');
+		if (!isJsonObject(parsed)) return {};
+		const accounts: Record<string, Record<string, SavedDraft>> = {};
+		for (const [account, rooms] of Object.entries(parsed)) {
+			if (!isJsonObject(rooms)) continue;
+			const kept: Record<string, SavedDraft> = {};
+			for (const [room, draft] of Object.entries(rooms)) {
+				if (!isJsonObject(draft) || typeof draft.text !== 'string') continue;
+				kept[room] = typeof draft.reply === 'string' ? { text: draft.text, reply: draft.reply } : { text: draft.text };
+			}
+			accounts[account] = kept;
+		}
+		return accounts;
+	} catch {
+		return {};
+	}
+}
+
+/** The drafts kept for an account (`webPushAccount`), by `room_id`. */
+export function loadDrafts(account: string): Record<string, SavedDraft> {
+	return allDrafts()[account] ?? {};
+}
+
+/**
+ * Keeps an account's drafts that changed, by `room_id` (undefined: sent or emptied, no longer kept), over what is
+ * kept now, so another tab's drafts in other rooms stay. The most recently changed `DRAFTS_MAX` are kept.
+ */
+export function saveDrafts(account: string, changed: Record<string, SavedDraft | undefined>): void {
+	const accounts = allDrafts();
+	const rooms = Object.entries(accounts[account] ?? {}).filter(([room]) => !(room in changed));
+	for (const [room, draft] of Object.entries(changed)) if (draft) rooms.push([room, draft]);
+	if (rooms.length) accounts[account] = Object.fromEntries(rooms.slice(-DRAFTS_MAX));
+	else delete accounts[account];
+	if (Object.keys(accounts).length) write(KEY.drafts, JSON.stringify(accounts));
+	else remove(KEY.drafts);
+}
+
+/**
+ * Deletes kept drafts with the history they belong to (`HistoryKeeper.forget`): `userId`'s on `server`, every
+ * account's on `server`, or, with neither, every account's.
+ */
+export function forgetDrafts(server?: string, userId?: string): void {
+	if (server === undefined) return remove(KEY.drafts);
+	const accounts = allDrafts();
+	for (const account of Object.keys(accounts)) {
+		const [accountServer, accountUser] = [account.slice(0, account.lastIndexOf('\n')), account.slice(account.lastIndexOf('\n') + 1)];
+		if (accountServer === server && (userId === undefined || accountUser === userId)) delete accounts[account];
+	}
+	if (Object.keys(accounts).length) write(KEY.drafts, JSON.stringify(accounts));
+	else remove(KEY.drafts);
 }
 
 /** What an account chose to be notified about (`notifyAccount`); undefined until it chose. */

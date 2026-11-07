@@ -20,6 +20,7 @@ import type { JsonObject, MessageRecord, RoomRecord } from '$lib/protocol/types'
 import { decrement, loadKeptSessionUser } from '$lib/protocol/client-internals';
 import { deleteHistory, HistoryGone, historyName, listHistories, openHistory, pageHistory, pruneHistory, readHistory, readMeta, readRoomRows, scanMessages, timeLike, timeLikeLog, writeHistory, type Databases, type HistoryWrite, type KeptHistory, type MetaRow, type RoomRow } from './history-db';
 import { clearView, clearViewOf } from '$lib/ui/session-cache';
+import { forgetDrafts } from '$lib/ui/storage';
 import { historyResult } from './log';
 
 /** What the keeper needs of the chat client. */
@@ -518,9 +519,10 @@ export class HistoryKeeper {
 	 * the signed-in account starts again from the next change, writing what the page has: clearing is for the
 	 * space older history takes, not to stop keeping (that's Retention's Don't keep). The view kept to paint the
 	 * next visit (`session-cache.ts`) is history too: the one of each server cleared goes, if it is of an account
-	 * whose history goes.
+	 * whose history goes. So are the drafts kept unsent (`forgetDrafts`).
 	 */
 	async forget(server?: string, userId?: string): Promise<void> {
+		forgetDrafts(server, userId);
 		const goes = (entry: { server: string; userId: string }) => (server === undefined || entry.server === server) && (userId === undefined || entry.userId === userId);
 		if (this.writer && goes(this.writer)) {
 			this.endWriter();

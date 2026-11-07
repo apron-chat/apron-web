@@ -9,6 +9,8 @@ import { HistoryKeeper, mergeOf, plannedRoom, PRUNE_MS, RESTORE_WINDOW, restored
 import type { RoomSync } from '$lib/protocol/client';
 import type { RestoredState } from '$lib/protocol/client-types';
 import { loadView, saveView } from '$lib/ui/session-cache';
+import { loadDrafts, saveDrafts } from '$lib/ui/storage';
+import { memoryStorage } from '$lib/test/storage';
 
 const URL = 'wss://chat.example/';
 /** The memory server's account. */
@@ -620,6 +622,22 @@ describe('HistoryKeeper', () => {
 		await saveView(other, 'ada', { rooms: [] }, indexedDB);
 		await keeper.setRetention(null);
 		expect(await views()).toEqual([undefined, undefined]);
+	});
+
+	it('deletes the drafts kept unsent with the history they belong to', async () => {
+		vi.stubGlobal('localStorage', memoryStorage(new Map()));
+		try {
+			const keeper = new HistoryKeeper({ indexedDB: new IDBFactory(), locks: null });
+			const drafts = () => ['ada', 'zed'].map((userId) => Object.keys(loadDrafts(`${URL}\n${userId}`)).length);
+			saveDrafts(`${URL}\nada`, { general: { text: 'hi' } });
+			saveDrafts(`${URL}\nzed`, { general: { text: 'yo' } });
+			await keeper.forget(URL, 'zed');
+			expect(drafts()).toEqual([1, 0]);
+			await keeper.setRetention(null);
+			expect(drafts()).toEqual([0, 0]);
+		} finally {
+			vi.unstubAllGlobals();
+		}
 	});
 });
 

@@ -122,4 +122,26 @@ describe('PaneDrafts', () => {
 		drafts.unstage('a');
 		expect(drafts.unsent).toBe(false);
 	});
+
+	it('with text kept on this device, only staged files would be lost to a reload', () => {
+		const drafts = new PaneDrafts();
+		drafts.kept = true;
+		drafts.open('lobby');
+		drafts.text = 'hello';
+		drafts.open('thread');
+		expect(drafts.unsent).toBe(false);
+		drafts.stage([staged('a')]);
+		expect(drafts.unsent).toBe(true);
+	});
+
+	it('lists every destination\'s text and reply, the open pane\'s as it is now', () => {
+		const drafts = new PaneDrafts();
+		drafts.open('lobby');
+		drafts.text = 'first';
+		drafts.open('thread');
+		drafts.setReply('m1');
+		drafts.text = 'typed, not saved yet';
+		expect(Object.fromEntries(drafts.entries())).toEqual({ lobby: { text: 'first', reply: undefined }, thread: { text: 'typed, not saved yet', reply: 'm1' } });
+	});
 });
+

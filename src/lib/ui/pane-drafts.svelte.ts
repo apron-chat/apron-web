@@ -29,6 +29,8 @@ export class PaneDrafts {
 	files = $state.raw<StagedFile[]>([]);
 	/** The link previews removed from the open pane's draft, by URL: it goes out without them. */
 	dismissed = $state.raw<string[]>([]);
+	/** Drafts' text and reply are kept on this device (`DraftKeeper`): a reload gives them back, though not staged files. */
+	kept = $state(false);
 	private key: string | undefined;
 	private readonly texts = new Map<string, string>();
 	private readonly replies = new Map<string, string | undefined>();
@@ -143,14 +145,20 @@ export class PaneDrafts {
 
 	/**
 	 * Some draft has text or files that reloading would lose: the open pane's,
-	 * or one kept for another. Reactive through the open pane's, which every
+	 * or one kept for another. Text kept on this device (`kept`) isn't lost. Reactive through the open pane's, which every
 	 * kept draft passes through.
 	 */
 	get unsent(): boolean {
-		if (this.text.trim() || this.files.length) return true;
-		for (const [key, text] of this.texts) if (key !== this.key && text.trim()) return true;
+		if ((!this.kept && this.text.trim()) || this.files.length) return true;
+		if (!this.kept) for (const [key, text] of this.texts) if (key !== this.key && text.trim()) return true;
 		for (const [key, files] of this.staged) if (key !== this.key && files.length) return true;
 		return false;
+	}
+
+	/** Every destination's text and reply, the open pane's as it is now, by key: what `DraftKeeper` keeps. */
+	*entries(): Generator<[string, { text: string; reply?: string }]> {
+		this.save();
+		for (const key of new Set([...this.texts.keys(), ...this.replies.keys()])) yield [key, { text: this.texts.get(key) ?? '', reply: this.replies.get(key) }];
 	}
 
 	/** The open pane's draft has something in it. */
