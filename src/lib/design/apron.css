@@ -713,6 +713,8 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 /* In the main pane: a StatusBanner under the header, and who is typing, in a row kept while nobody is so nothing moves. */
 .ap-shell-banner { padding: var(--space-2) var(--space-4) 0; }
 /* Waits the server asked for (RateLimitNotice) on what the composer sends, just above it. */
+/* An ask that holds back Send, such as to add who a message mentions: above the composer at any width, pointing at it. */
+.ap-shell-ask { padding: var(--space-2) var(--space-4) 0; }
 .ap-shell-waits { display: flex; flex-wrap: wrap; gap: var(--space-2); padding: var(--space-2) var(--space-4) 0; }
 .ap-typing.ap-shell-typing { min-height: 20px; padding-top: var(--space-1); }
 /* Wide screens give the member list a column of its own, there while it's shut too, at 0, so it can slide. */

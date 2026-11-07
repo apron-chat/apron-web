@@ -42,6 +42,52 @@ test('Add member adds everyone with a role by @role', async ({ preview, page }) 
 	await expect(page.getByRole('complementary', { name: 'Room member list' }).locator('li.ap-member[data-user="margaret"]')).toBeVisible();
 });
 
+test('a message mentioning someone who isn’t in the room asks to add them first: Add and send adds them, then sends', async ({ preview, page }) => {
+	await preview.open();
+	await preview.openRoom('engineering');
+	await preview.composer().click();
+	await page.keyboard.type('@grace can you look?');
+	await page.keyboard.press('Enter');
+	const prompt = page.getByTestId('mention-add-prompt');
+	await expect(prompt).toContainText('Add Grace Hopper to engineering?');
+	await expect(prompt).toContainText('You mentioned them, but they aren’t in this room.');
+	// Held back: the draft waits, and Add and send has the focus, so Enter answers.
+	await expect(prompt.getByRole('button', { name: 'Add and send' })).toBeFocused();
+	await page.keyboard.press('Enter');
+
+	const sent = await preview.waitForSent('message', (p) => p.body?.text === '@grace can you look?');
+	expect(sent).toMatchObject({ room_id: 'engineering', body: { mentions: ['grace'] } });
+	await expect(prompt).toHaveCount(0);
+	await expect(page.getByRole('complementary', { name: 'Room member list' }).locator('li.ap-member[data-user="grace"]')).toBeVisible();
+	await expect(preview.composer()).toBeFocused();
+});
+
+test('the ask to add who a message mentions can send it as it is, or go back to the draft', async ({ preview, page }) => {
+	await preview.open();
+	await preview.openRoom('engineering');
+	await preview.composer().click();
+	await page.keyboard.type('@grace hi');
+	await page.keyboard.press('Enter');
+	const prompt = page.getByTestId('mention-add-prompt');
+	await expect(prompt).toBeVisible();
+	// Escape: back to the draft, unsent.
+	await page.keyboard.press('Escape');
+	await expect(prompt).toHaveCount(0);
+	await expect(preview.composer()).toBeFocused();
+	await expect(preview.composer()).toContainText('hi');
+
+	await page.keyboard.press('Enter');
+	await prompt.getByRole('button', { name: 'Send without adding' }).click();
+	await preview.waitForSent('message', (p) => p.body?.text === '@grace hi');
+	await expect(prompt).toHaveCount(0);
+	await expect(page.getByRole('complementary', { name: 'Room member list' }).locator('li.ap-member[data-user="grace"]')).toHaveCount(0);
+	// Someone who is here is mentioned without asking.
+	await page.keyboard.type('@linus hi');
+	await page.keyboard.press('Enter');
+	await preview.waitForSent('message', (p) => p.body?.text === '@linus hi');
+	await expect(prompt).toHaveCount(0);
+});
+
 test('a second click on a member closes their profile, on their name or anywhere else on their row', async ({ preview, page }) => {
 	await preview.open();
 	const list = await preview.showMembers();

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { installNudge, messageEditor, newPrivateDialog, newThreadDialog, profileCardHost, reactorsPopover, roomEditor, searchDialog, selectionBar, serverPaneHost, shortcutsDialog, signInLinkDialog } from '$lib/components/lazy';
+	import { installNudge, mentionAddNudge, messageEditor, newPrivateDialog, newThreadDialog, profileCardHost, reactorsPopover, roomEditor, searchDialog, selectionBar, serverPaneHost, shortcutsDialog, signInLinkDialog } from '$lib/components/lazy';
 	import { onMount, tick, untrack } from 'svelte';
 	import { fromAction } from 'svelte/attachments';
 	import { pushState, replaceState } from '$app/navigation';
@@ -12,7 +12,7 @@
 	import { destinationUrl, readDestination, type Destination } from '$lib/ui/address';
 	import { readApronLink, writeApronLink, type ApronLink } from '$lib/ui/apron-link';
 	import type { Embed, MessageRecord } from '$lib/protocol/types';
-	import { isJsonObject } from '$lib/protocol/types';
+	import { isJsonObject, isSystemId } from '$lib/protocol/types';
 	import Composer from '$lib/components/Composer.svelte';
 	import ReadOnlyBar from '$lib/components/ReadOnlyBar.svelte';
 	import ConnectScreen from '$lib/components/ConnectScreen.svelte';
@@ -48,7 +48,7 @@
 	import PrivateIntro from '$lib/design/components/PrivateIntro.svelte';
 	import AddedBanner from '$lib/design/components/AddedBanner.svelte';
 	import { ArrivalWatch, addRoomMembers, othersIn, reachesStart } from '$lib/ui/private-rooms';
-	import { couldNotAdd } from '$lib/ui/members';
+	import { absentMentions, addMembers, couldNotAdd, isGuest } from '$lib/ui/members';
 	import { faceOf, roomFaces } from '$lib/ui/faces';
 	import { receiptsByMessage, steadyReceipts } from '$lib/ui/receipts';
 	import { attachmentLimits, composerAction } from '$lib/ui/commands';
@@ -308,6 +308,11 @@
 	let displayName = $state('');
 	/** The `user_id`s the composer's chips mention (§3.5), sent as `body.mentions`. */
 	let composerMentions = $state<string[]>([]);
+	/**
+	 * A message held back at Send because it mentions people who aren't in the room or thread it goes to: the ask to
+	 * add them first (MentionAddPrompt), until it's answered, put away, or the draft changes.
+	 */
+	let mentionAsk = $state<{ roomId: string; userIds: string[]; busy: boolean } | undefined>();
 	let connectOpen = $state(false);
 	/** Disconnected from the server pane: the connect screen can't be cancelled back to it. */
 	let disconnected = $state(false);
@@ -1962,6 +1967,8 @@
 	// --- Composing ---
 
 	function composerInput(): void {
+		// The draft changed under the ask: Send asks again about what it mentions then.
+		if (mentionAsk && !mentionAsk.busy) mentionAsk = undefined;
 		if (!client || !paneRoom) return;
 		drafts.saveText();
 		// A live message shows itself as it is typed: no typing indicator besides.
@@ -1994,8 +2001,44 @@
 	 * command's failure shows as a local notice in the pane, where its replies
 	 * land too.
 	 */
-	function sendMessage(): void {
+	/**
+	 * Holds the draft back when it mentions people who aren't in the open room or thread, and you may add them: asks
+	 * whether to first (`mentionAsk`). Not for a command, which says what it does with whom it names. True when it
+	 * asked, and the draft waits.
+	 */
+	function askToAddMentioned(room: RoomSnapshot, text: string): boolean {
+		if (!canAddMembers || session.snapshot.memberChangesUnsupported) return false;
+		if (composerAction(text, { command: session.capabilities.command, rooms: false }).kind !== 'message') return false;
+		const skip = (userId: string) => directory.isMe(userId) || isSystemId(userId) || isGuest(directory.person({ user_id: userId }) ?? { user_id: userId });
+		const userIds = absentMentions(composerMentions, room, skip);
+		if (!userIds.length) return false;
+		mentionAsk = { roomId: room.id, userIds, busy: false };
+		return true;
+	}
+
+	/** The ask's Add and send: adds them (`room_join`, §4.2.2), then sends the draft, saying who the server wouldn't add. */
+	async function addMentionedAndSend(): Promise<void> {
+		const ask = mentionAsk;
+		if (!client || !ask || ask.busy) return;
+		mentionAsk = { ...ask, busy: true };
+		const refused = await addMembers(client, ask.roomId, ask.userIds);
+		if (mentionAsk?.roomId === ask.roomId) mentionAsk = undefined;
+		if (refused.length) feedback.error(couldNotAdd(refused, (userId) => directory.name({ user_id: userId })));
+		// Still where the draft is: it goes, whoever was added. Elsewhere by now, it waits in its own room's draft.
+		if (paneRoom?.id === ask.roomId) sendMessage(true);
+		composer?.focus();
+	}
+
+	/** The ask put away (Escape): back to the draft, unsent. */
+	function cancelMentionAsk(): void {
+		mentionAsk = undefined;
+		composer?.focus();
+	}
+
+	/** Send. `asked`: the ask to add who it mentions was answered (MentionAddPrompt), so it goes as it is. */
+	function sendMessage(asked = false): void {
 		if (!client || !paneRoom || !canCompose) return;
+		mentionAsk = undefined;
 		if (composingLive) {
 			liveComposer?.send();
 			composer?.focus();
@@ -2017,10 +2060,12 @@
 			return;
 		}
 		if (drafts.files.length) {
+			if (!asked && askToAddMentioned(paneRoom, drafts.text)) return;
 			void sendFiles();
 			return;
 		}
 		if (!drafts.text.trim()) return;
+		if (!asked && askToAddMentioned(paneRoom, drafts.text)) return;
 		const chat = client;
 		const draft = drafts.text;
 		const roomId = paneRoom.id;
@@ -3340,6 +3385,16 @@
 			<TypingIndicator names={typingNames} class="ap-shell-typing" />
 			<!-- Floats just above the composer, in the gap under the last message, rather than taking a line: nothing moves. -->
 			{#if (checkingShown || historyWait) && timeline.length > 0}<TimelineLoading float label={quietReconnect ? statusLabel(snapshot, session.stalled) : activeThread ? 'Checking for new replies…' : 'Checking for new messages…'} notice={historyWait ? historyNotice : undefined} />{/if}
+			<!-- The draft Send held back, for mentioning people who aren't here: add them first, or send it as it is. -->
+			{#if mentionAsk && mentionAsk.roomId === paneRoom?.id && !selection.active && !session.readOnly && mentionAddNudge.component}
+				{@const MentionAddPrompt = mentionAddNudge.component}
+				<div class="ap-shell-ask">
+					<MentionAddPrompt
+						names={mentionAsk.userIds.map((userId) => directory.name({ user_id: userId }))} place={activeThread ? threadTitle(activeThread) : activeRoom.title} thread={Boolean(activeThread)}
+						busy={mentionAsk.busy} onadd={() => void addMentionedAndSend()} onsend={() => { sendMessage(true); composer?.focus(); }} oncancel={cancelMentionAsk}
+					/>
+				</div>
+			{/if}
 			<!-- A wait the server asked for on sending or uploads, above the composer it holds back. -->
 			{#if (sendNotice || uploadNotice) && !selection.active && !session.readOnly}
 				<div class="ap-shell-waits">
@@ -3381,7 +3436,7 @@
 					{people}
 					rooms={roomSuggestions}
 					reply={drafts.reply ? replyPreview(drafts.reply) : undefined}
-					oninput={composerInput} onsend={sendMessage} files={drafts.files} onfiles={stageFiles} onunstage={(id) => drafts.unstage(id)} onrename={(id, title) => drafts.rename(id, title)} oncancelreply={cancelReply} onup={focusNewestMessage}
+					oninput={composerInput} onsend={() => sendMessage()} files={drafts.files} onfiles={stageFiles} onunstage={(id) => drafts.unstage(id)} onrename={(id, title) => drafts.rename(id, title)} oncancelreply={cancelReply} onup={focusNewestMessage}
 					onmention={() => { if (!paneRoom?.joined) listMembers(MEMBERS_FRESH_MS); }}
 					waitUntil={composerWait}
 				/>

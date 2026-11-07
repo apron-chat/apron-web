@@ -23,6 +23,18 @@ export function isGuest(user: Identity): boolean {
 	return user.user_id.startsWith('guest_') || (Array.isArray(user.roles) && user.roles.includes('guest'));
 }
 
+/**
+ * Who of `mentions` (a draft's `body.mentions`, §3.5) isn't a member of `room`, once each, in the order mentioned, but
+ * those `skip` names (such as you, the system identities and guests). None while the members aren't all known: before
+ * any listing, or when the server listed only some of them (`memberCount`, §4.2.1), since then anyone could be one.
+ */
+export function absentMentions(mentions: readonly string[], room: { members?: readonly Identity[]; memberCount?: number }, skip: (userId: string) => boolean): string[] {
+	const members = room.members;
+	if (!members || (room.memberCount !== undefined && room.memberCount > members.length)) return [];
+	const memberIds = new Set(members.map((member) => member.user_id));
+	return [...new Set(mentions)].filter((userId) => !memberIds.has(userId) && !skip(userId));
+}
+
 /** Everyone with a role, to add together: `@mod` adds each of them. */
 export interface RoleSet {
 	role: string;
