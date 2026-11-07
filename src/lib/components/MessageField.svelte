@@ -4,6 +4,7 @@
 	import type { MentionPerson } from '$lib/protocol/markdown';
 	import { DraftField } from '$lib/ui/draft-field.svelte';
 	import type { RoomSuggestion } from '$lib/ui/room-autocomplete';
+	import type { TextEdit } from '$lib/ui/text-edit';
 	import { autocompletePicker } from './lazy';
 
 	/**
@@ -26,6 +27,8 @@
 		known?: string[];
 		/** Enter where it sends or saves (`enterAction`), with no picker taking it. */
 		onsubmit: () => void;
+		/** Enter starts a new line and Ctrl+Enter (⌘+Enter) sends, for writing at length: the composer's full panel. */
+		newlineOnEnter?: boolean;
 		/** A key no picker took, before Enter's, such as ↑ in an empty composer: true when it was taken. */
 		onkey?: (event: KeyboardEvent) => boolean;
 		/** The draft changed by typing or a pick, not set from outside. */
@@ -35,7 +38,7 @@
 		/** A `data-testid` for the people's picker. */
 		pickerTestid?: string;
 	}
-	let { value = $bindable(), mentions = $bindable([]), people, rooms = [], known, disabled = false, onsubmit, onkey, oninput, onmention, pickerTestid, ...rest }: Props = $props();
+	let { value = $bindable(), mentions = $bindable([]), people, rooms = [], known, disabled = false, onsubmit, newlineOnEnter = false, onkey, oninput, onmention, pickerTestid, ...rest }: Props = $props();
 
 	/** Unique per field, for its picker's ID. */
 	const uid = $props.id();
@@ -48,6 +51,7 @@
 		get rooms() { return rooms; },
 		get known() { return known; },
 		get disabled() { return disabled; },
+		get newlineOnEnter() { return newlineOnEnter; },
 		submit: () => onsubmit(),
 		key: (event) => onkey?.(event) ?? false,
 		oninput: () => oninput?.(),
@@ -69,6 +73,11 @@
 	/** Puts text (a picked emoji) where the caret was, over any selection. */
 	export function insert(text: string): void {
 		draft.insert(text);
+	}
+
+	/** Makes a formatting change to the draft and its selection, as typing it would (`DraftField.apply`). */
+	export function apply(change: (edit: TextEdit) => TextEdit | undefined): boolean {
+		return draft.apply(change);
 	}
 
 	/** Closes the picker: the field is changing under it. */

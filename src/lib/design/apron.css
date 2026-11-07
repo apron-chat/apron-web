@@ -432,6 +432,36 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-composer-previews { display: flex; gap: var(--space-3); overflow-x: auto; padding: var(--space-3) var(--space-4) var(--space-2); }
 .ap-composer-preview { position: relative; flex: 0 1 320px; min-width: 0; }
 .ap-composer-preview .ap-embed { width: 100%; min-width: 0; }
+/* Expand: offered beside the field once a draft runs to a second line, for the full panel. */
+.ap-btn.ap-composer-expand { gap: var(--space-1); height: var(--control-md); padding: 0 var(--space-2); }
+/* A narrow pane keeps the field's room: the glyph alone, named by its label. */
+@container (max-width: 480px) { .ap-composer-expand-label { display: none; } }
+/*
+ * The full panel, for writing at length: the composer covers its pane below the pane's header (the main pane is the
+ * box it is placed in), the timeline kept as it was underneath, so closing it is back where the reader was. Its
+ * formatting along the top, the field filling the rest, and the attach, microphone and emoji buttons and Send at its foot.
+ */
+.ap-composer-full { position: absolute; inset: var(--header-h) 0 0; z-index: var(--z-head); display: flex; flex-direction: column; background: var(--bg-100); }
+.ap-composer.ap-composer-panel { flex: 1; min-height: 0; flex-direction: column; align-items: stretch; gap: 0; padding: 0; overflow: hidden; }
+.ap-composer-head, .ap-composer-foot { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-0_5); padding: var(--space-1_5) var(--space-2); }
+.ap-composer-head { border-bottom: 1px solid var(--line); }
+.ap-composer-foot { border-top: 1px solid var(--line); }
+.ap-composer-grow { flex: 1; }
+.ap-seg.ap-composer-views { margin: 0; padding: var(--space-0_5); }
+.ap-composer-views .ap-seg-item { flex: none; padding: 0 var(--space-3); }
+.ap-composer-format { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-0_5); }
+.ap-composer-format-sep { width: 1px; height: var(--space-4); margin: 0 var(--space-1); background: var(--line); }
+/* The field fills the panel and scrolls in it; an autocomplete opens at its foot, over the text, rather than above the panel. */
+.ap-composer-body { position: relative; flex: 1; min-height: 0; display: flex; }
+.ap-composer-body[hidden] { display: none; }
+.ap-composer-panel .ap-composer-field { flex: 1; height: auto; min-height: 0; max-height: none; overflow-y: auto; padding: var(--space-3) var(--space-4); }
+.ap-composer-body > .ap-mpick { bottom: var(--space-2); }
+.ap-composer-rendered { flex: 1; min-height: 0; overflow-y: auto; padding: var(--space-3) var(--space-4); background: var(--bg-100); }
+.ap-composer-rendered-empty { margin: 0; color: var(--ink-muted); font-size: var(--text-field); }
+.ap-composer-panel .ap-composer-reply { border-bottom: 1px solid var(--line); }
+.ap-composer-panel :is(.ap-attachments, .ap-composer-previews) { border-top: 1px solid var(--line); }
+.ap-composer-keys { display: inline-flex; align-items: center; gap: var(--space-1); margin-right: var(--space-2); font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
+.ap-composer-keys kbd { font: inherit; font-size: var(--text-xs); padding: 0 var(--space-1_5); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); }
 
 /* RoomItem */
 .ap-room { font: inherit; display: flex; align-items: center; gap: var(--space-2); width: 100%; padding: var(--space-2) var(--space-3); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink-muted); text-align: start; cursor: pointer; }

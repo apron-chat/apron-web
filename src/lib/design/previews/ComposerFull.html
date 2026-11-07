@@ -1,0 +1,28 @@
+<!-- @dsCard group="Input" height=480 subtitle="The full panel: Expand, offered once a draft has a second line, opens it over the pane below its header" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Composer: full panel</title></head>
+<body>
+<div id="compact" style="padding-top:8px"></div>
+<!-- The panel covers the nearest positioned box below a header's height: here, a pane with a header. -->
+<div style="position:relative;height:360px;border-top:1px solid var(--line)">
+  <header class="ap-roomhead"><div class="ap-roomhead-text"><h1 class="ap-roomhead-name">Ops</h1><p class="ap-roomhead-sub">Deploys and incidents</p></div></header>
+  <div id="full"></div>
+</div>
+<script>
+  var A = window.Apron, $ = function (id) { return document.getElementById(id); };
+  function noop() {}
+  var draft = '### Rollout plan for worker 1.9.1\n\n1. **Canary**: deploy to `worker-canary` only\n2. **Migration**: run 0042 with the lock timeout at 5s\n\n> If the error rate goes over 1%, roll back.';
+  A.render(A.Composer, $('compact'), { room: 'Ops', canUpload: true, onemoji: noop, value: 'Rollout plan for worker 1.9.1\n1. Canary', onexpand: noop });
+  var tools = ['Heading', 'Bold', 'Italic', 'Link', 'Bulleted list', 'Numbered list', 'Quote', 'Code block'].map(function (label) {
+    return '<button type="button" class="ap-iconbtn" aria-label="' + label + '" title="' + label + '">' + label.charAt(0) + '</button>';
+  }).join('');
+  A.render(A.Composer, $('full'), {
+    room: 'Ops', canUpload: true, onemoji: noop, expanded: true, oncollapse: noop, onpreview: noop, sendKeys: ['Ctrl', 'Enter'],
+    value: draft, reply: { name: 'Dana', text: 'Can someone write down the rollout?' }, oncancelreply: noop,
+    toolbar: A.html('<div class="ap-composer-format" role="toolbar" aria-label="Formatting">' + tools + '</div>'),
+    rendered: A.html('<div class="ap-msg-text ap-msg-markdown"><h3>Rollout plan</h3></div>')
+  });
+</script>
+</body>
+</html>

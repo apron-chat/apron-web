@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { flushSync } from 'svelte';
+import { flushSync, tick } from 'svelte';
 import { describe, expect, it, vi } from 'vitest';
 import Composer from './Composer.svelte';
 import * as dom from '$lib/test/dom';
@@ -58,5 +58,35 @@ describe('Composer', () => {
 		// No messages to go to: the key is the field's.
 		const none = render({ value: '', onup: () => false });
 		expect(dom.press(none.field, 'ArrowUp')).toBe(true);
+	});
+
+	it('offers Expand once the draft has a second line, then writes at length: Enter breaks lines, Ctrl+Enter sends, Esc closes', async () => {
+		const field = () => document.querySelector<HTMLElement>('[data-testid="message-input"]')!;
+		const panel = () => document.querySelector('[data-testid="composer-panel"]');
+		render({ value: 'one line' });
+		expect(document.querySelector('[data-testid="composer-expand"]')).toBeNull();
+		dom.unmount();
+
+		const { onsend } = render({ value: 'Plan\n- canary' });
+		document.querySelector<HTMLButtonElement>('[data-testid="composer-expand"]')!.click();
+		flushSync();
+		await tick();
+		expect(panel()).not.toBeNull();
+		expect(document.querySelector('[data-testid="composer-expand"]')).toBeNull();
+		// The same draft, in a field drawn anew in the panel.
+		expect(field().textContent).toBe('Plan\n- canary');
+		document.execCommand = vi.fn(() => true);
+		dom.press(field(), 'Enter', { shiftKey: true });
+		expect(onsend).not.toHaveBeenCalled();
+		dom.press(field(), 'Enter', { ctrlKey: true });
+		expect(onsend).toHaveBeenCalledOnce();
+		// @ts-expect-error: jsdom has no editing commands; put it back as it was.
+		delete document.execCommand;
+		// The draft wasn't emptied (the page keeps it on a failed send): the panel stays, until Esc.
+		await tick();
+		expect(panel()).not.toBeNull();
+		expect(dom.press(field(), 'Escape')).toBe(false);
+		flushSync();
+		expect(panel()).toBeNull();
 	});
 });
