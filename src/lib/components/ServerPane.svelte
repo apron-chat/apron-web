@@ -2,7 +2,7 @@
 	import { serverLook, type ChatClient } from '$lib/protocol/client';
 	import { renderMarkdown } from '$lib/protocol/markdown';
 	import { withoutBidiOverrides } from '$lib/protocol/plain-text';
-	import { backendHost, connectionStateOf, statusLabel } from '$lib/ui/connection';
+	import { serverLabel, connectionStateOf, statusLabel } from '$lib/ui/connection';
 	import { preferencesOpener } from '$lib/ui/preferences.svelte';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { NARROW_MAX } from '$lib/ui/breakpoints';
@@ -49,7 +49,7 @@
 		return { ...placed, top: head.bottom + GAP, left };
 	});
 	let look = $derived(serverLook(session.server, client.url));
-	let name = $derived(look.title ?? (backendHost(client.url) || client.url));
+	let name = $derived(look.title ?? (serverLabel(client.url) || client.url));
 	/** Its `description` (§3.1): CommonMark, sanitized as a message is. */
 	let description = $derived(look.description ? renderMarkdown(look.description, directory.resolve, directory.resolveRoom, undefined, directory.resolveEmoji, directory.mediaGate) : '');
 	let you = $derived(session.you);

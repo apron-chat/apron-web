@@ -6,7 +6,7 @@ import { systemScope, type Embed, type Identity, type MessageBody, type MessageR
 import type { EmbedProps, Face, MessageCaps, MessageEmbed, MessageUpload, LinkCardPlace, MessageLinkCard, MessageMention, MessageReply, MessageSender, MessageView, ReactionChip as Chip } from '$lib/design/components/types';
 import type { ReactionChip } from './reactions';
 import { placeLinksIn, readPlaceLink, writeApronLink, type ApronLink } from './apron-link';
-import { backendHost } from './connection';
+import { serverLabel } from './connection';
 import { directory, samePieces } from './directory.svelte';
 import type { MediaGate } from './media-gate';
 import { embedsOf, hueOf, isSystem, messageSnippet, textOf } from './messages';
@@ -203,7 +203,7 @@ function placeOf(roomId: string, thread = false): LinkCardPlace {
  */
 function linkCardOf(link: ApronLink & { room: string }, server: string, context: MessageContext): MessageLinkCard | undefined {
 	// The https form with its server, so a link without one opens the same place in a new tab too.
-	const base = { href: writeApronLink({ server, room: link.room, message: link.message }), server: backendHost(server) || server };
+	const base = { href: writeApronLink({ server, room: link.room, message: link.message }), server: serverLabel(server) || server };
 	if (link.message !== undefined) {
 		const target = context.linked(link);
 		if (!target) return undefined;

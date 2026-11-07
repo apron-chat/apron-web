@@ -1,7 +1,7 @@
 <script lang="ts">
 	/** The connect screen: which backend, its welcome, and the sign-in panel for it. */
 	import { normalizeWebSocketUrl, serverLook, type ChatClient } from '$lib/protocol/client';
-	import { backendHost } from '$lib/ui/connection';
+	import { serverLabel } from '$lib/ui/connection';
 	import { renderMarkdown } from '$lib/protocol/markdown';
 	import { directory } from '$lib/ui/directory.svelte';
 	import type { SessionView } from '$lib/ui/session.svelte';
@@ -54,12 +54,12 @@
 		const text = answered ? session.server?.welcome : undefined;
 		return text ? renderMarkdown(text, directory.resolve, directory.resolveRoom, undefined, directory.resolveEmoji, directory.mediaGate) : '';
 	});
-	/** How it shows itself (§3.1): its title, else its host, always with its address beside it (§5.3). */
+	/** How it shows itself (§3.1): its title, else its host and path (`serverLabel`), always with its address beside it (§5.3). */
 	let look = $derived(answered ? serverLook(session.server, client.url) : undefined);
-	let server = $derived(look ? { name: look.title ?? (backendHost(client.url) || client.url), address: client.url, avatar: directory.avatarGate.src(look.avatar) } : undefined);
+	let server = $derived(look ? { name: look.title ?? (serverLabel(client.url) || client.url), address: client.url, avatar: directory.avatarGate.src(look.avatar) } : undefined);
 	let description = $derived(look?.description ? renderMarkdown(look.description, directory.resolve, directory.resolveRoom, undefined, directory.resolveEmoji, directory.mediaGate) : '');
-	/** Each recent server by its title, else its host, with its address. */
-	let recent = $derived(recentServers.map((entry) => ({ url: entry.url, label: entry.title ?? (backendHost(entry.url) || entry.url), avatar: directory.avatarGateFor(entry.url).src(entry.avatar) })));
+	/** Each recent server by its title, else its host and path, with its address. */
+	let recent = $derived(recentServers.map((entry) => ({ url: entry.url, label: entry.title ?? (serverLabel(entry.url) || entry.url), avatar: directory.avatarGateFor(entry.url).src(entry.avatar) })));
 </script>
 
 <!-- The design system's ConnectPage draws the page; the app's SignIn runs the form, with a ConnectHeader at its top. -->

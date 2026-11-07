@@ -55,7 +55,7 @@ export type RoomMentionResolver = (id: string) => RoomMentionTarget | undefined;
  */
 export interface LinkChip {
 	kind: 'room' | 'thread' | 'message' | 'user';
-	/** On another server: not a mention but a chip of its own, its host first, that says opening it leaves this one. */
+	/** On another server: not a mention but a chip of its own, its server first, that says it opens in a new tab. */
 	elsewhere?: boolean;
 	/** The link under it, in place of the one written: its https form with the server, even for a relative one. */
 	href: string;

@@ -105,10 +105,10 @@ describe('messageView', () => {
 		const sender = { name: 'Ada', avatar: ada.avatar, hue: avatarHue('ada') };
 		expect(messageView(messageRecord(7, 'ops', { from: you, body: { text } }), row(), context([linkedOps, linkedThread])).linkCards).toEqual([
 			{
-				kind: 'message', href: https('room=ops&message=1710000000000'), server: 'chat.example', in: { id: 'ops', title: 'ops' }, sender,
+				kind: 'message', href: https('room=ops&message=1710000000000'), server: 'chat.example/ws', in: { id: 'ops', title: 'ops' }, sender,
 				timestamp: 1710000000000, time: idWhen('1710000000000'), snippet: ['ship it ', { user_id: 'you', name: 'You', me: true }, '\nnow\nthen']
 			},
-			{ kind: 'message', href: https('room=t1&message=1710000000001'), server: 'chat.example', in: { id: 't1', thread: true }, sender, timestamp: 1710000000001, time: idWhen('1710000000001'), deleted: true }
+			{ kind: 'message', href: https('room=t1&message=1710000000001'), server: 'chat.example/ws', in: { id: 't1', thread: true }, sender, timestamp: 1710000000001, time: idWhen('1710000000001'), deleted: true }
 		]);
 		// One not loaded, or on another server, would be its path alone, which its chip says already: none.
 		const unknown = 'apron:?room=ops&message=404 https://link.apron.chat/#server=wss://other.example/&room=ops&message=1710000000000';
@@ -130,8 +130,8 @@ describe('messageView', () => {
 		const https = (room: string) => `https://link.apron.chat/#server=wss://chat.example/ws&room=${room}`;
 		const text = 'apron:?room=ops and apron:?room=t1 and apron:?room=bare and apron:?room=gone and apron:?room=ops&user=ada';
 		expect(messageView(messageRecord(7, 'ops', { body: { text } }), row(), context([], {}, rooms)).linkCards).toEqual([
-			{ kind: 'room', href: https('ops'), server: 'chat.example', room: { id: 'ops', title: 'Ops' }, description: 'All things ops.\nSee the runbook.', members: 12, private: true },
-			{ kind: 'thread', href: https('t1'), server: 'chat.example', room: { id: 't1', title: 'Deploy', thread: true }, in: { id: 'ops', title: 'Ops' }, members: 3 }
+			{ kind: 'room', href: https('ops'), server: 'chat.example/ws', room: { id: 'ops', title: 'Ops' }, description: 'All things ops.\nSee the runbook.', members: 12, private: true },
+			{ kind: 'thread', href: https('t1'), server: 'chat.example/ws', room: { id: 't1', title: 'Deploy', thread: true }, in: { id: 'ops', title: 'Ops' }, members: 3 }
 		]);
 	});
 
