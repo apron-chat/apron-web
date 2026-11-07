@@ -179,6 +179,33 @@ test.describe('the member list under 960px', () => {
 				await overlays(preview);
 			});
 		});
+
+		test('the room\'s ⋯ menu opens over it, under its button, left to right and right to left', async ({ preview, page }) => {
+			await preview.open();
+			for (const dir of ['ltr', 'rtl'] as const) {
+				await test.step(dir, async () => {
+					if (dir === 'rtl') await page.evaluate(() => document.documentElement.setAttribute('dir', 'rtl'));
+					await showMembers(preview);
+					const button = page.getByRole('button', { name: 'Room actions', exact: true });
+					await preview.press(button);
+					const menu = page.getByRole('menu', { name: 'Room actions' });
+					await expect(menu).toBeVisible();
+					// Each item is what's drawn at its middle, not the member list it overlaps.
+					const covered = await menu.evaluate((el) => [...el.querySelectorAll<HTMLElement>('.ap-menu-item')].filter((item) => {
+						const r = item.getBoundingClientRect();
+						return !item.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
+					}).map((item) => item.textContent));
+					expect(covered, 'menu items under something else').toEqual([]);
+					const at = (await button.boundingBox())!;
+					const box = (await menu.boundingBox())!;
+					expect(box.y, 'below its button').toBeGreaterThanOrEqual(at.y + at.height);
+					if (dir === 'ltr') expect(Math.abs(box.x + box.width - (at.x + at.width)), 'its end at its button\'s').toBeLessThan(1);
+					else expect(Math.abs(box.x - at.x), 'its end at its button\'s').toBeLessThan(1);
+					await page.keyboard.press('Escape');
+					await expect(menu).toBeHidden();
+				});
+			}
+		});
 	});
 
 	test.describe('tablet, and at 960px and wider', () => {

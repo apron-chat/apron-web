@@ -45,6 +45,7 @@
 
 	let root = $state<HTMLElement | undefined>();
 	let trigger = $state<HTMLButtonElement | undefined>();
+	let menu = $state<HTMLUListElement | undefined>();
 	/** The choice whose submenu is open beneath it, by value. */
 	let expanded = $state<string | undefined>();
 
@@ -63,9 +64,36 @@
 		expanded = undefined;
 		open = true;
 		await tick();
+		place();
 		const list = items();
 		list[at < 0 ? list.length - 1 : at]?.focus();
 	}
+
+	/**
+	 * Lifts the menu into the top layer, under its button and lined up with its inline end, so it's over whatever
+	 * paints after the pane that holds the button: the member list's overlay on narrow screens, which a pane's
+	 * own stacking context (its `container-type`) would keep it under at any z-index. Without popovers it stays
+	 * where its CSS puts it, under the button.
+	 */
+	function place(): void {
+		if (!menu || !trigger || typeof menu.showPopover !== 'function') return;
+		if (!menu.matches(':popover-open')) menu.showPopover();
+		const box = trigger.getBoundingClientRect();
+		menu.style.setProperty('--menu-top', `${box.bottom}px`);
+		menu.style.setProperty('--menu-end', `${rtl() ? box.left : document.documentElement.clientWidth - box.right}px`);
+	}
+
+	/** Open, the menu follows its button as the page scrolls or resizes; shut, nothing listens. */
+	$effect(() => {
+		if (!open) return;
+		const follow = () => place();
+		addEventListener('resize', follow);
+		addEventListener('scroll', follow, { capture: true, passive: true });
+		return () => {
+			removeEventListener('resize', follow);
+			removeEventListener('scroll', follow, { capture: true });
+		};
+	});
 
 	function close(refocus: boolean): void {
 		open = false;
@@ -148,7 +176,7 @@
 		<button bind:this={trigger} type="button" class="ap-btn ap-btn-quiet ap-btn-sm" aria-haspopup="menu" aria-expanded={open} aria-label={ariaLabel} data-testid={buttonTestid} aria-disabled={busy ? 'true' : undefined} aria-busy={busy ? 'true' : undefined} {disabled} onclick={toggle}>{label}</button>
 	{/if}
 	{#if open}
-		<ul class={['ap-menu', 'ap-menu-below', selected !== undefined && 'ap-menu-pick']} role="menu" aria-label={ariaLabel ?? label}>
+		<ul bind:this={menu} popover="manual" class={['ap-menu', 'ap-menu-below', selected !== undefined && 'ap-menu-pick']} role="menu" aria-label={ariaLabel ?? label}>
 			{#each choices as choice (choice.value)}
 				{@const on = selected !== undefined && choice.value === selected}
 				<li role="none">
