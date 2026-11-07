@@ -49,6 +49,7 @@ describe('unread tracking', () => {
 		expect(tracker.byRoom).toEqual({ random: 1 });
 		tracker.reset();
 		expect(tracker.total).toBe(0);
+		expect(tracker.alerting).toBe(0);
 		// The other server's `random` loads its history, after this page's old watermark: none of it arrived.
 		tracker.observe([room('random', [message(30, 'random'), message(31, 'random')], { latestLogId: '31' })], me, 'general', true);
 		expect(tracker.total).toBe(0);

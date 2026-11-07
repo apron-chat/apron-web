@@ -44,6 +44,7 @@ export class UnreadTracker {
 	 */
 	reset(): void {
 		this.byRoom = {};
+		this.alerting = 0;
 		this.shown.clear();
 		this.watermarks.clear();
 		this.arrivals.clear();
