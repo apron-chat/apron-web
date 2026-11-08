@@ -19,13 +19,23 @@
 	/*
 	 * A player for an audio clip, drawn in the design system's own controls rather than the browser's: play or pause,
 	 * a bar to seek along, the time played and the clip's length, and a speed button (1×, 1.5×, 2×). Its parent shows
-	 * what the clip is called. A clip whose length isn't known until it has been played through (a recording made in
-	 * the browser) shows only the time played, and can't be sought along until then. A clip that can't be played (a
+	 * what the clip is called. The bar becomes the clip's waveform once it has been decoded: at once for a clip on the
+	 * draft (`preload="metadata"`, a local file), and on first Play for one in a message (`preload="none"`, as nothing
+	 * of it is fetched before), where it also can't be read from another site that doesn't allow it (CORS). A clip
+	 * whose length isn't known until it has been played through (a recording made in the browser) shows only the time
+	 * played, and can't be sought along, until it has been played through or decoded. A clip that can't be played (a
 	 * format the browser doesn't know, or a URL that fails) says so, and its controls are disabled.
 	 */
 	import Pause from '@lucide/svelte/icons/pause';
 	import Play from '@lucide/svelte/icons/play';
+	import { untrack } from 'svelte';
 	import type { MediaSrc } from './types';
+	import { waveOf, wavePath } from './waveform';
+
+	/** Bars in a waveform: 3.5px apiece in the narrowest player (a phone's), 2px wide with a gap. */
+	const BARS = 40;
+	/** Longer than this (ten minutes) keeps the plain bar. */
+	const MAX_SECONDS = 600;
 
 	interface Props {
 		src?: MediaSrc;
@@ -39,20 +49,20 @@
 	let audio = $state<HTMLAudioElement | undefined>();
 	let paused = $state(true);
 	let time = $state(0);
-	let duration = $state(Number.NaN);
+	/** The length the element reports: Infinity for a recording made in the browser, until it has played through. */
+	let reported = $state(Number.NaN);
 	let rate = $state(1);
 	/** The clip can't be played: the element reported an error, or refused to play it. */
 	let failed = $state(false);
+	/** The waveform's path, and the length decoding found, once decoded. */
+	let wave = $state<{ path: string; duration: number } | undefined>();
+	let decoding = false;
+
+	let duration = $derived(Number.isFinite(reported) ? reported : (wave?.duration ?? reported));
 
 	let known = $derived(Number.isFinite(duration) && duration > 0);
 	let progress = $derived(known ? Math.min(100, (time / duration) * 100) : 0);
 	let shown = $derived(failed ? "Can't play" : known ? `${clock(time)} / ${clock(duration)}` : clock(time));
-
-	// A new clip may play where the last one couldn't.
-	$effect.pre(() => {
-		void src;
-		failed = false;
-	});
 
 	// The page's playing clip, if it was this one, is gone with it.
 	$effect(() => {
@@ -67,8 +77,31 @@
 		if (!audio) return;
 		paused = audio.paused;
 		time = audio.currentTime;
-		duration = audio.duration;
+		reported = audio.duration;
 	}
+
+	/** Decodes the clip for its waveform, once per clip. */
+	function draw(): void {
+		const from = src;
+		// A long clip isn't decoded for a picture of it: its samples alone would take tens of MB.
+		if (!from || wave || decoding || (Number.isFinite(reported) && reported > MAX_SECONDS)) return;
+		decoding = true;
+		void waveOf(from, BARS).then((decoded) => {
+			if (decoded && from === src) wave = { path: wavePath(decoded.peaks), duration: decoded.duration };
+		});
+	}
+
+	// A new clip starts afresh: without the last one's wave, and playable until it says otherwise. A draft's wave is
+	// drawn at once, as the clip is already here.
+	$effect.pre(() => {
+		void src;
+		untrack(() => {
+			failed = false;
+			wave = undefined;
+			decoding = false;
+			if (preload === 'metadata') draw();
+		});
+	});
 
 	function toggle(): void {
 		if (!audio) return;
@@ -85,6 +118,7 @@
 		if (playing && playing !== audio && !playing.paused) playing.pause();
 		playing = audio;
 		sync();
+		draw();
 	}
 
 	function seek(event: Event & { currentTarget: HTMLInputElement }): void {
@@ -107,6 +141,11 @@
 	<button type="button" class="ap-audio-play" aria-label={paused ? `Play ${label}` : `Pause ${label}`} title={paused ? 'Play' : 'Pause'} disabled={failed} onclick={toggle}>
 		{#if paused}<Play size={16} fill="currentColor" aria-hidden="true" />{:else}<Pause size={16} fill="currentColor" aria-hidden="true" />{/if}
 	</button>
+	<span class="ap-audio-bar" class:ap-audio-waved={wave} style:--audio-progress="{progress}%">
+	{#if wave}
+		<svg class="ap-audio-wave" viewBox="0 0 {BARS * 2} 2" preserveAspectRatio="none" aria-hidden="true"><path d={wave.path} /></svg>
+		<svg class="ap-audio-wave ap-audio-wave-played" viewBox="0 0 {BARS * 2} 2" preserveAspectRatio="none" aria-hidden="true"><path d={wave.path} /></svg>
+	{/if}
 	<input
 		type="range"
 		class="ap-audio-seek"
@@ -117,9 +156,9 @@
 		disabled={!known || failed}
 		aria-label={`Seek ${label}`}
 		aria-valuetext={shown}
-		style:--audio-progress="{progress}%"
 		oninput={seek}
 	/>
+	</span>
 	<span class="ap-audio-time">{shown}</span>
 	<button type="button" class="ap-audio-rate" aria-label={`Playback speed ${rate}×`} title="Playback speed" disabled={failed} onclick={speed}>{rate}×</button>
 </div>

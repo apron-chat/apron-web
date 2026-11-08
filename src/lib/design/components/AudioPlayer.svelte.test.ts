@@ -2,10 +2,17 @@
 import { flushSync } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import AudioPlayer, { clock } from './AudioPlayer.svelte';
+import { waveOf } from './waveform';
 import { button, render, unmount } from '$lib/test/dom';
 import type { MediaSrc } from './types';
 
-afterEach(() => unmount());
+// Decoding needs a real browser: here a clip's wave is whatever the test says, and by default it can't be had.
+vi.mock('./waveform', async (actual) => ({ ...(await actual<typeof import('./waveform')>()), waveOf: vi.fn(async () => undefined) }));
+
+afterEach(() => {
+	unmount();
+	vi.mocked(waveOf).mockClear();
+});
 
 const src = 'blob:clip' as MediaSrc;
 
@@ -116,5 +123,37 @@ describe('AudioPlayer', () => {
 		document.querySelector<HTMLButtonElement>('.ap-audio-rate')!.click();
 		flushSync();
 		expect(document.querySelector('audio')!.defaultPlaybackRate).toBe(1.5);
+	});
+
+	it('draws a draft clip\'s waveform at once, and takes its length from decoding when the element has none', async () => {
+		vi.mocked(waveOf).mockResolvedValueOnce({ peaks: [1, 0.5], duration: 9 });
+		render(AudioPlayer, { src, preload: 'metadata', label: 'clip' });
+		reports(document.querySelector('audio')!, Infinity);
+		await vi.waitFor(() => expect(document.querySelectorAll('svg.ap-audio-wave path')).toHaveLength(2));
+		expect(waveOf).toHaveBeenCalledWith('blob:clip', 40);
+		expect(document.querySelector('.ap-audio-time')?.textContent).toBe('0:00 / 0:09');
+		expect(document.querySelector<HTMLInputElement>('input[type=range]')!.disabled).toBe(false);
+	});
+
+	it('fetches nothing for a message\'s clip until it is played', async () => {
+		vi.mocked(waveOf).mockResolvedValueOnce({ peaks: [1], duration: 3 });
+		render(AudioPlayer, { src, preload: 'none', label: 'clip' });
+		const audio = document.querySelector('audio')!;
+		flushSync();
+		expect(waveOf).not.toHaveBeenCalled();
+		audio.dispatchEvent(new Event('play'));
+		await vi.waitFor(() => expect(document.querySelector('svg.ap-audio-wave')).toBeTruthy());
+		expect(waveOf).toHaveBeenCalledOnce();
+	});
+
+	it('keeps the plain bar for a clip over ten minutes', () => {
+		render(AudioPlayer, { src, preload: 'none', label: 'clip' });
+		const audio = document.querySelector('audio')!;
+		reports(audio, 601);
+		audio.dispatchEvent(new Event('play'));
+		expect(waveOf).not.toHaveBeenCalled();
+		reports(audio, 30);
+		audio.dispatchEvent(new Event('play'));
+		expect(waveOf).toHaveBeenCalledOnce();
 	});
 });
