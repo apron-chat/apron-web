@@ -8,7 +8,7 @@
   var A = window.Apron, root = document.getElementById('root');
   function pane() { var box = document.createElement('div'); box.style.cssText = 'display:flex;flex-direction:column;height:220px;border:1px solid var(--line);border-radius:10px;background:var(--bg-100)'; root.appendChild(box); return box; }
   A.render(A.EmptyState, pane(), { title: 'Nothing here yet', detail: 'Start the conversation in Ops.' });
-  A.render(A.EmptyState, pane(), { title: 'No room open', detail: 'Pick a room from the list.', actions: A.part(A.Button, { size: 'sm', label: 'Connect to a backend' }) });
+  A.render(A.EmptyState, pane(), { title: 'No room open', detail: 'Pick a room from the list.', actions: A.part(A.Button, { size: 'sm', label: 'Change server' }) });
 </script>
 </body>
 </html>

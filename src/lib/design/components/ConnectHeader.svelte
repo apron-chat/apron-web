@@ -36,7 +36,7 @@
 	It has no root of its own: its parts are the card's first rows.
 -->
 <h1 class="ap-connect-title">Apron</h1>
-<p class="ap-connect-tag">Connect to a backend</p>
+<p class="ap-connect-tag">Connect to a server</p>
 {#if server}
 	<div class="ap-connect-server" data-testid={serverTestid}>
 		{#if server.avatar}<img class="ap-rail-tile ap-connect-tile" src={server.avatar} alt="" />{:else}<span class="ap-rail-tile ap-connect-tile" aria-hidden="true">{initials(server.name)}</span>{/if}

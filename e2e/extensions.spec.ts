@@ -66,7 +66,7 @@ test.describe('the server frame: title, description and avatar (§3.1), and the 
 		await expect(server.locator('img')).toHaveAttribute('src', GREEN);
 		await expect(page.locator('.ap-connect-server-desc strong')).toHaveText('tests');
 		// Recent: this server once, by its address, with the title it sent last; the copycat with its own address.
-		const recent = page.getByRole('group', { name: 'Recent backends' }).getByRole('button');
+		const recent = page.getByRole('group', { name: 'Recent servers' }).getByRole('button');
 		await expect(recent).toHaveCount(2);
 		await expect(recent.nth(0)).toContainText('Mock Chat');
 		await expect(recent.nth(0).locator('.ap-connect-address')).toHaveText('wss://server.apron.chat/');

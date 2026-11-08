@@ -41,6 +41,17 @@ describe('connection state', () => {
 		expect(statusLabel(snapshot({ status: 'idle' }), false)).toBe('Waiting to connect');
 	});
 
+	it('names the server while connecting and reconnecting, when given one', () => {
+		const host = 'chat.example';
+		expect(statusLabel(snapshot({ status: 'connecting' }), false, undefined, host)).toBe('Connecting to chat.example…');
+		expect(statusLabel(snapshot({ status: 'reconnecting', disconnectedAt: 1 }), false, undefined, host)).toBe('Reconnecting to chat.example…');
+		expect(statusLabel(snapshot({ status: 'reconnecting', disconnectedAt: 1 }), true, undefined, host)).toBe('Still trying to reach chat.example…');
+		expect(statusLabel(snapshot({ status: 'reconnecting', disconnectedAt: 1, error: 'Refused' }), true, undefined, host)).toBe("Can't reach chat.example: Refused");
+		// What isn't about reaching the server says the same.
+		expect(statusLabel(snapshot({ status: 'reconnecting', disconnectedAt: 1, retryAfterMs: 90_000 }), false, undefined, host)).toBe('Connection limited. Retrying in 2m…');
+		expect(statusLabel(snapshot({ status: 'offline' }), false, undefined, host)).toBe('Offline');
+	});
+
 	it('rounds retry delays up to a readable unit', () => {
 		expect(retryAfterLabel(500)).toBe('1s');
 		expect(retryAfterLabel(59_000)).toBe('59s');

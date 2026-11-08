@@ -8,26 +8,33 @@
 	/** The main pane with no room open: placeholders while the app comes up, then a pointer to the rooms list. */
 	interface Props {
 		session: SessionView;
-		/** Connect to a backend. */
+		/** Choose another server, keeping this connection until one is chosen: once connected. */
 		onconnect: () => void;
+		/** The server being connected to, as people read it (`serverLabel`). */
+		server?: string;
+		/** Stop connecting and choose another server: until connected. Without it, `onconnect`. */
+		onchangeserver?: () => void;
 	}
-	let { session, onconnect }: Props = $props();
+	let { session, onconnect, server, onchangeserver }: Props = $props();
 	let snapshot = $derived(session.snapshot);
 </script>
 
 {#if session.starting}
 	<!-- Coming up (connecting, signing in, listing rooms): placeholders where the room will be, not "No room open". -->
-	<RoomLoading label={session.connection === 'connected' ? 'Loading messages…' : 'Connecting…'} rows={6}>
-		<span class="ap-sr" data-testid="connection-status" role="status" aria-live="polite">{statusLabel(snapshot, session.stalled)}</span>
+	<!-- A server that is gone can keep this up for a while: it says which server, and offers another until it answers. -->
+	{@const connected = session.connection === 'connected'}
+	<RoomLoading label={connected ? 'Loading messages…' : server ? `Connecting to ${server}…` : 'Connecting…'} rows={6} action={!connected && onchangeserver ? changeServer : undefined}>
+		<span class="ap-sr" data-testid="connection-status" role="status" aria-live="polite">{statusLabel(snapshot, session.stalled, undefined, server)}</span>
 	</RoomLoading>
+	{#snippet changeServer()}<button class="ap-btn ap-btn-sm" type="button" data-testid="change-server" onclick={onchangeserver}>Change server</button>{/snippet}
 {:else}
 	{@const connected = session.connection === 'connected'}
 	<EmptyState title={connected ? 'No room open' : undefined} detail={connected ? 'Pick a room from the list.' : undefined}>
 		{#if !connected}
-			<StatusBanner tone={session.connection === 'offline' ? 'danger' : 'warn'} textTestid="connection-status" live>{statusLabel(snapshot, session.stalled)}</StatusBanner>
+			<StatusBanner tone={session.connection === 'offline' ? 'danger' : 'warn'} textTestid="connection-status" live>{statusLabel(snapshot, session.stalled, undefined, server)}</StatusBanner>
 		{:else}
 			<span class="ap-sr" data-testid="connection-status" role="status" aria-live="polite">Connected</span>
 		{/if}
-		{#snippet actions()}<button class="ap-btn ap-btn-sm" type="button" onclick={onconnect}>Connect to a backend</button>{/snippet}
+		{#snippet actions()}<button class="ap-btn ap-btn-sm" type="button" data-testid="change-server" onclick={connected ? onconnect : onchangeserver ?? onconnect}>Change server</button>{/snippet}
 	</EmptyState>
 {/if}

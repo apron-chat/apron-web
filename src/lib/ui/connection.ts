@@ -32,9 +32,11 @@ export function retryUntil(snapshot: Pick<ClientSnapshot, 'retryAfterMs'>, now =
 
 /**
  * What the status banner says: what happened, then what the client is doing about it. `retryLeftMs` is the time
- * left of the server's wait (`retryUntil`) as it counts down, the snapshot's own when not given.
+ * left of the server's wait (`retryUntil`) as it counts down, the snapshot's own when not given. With `server` (its
+ * `serverLabel`), connecting and reconnecting say which server: where nothing else on screen does, such as before
+ * the rooms are listed.
  */
-export function statusLabel(snapshot: ClientSnapshot, stalled: boolean, retryLeftMs = snapshot.retryAfterMs): string {
+export function statusLabel(snapshot: ClientSnapshot, stalled: boolean, retryLeftMs = snapshot.retryAfterMs, server?: string): string {
 	const state = connectionStateOf(snapshot);
 	if (state === 'connected') return 'Connected';
 	if (state === 'offline') return 'Offline';
@@ -42,10 +44,11 @@ export function statusLabel(snapshot: ClientSnapshot, stalled: boolean, retryLef
 		const error = reconnectErrorOf(snapshot);
 		if (snapshot.held) return error ? `Signed out: ${error}` : 'Signed out';
 		if (retryLeftMs && retryLeftMs > 0) return `${error || 'Connection limited'}. Retrying in ${retryAfterLabel(retryLeftMs)}…`;
-		if (error) return stalled ? `Still disconnected: ${error}` : error;
+		if (error) return stalled ? (server ? `Can't reach ${server}: ${error}` : `Still disconnected: ${error}`) : error;
+		if (server) return stalled ? `Still trying to reach ${server}…` : `Reconnecting to ${server}…`;
 		return stalled ? 'Still trying to reconnect…' : 'Reconnecting…';
 	}
-	if (snapshot.status === 'connecting' || snapshot.status === 'connected') return 'Connecting…';
+	if (snapshot.status === 'connecting' || snapshot.status === 'connected') return server ? `Connecting to ${server}…` : 'Connecting…';
 	return 'Waiting to connect';
 }
 
