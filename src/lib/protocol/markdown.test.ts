@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import type { MediaCheck } from './sanitize';
+import { toggleTask } from './task-list';
 import { markdownRoles, markdownText, renderBio, renderMarkdown, renderPlain, type EmojiResolver, type LinkResolver, type MentionResolver, mentionSegments } from './markdown';
 
 const resolve: MentionResolver = (id) => {
@@ -470,5 +471,47 @@ describe('role mentions (@&role)', () => {
 describe('role mentions in Markdown', () => {
 	it('chips @&role in rendered Markdown, but not inside code', () => {
 		expect(renderMarkdown('**@&mods** `@&mods`', resolve)).toContain('<strong><span class="ap-mention ap-mention-role" title="Everyone with the role mods">@mods</span></strong> <code>@&amp;mods</code>');
+	});
+});
+
+describe('task lists', () => {
+	it('draws `[ ]` and `[x]` items as disabled checkboxes, each with its source line', () => {
+		const html = renderMarkdown('Todo:\n\n- [ ] Foo\n- [x] Bar\n- [X] Baz');
+		expect(html).toContain('<li class="ap-task-item"><input type="checkbox" class="ap-task" data-task-line="2" disabled="">Foo</li>');
+		expect(html).toContain('<li class="ap-task-item ap-task-done"><input type="checkbox" class="ap-task" data-task-line="3" checked="" disabled="">Bar</li>');
+		expect(html).toContain('data-task-line="4" checked=""');
+	});
+
+	it('marks the lists that hold tasks, nested ones too, and no other', () => {
+		const html = renderMarkdown('- [ ] a\n  - [x] b\n  - c\n\n1. plain');
+		expect(html.match(/<ul class="ap-task-list">/g)).toHaveLength(2);
+		expect(html).toContain('<ol>');
+	});
+
+	it('counts lines in nested lists and quotes, and keeps the text after the marker', () => {
+		const html = renderMarkdown('> - a\n>   - [ ] **deep**');
+		expect(html).toContain('data-task-line="1" disabled=""><strong>deep</strong>');
+	});
+
+	it('leaves anything else as text', () => {
+		for (const source of ['- [ ]', '- [y] no', '- [x]no', '[ ] not a list', '- `[ ]` code', '- \\[ ] escaped']) {
+			expect(renderMarkdown(source), source).not.toContain('<input');
+		}
+	});
+
+	it('keeps an input out of a raw HTML body', () => {
+		expect(renderMarkdown('<input type="text"> - [ ] x')).not.toContain('<input');
+	});
+
+	it('names the line `toggleTask` rewrites', () => {
+		const source = 'a\n\n- b\n  - [ ] c\n\n> - [x] d';
+		const lines = [...renderMarkdown(source).matchAll(/data-task-line="(\d+)"/g)].map((match) => Number(match[1]));
+		expect(lines).toEqual([3, 5]);
+		expect(toggleTask(source, 3, true)).toBe('a\n\n- b\n  - [x] c\n\n> - [x] d');
+		expect(toggleTask(source, 5, false)).toBe('a\n\n- b\n  - [ ] c\n\n> - [ ] d');
+	});
+
+	it('leaves checkboxes out of plain text', () => {
+		expect(markdownText('- [ ] Foo\n- [x] Bar')).toBe('Foo\nBar');
 	});
 });

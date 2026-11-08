@@ -136,6 +136,21 @@ describe('a request the connection ends under', () => {
 });
 
 describe('saves', () => {
+	it('checks a task list item as an edit of its text, on top of an unconfirmed edit', async () => {
+		await connect();
+		socket.receive({ method: 'message', params: message('100', { body: { text: '- [ ] Foo\n- [ ] Bar', format: 'markdown', mentions: ['ada'] } }) });
+		quiet(client.toggleTask('100', 0, true)!);
+		expect(socket.request('message').params.body).toEqual({ text: '- [x] Foo\n- [ ] Bar', format: 'markdown', mentions: ['ada'] });
+		quiet(client.toggleTask('100', 1, true)!);
+		expect(socket.request('message').params.body).toEqual({ text: '- [x] Foo\n- [x] Bar', format: 'markdown', mentions: ['ada'] });
+		// Already as asked, or no task there: nothing to save.
+		expect(client.toggleTask('100', 0, true)).toBeUndefined();
+		expect(client.toggleTask('100', 5, true)).toBeUndefined();
+		// A plain body shows no checkboxes, so has none to check.
+		socket.receive({ method: 'message', params: message('101', { body: { text: '- [ ] Foo' } }) });
+		expect(client.toggleTask('101', 0, true)).toBeUndefined();
+	});
+
 	it('resubmits reply_to bare and the rest of the body on edits, but never ext, which the server merges', async () => {
 		await connect();
 		const ext = JSON.parse('{"example.org": {"nested": null}, "__proto__": {"opaque": true}}');

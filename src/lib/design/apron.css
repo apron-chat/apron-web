@@ -7,7 +7,7 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
    one that fills its row, list or track (--focus-offset-inset), where an outer ring would be clipped or cross its
    neighbours. A field rings its own border, which takes the color too (.ap-field); the composer and a message being
    edited light their frame instead, and a panel's handle its border. */
-:where(.ap-btn, .ap-embed-remove, .ap-link, .ap-dialog-titlebtn, .ap-thread, .ap-composer-field, .ap-embed-card, .ap-embed-url, .ap-actions-btn, .ap-jumpbar-btn, .ap-jumpfab, .ap-sect-toggle, .ap-roomhead-back, .ap-roomhead-crumb, .ap-profile-me, .ap-shell-sidehead-return, .ap-shell-sidehead-open, .ap-field, .ap-reply, .ap-choice-item, .ap-msg-check, .ap-msg-who, .ap-member-who, .ap-iconbtn, .ap-foldpill, .ap-rchip, .ap-rpick, .ap-switch, .ap-description-toggle, .ap-attachment-rename, .ap-viewer-btn, .ap-embed-ogcard, .ap-embed-imagelink, button.ap-mention, a.ap-linkchip, .ap-pick-chip-remove, .ap-audio-play, .ap-audio-rate, .ap-audio-seek, .ap-embed-audiotitle):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
+:where(.ap-btn, .ap-embed-remove, .ap-link, .ap-dialog-titlebtn, .ap-thread, .ap-composer-field, .ap-embed-card, .ap-embed-url, .ap-actions-btn, .ap-jumpbar-btn, .ap-jumpfab, .ap-sect-toggle, .ap-roomhead-back, .ap-roomhead-crumb, .ap-profile-me, .ap-shell-sidehead-return, .ap-shell-sidehead-open, .ap-field, .ap-reply, .ap-choice-item, .ap-msg-check, .ap-msg-who, .ap-member-who, .ap-iconbtn, .ap-foldpill, .ap-rchip, .ap-rpick, .ap-switch, .ap-description-toggle, .ap-attachment-rename, .ap-viewer-btn, .ap-embed-ogcard, .ap-embed-imagelink, button.ap-mention, a.ap-linkchip, .ap-pick-chip-remove, .ap-audio-play, .ap-audio-rate, .ap-audio-seek, .ap-embed-audiotitle, .ap-task):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
 :where(.ap-room, .ap-room-exit, .ap-room-join, .ap-menu-item, .ap-seg-item, .ap-connect-recent-item, .ap-font-option, .ap-font-load, .ap-preferences-nav button, .ap-profedit-upload):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset-inset); }
 /* The people picker's field rings itself while its input has the keyboard, as a field does. */
 .ap-pick-field:has(.ap-pick-input:focus-visible) { outline: var(--focus-ring); outline-offset: var(--focus-offset); border-color: var(--focus); }
@@ -305,6 +305,24 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-msg-text th { font-weight: 600; background: var(--bg-200); }
 .ap-msg-text .ap-align-center { text-align: center; }
 .ap-msg-text .ap-align-right { text-align: right; }
+/* A task list item (`- [ ]`, `- [x]`): a round check in its bullet's place, green once done, its text then quieter.
+   Where you may tick it (yours, or one that mentions you) it takes a hover; elsewhere its ring is dashed.
+   A list with tasks has no indent of its own: its checks line up with the text above it (a nested list's with
+   its item's text), each in a gutter its wrapped lines keep clear of, centred on the first line. Its other items
+   keep their bullet in that gutter, their text in line with the tasks'. */
+.ap-task-list { padding-inline-start: 0; }
+.ap-task-list > li { margin-inline-start: var(--space-6); }
+.ap-task-list > .ap-task-item { position: relative; margin-inline-start: 0; padding-inline-start: var(--space-6); list-style: none; }
+.ap-task-done { color: var(--ink-muted); }
+.ap-task-done > :is(ul, ol) { color: var(--ink); }
+.ap-task { appearance: none; position: absolute; inset-inline-start: 0; top: calc((var(--leading-body) - 17px) / 2); top: calc((1lh - 17px) / 2); display: grid; place-items: center; box-sizing: border-box; width: 17px; height: 17px; margin: 0; border: 1.5px solid var(--line-strong); border-radius: var(--radius-full); background: transparent; }
+.ap-task::after { content: ''; width: 8px; height: 4px; border: 2px solid var(--bg-100); border-top: 0; border-right: 0; transform: translateY(-1px) rotate(-45deg); opacity: 0; }
+.ap-task:checked { border-color: var(--ok); background: var(--ok); }
+.ap-task:checked::after { opacity: 1; }
+.ap-task:enabled { cursor: pointer; }
+.ap-task:enabled:hover:not(:checked) { border-color: var(--ok); background: color-mix(in srgb, var(--ok) 16%, transparent); }
+.ap-task:disabled { border-style: dashed; }
+.ap-task:disabled:checked { border-style: solid; opacity: var(--opacity-dim); }
 .ap-msg-tomb { font-style: italic; color: var(--ink-muted); }
 .ap-msg-embeds { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); margin-top: var(--space-2); }
 /* An absent format is plain (§3.5): its line breaks kept. A Markdown body's quotes set apart on a muted ground. */

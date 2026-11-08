@@ -48,7 +48,7 @@
 		"send-message-busy": {
 			"layouts": 38,
 			"styleRecalcs": 16,
-			"calls": 284904
+			"calls": 283460
 		},
 		"sidebar-collapse": {
 			"layouts": 3,

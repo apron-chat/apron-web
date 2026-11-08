@@ -11,6 +11,9 @@ import { canSanitize, NOWHERE, sanitizeHtml, type MediaCheck } from './sanitize'
  * markup (`html: false`, §3.5), and links with unsafe schemes (`javascript:`,
  * `data:` other than images, ...) are not linked.
  */
+/** A task list item's marker at the start of its text: `[ ]`, `[x]` or `[X]`, then a space or the end of the line. */
+const TASK_TEXT = /^\[([ xX])\](?:[ \t]+|$)/;
+
 const md = new MarkdownIt({ html: false, breaks: true, linkify: false, typographer: false });
 
 // Table alignment as a class, so no `style` attribute has to be let through.
@@ -19,6 +22,38 @@ md.core.ruler.push('align_class', (state) => {
 		if (token.type !== 'th_open' && token.type !== 'td_open') continue;
 		const align = String(token.attrGet('style') ?? '').match(/^text-align:(left|center|right)$/)?.[1];
 		token.attrs = align ? [['class', `ap-align-${align}`]] : null;
+	}
+});
+/**
+ * GitHub task list items: a list item whose text starts with `[ ]` or `[x]` and a space shows a checkbox in their
+ * place. Each carries the source line its marker is on (`data-task-line`), so checking it can rewrite that marker
+ * (`toggleTask`). It renders disabled: where whoever views it may edit the message, the page enables it.
+ */
+md.core.ruler.after('inline', 'task_lists', (state) => {
+	const tokens = state.tokens;
+	for (let index = 2; index < tokens.length; index += 1) {
+		const inline = tokens[index];
+		const paragraph = tokens[index - 1];
+		const item = tokens[index - 2];
+		if (inline.type !== 'inline' || paragraph.type !== 'paragraph_open' || item.type !== 'list_item_open') continue;
+		const children = inline.children ?? [];
+		const first = children[0];
+		const marker = first?.type === 'text' ? TASK_TEXT.exec(first.content) : null;
+		const line = paragraph.map?.[0];
+		// A marker with nothing after it is text, as on GitHub.
+		if (!marker || line === undefined || (marker[0].length === first.content.length && children.length < 2)) continue;
+		first.content = first.content.slice(marker[0].length);
+		const box = new state.Token('html_inline', '', 0);
+		box.content = `<input type="checkbox" class="ap-task" data-task-line="${line}"${marker[1] === ' ' ? '' : ' checked'} disabled>`;
+		children.unshift(box);
+		item.attrJoin('class', marker[1] === ' ' ? 'ap-task-item' : 'ap-task-item ap-task-done');
+		// Its list, once: drawn without its own indent, so its checks line up with the text above it.
+		for (let back = index - 3; back >= 0; back -= 1) {
+			const list = tokens[back];
+			if (list.level >= item.level || (list.type !== 'bullet_list_open' && list.type !== 'ordered_list_open')) continue;
+			if (!list.attrGet('class')) list.attrSet('class', 'ap-task-list');
+			break;
+		}
 	}
 });
 // Wide tables scroll inside the message rather than widening it.

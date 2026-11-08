@@ -75,7 +75,7 @@ function bodyOf(body: MessageBody | undefined, text = typeof body?.text === 'str
 	const html = markdown
 		? renderMarkdown(settle ? settleMarkdown(text) : text, directory.resolve, directory.resolveRoom, directory.resolveLink, directory.resolveEmoji, directory.mediaGate)
 		: renderPlain(text, directory.resolve, directory.resolveRoom, directory.resolveLink, directory.resolveEmoji, directory.mediaGate);
-	return { html, markdown, code: html.includes('<pre') };
+	return { html, markdown, code: html.includes('<pre'), ...(markdown && html.includes('class="ap-task"') ? { tasks: true } : {}) };
 }
 
 /**

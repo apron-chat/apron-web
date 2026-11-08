@@ -606,3 +606,47 @@ describe('test ids', () => {
 		expect(ids('writing')).toEqual([row.querySelector('.ap-msg-writing')]);
 	});
 });
+
+describe('task list checkboxes', () => {
+	const html = '<ul><li class="ap-task-item"><input type="checkbox" class="ap-task" data-task-line="0" disabled="">Foo</li></ul>';
+	const box = () => document.querySelector<HTMLInputElement>('input.ap-task')!;
+
+	it('stay disabled where you may not tick them, even on one you may edit', () => {
+		render({ body: { html, markdown: true, tasks: true }, caps: ALL }, { toggleTask: () => true });
+		expect(box().disabled).toBe(true);
+		dom.cleanup();
+	});
+
+	it('follow select mode without decorating the code blocks again', () => {
+		const code = vi.fn();
+		const body = { html: `<pre><code>a</code></pre>${html}`, markdown: true, code: true, tasks: true };
+		const props = $state({ view: view({ body, caps: { ...NONE, check: true } }), on: { code, toggleTask: () => true } });
+		dom.render(Message, props);
+		expect(box().disabled).toBe(false);
+		props.view = view({ body, caps: { ...NONE, check: true }, selecting: true });
+		flushSync();
+		expect(box().disabled).toBe(true);
+		expect(code).toHaveBeenCalledOnce();
+		dom.cleanup();
+	});
+
+	it('save a check where you may tick them, and go back when it fails', async () => {
+		let result = true;
+		const toggled: Array<[number, boolean]> = [];
+		render({ body: { html, markdown: true, tasks: true }, caps: { ...NONE, check: true } }, { toggleTask: (_view, line, checked) => (toggled.push([line, checked]), Promise.resolve(result)) });
+		expect(box().disabled).toBe(false);
+		box().click();
+		await tick();
+		expect(toggled).toEqual([[0, true]]);
+		expect(box().checked).toBe(true);
+		expect(box().parentElement!.classList.contains('ap-task-done')).toBe(true);
+		result = false;
+		box().click();
+		await Promise.resolve();
+		await tick();
+		expect(toggled).toEqual([[0, true], [0, false]]);
+		expect(box().checked).toBe(true);
+		expect(box().parentElement!.classList.contains('ap-task-done')).toBe(true);
+		dom.cleanup();
+	});
+});

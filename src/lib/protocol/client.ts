@@ -139,6 +139,7 @@ import {
 import { capabilitiesOf, parseServerParams, peopleTitle, PRIVATE_ROOM, sameRoomSnapshot, serverAddress, serverSettings, yourPermissions } from './client-views';
 import { reactionKey } from './custom-emoji';
 import { HistoryQueue } from './history-queue';
+import { toggleTask } from './task-list';
 import { Transport } from './transport';
 
 export * from './client-types';
@@ -1807,6 +1808,18 @@ export class ChatClient {
 			return [title === undefined ? entry : renamedEmbed(entry, title)];
 		});
 		return this.saveMessage(messageId, { body: kept.length ? { ...rest, embeds: kept } : rest });
+	}
+
+	/**
+	 * Checks or unchecks the task list item on `line` of a Markdown body (a checkbox's `data-task-line`), on top of
+	 * any edit still unconfirmed, as an edit of the text. Undefined, saving nothing, when that line holds no task or
+	 * it is already as asked.
+	 */
+	toggleTask(messageId: string, line: number, checked: boolean): OperationHandle<MessageResult> | undefined {
+		const body = this.messageBase(messageId)?.body;
+		if (!isJsonObject(body) || body.format !== 'markdown' || typeof body.text !== 'string') return undefined;
+		const text = toggleTask(body.text, line, checked);
+		return text === undefined ? undefined : this.editMessage(messageId, text);
 	}
 
 	/**

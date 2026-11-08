@@ -273,6 +273,11 @@ export interface MessageCaps {
 	react: boolean;
 	/** Copy link, under ⋯: a URL that opens this message where it is. */
 	link: boolean;
+	/**
+	 * Tick its task list checkboxes: on your own message, or one that mentions you. Saving it is an edit, which the
+	 * server may refuse for someone else's message; the box goes back if it does.
+	 */
+	check?: boolean;
 }
 
 /** Who sent a message, as its row shows them (§3.3): the kept user object, else the one it was posted under. */
@@ -381,8 +386,8 @@ export interface MessageView {
 	timestamp?: number;
 	/** The short time, pre-formatted; without a timestamp it's all that shows. */
 	time?: string;
-	/** ALREADY SANITIZED markup of the text; absent when a message has none. `code` when it holds code blocks to decorate. */
-	body?: { html: string; markdown?: boolean; code?: boolean };
+	/** ALREADY SANITIZED markup of the text; absent when a message has none. `code` when it holds code blocks to decorate, `tasks` task list checkboxes. */
+	body?: { html: string; markdown?: boolean; code?: boolean; tasks?: boolean };
 	reply?: MessageReply;
 	/** The messages, rooms and threads its links point to, as cards under its text; none on a tombstone. */
 	linkCards?: MessageLinkCard[];
@@ -451,6 +456,11 @@ export interface MessageHandlers {
 	jump?: (messageId: string) => void;
 	/** Decorate the code blocks in a body (highlighting; `copy` adds Copy buttons, on a notice). Runs again when the body changes. */
 	code?: (body: HTMLElement, copy: boolean) => void | (() => void);
+	/**
+	 * A task list item's checkbox was checked or unchecked, on a message whose `caps.check` allows it: save the text with it so. `line` is its
+	 * `data-task-line`. Resolves whether it was saved (false puts the box back); offering it enables the boxes.
+	 */
+	toggleTask?: (view: MessageView, line: number, checked: boolean) => boolean | Promise<boolean>;
 }
 
 /** The `data-testid`s a Message puts on its parts, for whoever queries them. */
