@@ -156,7 +156,10 @@ test('a reload draws the avatars it kept from the media origin the server named,
 	await page.reload();
 	await expect(page.getByText('Message 4', { exact: true })).toBeVisible();
 	await expect(face).toBeVisible();
+	// Then the server's own frame takes over: what came since shows, and the avatars stay.
+	messages.push({ ...messages[4], message_id: String(start + 5000), log_id: String(start + 5000), body: { text: 'While you were away' } });
 	answer();
+	await expect(page.getByText('While you were away')).toBeVisible();
 	await expect(face).toBeVisible();
 });
 

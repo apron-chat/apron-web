@@ -190,35 +190,20 @@ describe('directory', () => {
 	});
 
 
-	it('loads avatars from where the kept view\'s server frame said, until the connection\'s own arrives', () => {
+	it('loads media by the frame it is given, the session\'s, over the snapshot\'s', () => {
 		const cy: Identity = { user_id: 'cy', name: 'Cy', avatar: 'https://media.example/cy.png' };
-		const frame = (origins: string[]) => ({ apron: 10, auth: ['guest'], capabilities: ['ext:media'], ext: { media: { origins } } });
-		const server = 'wss://example.com/';
+		const frame = { apron: 10, auth: ['guest'], capabilities: ['ext:media'], ext: { media: { origins: ['https://media.example'] } } };
 		const connecting = { ...blankSnapshot(), server: undefined };
 		try {
 			mediaSettings.update('trusted', []);
-			// The connection is up but its server frame hasn't arrived: nothing kept, only the server's own origin.
-			directory.apply(connecting, 'https://example.com', server);
+			directory.apply(connecting, 'https://example.com');
 			expect(directory.avatar(cy)).toBeUndefined();
-			// The view kept on this device names the media origin: avatars load from it at once.
-			directory.prime(server, frame(['https://media.example']));
+			// The kept view's frame, while the connection has none.
+			directory.apply(connecting, 'https://example.com', 'wss://example.com/', frame);
 			expect(directory.avatar(cy)).toBe('https://media.example/cy.png');
-			directory.apply(connecting, 'https://example.com', server);
-			expect(directory.avatar(cy)).toBe('https://media.example/cy.png');
-			// Kept for another server: not used for this one.
-			directory.apply(connecting, 'https://other.example', 'wss://other.example/');
-			expect(directory.avatar(cy)).toBeUndefined();
-			// The connection's own frame wins once it arrives.
-			directory.apply(snapshot([ada, cy], { server: frame([]) }), 'https://example.com', server);
-			expect(directory.avatar(cy)).toBeUndefined();
-			directory.apply(snapshot([ada, cy], { server: frame(['https://media.example']) }), 'https://example.com', server);
-			expect(directory.avatar(cy)).toBe('https://media.example/cy.png');
-			// Forgotten with the rest at a sign-out.
-			directory.forget();
-			directory.apply(connecting, 'https://example.com', server);
+			directory.apply(connecting, 'https://example.com', 'wss://example.com/', undefined);
 			expect(directory.avatar(cy)).toBeUndefined();
 		} finally {
-			directory.forget();
 			mediaSettings.update('trusted', [], []);
 		}
 	});

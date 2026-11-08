@@ -76,12 +76,35 @@ describe('SessionView, primed with a view kept on this device', () => {
 		expect(chat.awaitRoom).toHaveBeenLastCalledWith(undefined);
 	});
 
+	it('stands in with its server frame until the server sends its own, which then stands in through a reconnect', () => {
+		const frame = (agent: string) => ({ apron: 10, agent, auth: ['token'], capabilities: ['ext:media'] });
+		const session = new SessionView();
+		const chat = client();
+		session.prime({ ...kept, server: frame('kept') });
+		session.apply({ ...blankSnapshot(), status: 'connecting' }, chat);
+		expect(session.server?.agent).toBe('kept');
+		session.apply(ready({ server: frame('live'), rooms: [room('general', ['1'])], activeRoom: 'general' }), chat);
+		expect(session.server?.agent).toBe('live');
+		// A drop: the client forgets the frame, the held view (this connection's, not the kept one) keeps it.
+		session.apply({ ...blankSnapshot(), status: 'reconnecting', disconnectedAt: 1 }, chat);
+		expect(session.server?.agent).toBe('live');
+		session.apply({ ...blankSnapshot(), status: 'offline' }, chat);
+		expect(session.server).toBeUndefined();
+		// A sign-out forgets it.
+		const signedOut = new SessionView();
+		signedOut.prime({ ...kept, server: frame('kept') });
+		signedOut.forget();
+		signedOut.apply({ ...blankSnapshot(), status: 'connecting' }, chat);
+		expect(signedOut.server).toBeUndefined();
+	});
+
 	it('drops it when the session signs in as someone else, and comes too late once the session is ready', () => {
 		const session = new SessionView();
 		session.prime(kept);
 		session.apply(ready({ you: { user_id: 'bo' }, roomsListed: false }), client());
 		flushSync();
 		expect(session.rooms).toEqual([]);
+		expect(session.server).toBeUndefined();
 		expect(session.showingHeld).toBe(false);
 		// Primed once the session is ready, it comes too late.
 		const late = new SessionView();

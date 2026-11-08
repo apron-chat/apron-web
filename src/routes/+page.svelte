@@ -1181,15 +1181,17 @@
 		const keeper = historyKeeper;
 		// The view from this device's last visit, while this one signs in and catches up: only for the session
 		// saved here, which is the account it was kept for (a sign-in as anyone else drops it).
+		// Media loads by the session's server frame, the kept view's until the server sends its own.
+		const showDirectory = (next: ClientSnapshot) => directory.apply(next, serverOrigin(chat.url), chat.url, session.server);
 		void viewKeeper.restore(chat, (view) => {
 			if (client !== chat) return;
 			session.prime(view);
-			directory.prime(chat.url, view.server);
+			showDirectory(chat.snapshot());
 		});
 		const unsubscribe = chat.subscribe((next) => {
 			serverUrl = chat.url;
 			session.apply(next, chat);
-			directory.apply(next, serverOrigin(chat.url), chat.url);
+			showDirectory(next);
 			noteArrivals(next);
 		});
 		// Each session the client begins goes on from what this device kept for its server.

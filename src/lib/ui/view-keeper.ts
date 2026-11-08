@@ -67,12 +67,14 @@ export class ViewKeeper {
 	async restore(client: KeeperClient, show: (view: HeldSession) => void): Promise<void> {
 		if (!this.enabled) return;
 		if (!this.keeping()) return this.clear();
-		if (!client.keptSessionFor(client.url)) return;
-		const kept = await loadView(client.url, this.databases);
-		if (!kept) return;
+		const server = client.url;
+		if (!client.keptSessionFor(server)) return;
+		const kept = await loadView(server, this.databases);
+		// The client went to another server meanwhile (a push's, a link's): this one's view isn't that one's.
+		if (!kept || client.url !== server) return;
 		// Another account's (signed in there as someone else since): it goes, as a sign-in as them would drop it.
-		const account = loadKeptSessionUser(client.url);
-		if (account !== undefined && account !== kept.userId) return clearViewOf(client.url, kept.userId, this.databases);
+		const account = loadKeptSessionUser(server);
+		if (account !== undefined && account !== kept.userId) return clearViewOf(server, kept.userId, this.databases);
 		show(kept.view);
 	}
 
