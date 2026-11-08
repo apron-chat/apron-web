@@ -273,3 +273,179 @@ test.describe('files pasted outside the composer', () => {
 		await expect(page.getByTestId('staged-files')).toBeVisible();
 	});
 });
+
+test.describe('the full panel', () => {
+	test.use(DEVICES.desktop);
+
+	const panel = (preview: Preview) => preview.page.getByTestId('composer-panel');
+	/** The field's text, its line breaks included (an element, which textContent leaves out). */
+	const written = (preview: Preview) => preview.composer().evaluate((el) => (el as HTMLElement).innerText.replace(/\n$/, ''));
+
+	test('opens from Expand once a draft has two lines, keeps the caret, formats with its toolbar, previews, and sends with Ctrl+Enter', async ({ preview, page }) => {
+		await preview.open();
+		await preview.composer().click();
+		await page.keyboard.type('first @ad');
+		await expect(picker(preview).getByRole('option').first()).toHaveText(/Ada Lovelace/);
+		await page.keyboard.press('Tab');
+		await expect(chip(preview)).toHaveAttribute('data-user-id', 'ada');
+		// Picking a mention puts a space after it.
+		await page.keyboard.type('line');
+		await expect(page.getByTestId('composer-expand')).toHaveCount(0);
+		await page.keyboard.press('Shift+Enter');
+		await page.keyboard.type('second line');
+
+		await test.step('Expand opens the panel under a strip of the conversation, the caret where it was', async () => {
+			await page.keyboard.press('ControlOrMeta+Home');
+			await page.getByTestId('composer-expand').click();
+			await expect(panel(preview)).toBeVisible();
+			await expect(preview.composer()).toBeFocused();
+			const header = (await page.locator('.ap-roomhead').boundingBox())!;
+			const timeline = (await page.getByTestId('message-list').boundingBox())!;
+			const box = (await panel(preview).boundingBox())!;
+			expect(timeline.y).toBeGreaterThanOrEqual(header.y + header.height - 1);
+			expect(box.y).toBeGreaterThanOrEqual(timeline.y + timeline.height - 1);
+			// The same field: typing goes in at the start, where the caret was before it opened.
+			await page.keyboard.type('The ');
+			await expect.poll(() => written(preview)).toBe('The first @Ada Lovelace line\nsecond line');
+		});
+
+		await test.step('Quote prefixes every selected line and keeps the mention a chip; pressed again, it takes the quote off', async () => {
+			await page.keyboard.press('ControlOrMeta+A');
+			await panel(preview).getByRole('button', { name: 'Quote' }).click();
+			await expect.poll(() => written(preview)).toBe('> The first @Ada Lovelace line\n> second line');
+			await expect(chip(preview)).toHaveAttribute('data-user-id', 'ada');
+			// The lines stay selected: a second press takes the quote off, a third puts it back.
+			await panel(preview).getByRole('button', { name: 'Quote' }).click();
+			await expect.poll(() => written(preview)).toBe('The first @Ada Lovelace line\nsecond line');
+			await panel(preview).getByRole('button', { name: 'Quote' }).click();
+			await expect.poll(() => written(preview)).toBe('> The first @Ada Lovelace line\n> second line');
+		});
+
+		await test.step('Enter starts a line rather than sending, and Bold wraps the selection', async () => {
+			await page.keyboard.press('ControlOrMeta+End');
+			await page.keyboard.press('Enter');
+			await page.keyboard.press('Enter');
+			await page.keyboard.type('- canary');
+			await page.keyboard.press('Enter');
+			await page.keyboard.type('- fleet');
+			for (let i = 0; i < 'fleet'.length; i++) await page.keyboard.press('Shift+ArrowLeft');
+			await panel(preview).getByRole('button', { name: 'Bold' }).click();
+			await expect.poll(() => written(preview)).toBe('> The first @Ada Lovelace line\n> second line\n\n- canary\n- **fleet**');
+			expect(await sentWithText(preview, 'first')).toEqual([]);
+		});
+
+		await test.step('Preview shows the draft as its message will show', async () => {
+			await panel(preview).getByRole('radio', { name: 'Preview' }).click();
+			const shown = page.getByTestId('draft-preview');
+			await expect(shown.locator('blockquote')).toContainText('second line');
+			await expect(shown.locator('li')).toHaveText(['canary', 'fleet']);
+			await expect(shown.locator('li strong')).toHaveText('fleet');
+			await panel(preview).getByRole('radio', { name: 'Write' }).click();
+			await expect(preview.composer()).toBeVisible();
+		});
+
+		await test.step('Ctrl+Enter sends it, mention and all, and the panel closes', async () => {
+			await preview.composer().click();
+			await page.keyboard.press('ControlOrMeta+Enter');
+			const sent = await preview.waitForSent('message', (p) => p.body?.text?.endsWith('**fleet**'));
+			expect(sent.body).toMatchObject({ text: '> The first @ada line\n> second line\n\n- canary\n- **fleet**', mentions: ['ada'] });
+			await expect(panel(preview)).toBeHidden();
+			await expect(preview.composer()).toHaveText('');
+		});
+	});
+
+	test('takes three quarters of the pane, the latest messages in view above it, and what arrives there is read', async ({ preview, page }) => {
+		const unread = page.locator('[data-testid="room-list"] button[data-room="general"]').getByTestId('room-unread');
+		await preview.open();
+		await preview.post('general', 'ada', 'Before writing');
+		await expect(preview.message('Before writing')).toBeInViewport();
+		await preview.composer().click();
+		await page.keyboard.type('one');
+		await page.keyboard.press('Shift+Enter');
+		await page.keyboard.type('two');
+		await page.getByTestId('composer-expand').click();
+		await expect(panel(preview)).toBeVisible();
+
+		await test.step('the timeline stays at its latest above the panel', async () => {
+			const pane = (await page.locator('main.ap-shell-main').boundingBox())!;
+			const box = (await panel(preview).boundingBox())!;
+			expect(Math.abs(box.height - pane.height * 0.75)).toBeLessThan(2);
+			await expect(preview.message('Before writing')).toBeInViewport();
+		});
+
+		await test.step('what arrives shows above it, read, as anywhere at the latest', async () => {
+			await preview.post('general', 'ada', 'Arrived while writing');
+			await expect(preview.message('Arrived while writing')).toBeInViewport();
+			await preview.openRoom('engineering');
+			await expect(unread).toHaveCount(0);
+		});
+	});
+
+	test('leaves a few lines of the timeline in a short pane', async ({ preview, page }) => {
+		await page.setViewportSize({ width: 1280, height: 420 });
+		await preview.open();
+		await preview.composer().click();
+		await page.keyboard.type('one');
+		await page.keyboard.press('Shift+Enter');
+		await page.keyboard.type('two');
+		await page.getByTestId('composer-expand').click();
+		const pane = (await page.locator('main.ap-shell-main').boundingBox())!;
+		const header = (await page.locator('.ap-roomhead').boundingBox())!;
+		const box = (await panel(preview).boundingBox())!;
+		// Capped at the pane less its header and three 32px lines, short of three quarters here.
+		expect(box.height).toBeLessThan(pane.height * 0.75);
+		expect(Math.round(pane.height - header.height - box.height)).toBeGreaterThanOrEqual(96);
+	});
+
+	test('shows the ask to add who a draft mentions above it, and closes once the draft is sent from the ask', async ({ preview, page }) => {
+		await preview.open();
+		await preview.openRoom('engineering');
+		await preview.composer().click();
+		await page.keyboard.type('@grace hi');
+		await page.keyboard.press('Shift+Enter');
+		await page.keyboard.type('the plan is below');
+		await page.getByTestId('composer-expand').click();
+		await expect(panel(preview)).toBeVisible();
+		await page.keyboard.press('ControlOrMeta+Enter');
+		const prompt = page.getByTestId('mention-add-prompt');
+		await expect(prompt).toBeInViewport();
+		await prompt.getByRole('button', { name: 'Send without adding' }).click();
+		await preview.waitForSent('message', (p) => p.body?.text === '@grace hi\nthe plan is below');
+		await expect(panel(preview)).toBeHidden();
+		await expect(preview.composer()).toHaveText('');
+	});
+
+	test('Esc closes it with the draft kept', async ({ preview, page }) => {
+		await preview.open();
+		await preview.composer().click();
+		await page.keyboard.type('one');
+		await page.keyboard.press('Shift+Enter');
+		await page.keyboard.type('two');
+		await page.getByTestId('composer-expand').click();
+		await expect(panel(preview)).toBeVisible();
+		await page.keyboard.press('Escape');
+		await expect(panel(preview)).toBeHidden();
+		await expect(preview.composer()).toBeFocused();
+		expect(await written(preview)).toBe('one\ntwo');
+	});
+});
+
+test.describe('the full panel on a phone', () => {
+	test.use(DEVICES.phone);
+
+	test('fills the pane below the header, and Send sends', async ({ preview, page }) => {
+		await preview.open();
+		await preview.press(preview.composer());
+		await page.keyboard.type('one');
+		await page.keyboard.press('Enter');
+		await page.keyboard.type('two');
+		await preview.press(page.getByTestId('composer-expand'));
+		const box = await page.getByTestId('composer-panel').boundingBox();
+		const viewport = page.viewportSize()!;
+		expect(Math.round(box!.y + box!.height)).toBeLessThanOrEqual(viewport.height);
+		expect(box!.height).toBeGreaterThan(viewport.height / 2);
+		await preview.press(page.getByRole('button', { name: 'Send message', exact: true }));
+		await preview.waitForSent('message', (p) => p.body?.text === 'one\ntwo');
+		await expect(page.getByTestId('composer-panel')).toBeHidden();
+	});
+});

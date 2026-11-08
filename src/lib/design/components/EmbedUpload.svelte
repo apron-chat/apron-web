@@ -4,6 +4,7 @@
 	   whichever of those shows, or on what holds the file card and the ask. */
 	import FileIcon from '@lucide/svelte/icons/file';
 	import FileX from '@lucide/svelte/icons/file-x';
+	import AudioPlayer from './AudioPlayer.svelte';
 	import MediaAsk from './MediaAsk.svelte';
 	import type { EmbedComponentProps } from './types';
 	import { ogRatio, plainClick, safeHttp } from './util';
@@ -13,7 +14,8 @@
 	const title = $derived(rawTitle || og.title || 'File');
 	const pct = $derived(progress != null ? Math.round(progress * 100) : null);
 	const video = $derived(og.video && safeHttp(og.video.url));
-	const audio = $derived(og.audio && safeHttp(og.audio.url));
+	/** The gated URL itself (a `MediaSrc`, for AudioPlayer), where it is a safe one. */
+	const audio = $derived(og.audio?.url && safeHttp(og.audio.url) ? og.audio.url : undefined);
 	const image = $derived(og.image && safeHttp(og.image.url));
 	/** The preview that waits for a click, the one that would show first: none while one may load. */
 	const ask = $derived(video || audio || image ? undefined : og.video?.ask ? { ...og.video.ask, what: 'Video', kind: 'video' as const } : og.audio?.ask ? { ...og.audio.ask, what: 'Audio', kind: 'audio' as const } : og.image?.ask ? { ...og.image.ask, what: og.image.alt || 'Image', kind: 'image' as const } : undefined);
@@ -39,8 +41,8 @@
 	</figure>
 {:else if audio}
 	<div data-testid={testid} class={['ap-embed', 'ap-embed-card', 'ap-embed-audiocard', className]}>
-		<span class="ap-embed-title">{title}</span>
-		<audio class="ap-embed-audio" src={audio} controls preload="none"></audio>
+		<a class="ap-embed-title ap-embed-audiotitle" href={url} download={title} target="_blank" rel="noreferrer noopener" title={`Download ${title}`}>{title}</a>
+		<AudioPlayer src={audio} preload="none" label={title} />
 	</div>
 {:else if image}
 	<figure data-testid={testid} class={['ap-embed', 'ap-embed-figure', className]}>

@@ -7,6 +7,7 @@
 	 */
 	import { tick } from 'svelte';
 	import type { ClassValue } from 'svelte/elements';
+	import AudioPlayer from './AudioPlayer.svelte';
 	import FileGlyph from './FileGlyph.svelte';
 
 	interface Props {
@@ -108,7 +109,7 @@
 	{:else if kind === 'audio'}
 		<div class="ap-embed ap-embed-card ap-embed-audiocard">
 			<span class="ap-embed-cardtext">{@render label('ap-embed-title', 'ap-embed-detail')}</span>
-			<audio class="ap-embed-audio" {src} controls preload="metadata"></audio>
+			<AudioPlayer {src} preload="metadata" label={name} />
 		</div>
 	{:else}
 		<div class="ap-embed ap-embed-card ap-embed-file">

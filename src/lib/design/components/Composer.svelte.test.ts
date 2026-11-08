@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { createRawSnippet } from 'svelte';
+import { createRawSnippet, flushSync } from 'svelte';
 import { describe, expect, it, vi } from 'vitest';
 import Composer from './Composer.svelte';
 import ComposerEditable from './ComposerEditable.svelte';
@@ -130,5 +130,72 @@ describe('Composer', () => {
 		dom.unmount();
 		render({ empty: true }, ComposerEditable);
 		expect(dom.byRole('textbox', 'Message').getAttribute('dir')).toBe('auto');
+	});
+
+	it('offers the full panel with Expand when asked, but not while recording', () => {
+		const onexpand = vi.fn();
+		render({ value: 'one\ntwo', onexpand });
+		dom.button('Expand composer').click();
+		expect(onexpand).toHaveBeenCalledOnce();
+		dom.unmount();
+		render({ value: 'one' });
+		expect(dom.queryByRole('button', 'Expand composer')).toBeNull();
+		dom.unmount();
+		render({ value: 'one\ntwo', onexpand, canUpload: true, recording: true });
+		expect(dom.queryByRole('button', 'Expand composer')).toBeNull();
+	});
+
+	it('as the full panel, puts the toolbar on top, the reply and files inside, and Send at the foot with its keys', () => {
+		const oncollapse = vi.fn();
+		const onsend = vi.fn();
+		render({
+			value: 'one\ntwo', expanded: true, oncollapse, onsend, sendKeys: ['Ctrl', 'Enter'], panelTestid: 'panel',
+			toolbar: dom.html('<div role="toolbar" aria-label="Formatting">B</div>'),
+			reply: { name: 'Ada', text: 'Lunch?' }, attachments: dom.html('<div class="ap-attachment">tile</div>')
+		});
+		const panel = document.querySelector<HTMLElement>('[data-testid="panel"]')!;
+		expect(panel.querySelector('[role="toolbar"]')).not.toBeNull();
+		expect(panel.querySelector('.ap-composer-reply')?.textContent).toContain('Replying to Ada');
+		expect(panel.querySelector('[aria-label="Files to send"]')?.textContent).toBe('tile');
+		expect(panel.querySelector('.ap-composer-keys')?.textContent).toBe('CtrlEnter to send');
+		expect(dom.queryByRole('button', 'Expand composer')).toBeNull();
+		// No rendering of the draft given: no Preview.
+		expect(dom.queryByRole('radio', 'Preview')).toBeNull();
+		dom.button('Collapse composer').click();
+		expect(oncollapse).toHaveBeenCalledOnce();
+		send().click();
+		expect(onsend).toHaveBeenCalledOnce();
+	});
+
+	it('switches the full panel between Write and Preview, keeping the field while it previews', () => {
+		const onpreview = vi.fn();
+		render({ value: 'one\ntwo', expanded: true, onpreview, rendered: dom.html('<p>rendered</p>'), toolbar: dom.html('<div role="toolbar" aria-label="Formatting">B</div>') });
+		expect(dom.byRole('radio', 'Write').getAttribute('aria-checked')).toBe('true');
+		dom.byRole('radio', 'Preview').click();
+		expect(onpreview).toHaveBeenCalledWith(true);
+		dom.unmount();
+		render({ value: 'one\ntwo', expanded: true, previewing: true, onpreview, rendered: dom.html('<p>rendered</p>'), toolbar: dom.html('<div role="toolbar" aria-label="Formatting">B</div>') });
+		expect(document.querySelector('.ap-composer-rendered')?.textContent).toBe('rendered');
+		// The field stays, hidden by the stylesheet, so the draft and its place in it are kept.
+		expect(document.querySelector('form')!.classList.contains('ap-composer-previewing')).toBe(true);
+		expect(dom.byRole('textbox', 'Message')).toBeDefined();
+		// Formatting has nothing to do with the draft out of sight.
+		expect(document.querySelector('[role="toolbar"]')).toBeNull();
+		dom.byRole('radio', 'Write').click();
+		expect(onpreview).toHaveBeenCalledWith(false);
+	});
+
+	it('opens and closes the full panel around the same field, so what is typed and the caret stay put', () => {
+		const props = $state<Record<string, unknown>>({ room: 'Ops', value: 'one\ntwo', panelTestid: 'panel' });
+		dom.render(Composer, props);
+		const field = dom.byRole<HTMLTextAreaElement>('textbox', 'Message');
+		expect(document.querySelector('[data-testid="panel"]')).toBeNull();
+		props.expanded = true;
+		flushSync();
+		expect(document.querySelector('[data-testid="panel"]')).not.toBeNull();
+		expect(dom.byRole('textbox', 'Message')).toBe(field);
+		props.expanded = false;
+		flushSync();
+		expect(dom.byRole('textbox', 'Message')).toBe(field);
 	});
 });

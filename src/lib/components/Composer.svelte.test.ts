@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { flushSync } from 'svelte';
+import { flushSync, tick } from 'svelte';
 import { describe, expect, it, vi } from 'vitest';
 import Composer from './Composer.svelte';
 import * as dom from '$lib/test/dom';
@@ -58,5 +58,62 @@ describe('Composer', () => {
 		// No messages to go to: the key is the field's.
 		const none = render({ value: '', onup: () => false });
 		expect(dom.press(none.field, 'ArrowUp')).toBe(true);
+	});
+
+	it('offers Expand once the draft has a second line, then writes at length: Enter breaks lines, Ctrl+Enter sends, Esc closes', async () => {
+		const field = () => document.querySelector<HTMLElement>('[data-testid="message-input"]')!;
+		const panel = () => document.querySelector('[data-testid="composer-panel"]');
+		render({ value: 'one line' });
+		expect(document.querySelector('[data-testid="composer-expand"]')).toBeNull();
+		dom.unmount();
+
+		const { onsend, field: compact } = render({ value: 'Plan\n- canary' });
+		document.querySelector<HTMLButtonElement>('[data-testid="composer-expand"]')!.click();
+		flushSync();
+		await tick();
+		expect(panel()).not.toBeNull();
+		expect(document.querySelector('[data-testid="composer-expand"]')).toBeNull();
+		// The same field, the draft in it as it was.
+		expect(field()).toBe(compact);
+		expect(field().textContent).toBe('Plan\n- canary');
+		document.execCommand = vi.fn(() => true);
+		dom.press(field(), 'Enter', { shiftKey: true });
+		expect(onsend).not.toHaveBeenCalled();
+		dom.press(field(), 'Enter', { ctrlKey: true });
+		expect(onsend).toHaveBeenCalledOnce();
+		// @ts-expect-error: jsdom has no editing commands; put it back as it was.
+		delete document.execCommand;
+		// The draft wasn't emptied (the page keeps it on a failed send): the panel stays, until Esc.
+		await tick();
+		expect(panel()).not.toBeNull();
+		expect(dom.press(field(), 'Escape')).toBe(false);
+		flushSync();
+		expect(panel()).toBeNull();
+	});
+
+	it('closes the full panel once the draft is emptied from outside (sent, from here or an ask), not by typing', async () => {
+		const props = $state<Record<string, unknown>>({ value: 'one\ntwo', placeholder: 'Message General', disabled: false, canUpload: false, people: [], oninput: vi.fn(), onsend: vi.fn(), onfiles: vi.fn(), onunstage: vi.fn(), onrename: vi.fn(), oncancelreply: vi.fn() });
+		dom.render(Composer, props as never);
+		flushSync();
+		const panel = () => document.querySelector('[data-testid="composer-panel"]');
+		document.querySelector<HTMLButtonElement>('[data-testid="composer-expand"]')!.click();
+		flushSync();
+		await tick();
+		expect(panel()).not.toBeNull();
+		// Emptied by typing: the panel stays, to write in.
+		const field = document.querySelector<HTMLElement>('[data-testid="message-input"]')!;
+		field.replaceChildren();
+		field.dispatchEvent(new InputEvent('input', { bubbles: true }));
+		flushSync();
+		expect(props.value).toBe('');
+		expect(panel()).not.toBeNull();
+		// Typed again, then emptied from outside, as a send empties it: the panel closes.
+		field.append('three');
+		field.dispatchEvent(new InputEvent('input', { bubbles: true }));
+		flushSync();
+		expect(props.value).toBe('three');
+		props.value = '';
+		flushSync();
+		expect(panel()).toBeNull();
 	});
 });
