@@ -92,6 +92,21 @@ describe('prefixLines', () => {
 		expect(marked(prefixLines(draft('[- a\n\n- b\nc]'), 'number'))).toBe('[1. a\n\n2. b\n3. c]');
 	});
 
+	it('starts a list on the empty line a bare caret is on, the caret after its marker', () => {
+		const caret = (text: string, at: number): TextEdit => ({ text, start: at, end: at });
+		expect(prefixLines(caret('Plan:\n\n', 7), 'task')).toEqual({ text: 'Plan:\n\n- [ ] ', start: 13, end: 13 });
+		expect(prefixLines(caret('', 0), 'bullet')).toEqual({ text: '- ', start: 2, end: 2 });
+		expect(prefixLines(caret('', 0), 'number')).toEqual({ text: '1. ', start: 3, end: 3 });
+	});
+
+	it('makes a checklist, replacing another list’s markers, and takes it off again', () => {
+		expect(marked(prefixLines(draft('[- a\n1. b\nc]'), 'task'))).toBe('[- [ ] a\n- [ ] b\n- [ ] c]');
+		const whole = (text: string): TextEdit => ({ text, start: 0, end: text.length });
+		expect(prefixLines(whole('- [ ] a\n- [x] b'), 'task').text).toBe('a\nb');
+		// A bulleted list over a checklist swaps the boxes for bullets, rather than taking the `- ` off.
+		expect(prefixLines(whole('- [ ] a\n- [x] b'), 'bullet').text).toBe('- a\n- b');
+	});
+
 	it('takes a list off with blank lines between its items', () => {
 		const whole = (text: string): TextEdit => ({ text, start: 0, end: text.length });
 		expect(prefixLines(whole('- a\n\n- b'), 'bullet').text).toBe('a\n\nb');

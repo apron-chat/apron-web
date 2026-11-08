@@ -4,6 +4,7 @@
 	import Italic from '@lucide/svelte/icons/italic';
 	import Link from '@lucide/svelte/icons/link';
 	import List from '@lucide/svelte/icons/list';
+	import ListChecks from '@lucide/svelte/icons/list-checks';
 	import ListOrdered from '@lucide/svelte/icons/list-ordered';
 	import SquareCode from '@lucide/svelte/icons/square-code';
 	import Strikethrough from '@lucide/svelte/icons/strikethrough';
@@ -31,6 +32,7 @@
 		[
 			{ label: 'Bulleted list', icon: List, change: (edit: TextEdit) => prefixLines(edit, 'bullet') },
 			{ label: 'Numbered list', icon: ListOrdered, change: (edit: TextEdit) => prefixLines(edit, 'number') },
+			{ label: 'Checklist', icon: ListChecks, change: (edit: TextEdit) => prefixLines(edit, 'task') },
 			{ label: 'Quote', icon: TextQuote, change: (edit: TextEdit) => prefixLines(edit, 'quote') }
 		],
 		[

@@ -104,8 +104,8 @@
 		/** Classes for the default field, the textarea, added to its own; a `field` of your own takes its own. */
 		class?: ClassValue;
 		/**
-		 * Offers the full panel: an Expand button beside the field, for a draft long enough to want the room (the app
-		 * offers it once a draft has a second line). Omit to hide it.
+		 * Offers the full panel: an Expand button beside the field, for writing at length with formatting. It doesn't
+		 * show while recording, or for a command or live text. Omit to hide it.
 		 */
 		onexpand?: () => void;
 		/**
@@ -140,6 +140,13 @@
 
 	const ph = $derived(placeholder || (thread ? `Reply in ${roomName(thread.name, thread.thread, { thread: true })}` : `Message ${room || ''}`));
 	const cmd = $derived(!!canCommand && isCommand(value) && !live);
+	/** Expand, where it's offered: not while recording, nor for a command or live text, which have no full panel. */
+	const expandable = $derived(Boolean(onexpand) && !recording && !cmd && !live);
+	/**
+	 * What `field` is drawn with, kept as one object while its parts are the same: a snippet reads its arguments
+	 * afresh at every use, and the field reads `disabled` several times a key.
+	 */
+	const fieldArgs = $derived({ placeholder: ph, disabled: !!disabled, command: cmd });
 	const sendable = $derived(canSend ?? (!!value.trim() || !!attachments || !!live));
 	/** What's left of a wait on sending, while there is one. */
 	const waitLeft = $derived(waitUntil === undefined ? 0 : Math.max(0, waitUntil - secondNow()));
@@ -217,14 +224,14 @@
 			{:else}
 				{#if cmd}<span class="ap-composer-cmdtag" data-testid={commandTestid} title="Sent to the server, not posted">Command</span>{/if}
 				{#if live}<span class="ap-composer-cmdtag ap-composer-livetag" data-testid={liveTestid} title="Everyone sees this message as you type it; Send finishes it"><span class="ap-composer-livedot" aria-hidden="true"></span>Live</span>{/if}
-				{#if field}{@render field({ placeholder: ph, disabled: !!disabled, command: cmd })}
+				{#if field}{@render field(fieldArgs)}
 				{:else}
 					<textarea rows="1" dir="auto" placeholder={ph} {disabled} aria-label={cmd ? 'Command' : 'Message'} class={['ap-composer-field', className]} bind:value={() => value, (v) => { value = v; oninput?.(v); }}></textarea>
 				{/if}
 			{/if}
-			{#if onemoji || (onexpand && !recording)}
+			{#if onemoji || expandable}
 				<span class="ap-composer-tools ap-composer-tools-end">
-					{#if onexpand && !recording}
+					{#if expandable}
 						<Button variant="ghost" size="sm" class="ap-composer-expand" data-testid={expandTestid} aria-label="Expand composer" title="Expand to the full panel" onmousedown={(e) => e.preventDefault()} onclick={onexpand}>
 							{#snippet children()}<Maximize size={14} aria-hidden="true" /><span class="ap-composer-expand-label">Expand</span>{/snippet}
 						</Button>

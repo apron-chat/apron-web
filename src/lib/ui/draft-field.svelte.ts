@@ -1,6 +1,7 @@
 import { untrack } from 'svelte';
 import { mentionClass, mentionLabel, type Mention, type MentionPerson } from '$lib/protocol/markdown';
-import { chipText, collapseMentions, draftLength, draftMentions, draftText, insertMention, insertText, mentionQuery, normalizeDraft, partLength, unchip, type DraftChip, type DraftPart } from './draft';
+import { chipTasks, chipText, collapseMentions, deleteAtTask, draftLength, draftMentions, draftText, insertMention, insertText, mentionQuery, normalizeDraft, partLength, unchip, type DraftChip, type DraftPart } from './draft';
+import { continueList, expandTask } from './list-continue';
 import { roomRoles, searchRoles, type RoleSuggestion } from './role-mentions';
 import { isAutocompleteDismissed, type DismissedAutocomplete } from './autocomplete-dismiss';
 import { emojiQuery as findEmojiQuery, searchEmoji, withCustomEmoji, type EmojiQuery, type EmojiSuggestion } from './emoji-autocomplete';
@@ -28,6 +29,26 @@ const ROLE_MATCHES_MAX = 3;
 
 /** A suggestion in the `@` picker: a person, or a role (`@&role`). */
 export type MentionMatch = MentionPerson | RoleSuggestion;
+
+/** The draft as the field holds it, and the caret in it: what one read of the field gives. */
+type Read = { parts: DraftPart[]; caret: number | undefined };
+
+/** How far back an `@` can start a mention query: `mentionQuery` takes up to 64 characters after it. */
+const MENTION_REACH = 65;
+
+/**
+ * Whether the line before the caret, as far back as a query can start, holds an `@`, `#` or `:`: else no mention,
+ * room or emoji query can be open at it (`mentionQuery`, `roomQuery`, `emojiQuery`). `text` has one character per caret
+ * position (`positionText`), a chip as its `@id`.
+ */
+function nearTrigger(text: string, caret: number): boolean {
+	const from = Math.max(text.lastIndexOf('\n', caret - 1) + 1, caret - MENTION_REACH);
+	for (let at = caret - 1; at >= from; at--) {
+		const char = text[at];
+		if (char === '@' || char === '#' || char === ':') return true;
+	}
+	return false;
+}
 
 /** How the field's component takes part. */
 export interface DraftHost {
@@ -75,13 +96,7 @@ export class DraftField {
 	element = $state<HTMLDivElement | undefined>();
 	/** Nothing is in the field: its placeholder shows. */
 	empty = $state(true);
-	/**
-	 * The draft has more than one line: set only as that changes, so what reads it (the composer's Expand) isn't asked
-	 * again on every key, as it would be reading the draft itself.
-	 */
-	multiline = $state(false);
-	private wasMultiline = false;
-	/** The text after `@` at the caret, or undefined when the picker is closed. */
+		/** The text after `@` at the caret, or undefined when the picker is closed. */
 	query = $state<string | undefined>();
 	/** The `:shortcode` or `#room` at the caret, while its picker is open. */
 	emojiFound = $state<EmojiQuery | undefined>();
@@ -148,6 +163,17 @@ export class DraftField {
 			'aria-controls': this.completion ? pickerId : undefined,
 			'aria-activedescendant': this.completion?.count ? `${pickerId}-${this.activeIndex}` : undefined
 		});
+		// Copy and cut are listened for once per field, not passed as its props, which are applied again on every key.
+		$effect(() => {
+			const field = this.element;
+			if (!field) return;
+			field.addEventListener('copy', this.copy);
+			field.addEventListener('cut', this.cut);
+			return () => {
+				field.removeEventListener('copy', this.copy);
+				field.removeEventListener('cut', this.cut);
+			};
+		});
 		$effect(() => {
 			const current = this.element;
 			const text = this.host.value;
@@ -157,8 +183,9 @@ export class DraftField {
 				this.lastSelection = undefined;
 				// Nobody typed it: its `@user_id`s become chips, the last one too, and a name in plain text stays text.
 				const collapsed = collapseMentions([text], this.host.people, { caret: text.length, final: true, names: false, isUser: this.isUser, rooms: this.roomIds, roles: this.roleIds });
-				this.draw(current, collapsed.parts, document.activeElement === current ? collapsed.caret : undefined);
-				this.commit(current, collapsed.parts, false);
+				const parts = chipTasks(collapsed.parts);
+				this.draw(current, parts, document.activeElement === current ? collapsed.caret : undefined);
+				this.commit(current, parts, false);
 				if (cleared) this.host.oncleared?.();
 			});
 		});
@@ -202,8 +229,7 @@ export class DraftField {
 		this.lastSelection = undefined;
 		field.focus();
 		this.draw(field, inserted.parts, inserted.caret);
-		this.collapse(false);
-		this.refreshQuery();
+		this.refresh(this.collapse(false));
 	}
 
 	/**
@@ -224,12 +250,35 @@ export class DraftField {
 		if (!changed) return false;
 		this.closeCompletions();
 		this.lastSelection = undefined;
-		const next = collapseMentions([changed.text], this.host.people, { caret: changed.end, final: true, names: false, isUser: this.isUser, rooms: this.roomIds, roles: this.roleIds }).parts;
+		const next = chipTasks(collapseMentions([changed.text], this.host.people, { caret: changed.end, final: true, names: false, isUser: this.isUser, rooms: this.roomIds, roles: this.roleIds }).parts);
 		field.focus();
 		this.draw(field, next, undefined);
 		placeSelection(field, changed.start, changed.end);
 		this.commit(field, next, true);
 		return true;
+	}
+
+	/**
+	 * Makes a change at a bare caret (`continueList`, `expandTask`) as typing it would: the text it replaces is selected
+	 * and the new text typed over it, so the browser's Undo takes it back and the chips around it stay as they are. The
+	 * change keeps everything after the caret; false when it makes none.
+	 */
+	private typeChange(change: (edit: TextEdit) => TextEdit | undefined): boolean {
+		const field = this.element;
+		if (!field || this.host.disabled) return false;
+		const { parts, caret, anchor } = readDraft(field);
+		if (caret === undefined || (anchor !== undefined && anchor !== caret)) return false;
+		const before = positionText(parts);
+		const changed = change({ text: before, start: caret, end: caret });
+		if (!changed) return false;
+		const kept = before.length - caret;
+		let from = 0;
+		while (from < caret && before[from] === changed.text[from]) from++;
+		// A selection is placed among the field's own text and chips: lines the browser wrapped in blocks (Chrome's
+		// `<div>` for Enter) are drawn flat first.
+		if (!isFlat(field)) this.draw(field, parts, caret);
+		placeSelection(field, from, caret);
+		return document.execCommand('insertText', false, changed.text.slice(from, changed.text.length - kept));
 	}
 
 	/** Closes the picker and forgets where the caret was: the field is changing under it. */
@@ -278,7 +327,8 @@ export class DraftField {
 			event.preventDefault();
 			const send = this.host.newlineOnEnter ? event.ctrlKey || event.metaKey : enterAction(event, this.onHandheld) === 'send';
 			if (send) this.host.submit();
-			else document.execCommand('insertText', false, '\n');
+			// A new line on a list item carries the list on (a task unticked), or ends it on an empty one.
+			else if (!this.typeChange(continueList)) document.execCommand('insertText', false, '\n');
 		}
 	};
 
@@ -288,8 +338,65 @@ export class DraftField {
 	 * keyboards often send no Backspace keydown.
 	 */
 	beforeinput = (event: InputEvent): void => {
-		if (event.inputType === 'deleteContentBackward' && !event.isComposing && this.backspaceChip()) event.preventDefault();
+		if (event.isComposing) return;
+		const forward = event.inputType === 'deleteContentForward';
+		if ((forward || event.inputType === 'deleteContentBackward') && this.deleteTask(forward)) event.preventDefault();
+		else if (event.inputType === 'deleteContentBackward' && this.backspaceChip()) event.preventDefault();
 	};
+
+	/**
+	 * Copying a selection with a checkbox in it copies its Markdown (`- [ ] `), which the browser would leave out (the
+	 * checkbox draws no text); mentions copy as they show. Any other selection is the browser's to copy.
+	 */
+	copy = (event: ClipboardEvent): void => {
+		const text = this.selectedMarkdown();
+		if (text === undefined || !event.clipboardData) return;
+		event.preventDefault();
+		event.clipboardData.setData('text/plain', text);
+	};
+
+	/** Cutting copies as `copy` does, then deletes the selection, as the browser would. */
+	cut = (event: ClipboardEvent): void => {
+		this.copy(event);
+		if (event.defaultPrevented) document.execCommand('delete');
+	};
+
+	/** The selected text, each checkbox as its Markdown and each mention as it shows; undefined without a checkbox in it. */
+	private selectedMarkdown(): string | undefined {
+		const field = this.element;
+		if (!field || !field.querySelector('[data-task]')) return undefined;
+		const { parts, caret, anchor } = readDraft(field);
+		if (caret === undefined || anchor === undefined || caret === anchor) return undefined;
+		const [start, end] = caret < anchor ? [caret, anchor] : [anchor, caret];
+		let text = '';
+		let tasks = false;
+		let offset = 0;
+		for (const part of parts) {
+			const length = partLength(part);
+			if (offset + length > start && offset < end) {
+				if (typeof part === 'string') text += part.slice(Math.max(0, start - offset), end - offset);
+				else if (part.task) {
+					text += chipText(part);
+					tasks = true;
+				} else text += part.role ? chipText(part) : mentionLabel(this.chipMention(part));
+			}
+			offset += length;
+		}
+		return tasks ? text : undefined;
+	}
+
+	/** A delete against a checkbox at its line's start (`deleteAtTask`), done here: the browser would take the checkbox. */
+	private deleteTask(forward: boolean): boolean {
+		const field = this.element;
+		if (!field || !field.querySelector('[data-task]')) return false;
+		const { parts, caret, anchor } = readDraft(field);
+		if (caret === undefined || (anchor !== undefined && anchor !== caret)) return false;
+		const done = deleteAtTask(parts, caret, forward);
+		if (!done) return false;
+		this.draw(field, done.parts, done.caret);
+		this.commit(field, done.parts, true);
+		return true;
+	}
 
 	input = (event: Event): void => {
 		const field = this.element;
@@ -298,8 +405,10 @@ export class DraftField {
 			this.commit(field, readDraft(field).parts, true);
 			return;
 		}
-		this.collapse(false);
-		this.refreshQuery();
+		const read = this.collapse(false);
+		// A space after `[]` at a line's start may finish a checklist item typed short (`-[] `): only then is it looked at.
+		if ((event as InputEvent).data === ' ' && read?.caret !== undefined && positionText(read.parts).slice(read.caret - 2, read.caret) === '] ' && this.typeChange(expandTask)) return;
+		this.refresh(read);
 	};
 
 	compositionend = (): void => {
@@ -317,21 +426,57 @@ export class DraftField {
 	};
 
 	/** Reads the `@`, `#`, or `:` token at the caret; anything else closes its picker. */
-	refreshQuery = (): void => {
+	refreshQuery = (): void => this.refresh();
+
+	/** A click: on a checkbox, ticks or unticks it in the draft, the caret where it was; anywhere, reads the query again. */
+	click = (event: MouseEvent): void => {
+		const box = (event.target as HTMLElement | null)?.closest?.<HTMLElement>('[data-task]');
+		const field = this.element;
+		if (box && field && field.contains(box) && !this.host.disabled) {
+			event.preventDefault();
+			const { parts, caret } = readDraft(field);
+			// The draft reads its checkboxes in document order, as the field holds them.
+			const index = [...field.querySelectorAll('[data-task]')].indexOf(box);
+			let seen = -1;
+			const toggled = parts.map((part): DraftPart => {
+				if (typeof part === 'string' || !part.task) return part;
+				seen += 1;
+				return seen === index ? { ...part, task: part.task === 'x' ? ' ' : 'x' } : part;
+			});
+			this.draw(field, toggled, caret);
+			this.commit(field, toggled, true);
+			return;
+		}
+		this.refresh();
+	};
+
+	/**
+	 * A key let go: the caret may have moved (arrows, Home, End), so the query is read again. A key that typed a
+	 * character was read at its `input`, so it isn't read twice.
+	 */
+	keyup = (event: KeyboardEvent): void => {
+		if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) return;
+		this.refresh();
+	};
+
+	/** `refreshQuery`, with the draft `collapse` just read, where it has, rather than read the field again. */
+	private refresh(read?: Read): void {
 		const field = this.element;
 		if (!field || this.host.disabled || document.activeElement !== field) {
 			this.closeCompletions();
 			this.dismissedAutocomplete = undefined;
 			return;
 		}
-		const { parts, caret } = readDraft(field);
+		const { parts, caret } = read ?? readDraft(field);
 		const text = draftText(parts);
 		const position = caret ?? draftLength(parts);
+		// Most keys are far from any `@`, `#` or `:`: with nothing open or dismissed, there's nothing to look for.
+		if (!this.query && !this.emojiFound && !this.roomFound && !this.dismissedAutocomplete && !nearTrigger(parts.length > 1 ? positionText(parts) : text, position)) return;
 		if (isAutocompleteDismissed(this.dismissedAutocomplete, text, position)) {
 			this.closeCompletions();
 			return;
 		}
-		this.dismissedAutocomplete = undefined;
+		if (this.dismissedAutocomplete) this.dismissedAutocomplete = undefined;
 		const foundEmoji = caret === undefined ? undefined : findEmojiQuery(parts, caret);
 		if (foundEmoji) {
 			if (this.emojiFound?.start !== foundEmoji.start) this.active = 0;
@@ -362,7 +507,7 @@ export class DraftField {
 		}
 		this.anchor = found.start;
 		this.query = found.query;
-	};
+	}
 
 	/** Swaps the typed `@…` for a chip: the person's name on screen, `@user_id` on the wire (Appendix A.3); a role's, `@&role`. */
 	pick(item: MentionMatch): void {
@@ -428,9 +573,9 @@ export class DraftField {
 
 	/** Closes whichever picker is open. */
 	private closeCompletions(): void {
-		this.query = undefined;
-		this.emojiFound = undefined;
-		this.roomFound = undefined;
+		if (this.query !== undefined) this.query = undefined;
+		if (this.emojiFound !== undefined) this.emojiFound = undefined;
+		if (this.roomFound !== undefined) this.roomFound = undefined;
 	}
 
 	private dismissAutocomplete(): void {
@@ -449,7 +594,8 @@ export class DraftField {
 		const { parts, caret, anchor } = readDraft(field);
 		if (caret === undefined || (anchor !== undefined && anchor !== caret)) return false;
 		// A role's chip goes back to what it's written as, `@&role`, so it can become a chip again.
-		const reverted = unchip(parts, caret, (part) => (part.role ? chipText(part) : mentionLabel(this.chipMention(part))));
+		// A checkbox goes back to its Markdown less the space after it, to edit: whole, it would be drawn again at once.
+		const reverted = unchip(parts, caret, (part) => (part.task ? chipText(part).trimEnd() : part.role ? chipText(part) : mentionLabel(this.chipMention(part))));
 		if (!reverted) return false;
 		this.draw(field, reverted.parts, reverted.caret);
 		this.commit(field, reverted.parts, true);
@@ -458,13 +604,17 @@ export class DraftField {
 	}
 
 	/** Chips finished mentions; `final` when sending, so one at the very end counts too. */
-	private collapse(final: boolean): void {
+	private collapse(final: boolean): Read | undefined {
 		const field = this.element;
-		if (!field) return;
+		if (!field) return undefined;
 		const { parts, caret } = readDraft(field);
 		const collapsed = collapseMentions(parts, this.host.people, { caret: caret ?? draftLength(parts), final, isUser: this.isUser, rooms: this.roomIds, roles: this.roleIds });
-		if (collapsed.changed) this.draw(field, collapsed.parts, caret === undefined ? undefined : collapsed.caret);
-		this.commit(field, collapsed.parts, collapsed.changed || draftText(collapsed.parts) !== this.host.value);
+		// A checklist item's `- [ ] ` is drawn as its checkbox; its length is its Markdown's, so the caret stays put.
+		const tasked = chipTasks(collapsed.parts);
+		const changed = collapsed.changed || tasked !== collapsed.parts;
+		if (changed) this.draw(field, tasked, caret === undefined ? undefined : collapsed.caret);
+		this.commit(field, tasked, changed || draftText(tasked) !== this.host.value);
+		return { parts: tasked, caret: caret === undefined ? undefined : collapsed.caret };
 	}
 
 	/** Publishes what the field shows as the draft. */
@@ -472,9 +622,6 @@ export class DraftField {
 		const text = draftText(parts);
 		this.shown = { field: root, text };
 		this.empty = parts.length === 0;
-		// Compared with a plain copy: reading the state itself would cost each key what this is here to save.
-		const multiline = text.includes('\n');
-		if (multiline !== this.wasMultiline) this.multiline = this.wasMultiline = multiline;
 		const mentioned = draftMentions(parts, this.roleMembers);
 		if (mentioned.join('\u0000') !== this.host.mentions.join('\u0000')) this.host.mentions = mentioned;
 		if (this.empty && root.childNodes.length > 0) root.replaceChildren();
@@ -506,6 +653,17 @@ export class DraftField {
 
 	/** A chip: the Mention component as a non-editable span, its ID on hover. */
 	private chip(part: DraftChip): HTMLSpanElement {
+		if (part.task) {
+			const box = document.createElement('span');
+			box.className = part.task === 'x' ? 'ap-task-chip ap-task-chip-done' : 'ap-task-chip';
+			box.contentEditable = 'false';
+			box.dataset.task = part.task;
+			// Named for what it is; the keyboard can't tick it, so it doesn't claim to be a checkbox.
+			box.setAttribute('role', 'img');
+			box.setAttribute('aria-label', part.task === 'x' ? 'Checklist item, done' : 'Checklist item');
+			box.title = part.task === 'x' ? 'Done: click to untick' : 'Click to tick';
+			return box;
+		}
 		const mention = this.chipMention(part);
 		const label = mentionLabel(mention);
 		const element = document.createElement('span');
@@ -523,7 +681,8 @@ export class DraftField {
 
 /** The chip a field's element draws, if it is one. */
 function chipOf(element: HTMLElement): DraftChip | undefined {
-	const { userId, roomId, role } = element.dataset;
+	const { userId, roomId, role, task } = element.dataset;
+	if (task === ' ' || task === 'x') return { id: '', task };
 	if (userId) return { id: userId };
 	if (roomId) return { id: roomId, room: true };
 	if (role) return { id: role, role: true };
@@ -621,4 +780,13 @@ function pointIn(root: HTMLElement, position: number): { node: Node; offset: num
 	}
 	const last = root.lastChild;
 	return { node: root, offset: last instanceof HTMLBRElement ? root.childNodes.length - 1 : root.childNodes.length };
+}
+
+/** Whether the field holds only text, line breaks and chips, as `draw` leaves it, with no blocks the browser added. */
+function isFlat(field: HTMLElement): boolean {
+	for (const node of field.childNodes) {
+		if (node.nodeType === Node.TEXT_NODE || node instanceof HTMLBRElement) continue;
+		if (!(node instanceof HTMLElement) || !chipOf(node)) return false;
+	}
+	return true;
 }

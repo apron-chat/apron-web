@@ -96,6 +96,19 @@ describe('DraftField', () => {
 		f.done();
 	});
 
+	it('looks for a query only near an `@`, `#` or `:`, however far along the line, and closes it once past', () => {
+		const f = field({ value: true });
+		f.type('x'.repeat(80));
+		expect(f.draft.pickerOpen).toBe(false);
+		f.type(' @al');
+		expect(f.draft.pickerOpen).toBe(true);
+		// Moving off the query with a key that types nothing reads it again (at `keyup`).
+		f.type('\nplain');
+		f.draft.keyup(new KeyboardEvent('keyup', { key: 'ArrowLeft' }));
+		expect(f.draft.pickerOpen).toBe(false);
+		f.done();
+	});
+
 	it('sends nothing on the Enter that commits a composition, as Safari sends it after `compositionend`', () => {
 		const f = field({ value: true });
 		const press = (init: KeyboardEventInit) => {
@@ -168,6 +181,55 @@ describe('DraftField', () => {
 		expect(f.submit).toHaveBeenCalledTimes(2);
 		// @ts-expect-error: jsdom has no editing commands; put it back as it was.
 		delete document.execCommand;
+		f.done();
+	});
+
+	it('carries a list on to a new line: a task unticked, ready to type', () => {
+		const f = field({ value: true }, { newlineOnEnter: true });
+		document.execCommand = vi.fn(() => true);
+		f.type('- [x] Foo');
+		f.enter();
+		// Typed as the browser types, so its Undo takes it back (jsdom has no editing commands to do it).
+		expect(document.execCommand).toHaveBeenCalledWith('insertText', false, '\n- [ ] ');
+		// @ts-expect-error: jsdom has no editing commands; put it back as it was.
+		delete document.execCommand;
+		f.done();
+	});
+
+	it('writes a checklist item typed short (`-[] `) out in full as its space is typed', () => {
+		const f = field({ value: true });
+		document.execCommand = vi.fn(() => true);
+		f.type('-[] ');
+		f.draft.input(new InputEvent('input', { data: ' ', inputType: 'insertText' }));
+		// What differs from the shorthand is selected and typed over: `[] ` becomes ` [ ] ` after the `-`.
+		expect(document.execCommand).toHaveBeenCalledWith('insertText', false, ' [ ] ');
+		expect(document.getSelection()!.toString()).toBe('[] ');
+		// @ts-expect-error: jsdom has no editing commands; put it back as it was.
+		delete document.execCommand;
+		f.done();
+	});
+
+	it('draws a checklist item as its checkbox, ticks it on a click, and copies it as its Markdown', () => {
+		const f = field({ value: true });
+		f.type('Plan:\n- [ ] Ship');
+		const box = () => f.element.querySelector<HTMLElement>('[data-task]')!;
+		expect(box().getAttribute('aria-label')).toBe('Checklist item');
+		// A click on the checkbox itself ticks it.
+		const click = new MouseEvent('click', { cancelable: true });
+		Object.defineProperty(click, 'target', { value: box() });
+		f.draft.click(click);
+		expect(f.value()).toBe('Plan:\n- [x] Ship');
+		expect(box().getAttribute('aria-label')).toBe('Checklist item, done');
+		// Copying it all gives its Markdown.
+		const range = document.createRange();
+		range.selectNodeContents(f.element);
+		document.getSelection()!.removeAllRanges();
+		document.getSelection()!.addRange(range);
+		const data = new Map<string, string>();
+		const copy = Object.assign(new Event('copy', { cancelable: true }), { clipboardData: { setData: (type: string, text: string) => data.set(type, text) } }) as unknown as ClipboardEvent;
+		f.draft.copy(copy);
+		expect(copy.defaultPrevented).toBe(true);
+		expect(data.get('text/plain')).toBe('Plan:\n- [x] Ship');
 		f.done();
 	});
 
