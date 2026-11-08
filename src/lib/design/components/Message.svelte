@@ -232,18 +232,28 @@
 		if ((event as PointerEvent).pointerType === 'mouse') touch = false;
 	}
 
+	// What its body's decorations follow, each a value of its own: a new view with the same body (select mode, a
+	// reaction) changes none of them, so the code blocks aren't decorated again.
+	const bodyHtml = $derived(view.body?.html);
+	const bodyCode = $derived(Boolean(view.body?.code));
+	const bodyTasks = $derived(Boolean(view.body?.tasks));
+	const notice = $derived(Boolean(view.system && view.scope));
+
 	/** Its code blocks, decorated by `on.code` (a notice's get Copy buttons), again whenever the body changes. */
 	function code(node: HTMLElement): void | (() => void) {
-		void view.body?.html;
-		return on.code?.(node, Boolean(view.system && view.scope));
+		void bodyHtml;
+		return on.code?.(node, notice);
 	}
 
-	/** A message's body: its code blocks and its task list checkboxes, in one attachment, so a row with neither runs none. */
-	function decorate(node: HTMLElement): () => void {
-		const undo = [view.body?.code && code(node), view.body?.tasks && tasks(node)];
-		return () => {
-			for (const done of undo) if (typeof done === 'function') done();
-		};
+	/**
+	 * A message's body: its code blocks and its task list checkboxes, in one attachment, so a row with neither runs
+	 * none. The checkboxes follow what may tick them in an effect of their own, so a change there (select mode, caps)
+	 * leaves the code blocks as they are; both start over when the body does.
+	 */
+	function decorate(node: HTMLElement): (() => void) | void {
+		const undo = bodyCode ? code(node) : undefined;
+		if (bodyTasks) $effect(() => tasks(node));
+		return typeof undo === 'function' ? undo : undefined;
 	}
 
 	/**
@@ -251,7 +261,7 @@
 	 * mentions you) and `on.toggleTask` saves them, again whenever the body changes. A box that fails to save goes back as it was.
 	 */
 	function tasks(node: HTMLElement): void | (() => void) {
-		void view.body?.html;
+		void bodyHtml;
 		const toggle = on.toggleTask;
 		if (!toggle || !view.caps?.check || view.deleted || view.selecting) return;
 		const boxes = node.querySelectorAll<HTMLInputElement>('input.ap-task');

@@ -13,6 +13,11 @@ describe('toggleTask', () => {
 		expect(toggleTask('* \t[ ] tab', 0, true)).toBe('* \t[x] tab');
 	});
 
+	it('finds the marker past bidi embeddings and overrides, as the line rendered, and keeps them', () => {
+		expect(toggleTask('- \u202A[ ] milk\u202C', 0, true)).toBe('- \u202A[x] milk\u202C');
+		expect(toggleTask('-\u202E [\u202D ] x', 0, true)).toBe('-\u202E [\u202Dx] x');
+	});
+
 	it('saves nothing for a line without a marker, or one already as asked', () => {
 		expect(toggleTask('- [ ] Foo', 1, true)).toBeUndefined();
 		expect(toggleTask('- Foo [ ]', 0, true)).toBeUndefined();

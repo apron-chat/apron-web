@@ -617,6 +617,19 @@ describe('task list checkboxes', () => {
 		dom.cleanup();
 	});
 
+	it('follow select mode without decorating the code blocks again', () => {
+		const code = vi.fn();
+		const body = { html: `<pre><code>a</code></pre>${html}`, markdown: true, code: true, tasks: true };
+		const props = $state({ view: view({ body, caps: { ...NONE, check: true } }), on: { code, toggleTask: () => true } });
+		dom.render(Message, props);
+		expect(box().disabled).toBe(false);
+		props.view = view({ body, caps: { ...NONE, check: true }, selecting: true });
+		flushSync();
+		expect(box().disabled).toBe(true);
+		expect(code).toHaveBeenCalledOnce();
+		dom.cleanup();
+	});
+
 	it('save a check where you may tick them, and go back when it fails', async () => {
 		let result = true;
 		const toggled: Array<[number, boolean]> = [];
