@@ -6,17 +6,23 @@ import { textId, type MentionPerson } from '$lib/protocol/markdown';
  * as `@user_id` (Appendix A.3), `#room_id` or `@&role`, so the wire text is
  * what a reader's client resolves, whatever it is called by then.
  */
-export type DraftChip = { id: string; room?: true; role?: true };
+export type DraftChip = { id: string; room?: true; role?: true; task?: TaskMark };
+/**
+ * A checklist item's marker drawn as its checkbox (`task`): `- [ ] `, or `- [x] ` when ticked. It names no one (its
+ * `id` is empty) and is sent as the Markdown it stands for.
+ */
+export type TaskMark = ' ' | 'x';
 export type DraftPart = string | DraftChip;
 
 /** A chip as sent: `@user_id` or `#room_id`, one character longer than its ID, or `@&role`, two. */
 export function chipText(chip: DraftChip): string {
+	if (chip.task) return `- [${chip.task}] `;
 	return `${chip.room ? '#' : chip.role ? '@&' : '@'}${chip.id}`;
 }
 
 /** A part's length in caret positions: a chip counts as its text as sent (`chipText`). */
 export function partLength(part: DraftPart): number {
-	return typeof part === 'string' ? part.length : part.id.length + (part.role ? 2 : 1);
+	return typeof part === 'string' ? part.length : part.task ? 6 : part.id.length + (part.role ? 2 : 1);
 }
 
 /**
@@ -31,11 +37,13 @@ export function draftText(parts: DraftPart[]): string {
 	// The ID of the chip the text so far ends with.
 	let open: string | undefined;
 	for (const part of parts) {
+		// A checkbox is its Markdown, at a line's start: no ID to keep apart.
+		const plain = typeof part === 'string' || part.task !== undefined;
 		const text = typeof part === 'string' ? part : chipText(part);
 		if (open !== undefined && (textId(open + text)?.length ?? 0) > open.length) out += ' ';
-		else if (typeof part !== 'string' && BEFORE_ID.test(out.slice(-1))) out += ' ';
+		else if (!plain && BEFORE_ID.test(out.slice(-1))) out += ' ';
 		out += text;
-		if (typeof part !== 'string') open = part.id;
+		if (!plain) open = (part as DraftChip).id;
 		else if (text) open = undefined;
 	}
 	return out;
@@ -54,7 +62,7 @@ export function draftLength(parts: DraftPart[]): number {
 export function draftMentions(parts: DraftPart[], members: (role: string) => string[] = () => []): string[] {
 	const ids: string[] = [];
 	for (const part of parts) {
-		if (typeof part === 'string' || part.room) continue;
+		if (typeof part === 'string' || part.room || part.task) continue;
 		if (part.role) ids.push(...members(part.id));
 		else ids.push(part.id);
 	}
@@ -370,6 +378,64 @@ export function unchip(parts: DraftPart[], caret: number, label: (chip: DraftChi
 		if (offset > caret || typeof part === 'string') return undefined;
 		const text = label(part);
 		return { parts: normalizeDraft([...parts.slice(0, index), text, ...parts.slice(index + 1)]), caret: offset - length + text.length };
+	}
+	return undefined;
+}
+
+/** A checklist item's marker at a line's start, after its indentation and quotes: what a task chip stands for. */
+const TASK_MARK = /(^|\n)([ \t]*(?:>[ \t]?)*[ \t]*)- \[([ xX])\] /g;
+
+/**
+ * Draws each checklist item's `- [ ] ` (or `- [x] `) at a line's start as its checkbox (a task chip). A line's start
+ * is the draft's start or just after a line break: text after a chip on the same line isn't one. Unchanged (the same
+ * array) where there is none, so most keys cost a scan for `[` and nothing more.
+ */
+export function chipTasks(parts: DraftPart[]): DraftPart[] {
+	if (!parts.some((part) => typeof part === 'string' && part.includes('['))) return parts;
+	const out: DraftPart[] = [];
+	let changed = false;
+	for (const [index, part] of parts.entries()) {
+		if (typeof part !== 'string' || !part.includes('- [')) {
+			out.push(part);
+			continue;
+		}
+		// Its start is a line's start only at the draft's start or after a line break.
+		const before = parts[index - 1];
+		const lineStart = index === 0 || (typeof before === 'string' && before.endsWith('\n'));
+		let last = 0;
+		for (const match of part.matchAll(TASK_MARK)) {
+			if (match.index === 0 && !match[1] && !lineStart) continue;
+			const at = match.index + match[1].length + match[2].length;
+			out.push(part.slice(last, at), { id: '', task: match[3] === ' ' ? ' ' : 'x' });
+			last = at + 6;
+			changed = true;
+		}
+		out.push(part.slice(last));
+	}
+	return changed ? normalizeDraft(out) : parts;
+}
+
+/**
+ * A delete against a checkbox (a task chip) at its line's start, which the browser would take the checkbox with:
+ * Backspace just before it, or Delete at the end of the line above, joins the lines as text would, the checkbox
+ * going back to its Markdown, which is no longer at a line's start; Delete just before it takes the checkbox off.
+ * Undefined anywhere else, for the browser to do.
+ */
+export function deleteAtTask(parts: DraftPart[], caret: number, forward: boolean): { parts: DraftPart[]; caret: number } | undefined {
+	let offset = 0;
+	for (const [index, part] of parts.entries()) {
+		if (typeof part !== 'string' && part.task) {
+			const before = parts[index - 1];
+			if (forward && caret === offset) {
+				return { parts: normalizeDraft([...parts.slice(0, index), ...parts.slice(index + 1)]), caret };
+			}
+			const joins = typeof before === 'string' && before.endsWith('\n') && caret === (forward ? offset - 1 : offset);
+			if (joins) {
+				const out = normalizeDraft([...parts.slice(0, index - 1), before.slice(0, -1), chipText(part), ...parts.slice(index + 1)]);
+				return { parts: out, caret: offset - 1 };
+			}
+		}
+		offset += partLength(part);
 	}
 	return undefined;
 }

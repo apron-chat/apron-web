@@ -117,6 +117,6 @@
 	oncompositionend={draft.compositionend}
 	onkeydown={draft.keydown}
 	onkeyup={draft.keyup}
-	onclick={draft.refreshQuery}
+	onclick={draft.click}
 	onblur={draft.blur}
 />

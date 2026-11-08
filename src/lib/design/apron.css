@@ -314,6 +314,12 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-task-list > li { margin-inline-start: var(--space-6); }
 .ap-task-list > .ap-task-item { position: relative; margin-inline-start: 0; padding-inline-start: var(--space-6); list-style: none; }
 .ap-task-done { color: var(--ink-muted); }
+/* A checklist item's `- [ ] ` in the composer, drawn as its check: the same ring, clickable, its Markdown underneath. */
+.ap-task-chip { display: inline-grid; place-items: center; box-sizing: border-box; width: 17px; height: 17px; margin-inline-end: 0.4em; vertical-align: middle; translate: 0 -1px; border: 1.5px solid var(--line-strong); border-radius: var(--radius-full); cursor: pointer; user-select: none; }
+.ap-task-chip::after { content: ''; width: 8px; height: 4px; border: 2px solid var(--bg-100); border-top: 0; border-right: 0; transform: translateY(-1px) rotate(-45deg); opacity: 0; }
+.ap-task-chip:hover:not(.ap-task-chip-done) { border-color: var(--ok); background: color-mix(in srgb, var(--ok) 16%, transparent); }
+.ap-task-chip-done { border-color: var(--ok); background: var(--ok); }
+.ap-task-chip-done::after { opacity: 1; }
 .ap-task-done > :is(ul, ol) { color: var(--ink); }
 .ap-task { appearance: none; position: absolute; inset-inline-start: 0; top: calc((var(--leading-body) - 17px) / 2); top: calc((1lh - 17px) / 2); display: grid; place-items: center; box-sizing: border-box; width: 17px; height: 17px; margin: 0; border: 1.5px solid var(--line-strong); border-radius: var(--radius-full); background: transparent; }
 .ap-task::after { content: ''; width: 8px; height: 4px; border: 2px solid var(--bg-100); border-top: 0; border-right: 0; transform: translateY(-1px) rotate(-45deg); opacity: 0; }

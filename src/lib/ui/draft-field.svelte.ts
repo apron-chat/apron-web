@@ -1,6 +1,6 @@
 import { untrack } from 'svelte';
 import { mentionClass, mentionLabel, type Mention, type MentionPerson } from '$lib/protocol/markdown';
-import { chipText, collapseMentions, draftLength, draftMentions, draftText, insertMention, insertText, mentionQuery, normalizeDraft, partLength, unchip, type DraftChip, type DraftPart } from './draft';
+import { chipTasks, chipText, collapseMentions, deleteAtTask, draftLength, draftMentions, draftText, insertMention, insertText, mentionQuery, normalizeDraft, partLength, unchip, type DraftChip, type DraftPart } from './draft';
 import { continueList, expandTask } from './list-continue';
 import { roomRoles, searchRoles, type RoleSuggestion } from './role-mentions';
 import { isAutocompleteDismissed, type DismissedAutocomplete } from './autocomplete-dismiss';
@@ -171,8 +171,9 @@ export class DraftField {
 				this.lastSelection = undefined;
 				// Nobody typed it: its `@user_id`s become chips, the last one too, and a name in plain text stays text.
 				const collapsed = collapseMentions([text], this.host.people, { caret: text.length, final: true, names: false, isUser: this.isUser, rooms: this.roomIds, roles: this.roleIds });
-				this.draw(current, collapsed.parts, document.activeElement === current ? collapsed.caret : undefined);
-				this.commit(current, collapsed.parts, false);
+				const parts = chipTasks(collapsed.parts);
+				this.draw(current, parts, document.activeElement === current ? collapsed.caret : undefined);
+				this.commit(current, parts, false);
 				if (cleared) this.host.oncleared?.();
 			});
 		});
@@ -237,7 +238,7 @@ export class DraftField {
 		if (!changed) return false;
 		this.closeCompletions();
 		this.lastSelection = undefined;
-		const next = collapseMentions([changed.text], this.host.people, { caret: changed.end, final: true, names: false, isUser: this.isUser, rooms: this.roomIds, roles: this.roleIds }).parts;
+		const next = chipTasks(collapseMentions([changed.text], this.host.people, { caret: changed.end, final: true, names: false, isUser: this.isUser, rooms: this.roomIds, roles: this.roleIds }).parts);
 		field.focus();
 		this.draw(field, next, undefined);
 		placeSelection(field, changed.start, changed.end);
@@ -302,8 +303,24 @@ export class DraftField {
 	 * keyboards often send no Backspace keydown.
 	 */
 	beforeinput = (event: InputEvent): void => {
-		if (event.inputType === 'deleteContentBackward' && !event.isComposing && this.backspaceChip()) event.preventDefault();
+		if (event.isComposing) return;
+		const forward = event.inputType === 'deleteContentForward';
+		if ((forward || event.inputType === 'deleteContentBackward') && this.deleteTask(forward)) event.preventDefault();
+		else if (event.inputType === 'deleteContentBackward' && this.backspaceChip()) event.preventDefault();
 	};
+
+	/** A delete against a checkbox at its line's start (`deleteAtTask`), done here: the browser would take the checkbox. */
+	private deleteTask(forward: boolean): boolean {
+		const field = this.element;
+		if (!field || !field.querySelector('[data-task]')) return false;
+		const { parts, caret, anchor } = readDraft(field);
+		if (caret === undefined || (anchor !== undefined && anchor !== caret)) return false;
+		const done = deleteAtTask(parts, caret, forward);
+		if (!done) return false;
+		this.draw(field, done.parts, done.caret);
+		this.commit(field, done.parts, true);
+		return true;
+	}
 
 	input = (event: Event): void => {
 		const field = this.element;
@@ -334,6 +351,28 @@ export class DraftField {
 
 	/** Reads the `@`, `#`, or `:` token at the caret; anything else closes its picker. */
 	refreshQuery = (): void => this.refresh();
+
+	/** A click: on a checkbox, ticks or unticks it in the draft, the caret where it was; anywhere, reads the query again. */
+	click = (event: MouseEvent): void => {
+		const box = (event.target as HTMLElement | null)?.closest?.<HTMLElement>('[data-task]');
+		const field = this.element;
+		if (box && field && field.contains(box) && !this.host.disabled) {
+			event.preventDefault();
+			const { parts, caret } = readDraft(field);
+			const index = [...field.childNodes].indexOf(box);
+			let seen = -1;
+			const toggled = parts.map((part): DraftPart => {
+				if (typeof part === 'string' || !part.task) return part;
+				seen += 1;
+				// Chips are drawn as the field's own children, in order: the nth chip among them is the nth task here.
+				return seen === tasksBefore(field, index) ? { ...part, task: part.task === 'x' ? ' ' : 'x' } : part;
+			});
+			this.draw(field, toggled, caret);
+			this.commit(field, toggled, true);
+			return;
+		}
+		this.refresh();
+	};
 
 	/**
 	 * A key let go: the caret may have moved (arrows, Home, End), so the query is read again. A key that typed a
@@ -479,7 +518,8 @@ export class DraftField {
 		const { parts, caret, anchor } = readDraft(field);
 		if (caret === undefined || (anchor !== undefined && anchor !== caret)) return false;
 		// A role's chip goes back to what it's written as, `@&role`, so it can become a chip again.
-		const reverted = unchip(parts, caret, (part) => (part.role ? chipText(part) : mentionLabel(this.chipMention(part))));
+		// A checkbox goes back to its Markdown less the space after it, to edit: whole, it would be drawn again at once.
+		const reverted = unchip(parts, caret, (part) => (part.task ? chipText(part).trimEnd() : part.role ? chipText(part) : mentionLabel(this.chipMention(part))));
 		if (!reverted) return false;
 		this.draw(field, reverted.parts, reverted.caret);
 		this.commit(field, reverted.parts, true);
@@ -493,9 +533,12 @@ export class DraftField {
 		if (!field) return undefined;
 		const { parts, caret } = readDraft(field);
 		const collapsed = collapseMentions(parts, this.host.people, { caret: caret ?? draftLength(parts), final, isUser: this.isUser, rooms: this.roomIds, roles: this.roleIds });
-		if (collapsed.changed) this.draw(field, collapsed.parts, caret === undefined ? undefined : collapsed.caret);
-		this.commit(field, collapsed.parts, collapsed.changed || draftText(collapsed.parts) !== this.host.value);
-		return { parts: collapsed.parts, caret: caret === undefined ? undefined : collapsed.caret };
+		// A checklist item's `- [ ] ` is drawn as its checkbox; its length is its Markdown's, so the caret stays put.
+		const tasked = chipTasks(collapsed.parts);
+		const changed = collapsed.changed || tasked !== collapsed.parts;
+		if (changed) this.draw(field, tasked, caret === undefined ? undefined : collapsed.caret);
+		this.commit(field, tasked, changed || draftText(tasked) !== this.host.value);
+		return { parts: tasked, caret: caret === undefined ? undefined : collapsed.caret };
 	}
 
 	/** Publishes what the field shows as the draft. */
@@ -534,6 +577,16 @@ export class DraftField {
 
 	/** A chip: the Mention component as a non-editable span, its ID on hover. */
 	private chip(part: DraftChip): HTMLSpanElement {
+		if (part.task) {
+			const box = document.createElement('span');
+			box.className = part.task === 'x' ? 'ap-task-chip ap-task-chip-done' : 'ap-task-chip';
+			box.contentEditable = 'false';
+			box.dataset.task = part.task;
+			box.setAttribute('role', 'checkbox');
+			box.setAttribute('aria-checked', String(part.task === 'x'));
+			box.title = part.task === 'x' ? 'Done: click to untick' : 'Click to tick';
+			return box;
+		}
 		const mention = this.chipMention(part);
 		const label = mentionLabel(mention);
 		const element = document.createElement('span');
@@ -551,7 +604,8 @@ export class DraftField {
 
 /** The chip a field's element draws, if it is one. */
 function chipOf(element: HTMLElement): DraftChip | undefined {
-	const { userId, roomId, role } = element.dataset;
+	const { userId, roomId, role, task } = element.dataset;
+	if (task === ' ' || task === 'x') return { id: '', task };
 	if (userId) return { id: userId };
 	if (roomId) return { id: roomId, room: true };
 	if (role) return { id: role, role: true };
@@ -649,4 +703,14 @@ function pointIn(root: HTMLElement, position: number): { node: Node; offset: num
 	}
 	const last = root.lastChild;
 	return { node: root, offset: last instanceof HTMLBRElement ? root.childNodes.length - 1 : root.childNodes.length };
+}
+
+/** How many task chips come before the field's child at `index`. */
+function tasksBefore(field: HTMLElement, index: number): number {
+	let count = 0;
+	for (let at = 0; at < index; at++) {
+		const node = field.childNodes[at];
+		if (node instanceof HTMLElement && node.dataset.task !== undefined) count++;
+	}
+	return count;
 }
