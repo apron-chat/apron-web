@@ -27,6 +27,7 @@ describe('media loads only through the gate', () => {
 		// Each of these takes its image, video or audio as a `MediaSrc` prop, which only the gate makes.
 		expect(using(/<(?:img|video|audio|source|track|picture|image)\b|\bposter=|\bsrcset=/)).toEqual([
 			'lib/design/components/AttachmentTile.svelte',
+			'lib/design/components/AudioPlayer.svelte',
 			'lib/design/components/Avatar.svelte',
 			'lib/design/components/BackendRail.svelte',
 			'lib/design/components/ConnectHeader.svelte',
