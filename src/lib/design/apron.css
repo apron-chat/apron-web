@@ -464,7 +464,7 @@ a.ap-embed-card:hover { background: var(--hover); }
  * Preview, Collapse) on top, the field filling the middle, and the attach, microphone and emoji buttons, the keys that
  * send and Send at its foot.
  */
-.ap-composer-full { flex: none; display: flex; flex-direction: column; height: 75%; max-height: calc(100% - var(--header-h) - 3 * var(--space-8)); }
+.ap-composer-full { flex: 0 1 auto; min-height: min(12rem, 50%); display: flex; flex-direction: column; height: 75%; max-height: calc(100% - var(--header-h) - 3 * var(--space-8)); }
 .ap-composer-full > .ap-composer-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .ap-composer-full .ap-composer { flex: 1; min-height: 0; display: grid; grid-template: "head head head head" auto "body body body body" minmax(0, 1fr) "start end keys send" auto / auto auto minmax(0, 1fr) auto; align-items: center; gap: 0; padding: 0; overflow: hidden; }
 .ap-composer-head { grid-area: head; display: flex; align-items: center; gap: var(--space-0_5); padding: var(--space-1_5) var(--space-2); border-bottom: 1px solid var(--line); }
@@ -593,7 +593,7 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-jump-dock-fab .ap-jumpfab { position: absolute; inset-inline-end: var(--space-4); bottom: var(--space-3); }
 
 /* RoomHeader */
-.ap-roomhead { background: var(--bg-100); }
+.ap-roomhead { flex: none; background: var(--bg-100); }
 /* A private room's or thread's header: washed with its cards' plum, its lock in the hue. */
 .ap-roomhead-private { background: color-mix(in srgb, var(--private-soft) 60%, var(--bg-100)); }
 .ap-roomhead-private .ap-lock { color: var(--private); }
