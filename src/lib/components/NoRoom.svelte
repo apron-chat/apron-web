@@ -10,16 +10,23 @@
 		session: SessionView;
 		/** Connect to a backend. */
 		onconnect: () => void;
+		/** The server being connected to, as people read it (`serverLabel`). */
+		server?: string;
+		/** Stop connecting and choose another server: shown while the connection is still being made. */
+		onchangeserver?: () => void;
 	}
-	let { session, onconnect }: Props = $props();
+	let { session, onconnect, server, onchangeserver }: Props = $props();
 	let snapshot = $derived(session.snapshot);
 </script>
 
 {#if session.starting}
 	<!-- Coming up (connecting, signing in, listing rooms): placeholders where the room will be, not "No room open". -->
-	<RoomLoading label={session.connection === 'connected' ? 'Loading messages…' : 'Connecting…'} rows={6}>
+	<!-- A server that is gone can keep this up for a while: it says which server, and offers another until it answers. -->
+	{@const connected = session.connection === 'connected'}
+	<RoomLoading label={connected ? 'Loading messages…' : server ? `Connecting to ${server}…` : 'Connecting…'} rows={6} action={!connected && onchangeserver ? changeServer : undefined}>
 		<span class="ap-sr" data-testid="connection-status" role="status" aria-live="polite">{statusLabel(snapshot, session.stalled)}</span>
 	</RoomLoading>
+	{#snippet changeServer()}<button class="ap-btn ap-btn-sm" type="button" data-testid="change-server" onclick={onchangeserver}>Change server</button>{/snippet}
 {:else}
 	{@const connected = session.connection === 'connected'}
 	<EmptyState title={connected ? 'No room open' : undefined} detail={connected ? 'Pick a room from the list.' : undefined}>

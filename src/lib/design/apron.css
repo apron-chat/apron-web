@@ -1427,6 +1427,10 @@ pre.ap-termviewer-text { width: 80ch; font-family: var(--font-mono); font-size: 
 .ap-tlstatus { position: sticky; bottom: 0; z-index: var(--z-raised); display: flex; justify-content: center; margin-top: var(--space-4); padding-bottom: var(--space-2); pointer-events: none; }
 /* A little less padding beside the round spinner, which looks further in than a letter's edge. */
 .ap-tlstatus-pill { display: inline-flex; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-3) var(--space-1) calc(var(--space-3) - 2px); border: 1px solid var(--line); border-radius: var(--radius-full); background: var(--bg-200); color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); box-shadow: var(--shadow-float); }
+/* With a way out under it: the pill, then the button, stacked; the button takes taps, the row around it doesn't. */
+.ap-tlstatus-act { flex-direction: column; align-items: center; gap: var(--space-3); }
+.ap-tlstatus-act > :not(.ap-tlstatus-pill) { pointer-events: auto; }
+.ap-tlstatus-act .ap-tlstatus-pill { max-width: 100%; box-sizing: border-box; overflow-wrap: anywhere; }
 .ap-tlstatus-spin { width: 12px; height: 12px; box-sizing: border-box; border-radius: var(--radius-full); border: 2px solid color-mix(in srgb, var(--ink-muted) 35%, transparent); border-top-color: var(--accent); animation: ap-spin .8s linear infinite; }
 @keyframes ap-spin { to { transform: rotate(360deg); } }
 .ap-tlstatus-float { position: relative; height: 0; z-index: var(--z-float); pointer-events: none; }

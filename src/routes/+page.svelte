@@ -3498,7 +3498,7 @@
 				/>
 			{/if}
 		{:else}
-			<NoRoom {session} onconnect={() => openConnect()} />
+			<NoRoom {session} server={serverLabel(client?.url ?? serverInput)} onconnect={() => openConnect()} onchangeserver={previewMode ? undefined : disconnect} />
 		{/if}
 	{/snippet}
 	{#snippet members()}

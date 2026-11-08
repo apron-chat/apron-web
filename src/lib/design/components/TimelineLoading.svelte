@@ -19,10 +19,12 @@
 		top?: boolean;
 		/** In place of the pill, such as a <RateLimitNotice> while the load waits for the server; it says its own status. */
 		notice?: Snippet;
+		/** Beside the pill, under it: a way out of the wait, such as a button to connect elsewhere. */
+		action?: Snippet;
 		/** Classes for its outermost element, added to its own. */
 		class?: ClassValue;
 	}
-	let { label, rows = 0, float = false, top = false, notice, class: className }: Props = $props();
+	let { label, rows = 0, float = false, top = false, notice, action, class: className }: Props = $props();
 
 	/** Widths that vary like real messages, the same on every render so nothing shimmers into a new shape. */
 	const WIDTHS = [['30%', '78%'], ['22%', '64%'], ['26%', '88%'], ['18%', '52%'], ['28%', '70%'], ['24%', '60%']];
@@ -31,6 +33,7 @@
 {#snippet pill(pillClass?: ClassValue)}
 	<!-- At the foot of the timeline, where new messages will appear; sticky, so it stays in view while reading back. -->
 	{#if notice}<div class={['ap-tlstatus', pillClass]}>{@render notice()}</div>
+	{:else if action}<div class={['ap-tlstatus', 'ap-tlstatus-act', pillClass]}><span role="status" class="ap-tlstatus-pill"><span class="ap-tlstatus-spin" aria-hidden="true"></span>{label}</span>{@render action()}</div>
 	{:else}<div role="status" class={['ap-tlstatus', pillClass]}><span class="ap-tlstatus-pill"><span class="ap-tlstatus-spin" aria-hidden="true"></span>{label}</span></div>{/if}
 {/snippet}
 
