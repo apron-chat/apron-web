@@ -1,7 +1,8 @@
 /*
- * An audio clip's waveform, for AudioPlayer: the clip fetched and decoded, then reduced to a bar per slice of it, each
- * as tall as that slice is loud (its RMS: a slice's loudest sample is near the top in nearly every second of speech). Decoding also gives the clip's length, which a recording made in the
- * browser doesn't report until it has played through.
+ * An audio clip's waveform, for AudioPlayer: the clip fetched and decoded, then reduced to `RESOLUTION` slices, each as
+ * loud as its RMS (a slice's loudest sample is near the top in nearly every second of speech). The player draws them in
+ * as many bars as its width has room for (`resample`). Decoding also gives the clip's length, which a recording made in
+ * the browser doesn't report until it has played through.
  */
 
 export interface Wave {
@@ -11,6 +12,8 @@ export interface Wave {
 	duration: number;
 }
 
+/** The slices a clip is decoded into: as many bars as the widest player draws (480px at 3px a bar). */
+export const RESOLUTION = 160;
 /** Larger than this isn't decoded for a picture of it: a voice note is a few hundred KB, 4 MB about 15 minutes of Opus. */
 export const MAX_BYTES = 4 * 1024 * 1024;
 /** Plenty to see a voice's shape by, and a quarter of the memory a CD-rate decode would take. */
@@ -34,6 +37,27 @@ export function bucketPeaks(samples: Float32Array, bars: number): number[] {
 		if (peak > top) top = peak;
 	}
 	return top ? peaks.map((peak) => peak / top) : peaks;
+}
+
+/**
+ * `peaks` in `bars` bars, each as loud as the slices it takes in together (the RMS of their RMS, as they are of equal
+ * length), scaled so the loudest is 1. As many bars as peaks, or more, gives the peaks.
+ */
+export function resample(peaks: readonly number[], bars: number): number[] {
+	const n = peaks.length;
+	if (bars >= n) return [...peaks];
+	const out: number[] = [];
+	let top = 0;
+	for (let bar = 0; bar < bars; bar++) {
+		const start = Math.floor((bar * n) / bars);
+		const end = Math.max(start + 1, Math.floor(((bar + 1) * n) / bars));
+		let sum = 0;
+		for (let i = start; i < end; i++) sum += peaks[i] * peaks[i];
+		const level = Math.sqrt(sum / (end - start));
+		out.push(level);
+		if (level > top) top = level;
+	}
+	return top ? out.map((level) => level / top) : out;
 }
 
 /**

@@ -30,10 +30,11 @@
 	import Play from '@lucide/svelte/icons/play';
 	import { untrack } from 'svelte';
 	import type { MediaSrc } from './types';
-	import { waveOf, wavePath } from './waveform';
+	import { RESOLUTION, resample, waveOf, wavePath } from './waveform';
 
-	/** Bars in a waveform: 3.5px apiece in the narrowest player (a phone's), 2px wide with a gap. */
-	const BARS = 40;
+	/** A waveform's bars are 2px wide, with a gap: as many as fit at this many pixels apiece, and no fewer than `MIN_BARS`. */
+	const BAR_PITCH = 3;
+	const MIN_BARS = 24;
 	/** Longer than this (ten minutes) keeps the plain bar. */
 	const MAX_SECONDS = 600;
 
@@ -55,7 +56,11 @@
 	/** The clip can't be played: the element reported an error, or refused to play it. */
 	let failed = $state(false);
 	/** The waveform's path, and the length decoding found, once decoded. */
-	let wave = $state<{ path: string; duration: number } | undefined>();
+	let wave = $state<{ peaks: number[]; duration: number } | undefined>();
+	/** How many bars the waveform's width has room for, once it shows (a ResizeObserver: no layout read of its own). */
+	let bars = $state(40);
+	let bar = $state<HTMLElement | undefined>();
+	let path = $derived(wave ? wavePath(resample(wave.peaks, bars)) : '');
 	let decoding = false;
 
 	let duration = $derived(Number.isFinite(reported) ? reported : (wave?.duration ?? reported));
@@ -86,8 +91,8 @@
 		// A long clip isn't decoded for a picture of it: its samples alone would take tens of MB.
 		if (!from || wave || decoding || (Number.isFinite(reported) && reported > MAX_SECONDS)) return;
 		decoding = true;
-		void waveOf(from, BARS).then((decoded) => {
-			if (decoded && from === src) wave = { path: wavePath(decoded.peaks), duration: decoded.duration };
+		void waveOf(from, RESOLUTION).then((decoded) => {
+			if (decoded && from === src) wave = decoded;
 		});
 	}
 
@@ -101,6 +106,17 @@
 			decoding = false;
 			if (preload === 'metadata') draw();
 		});
+	});
+
+	// While a waveform shows, its bars follow its width.
+	$effect(() => {
+		const element = bar;
+		if (!element || !wave || typeof ResizeObserver !== 'function') return;
+		const observer = new ResizeObserver(([entry]) => {
+			bars = Math.max(MIN_BARS, Math.min(RESOLUTION, Math.round(entry.contentRect.width / BAR_PITCH)));
+		});
+		observer.observe(element);
+		return () => observer.disconnect();
 	});
 
 	function toggle(): void {
@@ -141,10 +157,10 @@
 	<button type="button" class="ap-audio-play" aria-label={paused ? `Play ${label}` : `Pause ${label}`} title={paused ? 'Play' : 'Pause'} disabled={failed} onclick={toggle}>
 		{#if paused}<Play size={16} fill="currentColor" aria-hidden="true" />{:else}<Pause size={16} fill="currentColor" aria-hidden="true" />{/if}
 	</button>
-	<span class="ap-audio-bar" class:ap-audio-waved={wave} style:--audio-progress="{progress}%">
+	<span class="ap-audio-bar" bind:this={bar} class:ap-audio-waved={wave} style:--audio-progress="{progress}%">
 	{#if wave}
-		<svg class="ap-audio-wave" viewBox="0 0 {BARS * 2} 2" preserveAspectRatio="none" aria-hidden="true"><path d={wave.path} /></svg>
-		<svg class="ap-audio-wave ap-audio-wave-played" viewBox="0 0 {BARS * 2} 2" preserveAspectRatio="none" aria-hidden="true"><path d={wave.path} /></svg>
+		<svg class="ap-audio-wave" viewBox="0 0 {bars * 2} 2" preserveAspectRatio="none" aria-hidden="true"><path d={path} /></svg>
+		<svg class="ap-audio-wave ap-audio-wave-played" viewBox="0 0 {bars * 2} 2" preserveAspectRatio="none" aria-hidden="true"><path d={path} /></svg>
 	{/if}
 	<input
 		type="range"
