@@ -8,7 +8,7 @@
 	import { directory } from '$lib/ui/directory.svelte';
 	import type { SessionView } from '$lib/ui/session.svelte';
 	import { versionWarning, type ConnectStep, type Scheme, type SignOutHandler } from '$lib/ui/sign-in';
-	import type { RecentServer } from '$lib/ui/storage';
+	import { forgetServer, starServer, type RecentServer } from '$lib/ui/storage';
 	import ConnectHeader from '$lib/design/components/ConnectHeader.svelte';
 	import ConnectPage from '$lib/design/components/ConnectPage.svelte';
 	import SignIn from './SignIn.svelte';
@@ -20,6 +20,7 @@
 		displayName: string;
 		/** Why passkeys can't be used in this browser, when they can't. */
 		passkeyUnavailable?: string;
+		/** The servers offered under the card (`bind:`): starring one or forgetting it here changes the list. */
 		recentServers: RecentServer[];
 		canCancel: boolean;
 		/** Preselects a scheme, e.g. when the profile asks to sign in with a passkey. */
@@ -41,14 +42,14 @@
 		onsignout: SignOutHandler;
 	}
 	let {
-		client, session, serverInput = $bindable(), displayName = $bindable(), passkeyUnavailable, recentServers, canCancel,
+		client, session, serverInput = $bindable(), displayName = $bindable(), passkeyUnavailable, recentServers = $bindable(), canCancel,
 		initialScheme, initialEmail, initialError, initialChoosing, linked, onconnect, onconnected, oncancel, onsignout
 	}: Props = $props();
 
 	let busy = $state(false);
 	let signIn = $state<ReturnType<typeof SignIn>>();
 	/** Each recent server by its title, else its host and path, with its address. */
-	let recent = $derived(recentServers.map((entry) => ({ url: entry.url, label: entry.title ?? (serverLabel(entry.url) || entry.url), avatar: directory.avatarGateFor(entry.url).src(entry.avatar) })));
+	let recent = $derived(recentServers.map((entry) => ({ url: entry.url, label: entry.title ?? (serverLabel(entry.url) || entry.url), avatar: directory.avatarGateFor(entry.url).src(entry.avatar), starred: entry.starred })));
 
 	/** CommonMark from a server (its welcome, its description), sanitized as a message is. */
 	function markdown(text: string | undefined): string {
@@ -76,7 +77,9 @@
 		warning={step.server ? versionWarning(step.server.apron, PROTOCOL_VERSION) : undefined}
 	/>
 {/snippet}
-<ConnectPage page {busy} {recent} onpickrecent={(picked) => void signIn?.continueTo(picked.url)}>
+<ConnectPage page {busy} {recent} onpickrecent={(picked) => void signIn?.continueTo(picked.url)}
+	onstarrecent={(picked, starred) => (recentServers = starServer(recentServers, picked.url, starred))}
+	onforgetrecent={(picked) => (recentServers = forgetServer(recentServers, picked.url))}>
 	<SignIn
 		bind:this={signIn}
 		{client} {session} bind:serverInput bind:displayName bind:busy {passkeyUnavailable} {canCancel}

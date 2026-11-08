@@ -1329,6 +1329,10 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-callout-body :is(ol, ul) { padding-inline-start: var(--space-6); }
 .ap-callout-action { margin-top: var(--space-1); }
 .ap-connect-recent { display: flex; flex-direction: column; gap: var(--space-1); width: min(100%, 400px); }
+.ap-connect-recent-row { display: flex; align-items: center; gap: var(--space-1); }
+.ap-connect-recent-row > .ap-connect-recent-item { flex: 1; min-width: 0; }
+.ap-connect-recent-starred { color: var(--accent); }
+.ap-connect-recent-starred svg { fill: currentColor; }
 .ap-connect-recent-item { font: inherit; display: flex; align-items: center; gap: var(--space-3); padding: var(--space-1) var(--space-2); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink); text-align: start; cursor: pointer; }
 .ap-connect-recent-item:hover { background: var(--hover); }
 .ap-connect-tile { width: var(--control-lg); height: var(--control-lg); font-size: var(--text-sm); border-radius: var(--radius-md); background: var(--bg-200); flex: none; }
