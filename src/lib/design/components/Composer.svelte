@@ -104,8 +104,9 @@
 		/** Classes for the default field, the textarea, added to its own; a `field` of your own takes its own. */
 		class?: ClassValue;
 		/**
-		 * Offers the full panel: an Expand button beside the field, for writing at length with formatting. It doesn't
-		 * show while recording, or for a command or live text. Omit to hide it.
+		 * Offers the full panel: an Expand button (its glyph alone) beside the field, for writing at length with
+		 * formatting; it flashes as it appears. It doesn't show while recording, or for a command or live text. Omit to
+		 * hide it, as the app does until a draft has a second line.
 		 */
 		onexpand?: () => void;
 		/**
@@ -232,9 +233,10 @@
 			{#if onemoji || expandable}
 				<span class="ap-composer-tools ap-composer-tools-end">
 					{#if expandable}
-						<Button variant="ghost" size="sm" class="ap-composer-expand" data-testid={expandTestid} aria-label="Expand composer" title="Expand to the full panel" onmousedown={(e) => e.preventDefault()} onclick={onexpand}>
-							{#snippet children()}<Maximize size={14} aria-hidden="true" /><span class="ap-composer-expand-label">Expand</span>{/snippet}
-						</Button>
+						<!-- Flashes as it appears (ap-composer-expand), so the way to more room is noticed. -->
+						<button type="button" class="ap-iconbtn ap-composer-expand" data-testid={expandTestid} aria-label="Expand composer" title="Expand to the full panel" onmousedown={(e) => e.preventDefault()} onclick={onexpand}>
+							<Maximize size={16} aria-hidden="true" />
+						</button>
 					{/if}
 					{#if onemoji}
 						<button type="button" class={['ap-iconbtn', emojiOpen && 'ap-iconbtn-on']} data-testid={emojiTestid} aria-label="Insert emoji" title="Insert emoji" aria-haspopup="dialog" aria-expanded={!!emojiOpen} disabled={disabled || recording} bind:this={emojiButton} onclick={onemoji}>

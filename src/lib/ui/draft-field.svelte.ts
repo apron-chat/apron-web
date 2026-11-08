@@ -96,6 +96,12 @@ export class DraftField {
 	element = $state<HTMLDivElement | undefined>();
 	/** Nothing is in the field: its placeholder shows. */
 	empty = $state(true);
+	/**
+	 * The draft has more than one line: set only as that changes, so what reads it (the composer's Expand) isn't asked
+	 * again on every key, as it would be reading the draft itself.
+	 */
+	multiline = $state(false);
+	private wasMultiline = false;
 		/** The text after `@` at the caret, or undefined when the picker is closed. */
 	query = $state<string | undefined>();
 	/** The `:shortcode` or `#room` at the caret, while its picker is open. */
@@ -622,6 +628,9 @@ export class DraftField {
 		const text = draftText(parts);
 		this.shown = { field: root, text };
 		this.empty = parts.length === 0;
+		// Compared with a plain copy: reading the state itself would cost each key what this is here to save.
+		const multiline = text.includes('\n');
+		if (multiline !== this.wasMultiline) this.multiline = this.wasMultiline = multiline;
 		const mentioned = draftMentions(parts, this.roleMembers);
 		if (mentioned.join('\u0000') !== this.host.mentions.join('\u0000')) this.host.mentions = mentioned;
 		if (this.empty && root.childNodes.length > 0) root.replaceChildren();

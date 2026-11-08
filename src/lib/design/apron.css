@@ -457,10 +457,9 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-composer-previews { display: flex; gap: var(--space-3); overflow-x: auto; padding: var(--space-3) var(--space-4) var(--space-2); }
 .ap-composer-preview { position: relative; flex: 0 1 320px; min-width: 0; }
 .ap-composer-preview .ap-embed { width: 100%; min-width: 0; }
-/* Expand: offered beside the field once a draft runs to a second line, for the full panel. */
-.ap-btn.ap-composer-expand { gap: var(--space-1); height: var(--control-md); padding: 0 var(--space-2); }
-/* A narrow pane keeps the field's room: the glyph alone, named by its label. */
-@container (max-width: 480px) { .ap-composer-expand-label { display: none; } }
+/* Expand, beside the field once a draft has a second line, for the full panel: it lights up in the accent as it appears, then settles (a change of colour, not of place). */
+.ap-composer-expand { animation: ap-composer-expand-in 1.2s ease-out 1; }
+@keyframes ap-composer-expand-in { 0%, 25% { background: var(--accent-soft); color: var(--accent); } }
 /* What holds the composer's parts adds nothing to the layout, until it is the full panel. */
 .ap-composer-box { display: contents; }
 /*

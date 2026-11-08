@@ -281,7 +281,7 @@ test.describe('the full panel', () => {
 	/** The field's text, its line breaks included (an element, which textContent leaves out). */
 	const written = (preview: Preview) => preview.composer().evaluate((el) => (el as HTMLElement).innerText.replace(/\n$/, ''));
 
-	test('opens from Expand, keeps the caret, formats with its toolbar, previews, and sends with Ctrl+Enter', async ({ preview, page }) => {
+	test('opens from Expand once a draft has two lines, keeps the caret, formats with its toolbar, previews, and sends with Ctrl+Enter', async ({ preview, page }) => {
 		await preview.open();
 		await preview.composer().click();
 		await page.keyboard.type('first @ad');
@@ -290,8 +290,9 @@ test.describe('the full panel', () => {
 		await expect(chip(preview)).toHaveAttribute('data-user-id', 'ada');
 		// Picking a mention puts a space after it.
 		await page.keyboard.type('line');
-		await expect(page.getByTestId('composer-expand')).toBeVisible();
+		await expect(page.getByTestId('composer-expand')).toHaveCount(0);
 		await page.keyboard.press('Shift+Enter');
+		await expect(page.getByTestId('composer-expand')).toBeVisible();
 		await page.keyboard.type('second line');
 
 		await test.step('Expand opens the panel under a strip of the conversation, the caret where it was', async () => {

@@ -10,7 +10,7 @@
 			"domNodes": 537,
 			"layouts": 10,
 			"styleRecalcs": 18,
-			"calls": 211172,
+			"calls": 209826,
 			"heapMB": 8.4
 		},
 		"load-busy": {
@@ -28,7 +28,7 @@
 			"domNodes": 538,
 			"layouts": 10,
 			"styleRecalcs": 16,
-			"calls": 185753,
+			"calls": 184407,
 			"heapMB": 8.2
 		},
 		"load-phone-busy": {
@@ -83,7 +83,7 @@
 		"type-composer": {
 			"layouts": 36,
 			"styleRecalcs": 6,
-			"calls": 36180
+			"calls": 35718
 		},
 		"hover-messages": {
 			"layouts": 7,
