@@ -790,8 +790,32 @@ export class MemoryProtocolServer {
 		for (const peer of this.sockets) if (!room || room.members.has('preview_guest')) peer.deliver(frame);
 	}
 	private message(socket: MemorySocket, p: JsonObject, reply: (result?: JsonObject) => void, fail: (message: string) => void): void {
-		const room = this.rooms.get(String(p.room_id ?? roomId));
+		let room = this.rooms.get(String(p.room_id ?? roomId));
 		if (!room) return fail('Unknown room');
+		// `ext:editors`: someone else's message whose text it shares with those it mentions, the viewer among them,
+		// takes only the new text; the rest stays, and `edited_by` names the viewer. A sender's save drops `edited_by`.
+		if (this.knobs.capabilities?.includes('ext:editors') && typeof p.message_id === 'string') {
+			const current = this.findMessage(p.message_id);
+			const sender = isJsonObject(current?.message.from) ? current.message.from.user_id : undefined;
+			if (current && sender !== 'preview_guest') {
+				const { message } = current;
+				const body = isJsonObject(message.body) ? message.body : {};
+				const editors = isJsonObject(message.ext) && isJsonObject(message.ext.editors) ? message.ext.editors : undefined;
+				const shared = !message.deleted && editors?.['body.text'] === 'mentioned' && Array.isArray(body.mentions) && body.mentions.includes('preview_guest');
+				if (!shared || p.deleted) return fail('Only the sender may change this message');
+				room = current.room;
+				const text = isJsonObject(p.body) ? p.body.text : undefined;
+				const { text: _old, ...rest } = body;
+				p = { message_id: p.message_id, room_id: room.room_id, body: { ...rest, ...(text !== undefined ? { text } : {}) },
+					...(message.reply_to ? { reply_to: message.reply_to } : {}), ext: { editors: { ...editors, edited_by: 'preview_guest' } } };
+			} else if (isJsonObject(p.ext) && isJsonObject(p.ext.editors)) {
+				const { edited_by: _ignored, ...grant } = p.ext.editors;
+				p = { ...p, ext: { ...p.ext, editors: grant } };
+			} else if (current && isJsonObject(current.message.ext) && isJsonObject(current.message.ext.editors) && 'edited_by' in current.message.ext.editors) {
+				const { edited_by: _dropped, ...grant } = current.message.ext.editors;
+				p = { ...p, ext: { ...(isJsonObject(p.ext) ? p.ext : {}), editors: grant } };
+			}
+		}
 		const id = typeof p.message_id === 'string' ? p.message_id : this.nextLog(room);
 		const log = this.nextLog(room);
 		const previous = typeof p.message_id === 'string' ? this.findMessage(id) : undefined;

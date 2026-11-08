@@ -274,8 +274,13 @@ export interface MessageCaps {
 	/** Copy link, under ⋯: a URL that opens this message where it is. */
 	link: boolean;
 	/**
-	 * Tick its task list checkboxes: on your own message, or one that mentions you. Saving it is an edit, which the
-	 * server may refuse for someone else's message; the box goes back if it does.
+	 * `edit` changes only the text: someone else's message that shares it with you (`ext:editors`). No delete,
+	 * reply reference removal, or embed changes.
+	 */
+	textOnly?: boolean;
+	/**
+	 * Tick its task list checkboxes: on your own message, or one that shares its text with you (`ext:editors`).
+	 * Saving it is an edit, which the server may refuse; the box goes back if it does.
 	 */
 	check?: boolean;
 }
@@ -388,6 +393,8 @@ export interface MessageView {
 	time?: string;
 	/** ALREADY SANITIZED markup of the text; absent when a message has none. `code` when it holds code blocks to decorate, `tasks` task list checkboxes. */
 	body?: { html: string; markdown?: boolean; code?: boolean; tasks?: boolean };
+	/** Who saved its text, by name, when someone other than its sender did (`ext:editors`): shown so their words don't read as the sender's. */
+	editedBy?: string;
 	reply?: MessageReply;
 	/** The messages, rooms and threads its links point to, as cards under its text; none on a tombstone. */
 	linkCards?: MessageLinkCard[];
@@ -473,6 +480,8 @@ export interface MessageTestids {
 	reactions?: string;
 	chip?: string;
 	select?: string;
+	/** Its "edited by" line (`ext:editors`). */
+	editedBy?: string;
 	/** The Writing… of a message whose text is still arriving. */
 	writing?: string;
 	/** The Waiting to stream… of a message whose text waits for its writer. */

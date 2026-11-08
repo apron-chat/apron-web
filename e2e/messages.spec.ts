@@ -63,12 +63,13 @@ test.describe('a message row', () => {
 test.describe('a task list', () => {
 	test.use(DEVICES.desktop);
 
-	test('checking a box in your message saves the edit; one in someone else\'s is yours to tick only where it mentions you', async ({ preview }) => {
+	test('checking a box in your message saves the edit; one in someone else\'s is not yours to tick, mentioned or not', async ({ preview }) => {
 		await preview.open();
 		await preview.post('general', 'preview_guest', 'Ship it:\n\n- [ ] Foo\n- [x] Bar');
 		await preview.post('general', 'ada', 'Mine:\n\n- [ ] Theirs');
-		await preview.post('general', 'ada', { text: 'For @preview_guest:\n\n- [ ] Yours', format: 'markdown', mentions: ['preview_guest'] });
-		await expect(preview.message('For ').getByRole('checkbox')).toBeEnabled();
+		// Without ext:editors only its sender may edit a message, whoever it mentions.
+		await preview.post('general', 'ada', { text: 'For @preview_guest:\n\n- [ ] Yours', format: 'markdown', mentions: ['preview_guest'] }, { ext: { editors: { 'body.text': 'mentioned' } } });
+		await expect(preview.message('For ').getByRole('checkbox')).toBeDisabled();
 		const mine = preview.message('Ship it:').getByRole('checkbox');
 		await expect(mine).toHaveCount(2);
 		await expect(mine.nth(0)).not.toBeChecked();
@@ -80,6 +81,45 @@ test.describe('a task list', () => {
 		expect(edit.body).toMatchObject({ text: 'Ship it:\n\n- [x] Foo\n- [x] Bar', format: 'markdown' });
 		await expect(mine.nth(0)).toBeChecked();
 		await expect(mine.nth(0)).toBeEnabled();
+	});
+});
+
+test.describe('a message shared with those it mentions (ext:editors)', () => {
+	test.use({ ...DEVICES.desktop, knobs: { capabilities: ['ext:editors'] } });
+
+	test('is yours to tick and edit where it mentions you, and says you edited it', async ({ preview, page }) => {
+		await preview.open();
+		await preview.post('general', 'ada', { text: 'Lunch, @preview_guest:\n\n- [ ] Soup', format: 'markdown', mentions: ['preview_guest'] }, { ext: { editors: { 'body.text': 'mentioned' } } });
+		await preview.post('general', 'ada', { text: 'Not shared, @preview_guest:\n\n- [ ] Salad', format: 'markdown', mentions: ['preview_guest'] });
+		await expect(preview.message('Not shared').getByRole('checkbox')).toBeDisabled();
+		const box = preview.message('Lunch, ').getByRole('checkbox');
+		await expect(box).toBeEnabled();
+		await box.check();
+		const edit = await preview.waitForSent('message', (params) => params.message_id !== undefined);
+		expect(edit.body).toMatchObject({ text: 'Lunch, @preview_guest:\n\n- [x] Soup' });
+		await expect(preview.message('Lunch, ').getByTestId('message-edited-by')).toHaveText(/edited by/);
+		// Its text is yours to edit too, but not to delete.
+		await preview.message('Lunch, ').hover();
+		await expect(preview.message('Lunch, ').getByRole('button', { name: 'Edit message' })).toBeVisible();
+		await preview.message('Lunch, ').getByRole('button', { name: 'More actions' }).click();
+		await expect(page.getByRole('menuitem', { name: 'Delete message' })).toHaveCount(0);
+	});
+
+	test('Send asks whether those a checklist mentions may edit it', async ({ preview, page }) => {
+		await preview.open();
+		await preview.composer().click();
+		await page.keyboard.type('@ada lunch?');
+		await page.keyboard.press('Shift+Enter');
+		await page.keyboard.press('Shift+Enter');
+		await page.keyboard.type('- [ ] soup');
+		await page.keyboard.press('Enter');
+		const prompt = page.getByTestId('editors-prompt');
+		await expect(prompt).toContainText('Let Ada Lovelace edit this message?');
+		await prompt.getByRole('button', { name: 'Let them edit' }).click();
+		const sent = await preview.waitForSent('message', (params) => params.message_id === undefined && String(params.body?.text).includes('soup'));
+		expect(sent.ext).toEqual({ editors: { 'body.text': 'mentioned' } });
+		expect(sent.body?.mentions).toEqual(['ada']);
+		await expect(prompt).toHaveCount(0);
 	});
 });
 

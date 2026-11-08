@@ -12,7 +12,7 @@ import type {
 } from './types';
 import type { Capabilities, ClientSnapshot, RoomSnapshot } from './client-types';
 
-const CAPABILITIES: Capability[] = ['history', 'edit', 'rooms', 'reactions', 'activity', 'embed:upload', 'embed:append', 'embed:terminal', 'command', 'status', 'ext', 'ext:settings', 'ext:limits', 'ext:media', 'ext:permissions', 'ext:bio', 'ext:archive'];
+const CAPABILITIES: Capability[] = ['history', 'edit', 'rooms', 'reactions', 'activity', 'embed:upload', 'embed:append', 'embed:terminal', 'command', 'status', 'ext', 'ext:settings', 'ext:limits', 'ext:media', 'ext:permissions', 'ext:bio', 'ext:archive', 'ext:editors'];
 
 /**
  * A `server` frame's params as this client keeps them (§3.1), or undefined
@@ -117,6 +117,8 @@ export function capabilitiesOf(server: ServerParams | undefined): Capabilities {
 
 /** Edit, move, and delete controls (capability `edit`). */
 export const canEdit = (server: ServerParams | undefined) => hasCapability(server, 'edit');
+/** Sharing a message's text with the users it mentions (extension `ext:editors`). */
+export const hasEditors = (server: ServerParams | undefined) => hasCapability(server, 'ext:editors');
 /** Room and thread creation and room updates (capability `rooms`). */
 export const canManageRooms = (server: ServerParams | undefined) => hasCapability(server, 'rooms');
 /** Reaction controls (capability `reactions`). */

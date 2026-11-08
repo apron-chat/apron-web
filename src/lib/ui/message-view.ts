@@ -1,6 +1,7 @@
 import { loadableOg } from '$lib/components/embeds/og';
 import type { Notice, RoomListing, RoomSnapshot, UploadState } from '$lib/protocol/client';
 import { markdownText, mentionLabel, mentionSegments, renderMarkdown, renderPlain } from '$lib/protocol/markdown';
+import { editedBy } from '$lib/protocol/editors';
 import { withoutBidiOverrides } from '$lib/protocol/plain-text';
 import { systemScope, type Embed, type Identity, type MessageBody, type MessageRecord } from '$lib/protocol/types';
 import type { EmbedProps, Face, MessageCaps, MessageEmbed, MessageUpload, LinkCardPlace, MessageLinkCard, MessageMention, MessageReply, MessageSender, MessageView, ReactionChip as Chip } from '$lib/design/components/types';
@@ -64,6 +65,11 @@ export interface MessageContext {
 	readonly server: string | undefined;
 	/** Files this client is writing to upload embeds, by `embed_id`: read only for a message with embeds. */
 	readonly uploads: Record<string, UploadState>;
+	/**
+	 * The server has `ext:editors`, so a snapshot's `edited_by` is the server's word, and shows: read only for a
+	 * message that has one.
+	 */
+	readonly editors?: boolean;
 }
 
 /**
@@ -120,6 +126,8 @@ interface Drawn {
 	links: ApronLink[];
 	time: string;
 	timestamp?: number;
+	/** Who saved this snapshot, by name, when someone it mentions did (`ext:editors`). */
+	editedBy?: string;
 }
 
 /** At most this many link cards under one message. */
@@ -158,6 +166,10 @@ function draw(event: MessageRecord): Drawn {
 		time: eventTime(event),
 		timestamp: idMillis(event.message_id)
 	};
+	// Most messages carry no `ext`: they read nothing more.
+	const by = event.ext && !event.deleted ? editedBy(event) : undefined;
+	// Name (@user_id) where another user shows under the same name (§3.3), so no editor passes as the sender.
+	if (by) next.editedBy = directory.sharesName({ user_id: by }) ? `${directory.name({ user_id: by })} (@${by})` : directory.name({ user_id: by });
 	drawn.set(event, next);
 	return next;
 }
@@ -319,7 +331,7 @@ function embedsIn(event: MessageRecord, row: MessageRow, context: MessageContext
 	const embeds = embedsOf(event);
 	if (!embeds.length) return undefined;
 	const uploads = context.uploads;
-	const removable = row.caps.edit && !row.selecting && (Boolean(seen.text.trim()) || embeds.length > 1);
+	const removable = row.caps.edit && !row.caps.textOnly && !row.selecting && (Boolean(seen.text.trim()) || embeds.length > 1);
 	const detail = seen.time ? `${name} · ${seen.time}` : name;
 	const shown = embeds.flatMap((embed, index) => {
 		// An `append` embed has no card: its text continues the body (§4.8.5).
@@ -392,6 +404,7 @@ export function messageView(event: MessageRecord, row: MessageRow, context: Mess
 	if (row.selected) view.selected = true;
 	if (row.editing) view.editing = true;
 	if (row.seenBy?.length) view.seenBy = row.seenBy;
+	if (seen.editedBy && !system && context.editors) view.editedBy = seen.editedBy;
 	const last = made.get(event);
 	if (last && sameView(last, view)) return last;
 	made.set(event, view);
@@ -409,7 +422,7 @@ export function noticeView(notice: Notice): MessageView {
 	};
 }
 
-const KEYS = ['id', 'timestamp', 'time', 'grouped', 'deleted', 'system', 'scope', 'mention', 'pinged', 'highlighted', 'selecting', 'selected', 'editing', 'writing', 'waiting'] as const;
+const KEYS = ['id', 'timestamp', 'time', 'grouped', 'deleted', 'system', 'scope', 'mention', 'pinged', 'highlighted', 'selecting', 'selected', 'editing', 'writing', 'waiting', 'editedBy'] as const;
 
 function sameFields<T extends object>(a: T | undefined, b: T | undefined): boolean {
 	if (a === b) return true;
