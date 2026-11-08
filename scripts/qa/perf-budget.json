@@ -15,7 +15,7 @@
 		},
 		"load-busy": {
 			"requests": 20,
-			"startupJsKB": 881.7,
+			"startupJsKB": 890.7,
 			"domNodes": 1149,
 			"layouts": 13,
 			"styleRecalcs": 16,
@@ -33,11 +33,11 @@
 		},
 		"load-phone-busy": {
 			"requests": 20,
-			"startupJsKB": 881.7,
+			"startupJsKB": 890.7,
 			"domNodes": 1150,
 			"layouts": 9,
 			"styleRecalcs": 15,
-			"calls": 1161020,
+			"calls": 1166967,
 			"heapMB": 10.6
 		},
 		"switch-room-busy": {
