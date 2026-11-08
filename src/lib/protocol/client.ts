@@ -3861,7 +3861,8 @@ export class ChatClient {
 
 	/** Whether the server keeps this `ext`: with capability `ext`, or each key's own extension, such as `ext:editors` (§4.12). */
 	private mayWriteExt(ext: JsonObject): boolean {
-		return this.hasCap('ext') || Object.keys(ext).every((key) => this.server?.capabilities?.includes(`ext:${key}`) === true);
+		const keys = Object.keys(ext);
+		return this.hasCap('ext') || (keys.length > 0 && keys.every((key) => this.server?.capabilities?.includes(`ext:${key}`) === true));
 	}
 
 	private isThread(roomId: string): boolean {

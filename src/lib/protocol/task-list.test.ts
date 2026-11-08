@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hasTasks, toggleTask } from './task-list';
+import { toggleTask } from './task-list';
 
 describe('toggleTask', () => {
 	it('checks and unchecks the marker on a line, leaving the rest as written', () => {
@@ -25,18 +25,3 @@ describe('toggleTask', () => {
 	});
 });
 
-describe('hasTasks', () => {
-	it('finds a task list item, in a list, after quotes and numbers', () => {
-		expect(hasTasks('Lunch:\n- [ ] soup')).toBe(true);
-		expect(hasTasks('> 1. [x] done')).toBe(true);
-		expect(hasTasks('* [X]')).toBe(true);
-		expect(hasTasks('- \u202A[ ] milk')).toBe(true);
-	});
-
-	it('finds none outside a list item, or without a space after the marker', () => {
-		expect(hasTasks('[ ] not in a list')).toBe(false);
-		expect(hasTasks('- [ ]x')).toBe(false);
-		expect(hasTasks('- Foo [ ]')).toBe(false);
-		expect(hasTasks('plain text')).toBe(false);
-	});
-});

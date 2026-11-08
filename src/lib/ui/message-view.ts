@@ -168,7 +168,8 @@ function draw(event: MessageRecord): Drawn {
 	};
 	// Most messages carry no `ext`: they read nothing more.
 	const by = event.ext && !event.deleted ? editedBy(event) : undefined;
-	if (by) next.editedBy = directory.name({ user_id: by });
+	// Name (@user_id) where another user shows under the same name (§3.3), so no editor passes as the sender.
+	if (by) next.editedBy = directory.sharesName({ user_id: by }) ? `${directory.name({ user_id: by })} (@${by})` : directory.name({ user_id: by });
 	drawn.set(event, next);
 	return next;
 }

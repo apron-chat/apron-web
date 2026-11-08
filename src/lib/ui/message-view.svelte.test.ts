@@ -74,6 +74,10 @@ describe('messageView', () => {
 		expect(messageView(messageRecord(2, 'ops', { from: { user_id: 'you' }, ext }), row(), context()).editedBy).toBeUndefined();
 		// The sender's own save carries none.
 		expect(messageView(messageRecord(3, 'ops', { from: { user_id: 'ada' }, ext }), row(), context([], {}, [], true)).editedBy).toBeUndefined();
+		// An editor under the sender's name is told apart by their user_id.
+		know({ ada, mallory: { user_id: 'mallory', name: 'Ada' } });
+		const posing = { editors: { 'body.text': 'mentioned', edited_by: 'mallory' } };
+		expect(messageView(messageRecord(4, 'ops', { from: { user_id: 'ada' }, ext: posing }), row(), context([], {}, [], true)).editedBy).toBe('Ada (@mallory)');
 	});
 
 	it('leaves out the body of a message with no text and of a tombstone, but not of a system line', () => {

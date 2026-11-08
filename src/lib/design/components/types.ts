@@ -480,9 +480,9 @@ export interface MessageTestids {
 	reactions?: string;
 	chip?: string;
 	select?: string;
-	/** The Writing… of a message whose text is still arriving. */
 	/** Its "edited by" line (`ext:editors`). */
 	editedBy?: string;
+	/** The Writing… of a message whose text is still arriving. */
 	writing?: string;
 	/** The Waiting to stream… of a message whose text waits for its writer. */
 	waiting?: string;

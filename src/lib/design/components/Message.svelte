@@ -258,7 +258,7 @@
 
 	/**
 	 * Its task list checkboxes, rendered disabled: enabled where you may tick them (`caps.check`: yours, or one that
-	 * mentions you) and `on.toggleTask` saves them, again whenever the body changes. A box that fails to save goes back as it was.
+	 * shares its text with you, `ext:editors`) and `on.toggleTask` saves them, again whenever the body changes. A box that fails to save goes back as it was.
 	 */
 	function tasks(node: HTMLElement): void | (() => void) {
 		void bodyHtml;

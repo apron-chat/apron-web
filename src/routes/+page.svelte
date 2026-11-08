@@ -13,7 +13,7 @@
 	import { readApronLink, writeApronLink, type ApronLink } from '$lib/ui/apron-link';
 	import type { Embed, MessageRecord } from '$lib/protocol/types';
 	import { isJsonObject, isSystemId } from '$lib/protocol/types';
-	import { markdownRoles } from '$lib/protocol/markdown';
+	import { hasTaskItems, markdownRoles } from '$lib/protocol/markdown';
 	import Composer from '$lib/components/Composer.svelte';
 	import ReadOnlyBar from '$lib/components/ReadOnlyBar.svelte';
 	import ConnectScreen from '$lib/components/ConnectScreen.svelte';
@@ -65,7 +65,6 @@
 	import { ReadPositions } from '$lib/ui/read-positions';
 	import { RoomOrder } from '$lib/ui/room-order.svelte';
 	import { mayEditText, SHARED_TEXT } from '$lib/protocol/editors';
-	import { hasTasks } from '$lib/protocol/task-list';
 	import { embedsOf, isOwn, mayMove, mentionsMe, peopleIn, messageSnippet, plainTextOf, senderName, textOf } from '$lib/ui/messages';
 	import { removeEmbedQuestion } from '$lib/ui/attachments';
 	import { messageLog, messageLogHtml } from '$lib/ui/message-log';
@@ -2090,9 +2089,9 @@
 	 * `added`: whom the ask to add who it mentions added. True when it asked, and the draft waits.
 	 */
 	function askEditors(room: RoomSnapshot, text: string, added: readonly string[]): boolean {
-		if (!session.editors) return false;
+		if (!session.editors || !session.canEdit) return false;
 		const action = composerAction(text, { command: session.capabilities.command, rooms: false });
-		if (action.kind !== 'message' || !hasTasks(action.text)) return false;
+		if (action.kind !== 'message' || !hasTaskItems(action.text)) return false;
 		const userIds = [...new Set([...composerMentions, ...added])].filter((userId) => !directory.isMe(userId) && !isSystemId(userId));
 		if (!userIds.length) return false;
 		editorsAsk = { roomId: room.id, userIds, added: [...added], text, files: stagedIds() };
@@ -2581,6 +2580,8 @@
 	// --- Message rows ---
 
 	/** The test ids interop finds a message's parts by. */
+	/** The embeds an editor of someone else's shared text sees: none, since only the text is theirs to change. */
+	const NO_EMBEDS: Embed[] = [];
 	const MESSAGE_TESTIDS: MessageTestids = { handle: 'sender-handle', reply: 'reply-reference', reactions: 'reactions', chip: 'reaction-chip', select: 'select-message', writing: 'message-writing', editedBy: 'message-edited-by', waiting: 'message-waiting', receipts: 'read-receipts' };
 
 	/** What every row reads from, each field only where a row needs it. */
@@ -2999,7 +3000,8 @@
 	}
 
 	/** Saves an edit: the new text, and any embeds removed or renamed in the editor, together. */
-	function saveEdit(event: MessageRecord, text: string, edits: EmbedEdits | undefined, mentions: string[]): void {
+	/** `mentions` undefined keeps the message's: an editor of shared text (`ext:editors`) changes only its text. */
+	function saveEdit(event: MessageRecord, text: string, edits: EmbedEdits | undefined, mentions: string[] | undefined): void {
 		if (!client || !session.canEdit) return;
 		feedback.track(client.editMessage(event.message_id, text, undefined, edits, mentions), 'Saving edit…');
 		endEdit();
@@ -3345,7 +3347,7 @@
 	{@const MessageEditor = messageEditor.component}
 	{@const event = rowEvent(view)}
 	<!-- Someone else's message that shares its text with you (`ext:editors`): only the text is yours to change. -->
-	{#if MessageEditor && event}<MessageEditor text={textOf(event)} embeds={view.caps?.textOnly ? [] : embedsOf(event)} uploads={session.uploads} mentions={event.body?.mentions} {people} rooms={roomSuggestions} onsave={(text, edits, mentions) => saveEdit(event, text, edits, mentions)} oncancel={endEdit} onmention={() => { if (!paneRoom?.joined) listMembers(MEMBERS_FRESH_MS); }} />{/if}
+	{#if MessageEditor && event}<MessageEditor text={textOf(event)} embeds={view.caps?.textOnly ? NO_EMBEDS : embedsOf(event)} uploads={session.uploads} mentions={event.body?.mentions} {people} rooms={roomSuggestions} onsave={(text, edits, mentions) => saveEdit(event, text, edits, view.caps?.textOnly ? undefined : mentions)} oncancel={endEdit} onmention={() => { if (!paneRoom?.joined) listMembers(MEMBERS_FRESH_MS); }} />{/if}
 {/snippet}
 <!-- The pane's history waiting as the server asked, where its messages will appear: it loads by itself at zero. -->
 {#snippet historyNotice()}{#if historyWait}<RateLimitNotice scope="history" until={historyWait.until} />{/if}{/snippet}
