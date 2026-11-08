@@ -1,7 +1,7 @@
 import { untrack } from 'svelte';
 import { mentionClass, mentionLabel, type Mention, type MentionPerson } from '$lib/protocol/markdown';
 import { chipText, collapseMentions, draftLength, draftMentions, draftText, insertMention, insertText, mentionQuery, normalizeDraft, partLength, unchip, type DraftChip, type DraftPart } from './draft';
-import { continueList } from './list-continue';
+import { continueList, expandTask } from './list-continue';
 import { roomRoles, searchRoles, type RoleSuggestion } from './role-mentions';
 import { isAutocompleteDismissed, type DismissedAutocomplete } from './autocomplete-dismiss';
 import { emojiQuery as findEmojiQuery, searchEmoji, withCustomEmoji, type EmojiQuery, type EmojiSuggestion } from './emoji-autocomplete';
@@ -312,7 +312,10 @@ export class DraftField {
 			this.commit(field, readDraft(field).parts, true);
 			return;
 		}
-		this.refresh(this.collapse(false));
+		const read = this.collapse(false);
+		// A space after `[]` at a line's start may finish a checklist item typed short (`-[] `): only then is it looked at.
+		if ((event as InputEvent).data === ' ' && read?.caret !== undefined && positionText(read.parts).slice(read.caret - 2, read.caret) === '] ' && this.apply(expandTask)) return;
+		this.refresh(read);
 	};
 
 	compositionend = (): void => {

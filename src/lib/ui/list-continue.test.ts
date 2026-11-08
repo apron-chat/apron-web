@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { continueList } from './list-continue';
+import { continueList, expandTask } from './list-continue';
 
 /** The text with `|` for the caret, and the change at it, the same way. */
 function enter(marked: string): string | undefined {
@@ -42,5 +42,26 @@ describe('continueList', () => {
 		expect(enter('-Foo|')).toBeUndefined();
 		expect(enter('- [ |] Foo')).toBeUndefined();
 		expect(continueList({ text: '- Foo', start: 2, end: 5 })).toBeUndefined();
+	});
+});
+
+describe('expandTask', () => {
+	const typed = (marked: string): string | undefined => {
+		const at = marked.indexOf('|');
+		const changed = expandTask({ text: marked.replace('|', ''), start: at, end: at });
+		return changed && `${changed.text.slice(0, changed.start)}|${changed.text.slice(changed.start)}`;
+	};
+
+	it('writes a checklist item typed short at a line’s start out in full', () => {
+		for (const short of ['[] ', '[ ] ', '-[] ', '-[ ] ', '- [] ', '* [] ']) expect(typed(`${short}|`), short).toBe('- [ ] |');
+		expect(typed('Plan:\n-[] |')).toBe('Plan:\n- [ ] |');
+		expect(typed('  > [] |rest')).toBe('  > - [ ] |rest');
+	});
+
+	it('leaves `- [ ] ` itself, a ticked box, and brackets anywhere but a line’s start', () => {
+		expect(typed('- [ ] |')).toBeUndefined();
+		expect(typed('[x] |')).toBeUndefined();
+		expect(typed('see [] |')).toBeUndefined();
+		expect(typed('[]|')).toBeUndefined();
 	});
 });

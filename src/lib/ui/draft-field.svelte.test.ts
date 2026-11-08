@@ -196,6 +196,14 @@ describe('DraftField', () => {
 		f.done();
 	});
 
+	it('writes a checklist item typed short (`-[] `) out in full as its space is typed', () => {
+		const f = field({ value: true });
+		f.type('-[] ');
+		f.draft.input(new InputEvent('input', { data: ' ', inputType: 'insertText' }));
+		expect(f.value()).toBe('- [ ] ');
+		f.done();
+	});
+
 	it('applies a formatting change around the selection, keeping chips, and selects what it returns', () => {
 		const f = field({ value: true });
 		f.type('ask @alan \nthen go');

@@ -33,3 +33,23 @@ export function continueList(edit: TextEdit): TextEdit | undefined {
 	const caret = start + 1 + next.length;
 	return { text: `${text.slice(0, start)}\n${next}${text.slice(start)}`, start: caret, end: caret };
 }
+
+/**
+ * A checklist item typed short, at a line's start (under any indentation or quotes): `[]`, `[ ]`, `-[]`, `- []` or
+ * `-[ ]`, then a space. Written out as `- [ ] `, the caret after it; the rest of the line stays. Undefined anywhere
+ * else, and for `- [ ] ` itself.
+ */
+const TASK_SHORTHAND = /^([ \t]*(?:>[ \t]?)*[ \t]*)(?:[-*+][ \t]?)?\[ ?\] $/;
+
+export function expandTask(edit: TextEdit): TextEdit | undefined {
+	const { text, start, end } = edit;
+	if (start !== end || text[start - 1] !== ' ' || text[start - 2] !== ']') return undefined;
+	const from = text.lastIndexOf('\n', start - 1) + 1;
+	const typed = text.slice(from, start);
+	const shorthand = TASK_SHORTHAND.exec(typed);
+	if (!shorthand) return undefined;
+	const written = `${shorthand[1]}- [ ] `;
+	if (written === typed) return undefined;
+	const caret = from + written.length;
+	return { text: text.slice(0, from) + written + text.slice(start), start: caret, end: caret };
+}
