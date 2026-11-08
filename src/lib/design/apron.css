@@ -279,6 +279,7 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-msg-text p + p { margin-top: var(--space-2); }
 .ap-msg-text a { color: var(--denim); }
 /* A message whose text is still arriving (an `append` embed, §4.8.5): a quiet line under what has come so far. */
+.ap-msg-edited { font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
 .ap-msg-writing { display: flex; align-items: center; gap: var(--space-1_5); font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
 .ap-emoji { font-family: var(--font-emoji); }
 /* A custom emoji (`ext:emoji`) in text: an image as tall as the line, its width from its aspect ratio. */

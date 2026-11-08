@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { installNudge, mentionAddNudge, messageEditor, newPrivateDialog, newThreadDialog, profileCardHost, reactorsPopover, roomEditor, searchDialog, selectionBar, serverPaneHost, shortcutsDialog, signInLinkDialog } from '$lib/components/lazy';
+	import { editorsNudge, installNudge, mentionAddNudge, messageEditor, newPrivateDialog, newThreadDialog, profileCardHost, reactorsPopover, roomEditor, searchDialog, selectionBar, serverPaneHost, shortcutsDialog, signInLinkDialog } from '$lib/components/lazy';
 	import { onMount, tick, untrack } from 'svelte';
 	import { fromAction } from 'svelte/attachments';
 	import { pushState, replaceState } from '$app/navigation';
@@ -64,6 +64,8 @@
 	import { UnreadTracker, countElsewhere, mutedMentions } from '$lib/ui/unread.svelte';
 	import { ReadPositions } from '$lib/ui/read-positions';
 	import { RoomOrder } from '$lib/ui/room-order.svelte';
+	import { mayEditText, SHARED_TEXT } from '$lib/protocol/editors';
+	import { hasTasks } from '$lib/protocol/task-list';
 	import { embedsOf, isOwn, mayMove, mentionsMe, peopleIn, messageSnippet, plainTextOf, senderName, textOf } from '$lib/ui/messages';
 	import { removeEmbedQuestion } from '$lib/ui/attachments';
 	import { messageLog, messageLogHtml } from '$lib/ui/message-log';
@@ -316,6 +318,12 @@
 	 * `files` (the staged files' ids): the draft it asked about, which Add and send sends only if it is still that draft.
 	 */
 	let mentionAsk = $state<{ roomId: string; userIds: string[]; busy: boolean; text: string; files: string } | undefined>();
+	/**
+	 * A message held back at Send because it mentions people and holds a checklist: the ask whether they may edit its
+	 * text (`ext:editors`, EditorsPrompt), until it's answered, put away, the draft changes, or the pane does. `added`:
+	 * whom the ask to add who it mentions added, which it goes on to mention; `text` and `files` as `mentionAsk`'s.
+	 */
+	let editorsAsk = $state<{ roomId: string; userIds: string[]; added: string[]; text: string; files: string } | undefined>();
 	let connectOpen = $state(false);
 	/** Disconnected from the server pane: the connect screen can't be cancelled back to it. */
 	let disconnected = $state(false);
@@ -1880,6 +1888,7 @@
 		if (typingIn && typingIn.room !== (thread ?? roomId)) stopTyping();
 		composer?.reset();
 		if (!mentionAsk?.busy) mentionAsk = undefined;
+		editorsAsk = undefined;
 		mentions.clearUnseen();
 		mentions.clearRoom(roomId);
 		if (thread) mentions.clearRoom(thread);
@@ -1994,6 +2003,7 @@
 	function composerInput(): void {
 		// The draft changed under the ask: Send asks again about what it mentions then.
 		if (mentionAsk && !mentionAsk.busy) mentionAsk = undefined;
+		editorsAsk = undefined;
 		if (!client || !paneRoom) return;
 		drafts.saveText();
 		// A live message shows itself as it is typed: no typing indicator besides.
@@ -2065,9 +2075,37 @@
 
 	/** Escape: an ask that isn't adding yet goes away, the draft unsent. True when there was one. */
 	function dismissMentionAsk(): boolean {
+		if (editorsAsk) {
+			editorsAsk = undefined;
+			return true;
+		}
 		if (!mentionAsk || mentionAsk.busy) return false;
 		mentionAsk = undefined;
 		return true;
+	}
+
+	/**
+	 * Before a message that mentions people and holds a checklist goes, asks whether they may edit its text, so they
+	 * can tick it (`ext:editors`): only where the server shares text, and only for a draft that goes as a message.
+	 * `added`: whom the ask to add who it mentions added. True when it asked, and the draft waits.
+	 */
+	function askEditors(room: RoomSnapshot, text: string, added: readonly string[]): boolean {
+		if (!session.editors) return false;
+		const action = composerAction(text, { command: session.capabilities.command, rooms: false });
+		if (action.kind !== 'message' || !hasTasks(action.text)) return false;
+		const userIds = [...new Set([...composerMentions, ...added])].filter((userId) => !directory.isMe(userId) && !isSystemId(userId));
+		if (!userIds.length) return false;
+		editorsAsk = { roomId: room.id, userIds, added: [...added], text, files: stagedIds() };
+		return true;
+	}
+
+	/** The ask's answer: the draft goes, editable by who it mentions or not, if it is still the draft asked about. */
+	function answerEditors(share: boolean): void {
+		const ask = editorsAsk;
+		editorsAsk = undefined;
+		composer?.focus();
+		if (!ask || paneRoom?.id !== ask.roomId || drafts.text !== ask.text || stagedIds() !== ask.files) return;
+		sendMessage(true, ask.added, share);
 	}
 
 	/**
@@ -2080,13 +2118,15 @@
 	 *
 	 * `asked`: the ask to add who it mentions was answered (MentionAddPrompt), so it goes as it is; `added`, whom that
 	 * added, which it mentions besides its chips, such as the holders of a role no one here held when it was written.
+	 * `editors`: the ask whether they may edit it was answered (EditorsPrompt), and how.
 	 */
-	function sendMessage(asked = false, added: readonly string[] = []): void {
+	function sendMessage(asked = false, added: readonly string[] = [], editors?: boolean): void {
 		if (!client || !paneRoom || !canCompose) return;
 		// Adding who it mentions: it goes once they're in (`addMentionedAndSend`).
 		if (mentionAsk?.busy && mentionAsk.roomId === paneRoom.id) return;
 		// An ask adding elsewhere carries on there.
 		if (!mentionAsk?.busy) mentionAsk = undefined;
+		editorsAsk = undefined;
 		if (composingLive) {
 			liveComposer?.send();
 			composer?.focus();
@@ -2109,11 +2149,13 @@
 		}
 		if (drafts.files.length) {
 			if (!asked && askToAddMentioned(paneRoom, drafts.text)) return;
-			void sendFiles(added);
+			if (editors === undefined && askEditors(paneRoom, drafts.text, added)) return;
+			void sendFiles(added, editors);
 			return;
 		}
 		if (!drafts.text.trim()) return;
 		if (!asked && askToAddMentioned(paneRoom, drafts.text)) return;
+		if (editors === undefined && askEditors(paneRoom, drafts.text, added)) return;
 		const chat = client;
 		const draft = drafts.text;
 		const roomId = paneRoom.id;
@@ -2134,7 +2176,7 @@
 		if (action.kind === 'message') {
 			if (!action.text.trim()) return;
 			const embeds = linkPreviews.embeds(action.text, dismissed);
-			const post = () => feedback.track(chat.send(roomId, action.text, 'markdown', { ...options, ...(embeds.length ? { embeds } : {}) }), 'Sending…', restore);
+			const post = () => feedback.track(chat.send(roomId, action.text, 'markdown', { ...options, ...(embeds.length ? { embeds } : {}), ...(editors ? { ext: SHARED_TEXT } : {}) }), 'Sending…', restore);
 			const joining = joinFirst(chat, paneRoom);
 			if (joining) {
 				joining.then(post, (cause: unknown) => {
@@ -2247,6 +2289,7 @@
 		drafts.stage(staged);
 		// The draft changed under the ask: Send asks again about what it mentions then.
 		if (!mentionAsk?.busy) mentionAsk = undefined;
+		editorsAsk = undefined;
 		composer?.focus();
 	}
 
@@ -2257,8 +2300,11 @@
 	 * takes them as arguments instead (§4.1). A failed send gives the draft
 	 * back, files and all.
 	 */
-	/** `added`: whom the ask to add who it mentions added, which it mentions besides its chips (`sendMessage`). */
-	async function sendFiles(added: readonly string[] = []): Promise<void> {
+	/**
+	 * `added`: whom the ask to add who it mentions added, which it mentions besides its chips; `editors`, whether
+	 * they may edit its text (`sendMessage`).
+	 */
+	async function sendFiles(added: readonly string[] = [], editors = false): Promise<void> {
 		if (!client || !paneRoom || !canCompose || !session.snapshot.capabilities['embed:upload']) return;
 		const chat = client;
 		const room = paneRoom;
@@ -2277,7 +2323,7 @@
 		const mentions = [...new Set([...composerMentions, ...added])];
 		const dismissed = drafts.dismissed;
 		const embeds = command ? [] : linkPreviews.embeds(text, dismissed);
-		const options = { ...(reply ? { replyTo: reply } : {}), ...(mentions.length ? { mentions } : {}), ...(embeds.length ? { embeds } : {}) };
+		const options = { ...(reply ? { replyTo: reply } : {}), ...(mentions.length ? { mentions } : {}), ...(embeds.length ? { embeds } : {}), ...(editors && !command ? { ext: SHARED_TEXT } : {}) };
 		clearComposer(roomId);
 		chat.sendTyping(roomId, false);
 		stopTyping();
@@ -2535,7 +2581,7 @@
 	// --- Message rows ---
 
 	/** The test ids interop finds a message's parts by. */
-	const MESSAGE_TESTIDS: MessageTestids = { handle: 'sender-handle', reply: 'reply-reference', reactions: 'reactions', chip: 'reaction-chip', select: 'select-message', writing: 'message-writing', waiting: 'message-waiting', receipts: 'read-receipts' };
+	const MESSAGE_TESTIDS: MessageTestids = { handle: 'sender-handle', reply: 'reply-reference', reactions: 'reactions', chip: 'reaction-chip', select: 'select-message', writing: 'message-writing', editedBy: 'message-edited-by', waiting: 'message-waiting', receipts: 'read-receipts' };
 
 	/** What every row reads from, each field only where a row needs it. */
 	const messageContext: MessageContext = {
@@ -2909,25 +2955,30 @@
 			selecting: selection.active,
 			selected: selection.has(event.message_id),
 			editing: editingId === event.message_id,
-			caps: capsFor(event, mention),
-			seenBy: receipts.get(event.message_id)
+			caps: capsFor(event),
+			seenBy: receipts.get(event.message_id),
+			editors: session.editors
 		};
 	}
 
 	/** What the toolbar offers: only what the server can do, and only on messages this viewer may change. */
-	function capsFor(event: MessageRecord, mention: boolean): MessageCaps {
+	function capsFor(event: MessageRecord): MessageCaps {
 		// Edits, moves and deletes are `message` requests: a reader who may not write makes none (`ext:permissions`).
-		const own = session.canEdit && !session.readOnly && isOwn(event, session.you);
+		const writes = session.canEdit && !session.readOnly;
+		const own = writes && isOwn(event, session.you);
+		// Someone else's message whose text its sender shares with those it mentions, you among them (`ext:editors`): you may edit its text, and nothing else.
+		const shared = writes && session.editors && mayEditText(event, session.you?.user_id);
 		return {
 			reply: canCompose && !event.deleted,
-			edit: own && !event.deleted,
+			edit: (own || shared) && !event.deleted,
 			startThread: canStartThreads && canCompose && !event.deleted && !activeThread && event.room_id === activeRoom?.id,
 			select: canSelect(event),
 			removeReply: own && Boolean(event.reply_to),
-			// Its author, or anyone it mentions, may tick its task list; the server decides whether another's edit stands.
-			check: !event.deleted && (own || (mention && session.canEdit && !session.readOnly)),
+			// Its author, or anyone it shares its text with, may tick its task list.
+			check: !event.deleted && (own || shared),
 			react: session.canReact && canCompose && !event.deleted,
-			link: !event.deleted
+			link: !event.deleted,
+			...(shared && !own ? { textOnly: true } : {})
 		};
 	}
 
@@ -3069,6 +3120,7 @@
 		editingId = undefined;
 		composer?.reset();
 		if (!mentionAsk?.busy) mentionAsk = undefined;
+		editorsAsk = undefined;
 		selection.begin(paneRoom.id, event.message_id);
 	}
 
@@ -3290,7 +3342,8 @@
 {#snippet editMessage(view: MessageView)}
 	{@const MessageEditor = messageEditor.component}
 	{@const event = rowEvent(view)}
-	{#if MessageEditor && event}<MessageEditor text={textOf(event)} embeds={embedsOf(event)} uploads={session.uploads} mentions={event.body?.mentions} {people} rooms={roomSuggestions} onsave={(text, edits, mentions) => saveEdit(event, text, edits, mentions)} oncancel={endEdit} onmention={() => { if (!paneRoom?.joined) listMembers(MEMBERS_FRESH_MS); }} />{/if}
+	<!-- Someone else's message that shares its text with you (`ext:editors`): only the text is yours to change. -->
+	{#if MessageEditor && event}<MessageEditor text={textOf(event)} embeds={view.caps?.textOnly ? [] : embedsOf(event)} uploads={session.uploads} mentions={event.body?.mentions} {people} rooms={roomSuggestions} onsave={(text, edits, mentions) => saveEdit(event, text, edits, mentions)} oncancel={endEdit} onmention={() => { if (!paneRoom?.joined) listMembers(MEMBERS_FRESH_MS); }} />{/if}
 {/snippet}
 <!-- The pane's history waiting as the server asked, where its messages will appear: it loads by itself at zero. -->
 {#snippet historyNotice()}{#if historyWait}<RateLimitNotice scope="history" until={historyWait.until} />{/if}{/snippet}
@@ -3490,6 +3543,12 @@
 							names={mentionAsk.userIds.map((userId) => directory.name({ user_id: userId }))} place={activeThread ? threadTitle(activeThread) : activeRoom.title} thread={Boolean(activeThread)}
 							busy={mentionAsk.busy} onadd={() => void addMentionedAndSend()} onsend={() => { sendMessage(true); composer?.focus(); }} oncancel={() => { dismissMentionAsk(); composer?.focus(); }}
 						/>
+					{:else if editorsAsk && editorsAsk.roomId === paneRoom?.id && editorsNudge.component}
+						{@const EditorsPrompt = editorsNudge.component}
+						<EditorsPrompt
+							names={editorsAsk.userIds.map((userId) => directory.name({ user_id: userId }))}
+							onshare={() => answerEditors(true)} onsend={() => answerEditors(false)} oncancel={() => { dismissMentionAsk(); composer?.focus(); }}
+						/>
 					{/if}
 				</div>
 				<Composer
@@ -3507,7 +3566,7 @@
 					{people}
 					rooms={roomSuggestions}
 					reply={drafts.reply ? replyPreview(drafts.reply) : undefined}
-					oninput={composerInput} onsend={() => sendMessage()} files={drafts.files} onfiles={stageFiles} onunstage={(id) => { drafts.unstage(id); if (!mentionAsk?.busy) mentionAsk = undefined; }} onrename={(id, title) => drafts.rename(id, title)} oncancelreply={cancelReply} onescape={dismissMentionAsk} onup={focusNewestMessage}
+					oninput={composerInput} onsend={() => sendMessage()} files={drafts.files} onfiles={stageFiles} onunstage={(id) => { drafts.unstage(id); if (!mentionAsk?.busy) mentionAsk = undefined; editorsAsk = undefined; }} onrename={(id, title) => drafts.rename(id, title)} oncancelreply={cancelReply} onescape={dismissMentionAsk} onup={focusNewestMessage}
 					onmention={() => { if (!paneRoom?.joined) listMembers(MEMBERS_FRESH_MS); }}
 					waitUntil={composerWait}
 				/>

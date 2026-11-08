@@ -65,6 +65,16 @@ describe('messageView', () => {
 		expect(markdown.body?.code).toBe(true);
 	});
 
+	it('says who edited a message its sender shares the text of, by name, only where the server has ext:editors', () => {
+		const ext = { editors: { 'body.text': 'mentioned', edited_by: 'ada' } };
+		const shared = messageRecord(1, 'ops', { from: { user_id: 'you' }, ext });
+		expect(messageView(shared, row({ editors: true }), context()).editedBy).toBe('Ada');
+		// Without the extension the server wouldn't have set it, so anyone could have: it doesn't show.
+		expect(messageView(messageRecord(2, 'ops', { from: { user_id: 'you' }, ext }), row(), context()).editedBy).toBeUndefined();
+		// The sender's own save carries none.
+		expect(messageView(messageRecord(3, 'ops', { from: { user_id: 'ada' }, ext }), row({ editors: true }), context()).editedBy).toBeUndefined();
+	});
+
 	it('leaves out the body of a message with no text and of a tombstone, but not of a system line', () => {
 		expect(messageView(messageRecord(1, 'ops', { body: { text: '' } }), row(), context()).body).toBeUndefined();
 		const tomb = messageView(messageRecord(2, 'ops', { deleted: true, body: undefined }), row({ reactions: [{ emoji: '👍', count: 1, mine: false, title: '', label: '', reactors: [] }] }), context());

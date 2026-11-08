@@ -1,6 +1,6 @@
 import type { ChatClient } from '$lib/protocol/client';
 import type { ClientSnapshot, ConnectionStatus, RoomSnapshot } from '$lib/protocol/client-types';
-import { canEdit, canManageRooms, canReact, capabilitiesOf } from '$lib/protocol/client-views';
+import { canEdit, canManageRooms, canReact, capabilitiesOf, hasEditors } from '$lib/protocol/client-views';
 import type { Identity, ServerParams } from '$lib/protocol/types';
 import { connectionStateOf, isSessionReady, reconnectErrorOf } from './connection';
 
@@ -325,6 +325,8 @@ export class SessionView {
 
 	/** Edit, move, and delete (capability `edit`). */
 	readonly canEdit = $derived(canEdit(this.server));
+	/** Share a message's text with the users it mentions, and save the text others share (`ext:editors`). */
+	readonly editors = $derived(hasEditors(this.server));
 	/** Create and update rooms and threads (capability `rooms`). */
 	readonly canManageRooms = $derived(canManageRooms(this.server));
 	/** You only read (`ext:permissions` with `write: false`): no composer, reactions, joins, or new threads. */

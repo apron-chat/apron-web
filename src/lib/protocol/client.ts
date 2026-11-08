@@ -1676,7 +1676,7 @@ export class ChatClient {
 			...(room !== DEFAULT_ROOM_ID ? { room_id: room } : {}),
 			body,
 			...(options.replyTo !== undefined ? { reply_to: { message_id: options.replyTo } } : {}),
-			...(options.ext !== undefined && this.hasCap('ext') ? { ext: options.ext } : {})
+			...(options.ext !== undefined && this.mayWriteExt(options.ext) ? { ext: options.ext } : {})
 		};
 	}
 
@@ -3857,6 +3857,11 @@ export class ChatClient {
 
 	private hasCap(cap: Capability): boolean {
 		return this.server?.capabilities?.includes(cap) === true;
+	}
+
+	/** Whether the server keeps this `ext`: with capability `ext`, or each key's own extension, such as `ext:editors` (§4.12). */
+	private mayWriteExt(ext: JsonObject): boolean {
+		return this.hasCap('ext') || Object.keys(ext).every((key) => this.server?.capabilities?.includes(`ext:${key}`) === true);
 	}
 
 	private isThread(roomId: string): boolean {

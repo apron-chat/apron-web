@@ -31,3 +31,15 @@ export function toggleTask(source: string, line: number, checked: boolean): stri
 	parts[line * 2] = `${text.slice(0, at)}${checked ? 'x' : ' '}${text.slice(at + 1)}`;
 	return parts.join('');
 }
+
+/** A list marker among what opens a task line's blocks: a task needs a list item to be in. */
+const LIST_MARKER = /(?:^|[ \t>])(?:[-*+]|\d{1,9}[.)])[ \t]/;
+
+/** Whether Markdown holds a task list item: a list item whose text starts with `[ ]` or `[x]`, then a space or the line's end. */
+export function hasTasks(source: string): boolean {
+	return source.split(/\r\n|\r|\n/).some((line) => {
+		const shown = line.replace(new RegExp(BIDI_OVERRIDE.source, 'g'), '');
+		const marker = TASK_LINE.exec(shown);
+		return marker !== null && LIST_MARKER.test(marker[1]) && /^(?:[ \t]|$)/.test(shown.slice(marker[0].length));
+	});
+}
