@@ -2,7 +2,7 @@
 
 | Protocol Version | 10         |
 |------------------|------------|
-| Last Updated     | 2026-11-05 |
+| Last Updated     | 2026-11-08 |
 
 apron-web is a web client for the
 [Apron Chat Protocol](https://github.com/shazow/apron/blob/main/PROTOCOL.md).
@@ -40,6 +40,7 @@ the fallback of that capability:
 | `ext:bio`      | shows bios on profile cards, and edits your own ([§8](#8-extbio)); also with `ext`              | no bios                            |
 | `ext:emoji`    | shows the server's custom emoji in reactions and text, and offers them to pick ([§9](#9-extemoji)) | shows keys as text, and in reactions as a placeholder |
 | `ext:archive`  | says whose archive it reads, and when it was written ([§10](#10-extarchive))                    | says only that you read            |
+| `ext:editors`  | asks whether those a message with a checklist mentions may edit its text, lets you edit a message that shares its text with you, and shows who edited it ([§11](#11-exteditors)) | edits only your own messages |
 
 Some features have no capability:
 
@@ -55,7 +56,8 @@ Some features have no capability:
   address, and its title and avatar in the sidebar, over its host.
 - After a failed WebSocket handshake, apron-web asks the server why over HTTP
   ([§5](#5-connection-status)).
-- apron-web writes no `ext` of its own, except `ext.bio` ([§8](#8-extbio)).
+- apron-web writes no `ext` of its own, except `ext.bio` ([§8](#8-extbio)) and
+  `ext.editors` ([§11](#11-exteditors)).
 
 ## 2. The boundary
 
@@ -316,3 +318,25 @@ and whose archive it is.
 
 - apron-web says in place of the composer which server the archive is from,
   and when it was written.
+
+---
+
+## 11. `ext:editors`
+
+A message's sender shares the editing of its text with the users that it
+mentions.
+[EXTENSIONS.md](https://github.com/shazow/apron/blob/main/EXTENSIONS.md#exteditors)
+defines it.
+
+### 11.1 apron-web
+
+- When you send a message that mentions someone and holds a task list, apron-web
+  asks first whether they may edit it. "Let them edit" sends
+  `ext.editors {"body.text": "mentioned"}`; "Only I can edit" sends none.
+- apron-web asks only for a message, not a command, and after the ask to add
+  who it mentions to the room.
+- On someone else's message that shares its text with you, apron-web offers
+  Edit for the text only, and enables its task list checkboxes. It offers no
+  delete, reply removal, or embed changes.
+- apron-web shows `edited_by` under the text as "edited by" and the user's
+  name.

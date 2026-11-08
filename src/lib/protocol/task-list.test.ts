@@ -23,5 +23,5 @@ describe('toggleTask', () => {
 		expect(toggleTask('- Foo [ ]', 0, true)).toBeUndefined();
 		expect(toggleTask('- [x] Foo', 0, true)).toBeUndefined();
 	});
-
 });
+

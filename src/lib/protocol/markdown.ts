@@ -56,6 +56,11 @@ md.core.ruler.after('inline', 'task_lists', (state) => {
 		}
 	}
 });
+/** Whether Markdown holds a task list item that renders as a checkbox (`task_lists`): parsed as it would render. */
+export function hasTaskItems(source: string): boolean {
+	return md.parse(withoutBidiOverrides(source), {}).some((token) => token.type === 'list_item_open' && String(token.attrGet('class') ?? '').split(' ').includes('ap-task-item'));
+}
+
 // Wide tables scroll inside the message rather than widening it.
 md.renderer.rules.table_open = () => '<div class="ap-table"><table>\n';
 md.renderer.rules.table_close = () => '</table></div>\n';

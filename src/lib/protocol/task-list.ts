@@ -31,3 +31,4 @@ export function toggleTask(source: string, line: number, checked: boolean): stri
 	parts[line * 2] = `${text.slice(0, at)}${checked ? 'x' : ' '}${text.slice(at + 1)}`;
 	return parts.join('');
 }
+

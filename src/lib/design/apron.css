@@ -278,6 +278,8 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-msg-text p { margin: 0; }
 .ap-msg-text p + p { margin-top: var(--space-2); }
 .ap-msg-text a { color: var(--denim); }
+/* Who else saved a message's text (`ext:editors`): a quiet line under it. */
+.ap-msg-edited { font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
 /* A message whose text is still arriving (an `append` embed, §4.8.5): a quiet line under what has come so far. */
 .ap-msg-writing { display: flex; align-items: center; gap: var(--space-1_5); font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
 .ap-emoji { font-family: var(--font-emoji); }

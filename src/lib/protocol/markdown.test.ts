@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import type { MediaCheck } from './sanitize';
 import { toggleTask } from './task-list';
-import { markdownRoles, markdownText, renderBio, renderMarkdown, renderPlain, type EmojiResolver, type LinkResolver, type MentionResolver, mentionSegments } from './markdown';
+import { markdownRoles, markdownText, renderBio, renderMarkdown, renderPlain, type EmojiResolver, type LinkResolver, type MentionResolver, mentionSegments, hasTaskItems } from './markdown';
 
 const resolve: MentionResolver = (id) => {
 	if (id === 'alice') return { kind: 'user', id, name: 'Alice Chen' };
@@ -513,5 +513,23 @@ describe('task lists', () => {
 
 	it('leaves checkboxes out of plain text', () => {
 		expect(markdownText('- [ ] Foo\n- [x] Bar')).toBe('Foo\nBar');
+	});
+});
+
+describe('hasTaskItems', () => {
+	it('finds a task list item as it renders: in a list item, with something after its marker', () => {
+		expect(hasTaskItems('Lunch:\n\n- [ ] soup')).toBe(true);
+		expect(hasTaskItems('> 1. [x] done')).toBe(true);
+		expect(hasTaskItems('- \u202A[ ] milk')).toBe(true);
+	});
+
+	it('finds none where no checkbox renders: a bare marker, code, a quote in an item, or outside a list', () => {
+		expect(hasTaskItems('* [X]')).toBe(false);
+		expect(hasTaskItems('- [ ]   ')).toBe(false);
+		expect(hasTaskItems('```\n- [ ] step\n```')).toBe(false);
+		expect(hasTaskItems('    - [ ] code')).toBe(false);
+		expect(hasTaskItems('- > [ ] x')).toBe(false);
+		expect(hasTaskItems('[ ] not in a list')).toBe(false);
+		expect(hasTaskItems('- [ ]x')).toBe(false);
 	});
 });
