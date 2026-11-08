@@ -1664,6 +1664,17 @@ button.ap-mention, a.ap-linkchip { max-width: 100%; white-space: normal; overflo
 /* The play triangle's weight sits left of its box: nudged right to look centered */
 .ap-audio-play svg { margin-inline-start: 1px; }
 .ap-audio-playing .ap-audio-play svg { margin-inline-start: 0; }
+/* The bar to seek along, or the clip's waveform with the bar laid over it, unseen but for its focus ring and thumb */
+.ap-audio-bar { position: relative; display: flex; align-items: center; flex: 1; min-width: 0; height: var(--control-md); }
+.ap-audio-wave { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.ap-audio-wave path { fill: none; stroke: var(--line-strong); stroke-width: 2px; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.ap-audio-wave-played { clip-path: inset(0 calc(100% - var(--audio-progress, 0%)) 0 0); }
+.ap-audio-wave-played path { stroke: var(--accent); }
+.ap-audio-waved .ap-audio-seek { position: relative; height: 100%; }
+.ap-audio-waved .ap-audio-seek::-webkit-slider-runnable-track { height: 100%; background: none; }
+.ap-audio-waved .ap-audio-seek::-moz-range-track { height: 100%; background: none; }
+.ap-audio-waved .ap-audio-seek::-webkit-slider-thumb { width: 2px; height: var(--control-md); margin-top: 0; }
+.ap-audio-waved .ap-audio-seek::-moz-range-thumb { width: 2px; height: var(--control-md); }
 .ap-audio-seek { flex: 1; min-width: 0; height: var(--control-sm); margin: 0; background: none; cursor: pointer; appearance: none; -webkit-appearance: none; }
 .ap-audio-seek:disabled { cursor: default; }
 .ap-audio-seek::-webkit-slider-runnable-track { height: 4px; border-radius: var(--radius-full); background: linear-gradient(to right, var(--accent) var(--audio-progress, 0%), var(--line-strong) var(--audio-progress, 0%)); }
@@ -1672,6 +1683,10 @@ button.ap-mention, a.ap-linkchip { max-width: 100%; white-space: normal; overflo
 .ap-audio-seek::-moz-range-thumb { width: 12px; height: 12px; border: 0; border-radius: var(--radius-full); background: var(--accent); opacity: 0; transition: opacity var(--duration-fast); }
 .ap-audio-seek:not(:disabled):is(:hover, :focus-visible)::-webkit-slider-thumb, .ap-audio-playing .ap-audio-seek::-webkit-slider-thumb { opacity: 1; }
 .ap-audio-seek:not(:disabled):is(:hover, :focus-visible)::-moz-range-thumb, .ap-audio-playing .ap-audio-seek::-moz-range-thumb { opacity: 1; }
+/* Over a waveform, where it has played is drawn in the accent: the thumb shows only to the keyboard
+   (after the bar's own hover and playing rules, which it outranks only by coming later) */
+.ap-audio-waved .ap-audio-seek:not(:focus-visible)::-webkit-slider-thumb { opacity: 0; }
+.ap-audio-waved .ap-audio-seek:not(:focus-visible)::-moz-range-thumb { opacity: 0; }
 .ap-audio-time { flex: none; font-size: var(--text-sm); line-height: var(--leading-sm); font-variant-numeric: tabular-nums; color: var(--ink-muted); }
 .ap-audio-rate { flex: none; min-width: var(--control-lg); height: var(--control-sm); padding: 0 var(--space-1); border: 1px solid var(--line); border-radius: var(--radius-full); background: var(--bg-100); color: var(--ink-muted); font: inherit; font-size: var(--text-xs); font-variant-numeric: tabular-nums; cursor: pointer; }
 .ap-audio-rate:hover:not(:disabled) { background: var(--hover); color: var(--ink); }
