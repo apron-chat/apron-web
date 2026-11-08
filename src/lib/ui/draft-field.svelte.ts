@@ -162,6 +162,17 @@ export class DraftField {
 			'aria-controls': this.completion ? pickerId : undefined,
 			'aria-activedescendant': this.completion?.count ? `${pickerId}-${this.activeIndex}` : undefined
 		});
+		// Copy and cut are listened for once per field, not passed as its props, which are applied again on every key.
+		$effect(() => {
+			const field = this.element;
+			if (!field) return;
+			field.addEventListener('copy', this.copy);
+			field.addEventListener('cut', this.cut);
+			return () => {
+				field.removeEventListener('copy', this.copy);
+				field.removeEventListener('cut', this.cut);
+			};
+		});
 		$effect(() => {
 			const current = this.element;
 			const text = this.host.value;
@@ -308,6 +319,47 @@ export class DraftField {
 		if ((forward || event.inputType === 'deleteContentBackward') && this.deleteTask(forward)) event.preventDefault();
 		else if (event.inputType === 'deleteContentBackward' && this.backspaceChip()) event.preventDefault();
 	};
+
+	/**
+	 * Copying a selection with a checkbox in it copies its Markdown (`- [ ] `), which the browser would leave out (the
+	 * checkbox draws no text); mentions copy as they show. Any other selection is the browser's to copy.
+	 */
+	copy = (event: ClipboardEvent): void => {
+		const text = this.selectedMarkdown();
+		if (text === undefined || !event.clipboardData) return;
+		event.preventDefault();
+		event.clipboardData.setData('text/plain', text);
+	};
+
+	/** Cutting copies as `copy` does, then deletes the selection, as the browser would. */
+	cut = (event: ClipboardEvent): void => {
+		this.copy(event);
+		if (event.defaultPrevented) document.execCommand('delete');
+	};
+
+	/** The selected text, each checkbox as its Markdown and each mention as it shows; undefined without a checkbox in it. */
+	private selectedMarkdown(): string | undefined {
+		const field = this.element;
+		if (!field || !field.querySelector('[data-task]')) return undefined;
+		const { parts, caret, anchor } = readDraft(field);
+		if (caret === undefined || anchor === undefined || caret === anchor) return undefined;
+		const [start, end] = caret < anchor ? [caret, anchor] : [anchor, caret];
+		let text = '';
+		let tasks = false;
+		let offset = 0;
+		for (const part of parts) {
+			const length = partLength(part);
+			if (offset + length > start && offset < end) {
+				if (typeof part === 'string') text += part.slice(Math.max(0, start - offset), end - offset);
+				else if (part.task) {
+					text += chipText(part);
+					tasks = true;
+				} else text += part.role ? chipText(part) : mentionLabel(this.chipMention(part));
+			}
+			offset += length;
+		}
+		return tasks ? text : undefined;
+	}
 
 	/** A delete against a checkbox at its line's start (`deleteAtTask`), done here: the browser would take the checkbox. */
 	private deleteTask(forward: boolean): boolean {

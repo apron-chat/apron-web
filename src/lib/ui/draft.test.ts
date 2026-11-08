@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { collapseMentions, draftLength, draftMentions, draftText, insertMention, insertText, mentionQuery, partLength, unchip, type DraftChip, type DraftPart } from './draft';
+import { chipTasks, collapseMentions, deleteAtTask, draftLength, draftMentions, draftText, insertMention, insertText, mentionQuery, partLength, unchip, type DraftChip, type DraftPart } from './draft';
 
 const people = [
 	{ id: 'ada_1', name: 'Ada' },
@@ -254,5 +254,41 @@ describe('role chips (@&role)', () => {
 
 	it('turns back into its text on backspace', () => {
 		expect(unchip(['ask ', mods], 10, (chip) => (chip.role ? `@&${chip.id}` : `@${chip.id}`))).toEqual({ parts: ['ask @&mods'], caret: 10 });
+	});
+});
+
+describe('checklist items drawn as checkboxes', () => {
+	const open: DraftChip = { id: '', task: ' ' };
+	const done: DraftChip = { id: '', task: 'x' };
+
+	it('chips a `- [ ] ` or `- [x] ` at a line’s start, under indentation and quotes, and sends it as its Markdown', () => {
+		const parts = chipTasks(['Plan:\n- [ ] a\n  > - [X] b\nsee - [ ] c']);
+		expect(parts).toEqual(['Plan:\n', open, 'a\n  > ', done, 'b\nsee - [ ] c']);
+		expect(draftText(parts)).toBe('Plan:\n- [ ] a\n  > - [x] b\nsee - [ ] c');
+		expect(partLength(open)).toBe(6);
+		expect(draftMentions(parts)).toEqual([]);
+	});
+
+	it('leaves a marker after a chip on the same line, one not yet finished, and a draft without one (the same array)', () => {
+		const ada: DraftChip = { id: 'ada' };
+		expect(chipTasks([ada, ' - [ ] x'])).toEqual([ada, ' - [ ] x']);
+		expect(chipTasks(['- [ ]'])).toEqual(['- [ ]']);
+		const plain = ['no tasks here'];
+		expect(chipTasks(plain)).toBe(plain);
+	});
+
+	it('keeps no space between a checkbox and the mention after it', () => {
+		expect(draftText([open, { id: 'ada' }])).toBe('- [ ] @ada');
+	});
+
+	it('joins lines across a checkbox as text would, and takes one off with Delete just before it', () => {
+		const parts: DraftPart[] = ['a\n', open, 'b'];
+		// Backspace just before it (position 2): the line break goes, and so does the checkbox, back to its Markdown.
+		expect(deleteAtTask(parts, 2, false)).toEqual({ parts: ['a- [ ] b'], caret: 1 });
+		// Delete at the end of the line above does the same.
+		expect(deleteAtTask(parts, 1, true)).toEqual({ parts: ['a- [ ] b'], caret: 1 });
+		expect(deleteAtTask(parts, 2, true)).toEqual({ parts: ['a\nb'], caret: 2 });
+		// Anywhere else is the browser's.
+		expect(deleteAtTask(parts, 8, false)).toBeUndefined();
 	});
 });

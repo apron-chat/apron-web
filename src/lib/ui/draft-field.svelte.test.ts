@@ -204,6 +204,30 @@ describe('DraftField', () => {
 		f.done();
 	});
 
+	it('draws a checklist item as its checkbox, ticks it on a click, and copies it as its Markdown', () => {
+		const f = field({ value: true });
+		f.type('Plan:\n- [ ] Ship');
+		const box = () => f.element.querySelector<HTMLElement>('[data-task]')!;
+		expect(box().getAttribute('aria-checked')).toBe('false');
+		// A click on the checkbox itself ticks it.
+		const click = new MouseEvent('click', { cancelable: true });
+		Object.defineProperty(click, 'target', { value: box() });
+		f.draft.click(click);
+		expect(f.value()).toBe('Plan:\n- [x] Ship');
+		expect(box().getAttribute('aria-checked')).toBe('true');
+		// Copying it all gives its Markdown.
+		const range = document.createRange();
+		range.selectNodeContents(f.element);
+		document.getSelection()!.removeAllRanges();
+		document.getSelection()!.addRange(range);
+		const data = new Map<string, string>();
+		const copy = Object.assign(new Event('copy', { cancelable: true }), { clipboardData: { setData: (type: string, text: string) => data.set(type, text) } }) as unknown as ClipboardEvent;
+		f.draft.copy(copy);
+		expect(copy.defaultPrevented).toBe(true);
+		expect(data.get('text/plain')).toBe('Plan:\n- [x] Ship');
+		f.done();
+	});
+
 	it('applies a formatting change around the selection, keeping chips, and selects what it returns', () => {
 		const f = field({ value: true });
 		f.type('ask @alan \nthen go');
