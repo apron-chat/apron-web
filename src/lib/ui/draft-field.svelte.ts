@@ -1,6 +1,7 @@
 import { untrack } from 'svelte';
 import { mentionClass, mentionLabel, type Mention, type MentionPerson } from '$lib/protocol/markdown';
 import { chipText, collapseMentions, draftLength, draftMentions, draftText, insertMention, insertText, mentionQuery, normalizeDraft, partLength, unchip, type DraftChip, type DraftPart } from './draft';
+import { continueList } from './list-continue';
 import { roomRoles, searchRoles, type RoleSuggestion } from './role-mentions';
 import { isAutocompleteDismissed, type DismissedAutocomplete } from './autocomplete-dismiss';
 import { emojiQuery as findEmojiQuery, searchEmoji, withCustomEmoji, type EmojiQuery, type EmojiSuggestion } from './emoji-autocomplete';
@@ -75,13 +76,7 @@ export class DraftField {
 	element = $state<HTMLDivElement | undefined>();
 	/** Nothing is in the field: its placeholder shows. */
 	empty = $state(true);
-	/**
-	 * The draft has more than one line: set only as that changes, so what reads it (the composer's Expand) isn't asked
-	 * again on every key, as it would be reading the draft itself.
-	 */
-	multiline = $state(false);
-	private wasMultiline = false;
-	/** The text after `@` at the caret, or undefined when the picker is closed. */
+		/** The text after `@` at the caret, or undefined when the picker is closed. */
 	query = $state<string | undefined>();
 	/** The `:shortcode` or `#room` at the caret, while its picker is open. */
 	emojiFound = $state<EmojiQuery | undefined>();
@@ -278,7 +273,8 @@ export class DraftField {
 			event.preventDefault();
 			const send = this.host.newlineOnEnter ? event.ctrlKey || event.metaKey : enterAction(event, this.onHandheld) === 'send';
 			if (send) this.host.submit();
-			else document.execCommand('insertText', false, '\n');
+			// A new line on a list item carries the list on (a task unticked), or ends it on an empty one.
+			else if (!this.apply(continueList)) document.execCommand('insertText', false, '\n');
 		}
 	};
 
@@ -472,9 +468,6 @@ export class DraftField {
 		const text = draftText(parts);
 		this.shown = { field: root, text };
 		this.empty = parts.length === 0;
-		// Compared with a plain copy: reading the state itself would cost each key what this is here to save.
-		const multiline = text.includes('\n');
-		if (multiline !== this.wasMultiline) this.multiline = this.wasMultiline = multiline;
 		const mentioned = draftMentions(parts, this.roleMembers);
 		if (mentioned.join('\u0000') !== this.host.mentions.join('\u0000')) this.host.mentions = mentioned;
 		if (this.empty && root.childNodes.length > 0) root.replaceChildren();

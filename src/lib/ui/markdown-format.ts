@@ -73,22 +73,23 @@ export function link(edit: TextEdit): TextEdit {
 	return { text: `${before}url)${text.slice(end)}`, start: before.length, end: before.length + 3 };
 }
 
-export type LinePrefix = 'quote' | 'bullet' | 'number';
+export type LinePrefix = 'quote' | 'bullet' | 'number' | 'task';
 
-/** Each prefix as written at a line's start. */
+/** Each prefix as written at a line's start. A bullet isn't a task's, which has its own. */
 const PREFIXES: Record<LinePrefix, RegExp> = {
 	quote: /^> ?/,
-	bullet: /^[-*+] /,
-	number: /^\d+[.)] /
+	bullet: /^[-*+] (?!\[[ xX]\] )/,
+	number: /^\d+[.)] /,
+	task: /^[-*+] \[[ xX]\] /
 };
-/** A list item's prefix, which the other kind of list replaces. */
-const LIST = /^(?:[-*+] |\d+[.)] )/;
+/** A list item's prefix, a task's with its box, which the other kind of list replaces. */
+const LIST = /^(?:[-*+] (?:\[[ xX]\] )?|\d+[.)] )/;
 
 /**
  * A quote or list for every line the selection touches; off again when every one of them but blank lines has it. A quote takes
  * in the blank lines between, as `>`, so it stays one quote, and quotes inside it nest; a list leaves them out. The
  * other kind of list gives way to the new one, and numbers count from 1. The lines stay selected, so a second press
- * undoes the first; a bare caret keeps its place in the text.
+ * undoes the first; a bare caret keeps its place in the text, and on an empty line starts the list there.
  */
 export function prefixLines(edit: TextEdit, kind: LinePrefix): TextEdit {
 	const { from, to } = touchedLines(edit);
@@ -97,11 +98,13 @@ export function prefixLines(edit: TextEdit, kind: LinePrefix): TextEdit {
 	// Off when it is there already, blank lines between aside.
 	const off = lines.some((line) => prefix.test(line)) && lines.every((line) => prefix.test(line) || !line.trim());
 	let count = 0;
+	// A bare caret on an empty line starts the list there, to type its first item.
+	const starting = edit.start === edit.end && lines.length === 1;
 	const out = lines.map((line) => {
 		if (off) return line.replace(prefix, '');
 		if (kind === 'quote') return line ? `> ${line}` : '>';
-		if (!line.trim()) return line;
-		return (kind === 'bullet' ? '- ' : `${++count}. `) + line.replace(LIST, '');
+		if (!line.trim() && !starting) return line;
+		return (kind === 'bullet' ? '- ' : kind === 'task' ? '- [ ] ' : `${++count}. `) + line.replace(LIST, '');
 	});
 	const joined = out.join('\n');
 	const text = edit.text.slice(0, from) + joined + edit.text.slice(to);

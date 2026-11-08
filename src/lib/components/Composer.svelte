@@ -100,7 +100,7 @@
 	let emojiButton = $state<HTMLButtonElement | undefined>();
 	const recorder = new VoiceRecorder();
 	/**
-	 * The full panel, for writing at length: Expand offers it once the draft has a second line. Its formatting and
+	 * The full panel, for writing at length, with formatting: Expand offers it. Its formatting and
 	 * Preview load on demand as it opens, and it closes again as the draft is sent or the pane changes.
 	 */
 	let expanded = $state(false);
@@ -131,10 +131,10 @@
 	let command = $derived(canCommand && isCommand(value) && !live);
 	let emojiOpen = $derived(emojiPicker.isOpenFor(emojiButton));
 	/**
-	 * Expand is offered for a draft of more than one line that is a message (not a command, not live) and can be
-	 * written. The field says when the draft gains or loses a line (`multiline`), so typing on a line doesn't ask again.
+	 * Expand is offered for any draft that can be written, empty or not; the design system's Composer leaves it out
+	 * for a command or live text, as it already tells those apart on every key.
 	 */
-	let canExpand = $derived(!expanded && (field?.multiline() ?? false) && !command && !live && !disabled);
+	let canExpand = $derived(!expanded && !disabled);
 	/** Bumped when a fetched preview arrives, so the previews below are redrawn. */
 	let previewsArrived = $state(0);
 	/** The link embeds the draft will be sent with (a command takes none). */

@@ -281,7 +281,7 @@ test.describe('the full panel', () => {
 	/** The field's text, its line breaks included (an element, which textContent leaves out). */
 	const written = (preview: Preview) => preview.composer().evaluate((el) => (el as HTMLElement).innerText.replace(/\n$/, ''));
 
-	test('opens from Expand once a draft has two lines, keeps the caret, formats with its toolbar, previews, and sends with Ctrl+Enter', async ({ preview, page }) => {
+	test('opens from Expand, keeps the caret, formats with its toolbar, previews, and sends with Ctrl+Enter', async ({ preview, page }) => {
 		await preview.open();
 		await preview.composer().click();
 		await page.keyboard.type('first @ad');
@@ -290,7 +290,7 @@ test.describe('the full panel', () => {
 		await expect(chip(preview)).toHaveAttribute('data-user-id', 'ada');
 		// Picking a mention puts a space after it.
 		await page.keyboard.type('line');
-		await expect(page.getByTestId('composer-expand')).toHaveCount(0);
+		await expect(page.getByTestId('composer-expand')).toBeVisible();
 		await page.keyboard.press('Shift+Enter');
 		await page.keyboard.type('second line');
 
@@ -321,13 +321,14 @@ test.describe('the full panel', () => {
 			await expect.poll(() => written(preview)).toBe('> The first @Ada Lovelace line\n> second line');
 		});
 
-		await test.step('Enter starts a line rather than sending, and Bold wraps the selection', async () => {
+		await test.step('Enter starts a line rather than sending, a list carries on, and Bold wraps the selection', async () => {
 			await page.keyboard.press('ControlOrMeta+End');
 			await page.keyboard.press('Enter');
 			await page.keyboard.press('Enter');
 			await page.keyboard.type('- canary');
+			// The next item's `- ` is there already.
 			await page.keyboard.press('Enter');
-			await page.keyboard.type('- fleet');
+			await page.keyboard.type('fleet');
 			for (let i = 0; i < 'fleet'.length; i++) await page.keyboard.press('Shift+ArrowLeft');
 			await panel(preview).getByRole('button', { name: 'Bold' }).click();
 			await expect.poll(() => written(preview)).toBe('> The first @Ada Lovelace line\n> second line\n\n- canary\n- **fleet**');

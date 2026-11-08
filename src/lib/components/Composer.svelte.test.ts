@@ -60,10 +60,13 @@ describe('Composer', () => {
 		expect(dom.press(none.field, 'ArrowUp')).toBe(true);
 	});
 
-	it('offers Expand once the draft has a second line, then writes at length: Enter breaks lines, Ctrl+Enter sends, Esc closes', async () => {
+	it('offers Expand for any draft, empty too, then writes at length: Enter breaks lines, Ctrl+Enter sends, Esc closes', async () => {
 		const field = () => document.querySelector<HTMLElement>('[data-testid="message-input"]')!;
 		const panel = () => document.querySelector('[data-testid="composer-panel"]');
-		render({ value: 'one line' });
+		render({ value: '' });
+		expect(document.querySelector('[data-testid="composer-expand"]')).not.toBeNull();
+		dom.unmount();
+		render({ value: '/me waves', canCommand: true });
 		expect(document.querySelector('[data-testid="composer-expand"]')).toBeNull();
 		dom.unmount();
 

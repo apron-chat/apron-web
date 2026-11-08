@@ -10,7 +10,7 @@
 			"domNodes": 537,
 			"layouts": 10,
 			"styleRecalcs": 18,
-			"calls": 209590,
+			"calls": 211172,
 			"heapMB": 8.4
 		},
 		"load-busy": {
@@ -28,7 +28,7 @@
 			"domNodes": 538,
 			"layouts": 10,
 			"styleRecalcs": 16,
-			"calls": 183608,
+			"calls": 185753,
 			"heapMB": 8.2
 		},
 		"load-phone-busy": {
@@ -68,7 +68,7 @@
 		"open-thread": {
 			"layouts": 4,
 			"styleRecalcs": 14,
-			"calls": 64988
+			"calls": 65368
 		},
 		"open-preferences": {
 			"layouts": 3,
@@ -83,7 +83,7 @@
 		"type-composer": {
 			"layouts": 36,
 			"styleRecalcs": 6,
-			"calls": 41536
+			"calls": 41956
 		},
 		"hover-messages": {
 			"layouts": 7,

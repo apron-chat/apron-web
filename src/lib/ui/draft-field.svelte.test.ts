@@ -171,6 +171,18 @@ describe('DraftField', () => {
 		f.done();
 	});
 
+	it('carries a list on to a new line: a task unticked, ready to type', () => {
+		const f = field({ value: true }, { newlineOnEnter: true });
+		document.execCommand = vi.fn(() => true);
+		f.type('- [x] Foo');
+		f.enter();
+		expect(f.value()).toBe('- [x] Foo\n- [ ] ');
+		expect(document.execCommand).not.toHaveBeenCalled();
+		// @ts-expect-error: jsdom has no editing commands; put it back as it was.
+		delete document.execCommand;
+		f.done();
+	});
+
 	it('applies a formatting change around the selection, keeping chips, and selects what it returns', () => {
 		const f = field({ value: true });
 		f.type('ask @alan \nthen go');
