@@ -1181,17 +1181,15 @@
 		const keeper = historyKeeper;
 		// The view from this device's last visit, while this one signs in and catches up: only for the session
 		// saved here, which is the account it was kept for (a sign-in as anyone else drops it).
-		// Media loads by the session's server frame, the kept view's until the server sends its own.
-		const showDirectory = (next: ClientSnapshot) => directory.apply(next, serverOrigin(chat.url), chat.url, session.server);
 		void viewKeeper.restore(chat, (view) => {
 			if (client !== chat) return;
 			session.prime(view);
-			showDirectory(chat.snapshot());
+			showDirectory(chat);
 		});
 		const unsubscribe = chat.subscribe((next) => {
 			serverUrl = chat.url;
 			session.apply(next, chat);
-			showDirectory(next);
+			showDirectory(chat);
 			noteArrivals(next);
 		});
 		// Each session the client begins goes on from what this device kept for its server.
@@ -1287,6 +1285,11 @@
 	}
 
 	/** The connect form was submitted: whatever belonged to the previous backend goes. */
+	/** The directory, from the session: media loads by its server frame, the kept view's until the server sends its own. */
+	function showDirectory(chat: ChatClient): void {
+		directory.apply(session.snapshot, serverOrigin(chat.url), chat.url, session.server);
+	}
+
 	function leaveBackend(): void {
 		drafts.open(undefined);
 		selectedRoomId = undefined;
@@ -1530,6 +1533,7 @@
 			// History kept here stays, for when this account signs in again: deleting it is its own choice (Sign out's
 			// Keep local history, or Clear in Preferences).
 			session.forget();
+			if (chat) showDirectory(chat);
 		};
 	}
 

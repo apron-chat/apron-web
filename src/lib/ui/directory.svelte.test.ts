@@ -192,18 +192,20 @@ describe('directory', () => {
 
 	it('loads media by the frame it is given, the session\'s, over the snapshot\'s', () => {
 		const cy: Identity = { user_id: 'cy', name: 'Cy', avatar: 'https://media.example/cy.png' };
-		const frame = { apron: 10, auth: ['guest'], capabilities: ['ext:media'], ext: { media: { origins: ['https://media.example'] } } };
-		const connecting = { ...blankSnapshot(), server: undefined };
+		const frame = (origins: string[]) => ({ apron: 10, auth: ['guest'], capabilities: ['ext:media'], ext: { media: { origins } } });
+		const named = frame(['https://media.example']);
 		try {
 			mediaSettings.update('trusted', []);
-			directory.apply(connecting, 'https://example.com');
-			expect(directory.avatar(cy)).toBeUndefined();
-			// The kept view's frame, while the connection has none.
-			directory.apply(connecting, 'https://example.com', 'wss://example.com/', frame);
+			// Still connecting: the kept view's frame stands in for the one the connection hasn't sent.
+			directory.apply(blankSnapshot(), 'https://example.com', 'wss://example.com/', named);
 			expect(directory.avatar(cy)).toBe('https://media.example/cy.png');
-			directory.apply(connecting, 'https://example.com', 'wss://example.com/', undefined);
+			// The frame given wins over the snapshot's, either way.
+			directory.apply(snapshot([ada], { server: named }), 'https://example.com', 'wss://example.com/', frame([]));
 			expect(directory.avatar(cy)).toBeUndefined();
+			directory.apply(snapshot([ada], { server: frame([]) }), 'https://example.com', 'wss://example.com/', named);
+			expect(directory.avatar(cy)).toBe('https://media.example/cy.png');
 		} finally {
+			directory.apply(blankSnapshot(), undefined);
 			mediaSettings.update('trusted', [], []);
 		}
 	});

@@ -83,6 +83,11 @@ describe('SessionView, primed with a view kept on this device', () => {
 		session.prime({ ...kept, server: frame('kept') });
 		session.apply({ ...blankSnapshot(), status: 'connecting' }, chat);
 		expect(session.server?.agent).toBe('kept');
+		// The server's frame replaces the kept one, even through a drop before the session is ready.
+		session.apply({ ...blankSnapshot(), status: 'connecting', server: frame('live') }, chat);
+		expect(session.server?.agent).toBe('live');
+		session.apply({ ...blankSnapshot(), status: 'reconnecting', disconnectedAt: 1 }, chat);
+		expect(session.server?.agent).toBe('live');
 		session.apply(ready({ server: frame('live'), rooms: [room('general', ['1'])], activeRoom: 'general' }), chat);
 		expect(session.server?.agent).toBe('live');
 		// A drop: the client forgets the frame, the held view (this connection's, not the kept one) keeps it.

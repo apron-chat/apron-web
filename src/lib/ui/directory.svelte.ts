@@ -4,7 +4,7 @@ import { safeLink, serverOrigin } from '$lib/protocol/embeds';
 import { mediaGate as gateFor, type MediaGate, type MediaSrc } from './media-gate';
 import { shownPerson, withoutBidiOverrides } from '$lib/protocol/plain-text';
 import type { EmojiResolver, LinkResolver, MentionResolver, MentionTarget, RoomMentionResolver } from '$lib/protocol/markdown';
-import type { Identity } from '$lib/protocol/types';
+import type { Identity, ServerParams } from '$lib/protocol/types';
 import { readPlaceLink, writeApronLink } from './apron-link';
 import { serverLabel } from './connection';
 import { customEmoji } from './custom-emoji.svelte';
@@ -96,11 +96,12 @@ class Directory {
 	 * rebuilds the view. The client emits fresh records on every frame, so
 	 * unchanged ones are kept: every message body renders from them, and a
 	 * typing notice or an upload's progress should not render them all again.
-	 * `frame` is the server frame media loads by (`ext.media`): the session's (`SessionView.server`), which is the
-	 * held view's while it stands in for the live one, so a reload's kept view draws its avatars before the server
-	 * answers, and a reconnect's don't drop to initials.
+	 * `frame` is the server frame media loads by (`ext.media`): the session's
+	 * (`SessionView.server`), the held view's while it stands in, so a kept
+	 * view's avatars draw before the server answers, and through a reconnect.
+	 * Without one, the snapshot's own.
 	 */
-	apply(snapshot: ClientSnapshot, origin: string | undefined, server?: string, frame = snapshot.server): void {
+	apply(snapshot: ClientSnapshot, origin: string | undefined, server?: string, frame: ServerParams | undefined = snapshot.server): void {
 		this.origin = origin;
 		this.server = server;
 		const { origins } = serverMedia(frame);
