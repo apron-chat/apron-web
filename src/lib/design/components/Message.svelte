@@ -349,9 +349,10 @@
 			{:else}
 				<!-- An absent format is plain (§3.5); only an explicit `markdown` body is rendered as Markdown. -->
 				{#if view.body}<div class={['ap-msg-text', view.body.markdown ? 'ap-msg-markdown' : 'ap-msg-plain']} {@attach (view.body.code || view.body.tasks) && decorate}>{@html view.body.html}</div>{/if}
-				{#if view.editedBy}<div class="ap-msg-edited" data-testid={testids?.editedBy}>edited by {view.editedBy}</div>{/if}
+				<!-- Who else saved its text (`ext:editors`): never while its live text is still coming, which no one else may save over. -->
 				{#if view.writing}<div class="ap-msg-writing" role="status" data-testid={testids?.writing}><TypingDots />Writing…</div>
-				{:else if view.waiting}<div class="ap-msg-writing" role="status" data-testid={testids?.waiting}>Waiting to stream…</div>{/if}
+				{:else if view.waiting}<div class="ap-msg-writing" role="status" data-testid={testids?.waiting}>Waiting to stream…</div>
+				{:else if view.editedBy}<div class="ap-msg-edited" data-testid={testids?.editedBy}>edited by {view.editedBy}</div>{/if}
 				{#if view.linkCards?.length}<div class="ap-msg-linkcards">{#each view.linkCards as card (card.href)}<LinkCard {card} data-testid={testids?.linkCard} />{/each}</div>{/if}
 				{#if view.embeds?.length}<MessageEmbeds embeds={view.embeds} {embed} onremove={(item) => on.removeEmbed?.(view, item)} />{/if}
 			{/if}

@@ -28,7 +28,7 @@ function row(fields: Partial<MessageRow> = {}): MessageRow {
 }
 
 /** A page on SERVER that has `records` and `rooms` loaded, and resolves a link only to them, on SERVER. */
-function context(records: MessageRecord[] = [], uploads: Record<string, UploadState> = {}, rooms: LinkedRoom[] = []): MessageContext {
+function context(records: MessageRecord[] = [], uploads: Record<string, UploadState> = {}, rooms: LinkedRoom[] = [], editors = false): MessageContext {
 	const resolve = (id: string) => records.find((record) => record.message_id === id);
 	const here = (link: ApronLink) => link.server === undefined || link.server === SERVER;
 	return {
@@ -36,7 +36,8 @@ function context(records: MessageRecord[] = [], uploads: Record<string, UploadSt
 		linked: (link) => (here(link) ? resolve(link.message!) : undefined),
 		linkedRoom: (link) => (here(link) ? rooms.find((room) => room.id === link.room) : undefined),
 		server: SERVER,
-		uploads
+		uploads,
+		editors
 	};
 }
 
@@ -68,11 +69,11 @@ describe('messageView', () => {
 	it('says who edited a message its sender shares the text of, by name, only where the server has ext:editors', () => {
 		const ext = { editors: { 'body.text': 'mentioned', edited_by: 'ada' } };
 		const shared = messageRecord(1, 'ops', { from: { user_id: 'you' }, ext });
-		expect(messageView(shared, row({ editors: true }), context()).editedBy).toBe('Ada');
+		expect(messageView(shared, row(), context([], {}, [], true)).editedBy).toBe('Ada');
 		// Without the extension the server wouldn't have set it, so anyone could have: it doesn't show.
 		expect(messageView(messageRecord(2, 'ops', { from: { user_id: 'you' }, ext }), row(), context()).editedBy).toBeUndefined();
 		// The sender's own save carries none.
-		expect(messageView(messageRecord(3, 'ops', { from: { user_id: 'ada' }, ext }), row({ editors: true }), context()).editedBy).toBeUndefined();
+		expect(messageView(messageRecord(3, 'ops', { from: { user_id: 'ada' }, ext }), row(), context([], {}, [], true)).editedBy).toBeUndefined();
 	});
 
 	it('leaves out the body of a message with no text and of a tombstone, but not of a system line', () => {

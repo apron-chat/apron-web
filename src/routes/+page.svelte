@@ -2593,6 +2593,9 @@
 		},
 		get uploads() {
 			return session.uploads;
+		},
+		get editors() {
+			return session.editors;
 		}
 	};
 
@@ -2956,8 +2959,7 @@
 			selected: selection.has(event.message_id),
 			editing: editingId === event.message_id,
 			caps: capsFor(event),
-			seenBy: receipts.get(event.message_id),
-			editors: session.editors
+			seenBy: receipts.get(event.message_id)
 		};
 	}
 
@@ -2967,7 +2969,7 @@
 		const writes = session.canEdit && !session.readOnly;
 		const own = writes && isOwn(event, session.you);
 		// Someone else's message whose text its sender shares with those it mentions, you among them (`ext:editors`): you may edit its text, and nothing else.
-		const shared = writes && session.editors && mayEditText(event, session.you?.user_id);
+		const shared = writes && event.ext !== undefined && session.editors && mayEditText(event, session.you?.user_id);
 		return {
 			reply: canCompose && !event.deleted,
 			edit: (own || shared) && !event.deleted,

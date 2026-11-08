@@ -47,8 +47,6 @@ export interface MessageRow {
 	caps: MessageCaps;
 	/** Read receipts under it (`receiptsByMessage`): kept the same array while unchanged (`steadyReceipts`). */
 	seenBy?: Face[];
-	/** The server has `ext:editors`, so a snapshot's `edited_by` is the server's word: it shows. */
-	editors?: boolean;
 }
 
 /** What every row reads from: one object for the page, its fields read only where a row needs them. */
@@ -67,6 +65,11 @@ export interface MessageContext {
 	readonly server: string | undefined;
 	/** Files this client is writing to upload embeds, by `embed_id`: read only for a message with embeds. */
 	readonly uploads: Record<string, UploadState>;
+	/**
+	 * The server has `ext:editors`, so a snapshot's `edited_by` is the server's word, and shows: read only for a
+	 * message that has one.
+	 */
+	readonly editors?: boolean;
 }
 
 /**
@@ -163,7 +166,8 @@ function draw(event: MessageRecord): Drawn {
 		time: eventTime(event),
 		timestamp: idMillis(event.message_id)
 	};
-	const by = event.deleted ? undefined : editedBy(event);
+	// Most messages carry no `ext`: they read nothing more.
+	const by = event.ext && !event.deleted ? editedBy(event) : undefined;
 	if (by) next.editedBy = directory.name({ user_id: by });
 	drawn.set(event, next);
 	return next;
@@ -399,7 +403,7 @@ export function messageView(event: MessageRecord, row: MessageRow, context: Mess
 	if (row.selected) view.selected = true;
 	if (row.editing) view.editing = true;
 	if (row.seenBy?.length) view.seenBy = row.seenBy;
-	if (row.editors && seen.editedBy && !system) view.editedBy = seen.editedBy;
+	if (seen.editedBy && !system && context.editors) view.editedBy = seen.editedBy;
 	const last = made.get(event);
 	if (last && sameView(last, view)) return last;
 	made.set(event, view);
