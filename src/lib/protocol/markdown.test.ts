@@ -482,6 +482,12 @@ describe('task lists', () => {
 		expect(html).toContain('data-task-line="4" checked=""');
 	});
 
+	it('marks the lists that hold tasks, nested ones too, and no other', () => {
+		const html = renderMarkdown('- [ ] a\n  - [x] b\n  - c\n\n1. plain');
+		expect(html.match(/<ul class="ap-task-list">/g)).toHaveLength(2);
+		expect(html).toContain('<ol>');
+	});
+
 	it('counts lines in nested lists and quotes, and keeps the text after the marker', () => {
 		const html = renderMarkdown('> - a\n>   - [ ] **deep**');
 		expect(html).toContain('data-task-line="1" disabled=""><strong>deep</strong>');

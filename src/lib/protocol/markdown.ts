@@ -47,6 +47,13 @@ md.core.ruler.after('inline', 'task_lists', (state) => {
 		box.content = `<input type="checkbox" class="ap-task" data-task-line="${line}"${marker[1] === ' ' ? '' : ' checked'} disabled>`;
 		children.unshift(box);
 		item.attrJoin('class', marker[1] === ' ' ? 'ap-task-item' : 'ap-task-item ap-task-done');
+		// Its list, once: drawn without its own indent, so its checks line up with the text above it.
+		for (let back = index - 3; back >= 0; back -= 1) {
+			const list = tokens[back];
+			if (list.level >= item.level || (list.type !== 'bullet_list_open' && list.type !== 'ordered_list_open')) continue;
+			if (!list.attrGet('class')) list.attrSet('class', 'ap-task-list');
+			break;
+		}
 	}
 });
 // Wide tables scroll inside the message rather than widening it.

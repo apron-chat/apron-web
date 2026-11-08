@@ -306,10 +306,16 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-msg-text .ap-align-center { text-align: center; }
 .ap-msg-text .ap-align-right { text-align: right; }
 /* A task list item (`- [ ]`, `- [x]`): a round check in its bullet's place, green once done, its text then quieter.
-   Where you may tick it (yours, or one that mentions you) it takes a hover; elsewhere its ring is dashed. */
-.ap-task-item { list-style: none; }
+   Where you may tick it (yours, or one that mentions you) it takes a hover; elsewhere its ring is dashed.
+   A list with tasks has no indent of its own: its checks line up with the text above it (a nested list's with
+   its item's text), each in a gutter its wrapped lines keep clear of, centred on the first line. Its other items
+   keep their bullet in that gutter, their text in line with the tasks'. */
+.ap-task-list { padding-inline-start: 0; }
+.ap-task-list > li { margin-inline-start: var(--space-6); }
+.ap-task-list > .ap-task-item { position: relative; margin-inline-start: 0; padding-inline-start: var(--space-6); list-style: none; }
 .ap-task-done { color: var(--ink-muted); }
-.ap-task { appearance: none; display: inline-grid; place-items: center; box-sizing: border-box; width: 17px; height: 17px; margin: 0; margin-inline: -1.4em 0.4em; vertical-align: middle; translate: 0 -1px; border: 1.5px solid var(--line-strong); border-radius: var(--radius-full); background: transparent; }
+.ap-task-done > :is(ul, ol) { color: var(--ink); }
+.ap-task { appearance: none; position: absolute; inset-inline-start: 0; top: calc((var(--leading-body) - 17px) / 2); top: calc((1lh - 17px) / 2); display: grid; place-items: center; box-sizing: border-box; width: 17px; height: 17px; margin: 0; border: 1.5px solid var(--line-strong); border-radius: var(--radius-full); background: transparent; }
 .ap-task::after { content: ''; width: 8px; height: 4px; border: 2px solid var(--bg-100); border-top: 0; border-right: 0; transform: translateY(-1px) rotate(-45deg); opacity: 0; }
 .ap-task:checked { border-color: var(--ok); background: var(--ok); }
 .ap-task:checked::after { opacity: 1; }
