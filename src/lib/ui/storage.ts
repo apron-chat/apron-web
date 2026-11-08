@@ -56,11 +56,13 @@ const KEY = {
 
 /**
  * A server signed in to before: its address (§1), the key it is known by, and the `title` and `avatar` of its last
- * `server` frame (§3.1), for showing it while it isn't connected. Never found by its title or avatar.
+ * `server` frame (§3.1), for showing it while it isn't connected. Never found by its title or avatar. A `starred`
+ * one is kept, at the top of the list, until it is unstarred or forgotten.
  */
-export type RecentServer = { url: string; title?: string; avatar?: string };
+export type RecentServer = { url: string; title?: string; avatar?: string; starred?: boolean };
 export type SidebarPrefs = { width: number; collapsed: boolean };
 
+/** The most servers kept that aren't starred; starred ones are kept besides these. */
 const RECENT_SERVERS_MAX = 5;
 /** The most rooms kept as added per account; the ones added longest ago go first. */
 const ADDED_ROOMS_MAX = 50;
@@ -149,8 +151,9 @@ export function saveLastSignIn(url: string, scheme: string): void {
 }
 
 /**
- * The servers signed in to before, newest first, each once by its address: entries saved before addresses were
- * normalized, or with a host `label` in place of a title, are folded into the newest entry for their address.
+ * The servers signed in to before, each once by its address: the starred ones, in the order they were starred, then
+ * the rest, newest first. Entries saved before addresses were normalized, or with a host `label` in place of a title,
+ * are folded into the newest entry for their address.
  */
 export function loadRecentServers(): RecentServer[] {
 	try {
@@ -161,21 +164,60 @@ export function loadRecentServers(): RecentServer[] {
 			if (!isJsonObject(entry) || typeof entry.url !== 'string') continue;
 			const url = addressOf(entry.url);
 			if (!url || recent.some((kept) => kept.url === url)) continue;
-			recent.push({ url, ...(typeof entry.title === 'string' && entry.title ? { title: entry.title } : {}), ...(typeof entry.avatar === 'string' && entry.avatar ? { avatar: entry.avatar } : {}) });
+			recent.push(recentEntry(url, { title: typeof entry.title === 'string' ? entry.title : undefined, avatar: typeof entry.avatar === 'string' ? entry.avatar : undefined }, entry.starred === true));
 		}
-		return recent.slice(0, RECENT_SERVERS_MAX);
+		return arrangeRecent(recent);
 	} catch {
 		return [];
 	}
 }
 
-/** Puts a server at the head of the recent list, with how it last looked, dropping its older entry and the tail. */
-export function rememberServer(recent: RecentServer[], url: string, look: Pick<ServerLook, 'title' | 'avatar'> = {}): RecentServer[] {
-	const address = addressOf(url) ?? url;
-	const entry: RecentServer = { url: address, ...(look.title ? { title: look.title } : {}), ...(look.avatar ? { avatar: look.avatar } : {}) };
-	const next = [entry, ...recent.filter((server) => server.url !== address)].slice(0, RECENT_SERVERS_MAX);
+function recentEntry(url: string, look: Pick<ServerLook, 'title' | 'avatar'>, starred: boolean | undefined): RecentServer {
+	return { url, ...(look.title ? { title: look.title } : {}), ...(look.avatar ? { avatar: look.avatar } : {}), ...(starred ? { starred: true } : {}) };
+}
+
+/** The starred servers in their order, then the first `RECENT_SERVERS_MAX` of the rest in theirs. */
+function arrangeRecent(recent: RecentServer[]): RecentServer[] {
+	return [...recent.filter((server) => server.starred), ...recent.filter((server) => !server.starred).slice(0, RECENT_SERVERS_MAX)];
+}
+
+function saveRecent(next: RecentServer[]): RecentServer[] {
 	write(KEY.recentServers, JSON.stringify(next));
 	return next;
+}
+
+/**
+ * Puts a server at the head of the recent list, with how it last looked, dropping its older entry and the tail. A
+ * starred server keeps its place among the starred.
+ */
+export function rememberServer(recent: RecentServer[], url: string, look: Pick<ServerLook, 'title' | 'avatar'> = {}): RecentServer[] {
+	const address = addressOf(url) ?? url;
+	const starred = recent.find((server) => server.url === address)?.starred;
+	const entry = recentEntry(address, look, starred);
+	if (starred) return saveRecent(recent.map((server) => (server.url === address ? entry : server)));
+	return saveRecent(arrangeRecent([entry, ...recent.filter((server) => server.url !== address)]));
+}
+
+/**
+ * Stars a listed server, last among the starred, so it is kept whatever is connected to after it; or unstars it, which
+ * makes it the newest of the rest. A server not listed is left alone.
+ */
+export function starServer(recent: RecentServer[], url: string, starred: boolean): RecentServer[] {
+	const address = addressOf(url) ?? url;
+	const kept = recent.find((server) => server.url === address);
+	if (!kept || Boolean(kept.starred) === starred) return recent;
+	const entry = recentEntry(address, kept, starred);
+	const others = recent.filter((server) => server.url !== address);
+	// After the starred and before the rest: last of the starred, or newest of the rest.
+	const stars = others.filter((server) => server.starred);
+	return saveRecent(arrangeRecent([...stars, entry, ...others.filter((server) => !server.starred)]));
+}
+
+/** Drops a server from the list, starred or not. Nothing else kept for it (its sign-in, its history) is touched. */
+export function forgetServer(recent: RecentServer[], url: string): RecentServer[] {
+	const address = addressOf(url) ?? url;
+	if (!recent.some((server) => server.url === address)) return recent;
+	return saveRecent(recent.filter((server) => server.url !== address));
 }
 
 /**
@@ -188,10 +230,8 @@ export function refreshRecentServer(recent: RecentServer[], url: string, look: P
 	if (index < 0) return recent;
 	const kept = recent[index];
 	if (kept.title === look.title && kept.avatar === look.avatar) return recent;
-	const entry: RecentServer = { url: address, ...(look.title ? { title: look.title } : {}), ...(look.avatar ? { avatar: look.avatar } : {}) };
-	const next = recent.map((server, at) => (at === index ? entry : server));
-	write(KEY.recentServers, JSON.stringify(next));
-	return next;
+	const entry = recentEntry(address, look, kept.starred);
+	return saveRecent(recent.map((server, at) => (at === index ? entry : server)));
 }
 
 function loadPanelPrefs(key: string): Partial<SidebarPrefs> {

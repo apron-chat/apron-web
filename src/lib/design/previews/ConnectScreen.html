@@ -1,4 +1,4 @@
-<!-- @dsCard group="Layout" height=640 width=2200 page subtitle="Guest by default, with recent backends, each with its address; token refused, with Cancel; an emailed code, under the server's name, address, description and welcome; passkey: sign in, or create an account. A client with its own sign-in flow builds the same page from ConnectPage, ConnectHeader and SignInForm" -->
+<!-- @dsCard group="Layout" height=640 width=2200 page subtitle="Guest by default, with recent backends, each with its address, a star and an ×; token refused, with Cancel; an emailed code, under the server's name, address, description and welcome; passkey: sign in, or create an account. A client with its own sign-in flow builds the same page from ConnectPage, ConnectHeader and SignInForm" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>ConnectScreen</title><style>html,body{height:100%}</style></head>
@@ -7,7 +7,7 @@
 <script>
   var A = window.Apron, root = document.getElementById('root');
   function add(C, props, at) { return A.render(C, at || root, props || {}); }
-  add(A.ConnectScreen, { recent: [{ url: 'wss://chat.work.example/ws', label: 'Work' }, { url: 'wss://home.lab:8443/apron', label: 'Home lab' }] });
+  add(A.ConnectScreen, { recent: [{ url: 'wss://chat.work.example/ws', label: 'Work', starred: true }, { url: 'wss://home.lab:8443/apron', label: 'Home lab' }], onstarrecent: function () {}, onforgetrecent: function () {} });
   add(A.ConnectScreen, { url: 'wss://chat.work.example/ws', name: 'Alice', schemes: ['token', 'webauthn'], scheme: 'token', error: 'The server refused that token. Check it and try again.', oncancel: function () {} });
   add(A.ConnectScreen, { url: 'wss://chat.work.example/ws', schemes: ['email', 'webauthn', 'token'], scheme: 'email', email: 'ada@example.com', codeSent: true,
     server: { name: 'Work', address: 'wss://chat.work.example/ws' }, description: A.html('<p>The team’s chat.</p>'),

@@ -3279,7 +3279,7 @@
 	<AppShell viewport />
 {:else if connectOpen}
 	<ConnectScreen
-		{client} {session} bind:serverInput bind:displayName {passkeyUnavailable} {recentServers}
+		{client} {session} bind:serverInput bind:displayName {passkeyUnavailable} bind:recentServers
 		canCancel={!disconnected && (session.rooms.length > 0 || session.ready || offeringLink)} initialScheme={connectScheme}
 		initialError={links.failure?.error} initialChoosing={connectChoosing} linked={offeringLink && linked ? { server: linked.server, room: linked.room } : undefined}
 		onconnect={leaveBackend} onconnected={connected} oncancel={() => { connectOpen = false; offeringLink = false; if (client) serverInput = client.url; }} onsignout={signedOut}

@@ -631,6 +631,8 @@ export interface RecentBackend {
 	label?: string;
 	/** Its `avatar` (§3.1), loaded as a user's is (§4.8.6); initials without one. */
 	avatar?: MediaSrc;
+	/** Starred: kept at the top of the list until unstarred. */
+	starred?: boolean;
 }
 
 /** The server in the connect screen's Server field, once it has answered: how it shows itself (§3.1), beside its address. */

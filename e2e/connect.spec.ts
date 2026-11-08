@@ -330,4 +330,37 @@ test.describe('on a phone', () => {
 		await expect(form).toBeVisible();
 		await expect(form.getByRole('button', { name: 'Cancel', exact: true })).toHaveCount(0);
 	});
+
+	test('recent servers can be starred, staying at the top, and forgotten', async ({ page }) => {
+		const base = process.env.E2E_URL!;
+		await page.route(/^https?:\/\/(?!127\.0\.0\.1[:/]|localhost[:/])/, (route) => route.abort());
+		await page.routeWebSocket(/.*/, () => new Promise<void>(() => undefined));
+		await page.addInitScript(() => {
+			localStorage.setItem('apron.serverUrl', 'wss://chat.gone.example/');
+			// Only the first visit's list: what the page saves after it stands on a reload.
+			if (!sessionStorage.getItem('seeded')) {
+				sessionStorage.setItem('seeded', '1');
+				localStorage.setItem('apron.recentServers', JSON.stringify([{ url: 'wss://chat.gone.example/', title: 'Old Chat' }, { url: 'wss://work.example/', title: 'Work' }]));
+			}
+		});
+		const openRecent = async () => {
+			await page.goto(`${base}/`);
+			await page.getByRole('button', { name: 'Change server', exact: true }).click();
+			return page.getByRole('group', { name: 'Recent servers' });
+		};
+		let recent = await openRecent();
+		const names = () => recent.locator('.ap-connect-recent-item .ap-room-name');
+		await expect(names()).toHaveText(['Old Chat', 'Work']);
+		const star = recent.getByRole('button', { name: 'Star Work', exact: true });
+		await expect(star).toHaveAttribute('aria-pressed', 'false');
+		await star.click();
+		await expect(names()).toHaveText(['Work', 'Old Chat']);
+		await expect(recent.getByRole('button', { name: 'Star Work', exact: true })).toHaveAttribute('aria-pressed', 'true');
+		await recent.getByRole('button', { name: 'Forget Old Chat', exact: true }).click();
+		await expect(names()).toHaveText(['Work']);
+		// Kept: starred, and the gone server forgotten.
+		recent = await openRecent();
+		await expect(names()).toHaveText(['Work']);
+		await expect(recent.getByRole('button', { name: 'Star Work', exact: true })).toHaveAttribute('aria-pressed', 'true');
+	});
 });
