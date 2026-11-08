@@ -181,30 +181,31 @@ describe('persisted session tokens', () => {
 		expect(snapshot.rooms.find((room) => room.id === 'general')?.notices).toEqual([]);
 	});
 
-	it('keeps each server its own session across switching servers, and resumes it on switching back', async () => {
+	it('keeps a session per server across a switch, and resumes it on switching back', async () => {
 		const { client } = startClient({ storage, onSnapshot: (next) => (snapshot = next) });
 		await latest().greet([], { auth: ['token', 'guest'], token: 'here-1', you: { user_id: 'ada' } });
-		expect(storage.get('apron.session:ws://fake.test/')).toBe('here-1');
+		const here = { 'apron.session:ws://fake.test/': 'here-1', 'apron.session-user:ws://fake.test/': 'ada', 'apron.signin:ws://fake.test/': 'token' };
+		expect(Object.fromEntries(storage)).toEqual(here);
 
-		// To another server: signed in there anew, and this one's token stays where it was, and isn't sent there.
+		// To another server: signed in there anew, and this one's session stays where it was, and isn't sent there.
 		client.setUrl('ws://other.test/');
 		await vi.advanceTimersByTimeAsync(0);
 		expect(latest().url).toBe('ws://other.test/');
+		expect(snapshot.keptSession).toBeUndefined();
 		await latest().greet([], { auth: ['token', 'guest'], token: 'there-1', you: { user_id: 'bob' } });
 		expect(authParams()).toEqual(expect.objectContaining({ scheme: 'guest' }));
 		expect(authParams()).not.toHaveProperty('token');
-		expect(storage.get('apron.session:ws://other.test/')).toBe('there-1');
-		expect(storage.get('apron.session:ws://fake.test/')).toBe('here-1');
+		const there = { 'apron.session:ws://other.test/': 'there-1', 'apron.session-user:ws://other.test/': 'bob', 'apron.signin:ws://other.test/': 'token' };
+		expect(Object.fromEntries(storage)).toEqual({ ...here, ...there });
 
-		// Back again: resumed with its own token, as its own account.
+		// Back again: its kept session is picked up before the server answers, and resumed with its own token.
 		client.setUrl('ws://fake.test/');
 		await vi.advanceTimersByTimeAsync(0);
 		expect(latest().url).toBe('ws://fake.test/');
+		expect(snapshot.keptSession).toBe(true);
 		await latest().greet([], { auth: ['token', 'guest'], you: { user_id: 'ada' } });
 		expect(authParams()).toEqual(expect.objectContaining({ scheme: 'token', token: 'here-1' }));
-		expect(snapshot.you?.user_id).toBe('ada');
-		expect(storage.get('apron.session:ws://other.test/')).toBe('there-1');
-		client.stop();
+		expect(Object.fromEntries(storage)).toEqual({ ...here, ...there });
 	});
 
 	it('forgets a stored token the server rejects and on sign-out', async () => {
