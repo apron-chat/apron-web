@@ -38,7 +38,8 @@ const MENTION_REACH = 65;
 
 /**
  * Whether the line before the caret, as far back as a query can start, holds an `@`, `#` or `:`: else no mention,
- * room or emoji query can be open at it (`mentionQuery`, `roomQuery`, `emojiQuery`). A chip counts as its `@`.
+ * room or emoji query can be open at it (`mentionQuery`, `roomQuery`, `emojiQuery`). `text` has one character per caret
+ * position (`positionText`), a chip as its `@id`.
  */
 function nearTrigger(text: string, caret: number): boolean {
 	const from = Math.max(text.lastIndexOf('\n', caret - 1) + 1, caret - MENTION_REACH);
@@ -257,6 +258,29 @@ export class DraftField {
 		return true;
 	}
 
+	/**
+	 * Makes a change at a bare caret (`continueList`, `expandTask`) as typing it would: the text it replaces is selected
+	 * and the new text typed over it, so the browser's Undo takes it back and the chips around it stay as they are. The
+	 * change keeps everything after the caret; false when it makes none.
+	 */
+	private typeChange(change: (edit: TextEdit) => TextEdit | undefined): boolean {
+		const field = this.element;
+		if (!field || this.host.disabled) return false;
+		const { parts, caret, anchor } = readDraft(field);
+		if (caret === undefined || (anchor !== undefined && anchor !== caret)) return false;
+		const before = positionText(parts);
+		const changed = change({ text: before, start: caret, end: caret });
+		if (!changed) return false;
+		const kept = before.length - caret;
+		let from = 0;
+		while (from < caret && before[from] === changed.text[from]) from++;
+		// A selection is placed among the field's own text and chips: lines the browser wrapped in blocks (Chrome's
+		// `<div>` for Enter) are drawn flat first.
+		if (!isFlat(field)) this.draw(field, parts, caret);
+		placeSelection(field, from, caret);
+		return document.execCommand('insertText', false, changed.text.slice(from, changed.text.length - kept));
+	}
+
 	/** Closes the picker and forgets where the caret was: the field is changing under it. */
 	reset(): void {
 		this.closeCompletions();
@@ -304,7 +328,7 @@ export class DraftField {
 			const send = this.host.newlineOnEnter ? event.ctrlKey || event.metaKey : enterAction(event, this.onHandheld) === 'send';
 			if (send) this.host.submit();
 			// A new line on a list item carries the list on (a task unticked), or ends it on an empty one.
-			else if (!this.apply(continueList)) document.execCommand('insertText', false, '\n');
+			else if (!this.typeChange(continueList)) document.execCommand('insertText', false, '\n');
 		}
 	};
 
@@ -383,7 +407,7 @@ export class DraftField {
 		}
 		const read = this.collapse(false);
 		// A space after `[]` at a line's start may finish a checklist item typed short (`-[] `): only then is it looked at.
-		if ((event as InputEvent).data === ' ' && read?.caret !== undefined && positionText(read.parts).slice(read.caret - 2, read.caret) === '] ' && this.apply(expandTask)) return;
+		if ((event as InputEvent).data === ' ' && read?.caret !== undefined && positionText(read.parts).slice(read.caret - 2, read.caret) === '] ' && this.typeChange(expandTask)) return;
 		this.refresh(read);
 	};
 
@@ -411,13 +435,13 @@ export class DraftField {
 		if (box && field && field.contains(box) && !this.host.disabled) {
 			event.preventDefault();
 			const { parts, caret } = readDraft(field);
-			const index = [...field.childNodes].indexOf(box);
+			// The draft reads its checkboxes in document order, as the field holds them.
+			const index = [...field.querySelectorAll('[data-task]')].indexOf(box);
 			let seen = -1;
 			const toggled = parts.map((part): DraftPart => {
 				if (typeof part === 'string' || !part.task) return part;
 				seen += 1;
-				// Chips are drawn as the field's own children, in order: the nth chip among them is the nth task here.
-				return seen === tasksBefore(field, index) ? { ...part, task: part.task === 'x' ? ' ' : 'x' } : part;
+				return seen === index ? { ...part, task: part.task === 'x' ? ' ' : 'x' } : part;
 			});
 			this.draw(field, toggled, caret);
 			this.commit(field, toggled, true);
@@ -447,7 +471,7 @@ export class DraftField {
 		const text = draftText(parts);
 		const position = caret ?? draftLength(parts);
 		// Most keys are far from any `@`, `#` or `:`: with nothing open or dismissed, there's nothing to look for.
-		if (!this.query && !this.emojiFound && !this.roomFound && !this.dismissedAutocomplete && !nearTrigger(text, position)) return;
+		if (!this.query && !this.emojiFound && !this.roomFound && !this.dismissedAutocomplete && !nearTrigger(parts.length > 1 ? positionText(parts) : text, position)) return;
 		if (isAutocompleteDismissed(this.dismissedAutocomplete, text, position)) {
 			this.closeCompletions();
 			return;
@@ -634,8 +658,9 @@ export class DraftField {
 			box.className = part.task === 'x' ? 'ap-task-chip ap-task-chip-done' : 'ap-task-chip';
 			box.contentEditable = 'false';
 			box.dataset.task = part.task;
-			box.setAttribute('role', 'checkbox');
-			box.setAttribute('aria-checked', String(part.task === 'x'));
+			// Named for what it is; the keyboard can't tick it, so it doesn't claim to be a checkbox.
+			box.setAttribute('role', 'img');
+			box.setAttribute('aria-label', part.task === 'x' ? 'Checklist item, done' : 'Checklist item');
 			box.title = part.task === 'x' ? 'Done: click to untick' : 'Click to tick';
 			return box;
 		}
@@ -757,12 +782,11 @@ function pointIn(root: HTMLElement, position: number): { node: Node; offset: num
 	return { node: root, offset: last instanceof HTMLBRElement ? root.childNodes.length - 1 : root.childNodes.length };
 }
 
-/** How many task chips come before the field's child at `index`. */
-function tasksBefore(field: HTMLElement, index: number): number {
-	let count = 0;
-	for (let at = 0; at < index; at++) {
-		const node = field.childNodes[at];
-		if (node instanceof HTMLElement && node.dataset.task !== undefined) count++;
+/** Whether the field holds only text, line breaks and chips, as `draw` leaves it, with no blocks the browser added. */
+function isFlat(field: HTMLElement): boolean {
+	for (const node of field.childNodes) {
+		if (node.nodeType === Node.TEXT_NODE || node instanceof HTMLBRElement) continue;
+		if (!(node instanceof HTMLElement) || !chipOf(node)) return false;
 	}
-	return count;
+	return true;
 }

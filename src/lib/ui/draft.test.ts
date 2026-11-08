@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chipTasks, collapseMentions, deleteAtTask, draftLength, draftMentions, draftText, insertMention, insertText, mentionQuery, partLength, unchip, type DraftChip, type DraftPart } from './draft';
+import { chipTasks, collapseMentions, deleteAtTask, tokenAtCaret, draftLength, draftMentions, draftText, insertMention, insertText, mentionQuery, partLength, unchip, type DraftChip, type DraftPart } from './draft';
 
 const people = [
 	{ id: 'ada_1', name: 'Ada' },
@@ -275,6 +275,28 @@ describe('checklist items drawn as checkboxes', () => {
 		expect(chipTasks(['- [ ]'])).toEqual(['- [ ]']);
 		const plain = ['no tasks here'];
 		expect(chipTasks(plain)).toBe(plain);
+	});
+
+	it('takes a mention, room or emoji typed right after a checkbox, which ends in a space', () => {
+		const people = [{ id: 'ada', name: 'Ada Lovelace' }];
+		expect(collapseMentions([open, '@ada and'], people, { caret: 14 }).parts).toEqual([open, { id: 'ada' }, ' and']);
+		expect(tokenAtCaret([open, '#gen'], 10, '#', /[\w-]/)).toEqual({ query: 'gen', start: 6, end: 10 });
+	});
+
+	it('turns a checkbox no longer at its line’s start back into its Markdown, and keeps one under a blank line', () => {
+		// Text typed before it, or its line joined to the one above.
+		expect(chipTasks(['x', open, 'milk'])).toEqual(['x- [ ] milk']);
+		expect(chipTasks([{ id: 'ada' }, open])).toEqual([{ id: 'ada' }, '- [ ] ']);
+		// Indentation and quotes before it still leave it at its line's start.
+		const indented: DraftPart[] = ['a\n  > ', open, 'b'];
+		expect(chipTasks(indented)).toBe(indented);
+		// Backspace before one under a blank line: the blank line goes, and it still starts its line.
+		expect(deleteAtTask(['a\n\n', open, 'b'], 3, false)).toEqual({ parts: ['a\n', open, 'b'], caret: 2 });
+	});
+
+	it('leaves a checklist item in a code block as text, and turns one there back', () => {
+		expect(chipTasks(['```\n- [ ] in code\n```\n- [ ] out'])).toEqual(['```\n- [ ] in code\n```\n', open, 'out']);
+		expect(chipTasks(['```\n', open, 'x'])).toEqual(['```\n- [ ] x']);
 	});
 
 	it('keeps no space between a checkbox and the mention after it', () => {

@@ -1,3 +1,4 @@
+import { fencedAt } from './draft';
 import type { TextEdit } from './text-edit';
 
 /**
@@ -10,7 +11,7 @@ const ITEM = /^([ \t]*(?:>[ \t]?)*[ \t]*)(?:([-*+])|(\d{1,9})([.)]))([ \t]+)(\[[
  * A new line typed at the end of a list item carries the list on: the same marker after the same indentation and
  * quotes, a number one up, and a task unticked (`- [ ] `), ready to type. On an item with nothing in it yet the list
  * ends instead: its marker goes, and a blank line follows, for plain text after the list. Undefined, for a plain line break, anywhere else:
- * a selection, a line that isn't a list item, or a caret inside the marker.
+ * a selection, a line that isn't a list item, a caret inside the marker, or a line in a code block.
  */
 export function continueList(edit: TextEdit): TextEdit | undefined {
 	const { text, start, end } = edit;
@@ -19,7 +20,7 @@ export function continueList(edit: TextEdit): TextEdit | undefined {
 	const lineEnd = text.indexOf('\n', start);
 	const line = text.slice(from, lineEnd < 0 ? text.length : lineEnd);
 	const item = ITEM.exec(line);
-	if (!item || start - from < item[0].length) return undefined;
+	if (!item || start - from < item[0].length || fencedAt(text, from)) return undefined;
 	const [marker, opens, bullet, number, close, space, task] = item;
 	if (!line.slice(marker.length).trim()) {
 		// Nothing in it: the list ends here. A blank line (in its quote, if it was in one) sets it apart from what comes
@@ -47,7 +48,7 @@ export function expandTask(edit: TextEdit): TextEdit | undefined {
 	const from = text.lastIndexOf('\n', start - 1) + 1;
 	const typed = text.slice(from, start);
 	const shorthand = TASK_SHORTHAND.exec(typed);
-	if (!shorthand) return undefined;
+	if (!shorthand || fencedAt(text, from)) return undefined;
 	const written = `${shorthand[1]}- [ ] `;
 	if (written === typed) return undefined;
 	const caret = from + written.length;

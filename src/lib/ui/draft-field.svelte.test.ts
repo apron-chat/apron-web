@@ -189,8 +189,8 @@ describe('DraftField', () => {
 		document.execCommand = vi.fn(() => true);
 		f.type('- [x] Foo');
 		f.enter();
-		expect(f.value()).toBe('- [x] Foo\n- [ ] ');
-		expect(document.execCommand).not.toHaveBeenCalled();
+		// Typed as the browser types, so its Undo takes it back (jsdom has no editing commands to do it).
+		expect(document.execCommand).toHaveBeenCalledWith('insertText', false, '\n- [ ] ');
 		// @ts-expect-error: jsdom has no editing commands; put it back as it was.
 		delete document.execCommand;
 		f.done();
@@ -198,9 +198,14 @@ describe('DraftField', () => {
 
 	it('writes a checklist item typed short (`-[] `) out in full as its space is typed', () => {
 		const f = field({ value: true });
+		document.execCommand = vi.fn(() => true);
 		f.type('-[] ');
 		f.draft.input(new InputEvent('input', { data: ' ', inputType: 'insertText' }));
-		expect(f.value()).toBe('- [ ] ');
+		// What differs from the shorthand is selected and typed over: `[] ` becomes ` [ ] ` after the `-`.
+		expect(document.execCommand).toHaveBeenCalledWith('insertText', false, ' [ ] ');
+		expect(document.getSelection()!.toString()).toBe('[] ');
+		// @ts-expect-error: jsdom has no editing commands; put it back as it was.
+		delete document.execCommand;
 		f.done();
 	});
 
@@ -208,13 +213,13 @@ describe('DraftField', () => {
 		const f = field({ value: true });
 		f.type('Plan:\n- [ ] Ship');
 		const box = () => f.element.querySelector<HTMLElement>('[data-task]')!;
-		expect(box().getAttribute('aria-checked')).toBe('false');
+		expect(box().getAttribute('aria-label')).toBe('Checklist item');
 		// A click on the checkbox itself ticks it.
 		const click = new MouseEvent('click', { cancelable: true });
 		Object.defineProperty(click, 'target', { value: box() });
 		f.draft.click(click);
 		expect(f.value()).toBe('Plan:\n- [x] Ship');
-		expect(box().getAttribute('aria-checked')).toBe('true');
+		expect(box().getAttribute('aria-label')).toBe('Checklist item, done');
 		// Copying it all gives its Markdown.
 		const range = document.createRange();
 		range.selectNodeContents(f.element);

@@ -37,6 +37,11 @@ describe('continueList', () => {
 		expect(enter('- a\n  - |')).toBe('- a\n\n|');
 	});
 
+	it('leaves a list in a code block alone', () => {
+		expect(enter('```\n- name: web|')).toBeUndefined();
+		expect(enter('```\nx\n```\n- out|')).toBe('```\nx\n```\n- out\n- |');
+	});
+
 	it('leaves a plain line break elsewhere', () => {
 		expect(enter('Foo|')).toBeUndefined();
 		expect(enter('-Foo|')).toBeUndefined();
@@ -63,5 +68,6 @@ describe('expandTask', () => {
 		expect(typed('[x] |')).toBeUndefined();
 		expect(typed('see [] |')).toBeUndefined();
 		expect(typed('[]|')).toBeUndefined();
+		expect(typed('```\n[] |')).toBeUndefined();
 	});
 });

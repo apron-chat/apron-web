@@ -147,7 +147,8 @@ export function collapseMentions(parts: DraftPart[], people: MentionPerson[], op
 				continue;
 			}
 			// A chip right before sends as `@id`, which ends in an ID character: readers would see this as text.
-			const before = at > 0 ? part[at - 1] : typeof previous === 'string' ? previous[previous.length - 1] : previous ? 'x' : undefined;
+			// A checkbox before it ends in a space (`- [ ] `), as its Markdown does.
+			const before = at > 0 ? part[at - 1] : typeof previous === 'string' ? previous[previous.length - 1] : previous ? (previous.task ? ' ' : 'x') : undefined;
 			const room = char === '#';
 			if ((char !== '@' && !room) || fence !== 0 || (before !== undefined && BEFORE_ID.test(before))) {
 				at += 1;
@@ -281,7 +282,8 @@ export function tokenAtCaret(parts: DraftPart[], caret: number, trigger: string,
 			const at = from - 1;
 			if (part[at] !== trigger || local - from < minLength) return undefined;
 			const before = at > 0 ? part[at - 1] : parts[index - 1];
-			if (before !== undefined && (typeof before !== 'string' || !/\s$/.test(before))) return undefined;
+			// A checkbox before it ends in a space, as its Markdown (`- [ ] `) does; a mention's chip doesn't.
+			if (before !== undefined && (typeof before === 'string' ? !/\s$/.test(before) : !before.task)) return undefined;
 			let end = local;
 			while (end < part.length && char.test(part[end])) end++;
 			return { query: part.slice(from, local), start: offset + at, end: offset + end };
@@ -383,34 +385,65 @@ export function unchip(parts: DraftPart[], caret: number, label: (chip: DraftChi
 }
 
 /** A checklist item's marker at a line's start, after its indentation and quotes: what a task chip stands for. */
-const TASK_MARK = /(^|\n)([ \t]*(?:>[ \t]?)*[ \t]*)- \[([ xX])\] /g;
+const TASK_MARK = /^([ \t]*(?:>[ \t]?)*[ \t]*)- \[([ xX])\] /;
+/** What may come before a list item's marker on its line: indentation and quotes. */
+const LINE_OPENING = /^[ \t]*(?:>[ \t]?)*[ \t]*$/;
+/** A line opening or closing a fenced code block, under any indentation and quotes. */
+const FENCE = /^[ \t]*(?:>[ \t]?)*[ \t]*(?:```|~~~)/;
+
+/** Whether the line starting at `from` is inside a fenced code block, counting the fences on the lines before it. */
+export function fencedAt(text: string, from: number): boolean {
+	let fenced = false;
+	for (let at = 0; at < from; ) {
+		const end = text.indexOf('\n', at);
+		if (FENCE.test(text.slice(at, end < 0 ? text.length : end))) fenced = !fenced;
+		if (end < 0) break;
+		at = end + 1;
+	}
+	return fenced;
+}
 
 /**
- * Draws each checklist item's `- [ ] ` (or `- [x] `) at a line's start as its checkbox (a task chip). A line's start
- * is the draft's start or just after a line break: text after a chip on the same line isn't one. Unchanged (the same
- * array) where there is none, so most keys cost a scan for `[` and nothing more.
+ * The draft with each checklist item's `- [ ] ` (or `- [x] `) at a line's start drawn as its checkbox (a task chip),
+ * outside code fences, and any checkbox no longer at a line's start (an edit moved text before it, or joined its line
+ * to the one above) back to its Markdown, as a reader's client would show it. A line's start is the draft's start or
+ * just after a line break, under indentation and quotes; a mention's chip before it on the line means it isn't one.
+ * Unchanged (the same array) where there is neither, so most keys cost a scan and nothing more.
  */
 export function chipTasks(parts: DraftPart[]): DraftPart[] {
-	if (!parts.some((part) => typeof part === 'string' && part.includes('['))) return parts;
+	const tasked = parts.some((part) => (typeof part === 'string' ? part.includes('- [') : part.task !== undefined));
+	if (!tasked) return parts;
 	const out: DraftPart[] = [];
+	let fenced = false;
+	// Whether the text since the last line break (in this part or ones before) can still open a list item.
+	let lineOpen = true;
 	let changed = false;
-	for (const [index, part] of parts.entries()) {
-		if (typeof part !== 'string' || !part.includes('- [')) {
+	for (const part of parts) {
+		if (typeof part !== 'string' && !part.task) {
 			out.push(part);
+			lineOpen = false;
 			continue;
 		}
-		// Its start is a line's start only at the draft's start or after a line break.
-		const before = parts[index - 1];
-		const lineStart = index === 0 || (typeof before === 'string' && before.endsWith('\n'));
-		let last = 0;
-		for (const match of part.matchAll(TASK_MARK)) {
-			if (match.index === 0 && !match[1] && !lineStart) continue;
-			const at = match.index + match[1].length + match[2].length;
-			out.push(part.slice(last, at), { id: '', task: match[3] === ' ' ? ' ' : 'x' });
-			last = at + 6;
-			changed = true;
+		// A checkbox is read again from its Markdown, so it stays one only where it would be drawn anew.
+		const text = typeof part === 'string' ? part : chipText(part);
+		let from = 0;
+		while (from < text.length) {
+			const lineEnd = text.indexOf('\n', from);
+			const end = lineEnd < 0 ? text.length : lineEnd + 1;
+			const line = text.slice(from, end);
+			const mark: RegExpExecArray | null = lineOpen && !fenced ? TASK_MARK.exec(line) : null;
+			if (lineOpen && FENCE.test(line)) fenced = !fenced;
+			if (mark) {
+				out.push(mark[1], { id: '', task: mark[2] === ' ' ? ' ' : 'x' }, line.slice(mark[0].length));
+				if (typeof part === 'string' || from !== 0 || mark[0].length !== text.length) changed = true;
+			} else {
+				out.push(line);
+				if (typeof part !== 'string') changed = true;
+			}
+			// Indentation and quotes alone still leave the line open, for a checkbox right after them.
+			lineOpen = lineEnd >= 0 || (!mark && lineOpen && LINE_OPENING.test(line));
+			from = end;
 		}
-		out.push(part.slice(last));
 	}
 	return changed ? normalizeDraft(out) : parts;
 }
@@ -431,7 +464,8 @@ export function deleteAtTask(parts: DraftPart[], caret: number, forward: boolean
 			}
 			const joins = typeof before === 'string' && before.endsWith('\n') && caret === (forward ? offset - 1 : offset);
 			if (joins) {
-				const out = normalizeDraft([...parts.slice(0, index - 1), before.slice(0, -1), chipText(part), ...parts.slice(index + 1)]);
+				// The line break goes; the checkbox stays one only if it still starts its line (a blank line was above it).
+				const out = chipTasks(normalizeDraft([...parts.slice(0, index - 1), before.slice(0, -1), part, ...parts.slice(index + 1)]));
 				return { parts: out, caret: offset - 1 };
 			}
 		}
