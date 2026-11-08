@@ -8,7 +8,7 @@
 
 	const HINTS: Record<string, string> = {
 		guest: 'No token needed; the server picks a guest identity.',
-		token: 'Paste the token this backend gave you.',
+		token: 'Paste the token this server gave you.',
 		email: 'We email you a code to sign in with; the link in the email signs you in too.',
 		external: 'Signs in on the server’s own sign-in page (such as single sign-on), which then brings you back here.'
 	};

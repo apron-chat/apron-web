@@ -27,7 +27,7 @@
 <div class={['ap-connect', page && 'ap-connect-page', className]}>
 	{@render children?.()}
 	{#if recent && recent.length > 0}
-		<div class="ap-connect-recent" role="group" aria-label="Recent backends">
+		<div class="ap-connect-recent" role="group" aria-label="Recent servers">
 			<span class="ap-fieldlabel">Recent</span>
 			{#each recent as r (r.url)}
 				<button class="ap-connect-recent-item" type="button" disabled={busy} onclick={() => onpickrecent?.(r)}>

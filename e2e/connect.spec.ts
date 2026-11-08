@@ -312,4 +312,22 @@ test.describe('on a phone', () => {
 		// Connecting stopped: there's nothing to cancel back to.
 		await expect(form.getByRole('button', { name: 'Cancel', exact: true })).toHaveCount(0);
 	});
+
+	test('a server that stays gone says it is still trying to reach it, and Change server stops it there too', async ({ page }) => {
+		const base = process.env.E2E_URL!;
+		await page.clock.install();
+		await page.route(/^https?:\/\/(?!127\.0\.0\.1[:/]|localhost[:/])/, (route) => route.abort());
+		// Gone: every socket is closed as it opens.
+		await page.routeWebSocket(/.*/, (ws) => ws.close());
+		await page.addInitScript(() => localStorage.setItem('apron.serverUrl', 'wss://chat.gone.example/'));
+		await page.goto(`${base}/`);
+		await expect(page.getByTestId('change-server')).toBeVisible();
+		// Past the wait before a reconnect counts as stalled.
+		await page.clock.runFor(11_000);
+		await expect(page.getByTestId('connection-status')).toHaveText('Still trying to reach chat.gone.example…');
+		await page.getByRole('button', { name: 'Change server', exact: true }).click();
+		const form = page.getByRole('form', { name: 'Sign in' });
+		await expect(form).toBeVisible();
+		await expect(form.getByRole('button', { name: 'Cancel', exact: true })).toHaveCount(0);
+	});
 });
