@@ -4,7 +4,7 @@ import { safeLink, serverOrigin } from '$lib/protocol/embeds';
 import { mediaGate as gateFor, type MediaGate, type MediaSrc } from './media-gate';
 import { shownPerson, withoutBidiOverrides } from '$lib/protocol/plain-text';
 import type { EmojiResolver, LinkResolver, MentionResolver, MentionTarget, RoomMentionResolver } from '$lib/protocol/markdown';
-import type { Identity } from '$lib/protocol/types';
+import type { Identity, ServerParams } from '$lib/protocol/types';
 import { readPlaceLink, writeApronLink } from './apron-link';
 import { serverLabel } from './connection';
 import { customEmoji } from './custom-emoji.svelte';
@@ -31,6 +31,10 @@ class Directory {
 	server = $state<string | undefined>();
 	/** The origins the server names for its media (`ext.media.origins`, EXT.md §6); replaced only when they change. */
 	private serverMedia = $state.raw<readonly string[]>([]);
+	/** The last snapshot's server frame, if it has one yet. */
+	private liveServer: ServerParams | undefined;
+	/** The server frame of the view kept on this device, and the server it was kept for (`prime`). */
+	private keptServer: { server: string; frame: ServerParams } | undefined;
 	/**
 	 * The origins besides the server's own that media loads from: the server's, this app's, and as the viewer chose
 	 * (`mediaSettings`), their trusted origins, or any (`ANY_ORIGIN`). Their blocked origins, which win over these, the
@@ -100,10 +104,8 @@ class Directory {
 	apply(snapshot: ClientSnapshot, origin: string | undefined, server?: string): void {
 		this.origin = origin;
 		this.server = server;
-		const { origins } = serverMedia(snapshot.server);
-		if (origins.join(' ') !== this.serverMedia.join(' ')) this.serverMedia = origins;
-		// Its custom emoji (`ext:emoji`), kept through a reconnect until the next server frame says otherwise.
-		if (snapshot.server) customEmoji.apply(snapshot.server, server, (url) => this.mediaGate.src(url) !== undefined);
+		this.liveServer = snapshot.server;
+		this.takeServer();
 		if (!snapshot.authenticated) return;
 		this.you = snapshot.you;
 		const current = this.users;
@@ -129,6 +131,27 @@ class Directory {
 	}
 
 	/**
+	 * The `server` frame of the view kept on this device for `server` (`session-cache.ts`), shown while this
+	 * page's connection comes up: until that connection's own frame arrives, media loads from where it said
+	 * (`ext.media`), so the kept view's avatars and custom emoji draw at once, not only once the server has
+	 * answered. The connection's frame wins as soon as there is one.
+	 */
+	prime(server: string, frame: ServerParams | undefined): void {
+		this.keptServer = frame ? { server, frame } : undefined;
+		this.takeServer();
+	}
+
+	/** The server frame media loads by (`ext.media`): the connection's, else the one kept for the same server (`prime`). */
+	private takeServer(): void {
+		const kept = this.keptServer;
+		const frame = this.liveServer ?? (kept && kept.server === this.server ? kept.frame : undefined);
+		const { origins } = serverMedia(frame);
+		if (origins.join(' ') !== this.serverMedia.join(' ')) this.serverMedia = origins;
+		// Its custom emoji (`ext:emoji`), kept through a reconnect until the next server frame says otherwise.
+		if (frame) customEmoji.apply(frame, this.server, (url) => this.mediaGate.src(url) !== undefined);
+	}
+
+	/**
 	 * Everything names, avatars and mentions are read from, one value per piece:
 	 * reading it depends on all of them, and a rendering made from the same
 	 * pieces is still current (`samePieces`).
@@ -151,6 +174,7 @@ class Directory {
 	};
 
 	forget(): void {
+		this.keptServer = undefined;
 		this.you = undefined;
 		this.users = { users: {}, recordedUsers: {}, userAliases: {} };
 		this.sawOffline = {};

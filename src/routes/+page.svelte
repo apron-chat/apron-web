@@ -1182,7 +1182,9 @@
 		// The view from this device's last visit, while this one signs in and catches up: only for the session
 		// saved here, which is the account it was kept for (a sign-in as anyone else drops it).
 		void viewKeeper.restore(chat, (view) => {
-			if (client === chat) session.prime(view);
+			if (client !== chat) return;
+			session.prime(view);
+			directory.prime(chat.url, view.server);
 		});
 		const unsubscribe = chat.subscribe((next) => {
 			serverUrl = chat.url;

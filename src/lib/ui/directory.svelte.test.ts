@@ -190,6 +190,39 @@ describe('directory', () => {
 	});
 
 
+	it('loads avatars from where the kept view\'s server frame said, until the connection\'s own arrives', () => {
+		const cy: Identity = { user_id: 'cy', name: 'Cy', avatar: 'https://media.example/cy.png' };
+		const frame = (origins: string[]) => ({ apron: 10, auth: ['guest'], capabilities: ['ext:media'], ext: { media: { origins } } });
+		const server = 'wss://example.com/';
+		const connecting = { ...blankSnapshot(), server: undefined };
+		try {
+			mediaSettings.update('trusted', []);
+			// The connection is up but its server frame hasn't arrived: nothing kept, only the server's own origin.
+			directory.apply(connecting, 'https://example.com', server);
+			expect(directory.avatar(cy)).toBeUndefined();
+			// The view kept on this device names the media origin: avatars load from it at once.
+			directory.prime(server, frame(['https://media.example']));
+			expect(directory.avatar(cy)).toBe('https://media.example/cy.png');
+			directory.apply(connecting, 'https://example.com', server);
+			expect(directory.avatar(cy)).toBe('https://media.example/cy.png');
+			// Kept for another server: not used for this one.
+			directory.apply(connecting, 'https://other.example', 'wss://other.example/');
+			expect(directory.avatar(cy)).toBeUndefined();
+			// The connection's own frame wins once it arrives.
+			directory.apply(snapshot([ada, cy], { server: frame([]) }), 'https://example.com', server);
+			expect(directory.avatar(cy)).toBeUndefined();
+			directory.apply(snapshot([ada, cy], { server: frame(['https://media.example']) }), 'https://example.com', server);
+			expect(directory.avatar(cy)).toBe('https://media.example/cy.png');
+			// Forgotten with the rest at a sign-out.
+			directory.forget();
+			directory.apply(connecting, 'https://example.com', server);
+			expect(directory.avatar(cy)).toBeUndefined();
+		} finally {
+			directory.forget();
+			mediaSettings.update('trusted', [], []);
+		}
+	});
+
 	it('loads avatars and images in messages from where media may load from, as Preferences choose', () => {
 		const away: Identity = { user_id: 'cy', name: 'Cy', avatar: 'https://gravatar.example/cy.png' };
 		const home: Identity = { user_id: 'di', name: 'Di', avatar: 'https://example.com/di.png' };
