@@ -142,6 +142,11 @@
 	const cmd = $derived(!!canCommand && isCommand(value) && !live);
 	/** Expand, where it's offered: not while recording, nor for a command or live text, which have no full panel. */
 	const expandable = $derived(Boolean(onexpand) && !recording && !cmd && !live);
+	/**
+	 * What `field` is drawn with, kept as one object while its parts are the same: a snippet reads its arguments
+	 * afresh at every use, and the field reads `disabled` several times a key.
+	 */
+	const fieldArgs = $derived({ placeholder: ph, disabled: !!disabled, command: cmd });
 	const sendable = $derived(canSend ?? (!!value.trim() || !!attachments || !!live));
 	/** What's left of a wait on sending, while there is one. */
 	const waitLeft = $derived(waitUntil === undefined ? 0 : Math.max(0, waitUntil - secondNow()));
@@ -219,7 +224,7 @@
 			{:else}
 				{#if cmd}<span class="ap-composer-cmdtag" data-testid={commandTestid} title="Sent to the server, not posted">Command</span>{/if}
 				{#if live}<span class="ap-composer-cmdtag ap-composer-livetag" data-testid={liveTestid} title="Everyone sees this message as you type it; Send finishes it"><span class="ap-composer-livedot" aria-hidden="true"></span>Live</span>{/if}
-				{#if field}{@render field({ placeholder: ph, disabled: !!disabled, command: cmd })}
+				{#if field}{@render field(fieldArgs)}
 				{:else}
 					<textarea rows="1" dir="auto" placeholder={ph} {disabled} aria-label={cmd ? 'Command' : 'Message'} class={['ap-composer-field', className]} bind:value={() => value, (v) => { value = v; oninput?.(v); }}></textarea>
 				{/if}

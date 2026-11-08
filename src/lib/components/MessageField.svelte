@@ -116,7 +116,7 @@
 	oninput={draft.input}
 	oncompositionend={draft.compositionend}
 	onkeydown={draft.keydown}
-	onkeyup={draft.refreshQuery}
+	onkeyup={draft.keyup}
 	onclick={draft.refreshQuery}
 	onblur={draft.blur}
 />

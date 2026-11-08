@@ -30,6 +30,25 @@ const ROLE_MATCHES_MAX = 3;
 /** A suggestion in the `@` picker: a person, or a role (`@&role`). */
 export type MentionMatch = MentionPerson | RoleSuggestion;
 
+/** The draft as the field holds it, and the caret in it: what one read of the field gives. */
+type Read = { parts: DraftPart[]; caret: number | undefined };
+
+/** How far back an `@` can start a mention query: `mentionQuery` takes up to 64 characters after it. */
+const MENTION_REACH = 65;
+
+/**
+ * Whether the line before the caret, as far back as a query can start, holds an `@`, `#` or `:`: else no mention,
+ * room or emoji query can be open at it (`mentionQuery`, `roomQuery`, `emojiQuery`). A chip counts as its `@`.
+ */
+function nearTrigger(text: string, caret: number): boolean {
+	const from = Math.max(text.lastIndexOf('\n', caret - 1) + 1, caret - MENTION_REACH);
+	for (let at = caret - 1; at >= from; at--) {
+		const char = text[at];
+		if (char === '@' || char === '#' || char === ':') return true;
+	}
+	return false;
+}
+
 /** How the field's component takes part. */
 export interface DraftHost {
 	/** The draft as sent; set as it is typed, and drawn with its mentions as chips when set from outside. */
@@ -197,8 +216,7 @@ export class DraftField {
 		this.lastSelection = undefined;
 		field.focus();
 		this.draw(field, inserted.parts, inserted.caret);
-		this.collapse(false);
-		this.refreshQuery();
+		this.refresh(this.collapse(false));
 	}
 
 	/**
@@ -294,8 +312,7 @@ export class DraftField {
 			this.commit(field, readDraft(field).parts, true);
 			return;
 		}
-		this.collapse(false);
-		this.refreshQuery();
+		this.refresh(this.collapse(false));
 	};
 
 	compositionend = (): void => {
@@ -313,21 +330,35 @@ export class DraftField {
 	};
 
 	/** Reads the `@`, `#`, or `:` token at the caret; anything else closes its picker. */
-	refreshQuery = (): void => {
+	refreshQuery = (): void => this.refresh();
+
+	/**
+	 * A key let go: the caret may have moved (arrows, Home, End), so the query is read again. A key that typed a
+	 * character was read at its `input`, so it isn't read twice.
+	 */
+	keyup = (event: KeyboardEvent): void => {
+		if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) return;
+		this.refresh();
+	};
+
+	/** `refreshQuery`, with the draft `collapse` just read, where it has, rather than read the field again. */
+	private refresh(read?: Read): void {
 		const field = this.element;
 		if (!field || this.host.disabled || document.activeElement !== field) {
 			this.closeCompletions();
 			this.dismissedAutocomplete = undefined;
 			return;
 		}
-		const { parts, caret } = readDraft(field);
+		const { parts, caret } = read ?? readDraft(field);
 		const text = draftText(parts);
 		const position = caret ?? draftLength(parts);
+		// Most keys are far from any `@`, `#` or `:`: with nothing open or dismissed, there's nothing to look for.
+		if (!this.query && !this.emojiFound && !this.roomFound && !this.dismissedAutocomplete && !nearTrigger(text, position)) return;
 		if (isAutocompleteDismissed(this.dismissedAutocomplete, text, position)) {
 			this.closeCompletions();
 			return;
 		}
-		this.dismissedAutocomplete = undefined;
+		if (this.dismissedAutocomplete) this.dismissedAutocomplete = undefined;
 		const foundEmoji = caret === undefined ? undefined : findEmojiQuery(parts, caret);
 		if (foundEmoji) {
 			if (this.emojiFound?.start !== foundEmoji.start) this.active = 0;
@@ -358,7 +389,7 @@ export class DraftField {
 		}
 		this.anchor = found.start;
 		this.query = found.query;
-	};
+	}
 
 	/** Swaps the typed `@…` for a chip: the person's name on screen, `@user_id` on the wire (Appendix A.3); a role's, `@&role`. */
 	pick(item: MentionMatch): void {
@@ -424,9 +455,9 @@ export class DraftField {
 
 	/** Closes whichever picker is open. */
 	private closeCompletions(): void {
-		this.query = undefined;
-		this.emojiFound = undefined;
-		this.roomFound = undefined;
+		if (this.query !== undefined) this.query = undefined;
+		if (this.emojiFound !== undefined) this.emojiFound = undefined;
+		if (this.roomFound !== undefined) this.roomFound = undefined;
 	}
 
 	private dismissAutocomplete(): void {
@@ -454,13 +485,14 @@ export class DraftField {
 	}
 
 	/** Chips finished mentions; `final` when sending, so one at the very end counts too. */
-	private collapse(final: boolean): void {
+	private collapse(final: boolean): Read | undefined {
 		const field = this.element;
-		if (!field) return;
+		if (!field) return undefined;
 		const { parts, caret } = readDraft(field);
 		const collapsed = collapseMentions(parts, this.host.people, { caret: caret ?? draftLength(parts), final, isUser: this.isUser, rooms: this.roomIds, roles: this.roleIds });
 		if (collapsed.changed) this.draw(field, collapsed.parts, caret === undefined ? undefined : collapsed.caret);
 		this.commit(field, collapsed.parts, collapsed.changed || draftText(collapsed.parts) !== this.host.value);
+		return { parts: collapsed.parts, caret: caret === undefined ? undefined : collapsed.caret };
 	}
 
 	/** Publishes what the field shows as the draft. */

@@ -137,11 +137,16 @@
 	let canExpand = $derived(!expanded && !disabled);
 	/** Bumped when a fetched preview arrives, so the previews below are redrawn. */
 	let previewsArrived = $state(0);
+	/**
+	 * The draft where it may hold a link (every one previewed has `://`), else empty: what link previews read, so a
+	 * draft without a link doesn't look for them again on every key.
+	 */
+	let linkText = $derived(value.includes('://') ? value : '');
 	/** The link embeds the draft will be sent with (a command takes none). */
 	let previews = $derived.by(() => {
 		void previewsArrived;
-		if (command || disabled) return [];
-		const embeds = linkPreviews.embeds(value, dismissed);
+		if (!linkText || command || disabled) return [];
+		const embeds = linkPreviews.embeds(linkText, dismissed);
 		return embeds.length && live ? [] : embeds;
 	});
 	/** Those as the design system's Composer takes them: their pictures only from where link previews may load from (each is drawn by `preview` below, which asks the same). */
@@ -150,14 +155,15 @@
 	$effect(() => linkPreviews.subscribe(() => previewsArrived++));
 	// Typed links are looked up once typing pauses, so a half-typed URL isn't.
 	$effect(() => {
-		const text = value;
-		if (command || disabled || linkPreviews.links(text).length === 0 || live) return;
+		const text = linkText;
+		if (!text || command || disabled || linkPreviews.links(text).length === 0 || live) return;
 		const timer = setTimeout(() => void linkPreviews.prefetch(text), PREVIEW_TYPING_PAUSE_MS);
 		return () => clearTimeout(timer);
 	});
 	// A sent or cleared draft forgets which previews were removed.
+	let blank = $derived(!value.trim());
 	$effect(() => {
-		if (!value.trim() && untrack(() => dismissed.length)) dismissed = [];
+		if (blank && untrack(() => dismissed.length)) dismissed = [];
 	});
 
 	export function focus(): void {

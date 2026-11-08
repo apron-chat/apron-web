@@ -96,6 +96,19 @@ describe('DraftField', () => {
 		f.done();
 	});
 
+	it('looks for a query only near an `@`, `#` or `:`, however far along the line, and closes it once past', () => {
+		const f = field({ value: true });
+		f.type('x'.repeat(80));
+		expect(f.draft.pickerOpen).toBe(false);
+		f.type(' @al');
+		expect(f.draft.pickerOpen).toBe(true);
+		// Moving off the query with a key that types nothing reads it again (at `keyup`).
+		f.type('\nplain');
+		f.draft.keyup(new KeyboardEvent('keyup', { key: 'ArrowLeft' }));
+		expect(f.draft.pickerOpen).toBe(false);
+		f.done();
+	});
+
 	it('sends nothing on the Enter that commits a composition, as Safari sends it after `compositionend`', () => {
 		const f = field({ value: true });
 		const press = (init: KeyboardEventInit) => {

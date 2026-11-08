@@ -48,7 +48,7 @@
 		"send-message-busy": {
 			"layouts": 38,
 			"styleRecalcs": 16,
-			"calls": 283460
+			"calls": 278244
 		},
 		"sidebar-collapse": {
 			"layouts": 3,
@@ -83,7 +83,7 @@
 		"type-composer": {
 			"layouts": 36,
 			"styleRecalcs": 6,
-			"calls": 41956
+			"calls": 35966
 		},
 		"hover-messages": {
 			"layouts": 7,
