@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { bucketPeaks, MAX_BYTES, wavePath, waveOf } from './waveform';
+import { bucketPeaks, MAX_BYTES, resample, wavePath, waveOf } from './waveform';
 
 describe('bucketPeaks', () => {
 	it('gives each slice its loudness (RMS), the loudest scaled to 1', () => {
@@ -10,6 +10,19 @@ describe('bucketPeaks', () => {
 	it('spreads uneven slices over the clip, and gives silence all zeros', () => {
 		expect(bucketPeaks(new Float32Array(10).fill(0.1), 4).map((p) => Math.round(p * 100) / 100)).toEqual([1, 1, 1, 1]);
 		expect(bucketPeaks(new Float32Array(8), 4)).toEqual([0, 0, 0, 0]);
+	});
+});
+
+describe('resample', () => {
+	it('folds slices into fewer bars by their combined loudness, the loudest scaled to 1', () => {
+		expect(resample([1, 1, 0.5, 0.5], 2)).toEqual([1, 0.5]);
+		expect(resample([0, 0, 0.6, 0.8], 2).map((p) => Math.round(p * 1000) / 1000)).toEqual([0, 1]);
+	});
+
+	it('spreads slices that don\'t divide evenly, and keeps them as they are for as many bars or more', () => {
+		expect(resample([1, 0, 0, 0, 1], 2)).toHaveLength(2);
+		expect(resample([0.2, 1], 2)).toEqual([0.2, 1]);
+		expect(resample([0.2, 1], 5)).toEqual([0.2, 1]);
 	});
 });
 

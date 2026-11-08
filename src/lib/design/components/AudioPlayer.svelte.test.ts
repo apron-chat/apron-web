@@ -130,7 +130,7 @@ describe('AudioPlayer', () => {
 		render(AudioPlayer, { src, preload: 'metadata', label: 'clip' });
 		reports(document.querySelector('audio')!, Infinity);
 		await vi.waitFor(() => expect(document.querySelectorAll('svg.ap-audio-wave path')).toHaveLength(2));
-		expect(waveOf).toHaveBeenCalledWith('blob:clip', 40);
+		expect(waveOf).toHaveBeenCalledWith('blob:clip', 160);
 		expect(document.querySelector('.ap-audio-time')?.textContent).toBe('0:00 / 0:09');
 		expect(document.querySelector<HTMLInputElement>('input[type=range]')!.disabled).toBe(false);
 	});
