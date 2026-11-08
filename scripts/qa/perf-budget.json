@@ -15,7 +15,7 @@
 		},
 		"load-busy": {
 			"requests": 20,
-			"startupJsKB": 890.7,
+			"startupJsKB": 900.6,
 			"domNodes": 1149,
 			"layouts": 13,
 			"styleRecalcs": 16,
@@ -33,7 +33,7 @@
 		},
 		"load-phone-busy": {
 			"requests": 20,
-			"startupJsKB": 890.7,
+			"startupJsKB": 900.6,
 			"domNodes": 1150,
 			"layouts": 9,
 			"styleRecalcs": 15,
@@ -83,7 +83,7 @@
 		"type-composer": {
 			"layouts": 36,
 			"styleRecalcs": 6,
-			"calls": 35966
+			"calls": 36180
 		},
 		"hover-messages": {
 			"layouts": 7,
@@ -97,7 +97,7 @@
 	},
 	"production": {
 		"startupFiles": 13,
-		"startupJsKB": 825.2,
-		"startupJsBrotliKB": 233.4
+		"startupJsKB": 837.5,
+		"startupJsBrotliKB": 236.8
 	}
 }
