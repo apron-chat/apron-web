@@ -325,7 +325,7 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-task-chip-done { border-color: var(--ok); background: var(--ok); }
 .ap-task-chip-done::after { opacity: 1; }
 .ap-task-done > :is(ul, ol) { color: var(--ink); }
-.ap-task { appearance: none; position: absolute; inset-inline-start: 0; top: calc((var(--leading-body) - 17px) / 2); top: calc((1lh - 17px) / 2); display: grid; place-items: center; box-sizing: border-box; width: 17px; height: 17px; margin: 0; border: 1.5px solid var(--line-strong); border-radius: var(--radius-full); background: transparent; }
+.ap-task { appearance: none; position: absolute; inset-inline-start: 0; line-height: inherit; top: calc((var(--leading-body) - 17px) / 2); top: calc((1lh - 17px) / 2); display: grid; place-items: center; box-sizing: border-box; width: 17px; height: 17px; margin: 0; border: 1.5px solid var(--line-strong); border-radius: var(--radius-full); background: transparent; }
 .ap-task::after { content: ''; width: 8px; height: 4px; border: 2px solid var(--bg-100); border-top: 0; border-right: 0; transform: translateY(-1px) rotate(-45deg); opacity: 0; }
 .ap-task:checked { border-color: var(--ok); background: var(--ok); }
 .ap-task:checked::after { opacity: 1; }
