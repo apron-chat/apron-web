@@ -1265,6 +1265,11 @@
 		connectOpen = true;
 	}
 
+	/** A mention picker opened (the composer's, a message being edited, a description): who can be named, fresh, unless joined. */
+	function refreshMembers(): void {
+		if (!paneRoom?.joined) listMembers(MEMBERS_FRESH_MS);
+	}
+
 	/** Asks `room_list` for the pane's members, unless a listing was answered within `maxAge`. */
 	function listMembers(maxAge: number): void {
 		const room = paneRoom;
@@ -3355,7 +3360,7 @@
 	{@const MessageEditor = messageEditor.component}
 	{@const event = rowEvent(view)}
 	<!-- Someone else's message that shares its text with you (`ext:editors`): only the text is yours to change. -->
-	{#if MessageEditor && event}<MessageEditor text={textOf(event)} embeds={view.caps?.textOnly ? NO_EMBEDS : embedsOf(event)} uploads={session.uploads} mentions={event.body?.mentions} {people} rooms={roomSuggestions} onsave={(text, edits, mentions) => saveEdit(event, text, edits, view.caps?.textOnly ? undefined : mentions)} oncancel={endEdit} onmention={() => { if (!paneRoom?.joined) listMembers(MEMBERS_FRESH_MS); }} />{/if}
+	{#if MessageEditor && event}<MessageEditor text={textOf(event)} embeds={view.caps?.textOnly ? NO_EMBEDS : embedsOf(event)} uploads={session.uploads} mentions={event.body?.mentions} {people} rooms={roomSuggestions} onsave={(text, edits, mentions) => saveEdit(event, text, edits, view.caps?.textOnly ? undefined : mentions)} oncancel={endEdit} onmention={refreshMembers} />{/if}
 {/snippet}
 <!-- The pane's history waiting as the server asked, where its messages will appear: it loads by itself at zero. -->
 {#snippet historyNotice()}{#if historyWait}<RateLimitNotice scope="history" until={historyWait.until} />{/if}{/snippet}
@@ -3383,7 +3388,7 @@
 	{#snippet sideToggle()}<PanelToggle side="left" panel="rooms" open={!sidebar.collapsed} ontoggle={() => sidebar.toggle()} />{/snippet}
 	{#snippet side()}
 		<Sidebar
-			drawRooms={sideDrawn} client={client!} {session} {backendLabel} serverLook={currentLook} serverAddress={client?.url} account={addedAccount} order={roomOrder} threads={listedThreads} {activeThread} mentions={mentions.byRoom} unread={unread.byRoom} bind:displayName {passkeyUnavailable}
+			drawRooms={sideDrawn} client={client!} {session} {people} {roomSuggestions} {backendLabel} serverLook={currentLook} serverAddress={client?.url} account={addedAccount} order={roomOrder} threads={listedThreads} {activeThread} mentions={mentions.byRoom} unread={unread.byRoom} bind:displayName {passkeyUnavailable}
 			notificationsEnabled={notificationsActive} notificationsSupported={notificationState !== 'unsupported'} notificationPermission={notificationState} notifyScopes={notifyScopes} onnotifications={toggleNotifications} onnotifyscopes={setNotifyScopes} ontestnotifications={testNotifications}
 			webPush={webPushKey(session.server) ? { supported: webPushAvailable, homeScreen: !webPushAvailable && needsHomeScreen(), enabled: webPushActive && !webPushHeldBy, ...(webPushHeldBy ? { heldBy: webPushHeldBy } : {}), ...(webPushServerKey ? {} : { signIn: true }), offered: webPushOffered, installable: canOfferInstall(installPrompt), ...(webPushError && webPushServerKey ? { error: webPushError } : {}) } : undefined} onwebpush={pushHere} oninstallapp={installApp}
 			pause={canPause ? { ...(pausedUntil !== undefined && isPaused(pausedUntil) ? { until: pausedUntil } : {}) } : undefined} onpause={pauseNotifications} onresume={() => client?.setMute(false) ?? Promise.resolve()}
@@ -3429,7 +3434,7 @@
 			{#if roomEditorOpen && editTarget && roomEditor.component}
 				{@const RoomEditor = roomEditor.component}
 				{#key editTarget.id}
-					<RoomEditor client={client!} room={editTarget} thread={Boolean(activeThread)} enabled={canCompose && session.canManageRooms} onclose={() => (roomEditorOpen = false)} />
+					<RoomEditor client={client!} room={editTarget} thread={Boolean(activeThread)} enabled={canCompose && session.canManageRooms} {people} rooms={roomSuggestions} onmention={refreshMembers} onclose={() => (roomEditorOpen = false)} />
 				{/key}
 			{/if}
 
@@ -3579,7 +3584,7 @@
 					rooms={roomSuggestions}
 					reply={drafts.reply ? replyPreview(drafts.reply) : undefined}
 					oninput={composerInput} onsend={() => sendMessage()} files={drafts.files} onfiles={stageFiles} onunstage={(id) => { drafts.unstage(id); if (!mentionAsk?.busy) mentionAsk = undefined; editorsAsk = undefined; }} onrename={(id, title) => drafts.rename(id, title)} oncancelreply={cancelReply} onescape={dismissMentionAsk} onup={focusNewestMessage}
-					onmention={() => { if (!paneRoom?.joined) listMembers(MEMBERS_FRESH_MS); }}
+					onmention={refreshMembers}
 					waitUntil={composerWait}
 				/>
 			{/if}
@@ -3601,6 +3606,7 @@
 		{#key start}
 			<NewThreadDialog room={start.room} title={start.title} description={start.description} moving={start.moving}
 				enabled={canStartThreads && canCompose && (!start.moving || session.canEdit)}
+				{people} rooms={roomSuggestions} onmention={refreshMembers}
 				oncreate={(thread) => createThread(start, thread)} onclose={() => (newThread = undefined)} />
 		{/key}
 	{/if}

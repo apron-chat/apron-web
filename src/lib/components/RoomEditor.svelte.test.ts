@@ -2,7 +2,7 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import type { ChatClient } from '$lib/protocol/client';
 import RoomEditor from './RoomEditor.svelte';
-import { render, stubDialog, submit, type, unmount } from '$lib/test/dom';
+import { press, render, stubDialog, unmount } from '$lib/test/dom';
 
 beforeAll(stubDialog);
 
@@ -18,8 +18,14 @@ describe('RoomEditor', () => {
 		const dialog = field<HTMLDialogElement>('dialog');
 		expect(dialog.textContent).toContain('Edit thread');
 		expect(dialog.textContent).toContain('Description');
-		type(field('textarea'), 'New');
-		await submit();
+		const description = field('[data-testid="description-input"]');
+		expect(description.getAttribute('aria-label')).toBe('Thread description');
+		expect(description.textContent).toBe('Old');
+		description.textContent = 'New';
+		description.dispatchEvent(new InputEvent('input', { bubbles: true }));
+		// Ctrl+Enter in the description saves, as Save does.
+		press(description, 'Enter', { ctrlKey: true });
+		await vi.waitFor(() => expect(onclose).toHaveBeenCalled());
 		expect(updateRoom).toHaveBeenCalledWith('t1', { description: 'New' });
 		expect(onclose).toHaveBeenCalled();
 		unmount();

@@ -497,11 +497,13 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-composer-full { flex: none; display: flex; flex-direction: column; height: 75%; max-height: calc(100% - var(--header-h) - 3 * var(--space-8)); }
 .ap-composer-full > .ap-composer-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .ap-composer-full .ap-composer { flex: 1; min-height: 0; display: grid; grid-template: "head head head head" auto "body body body body" minmax(0, 1fr) "start end keys send" auto / auto auto minmax(0, 1fr) auto; align-items: center; gap: 0; padding: 0; overflow: hidden; }
-.ap-composer-head { grid-area: head; display: flex; align-items: center; gap: var(--space-0_5); padding: var(--space-1_5) var(--space-2); border-bottom: 1px solid var(--line); }
-.ap-composer-head > :not(.ap-composer-format, .ap-composer-grow) { flex: none; }
-.ap-composer-grow { flex: 1; }
-.ap-seg.ap-composer-views { margin: 0; padding: var(--space-0_5); }
-.ap-composer-views .ap-seg-item { flex: none; padding: 0 var(--space-3); }
+/* A Markdown field's head, on the full panel and a MarkdownEditor alike: its formatting, then Write and Preview at its end. */
+.ap-mdhead { grid-area: head; display: flex; align-items: center; gap: var(--space-0_5); padding: var(--space-1_5) var(--space-2); border-bottom: 1px solid var(--line); }
+.ap-mdhead > :not(.ap-composer-format, .ap-mdhead-grow) { flex: none; }
+.ap-mdhead-grow { flex: 1; }
+/* Write and Preview (WritePreview), at the end of a Markdown field's head: two labels' width, not the row's. */
+.ap-seg.ap-views { flex: none; margin: 0; padding: var(--space-0_5); }
+.ap-views .ap-seg-item { flex: none; padding: 0 var(--space-3); }
 /* One row, which scrolls sideways where the pane is too narrow for every button (a phone), rather than wrapping under the view switch. */
 .ap-composer-format { display: flex; align-items: center; gap: var(--space-0_5); min-width: 0; overflow-x: auto; scrollbar-width: none; }
 .ap-composer-format > * { flex: none; }
@@ -1306,6 +1308,23 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-profedit-signin .ap-typing-dots { vertical-align: middle; margin-inline-end: var(--space-1); }
 .ap-field-multi { height: auto; padding: var(--space-1) var(--space-2); resize: vertical; font: inherit; font-size: var(--text-field); line-height: var(--leading-field); font-weight: 400; }
 .ap-fieldlabel-row { display: flex; justify-content: space-between; }
+/*
+ * MarkdownEditor: a Markdown field in a form, in a box like a field's, its formatting buttons and Write and Preview along
+ * its top (ap-mdhead, as the full panel's). The field is at least --ap-mdedit-rows lines and grows with its text to half the window; Preview takes its
+ * place at the same height, the field kept underneath with its text and caret.
+ */
+.ap-mdedit { display: flex; flex-direction: column; min-width: 0; font-weight: 400; color: var(--ink); background: var(--bg-100); border: 1px solid var(--line-strong); border-radius: var(--radius-md); }
+.ap-mdedit:focus-within { border-color: var(--focus); }
+.ap-mdedit-disabled { opacity: var(--opacity-disabled); }
+/* The picker anchors to the field. */
+.ap-mdedit-wrap { position: relative; }
+.ap-mdedit-previewing .ap-mdedit-wrap { display: none; }
+.ap-mdedit-field, .ap-mdedit-rendered { display: block; width: 100%; box-sizing: border-box; min-height: calc(var(--ap-mdedit-rows, 4) * var(--leading-field) + 2 * var(--space-2)); max-height: 50vh; overflow-y: auto; padding: var(--space-2) var(--space-3); }
+.ap-mdedit-field { height: auto; field-sizing: content; margin: 0; border: 0; outline: none; resize: none; background: transparent; color: var(--ink); font: inherit; font-size: var(--text-field); line-height: var(--leading-field); }
+.ap-mdedit-field::placeholder { color: var(--ink-muted); }
+/* A ComposerEditable's placeholder, which the composer keeps to one line: here it wraps, as a textarea's does. */
+.ap-mdedit-field.ap-composer-editable-empty::before { white-space: normal; }
+.ap-mdedit-rendered { font-size: var(--text-field); line-height: var(--leading-field); }
 .ap-fieldlabel-hint { font-weight: 400; color: var(--ap-tone, var(--ink-muted)); }
 /* RoomForm: what starting a thread will do, under its fields */
 .ap-roomform-note { margin: 0; font-size: var(--text-ui); line-height: var(--leading-ui); color: var(--ap-tone, var(--ink-muted)); }

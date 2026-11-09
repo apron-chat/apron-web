@@ -16,6 +16,7 @@
 	import Button from './Button.svelte';
 	import Embed from './Embed.svelte';
 	import EmbedRemove from './EmbedRemove.svelte';
+	import WritePreview from './WritePreview.svelte';
 	import { secondNow } from './clock.svelte';
 	import { isCommand } from './compose';
 	import type { ComposerField, EmbedProps } from './types';
@@ -191,30 +192,41 @@
 		lineHeight ||= parseFloat(getComputedStyle(field).lineHeight) || 22;
 		const line = lineHeight;
 		let frame = 0;
-		/** The field's width while grown by wrapping: another is the pane resizing, so whether it wraps is asked again. */
-		let grownWidth = 0;
-		/** A change of layout, drawn before this frame paints; the field's new size is looked at from the next frame, so it is no loop. */
-		const relayout = (change: () => void): void => {
-			observer.unobserve(field);
-			grownWidth = 0;
-			change();
-			frame = requestAnimationFrame(() => observer.observe(field));
+		/** The box's width, which growing doesn't change: another is the pane resizing, so whether a wrap still holds is asked again. */
+		let boxWidth = 0;
+		const box = form;
+		/**
+		 * A change of layout, drawn before this frame paints. The box and field are looked at again from the next frame, so
+		 * their new sizes are no loop; the box's width is kept, so a resize in between is still seen then.
+		 */
+		const watch = (): void => {
+			observer.observe(box, { box: 'border-box' });
+			observer.observe(field);
 		};
-		const observer = new ResizeObserver(([entry]) => {
-			const { width, height } = entry.contentRect;
-			if (grown) {
-				if (!wrapped || breaks) return;
-				if (grownWidth && width !== grownWidth) relayout(() => (wrapAt = lastWrapAt = 0));
-				else grownWidth = width;
-				return;
+		const relayout = (change: () => void): void => {
+			observer.disconnect();
+			change();
+			frame = requestAnimationFrame(watch);
+		};
+		const observer = new ResizeObserver((entries) => {
+			for (const entry of entries) {
+				if (entry.target === box) {
+					const width = entry.borderBoxSize?.[0]?.inlineSize;
+					if (width === undefined) continue;
+					const resized = boxWidth > 0 && width !== boxWidth;
+					boxWidth = width;
+					if (resized && wrapped && !breaks) return relayout(() => (wrapAt = lastWrapAt = 0));
+					continue;
+				}
+				const { height } = entry.contentRect;
+				const length = value.length;
+				// An empty field taller than a line is its placeholder wrapping (the textarea's), not the draft.
+				if (grown || !length || height <= line * 1.5) continue;
+				const lines = Math.max(2, Math.round(height / line));
+				return relayout(() => (wrapAt = lines > 2 || length < lastWrapAt ? Math.ceil(length / lines) : length));
 			}
-			const length = value.length;
-			// An empty field taller than a line is its placeholder wrapping (the textarea's), not the draft.
-			if (!length || height <= line * 1.5) return;
-			const lines = Math.max(2, Math.round(height / line));
-			relayout(() => (wrapAt = lines > 2 || length < lastWrapAt ? Math.ceil(length / lines) : length));
 		});
-		observer.observe(field);
+		watch();
 		return () => {
 			cancelAnimationFrame(frame);
 			observer.disconnect();
@@ -257,14 +269,11 @@
 		{@render picker?.()}
 		<form class={['ap-composer', disabled && 'ap-composer-disabled', cmd && 'ap-composer-cmd', grown && 'ap-composer-grown', expanded && previewing && rendered && 'ap-composer-previewing']} aria-label="Send a message" onsubmit={submit} bind:this={form}>
 			{#if expanded}
-				<div class="ap-composer-head">
+				<div class="ap-mdhead">
 					{#if !previewing}{@render toolbar?.()}{/if}
-					<span class="ap-composer-grow"></span>
+					<span class="ap-mdhead-grow"></span>
 					{#if rendered}
-						<div class="ap-seg ap-composer-views" role="radiogroup" aria-label="View">
-							<button type="button" role="radio" aria-checked={!previewing} class={['ap-seg-item', !previewing && 'ap-seg-on']} onclick={() => onpreview?.(false)}>Write</button>
-							<button type="button" role="radio" aria-checked={previewing} class={['ap-seg-item', previewing && 'ap-seg-on']} onclick={() => onpreview?.(true)}>Preview</button>
-						</div>
+						<WritePreview {previewing} {onpreview} />
 					{/if}
 					{#if oncollapse}
 						<button type="button" class="ap-iconbtn" aria-label="Collapse composer" title="Collapse (Esc)" onclick={oncollapse}>

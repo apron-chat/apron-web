@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import RoomForm from '$lib/design/components/RoomForm.svelte';
+	import type { RoomFormField } from '$lib/design/components/types';
+	import DescriptionField, { type DescriptionSources } from './DescriptionField.svelte';
 	import { messageOf, Task } from '$lib/ui/task.svelte';
 
-	interface Props {
+	interface Props extends DescriptionSources {
 		/** The room the thread goes under (`parent_room_id`, §3.4); a thread of a private room is private too (§4.2.4). */
 		room: { id: string; title: string; private?: boolean };
 		/** What the form starts with: empty from a room, or suggested from the message(s) it starts from. */
@@ -21,7 +23,7 @@
 		/** It closed: started, or put away. */
 		onclose: () => void;
 	}
-	let { room, title: suggestedTitle = '', description: suggestedDescription = '', moving = 0, enabled, oncreate, onclose }: Props = $props();
+	let { room, title: suggestedTitle = '', description: suggestedDescription = '', moving = 0, enabled, people = [], rooms = [], onmention, oncreate, onclose }: Props = $props();
 
 	// The form starts from what it was opened with; the caller remounts it for each new thread.
 	let open = $state(true);
@@ -42,4 +44,8 @@
 	}
 </script>
 
-<RoomForm bind:open kind="thread" mode="create" subtitle="In {room.title}" private={room.private === true} {moving} bind:name={title} bind:description status={task.busy ? 'saving' : 'idle'} error={task.note} disabled={!enabled} onsubmit={start} {onclose} />
+<RoomForm bind:open kind="thread" mode="create" subtitle="In {room.title}" private={room.private === true} {moving} bind:name={title} field={descriptionField} status={task.busy ? 'saving' : 'idle'} error={task.note} disabled={!enabled} onsubmit={start} {onclose} />
+
+{#snippet descriptionField(form: RoomFormField)}
+	<DescriptionField bind:value={description} {form} {people} {rooms} {onmention} />
+{/snippet}

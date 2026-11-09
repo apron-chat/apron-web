@@ -1,10 +1,12 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import RoomForm from '$lib/design/components/RoomForm.svelte';
+	import type { RoomFormField } from '$lib/design/components/types';
+	import DescriptionField, { type DescriptionSources } from './DescriptionField.svelte';
 	import type { ChatClient } from '$lib/protocol/client';
 	import { messageOf, Task } from '$lib/ui/task.svelte';
 
-	interface Props {
+	interface Props extends DescriptionSources {
 		client: ChatClient;
 		/** The room or thread to edit, as it was when the editor opened. */
 		room: { id: string; title: string; description?: string };
@@ -15,7 +17,7 @@
 		/** It closed: saved, or put away. */
 		onclose: () => void;
 	}
-	let { client, room, thread, enabled, onclose }: Props = $props();
+	let { client, room, thread, enabled, people = [], rooms = [], onmention, onclose }: Props = $props();
 
 	// The form starts from the room as it was opened; the caller remounts it per room.
 	const initialTitle = untrack(() => room.title);
@@ -50,4 +52,8 @@
 	}
 </script>
 
-<RoomForm bind:open kind={thread ? 'thread' : 'room'} mode="edit" bind:name={title} bind:description status={task.busy ? 'saving' : 'idle'} error={task.note} disabled={!enabled} onsubmit={save} {onclose} />
+<RoomForm bind:open kind={thread ? 'thread' : 'room'} mode="edit" bind:name={title} field={descriptionField} status={task.busy ? 'saving' : 'idle'} error={task.note} disabled={!enabled} onsubmit={save} {onclose} />
+
+{#snippet descriptionField(form: RoomFormField)}
+	<DescriptionField bind:value={description} {form} {people} {rooms} {onmention} />
+{/snippet}

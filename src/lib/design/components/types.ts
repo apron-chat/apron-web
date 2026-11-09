@@ -203,6 +203,29 @@ export interface ComposerField {
 	command: boolean;
 }
 
+/** What a MarkdownEditor gives your own `field`: its class, for the editor's look, and its name, placeholder and state. */
+export interface MarkdownEditorField {
+	/** The field's class, `ap-mdedit-field`. */
+	class: string;
+	/** The field's accessible name, the editor's `label`. */
+	label: string;
+	placeholder: string;
+	disabled: boolean;
+}
+
+/** What a RoomForm's own description field (`field`) is drawn with. */
+export interface RoomFormField {
+	/** The description's accessible name: "Room description" or "Thread description". */
+	label: string;
+	placeholder: string;
+	/** Saving: it takes no typing until it's done. */
+	disabled: boolean;
+	/** How many lines tall it starts. */
+	rows: number;
+	/** Submits the form, as Ctrl+Enter (⌘+Enter) in the field may. */
+	submit: () => void;
+}
+
 /** What the MessageEditor gives your own `field`: put both on it, for the editor's look and the field's name. */
 export interface MessageEditorField {
 	/** The editor's field class, `ap-msgedit-field`. */

@@ -50,6 +50,8 @@ export { default as ReplyPreview } from './ReplyPreview.svelte';
 export { default as LinkCard } from './LinkCard.svelte';
 export { default as ThreadDescription } from './ThreadDescription.svelte';
 export { default as RoomForm } from './RoomForm.svelte';
+export { default as MarkdownEditor } from './MarkdownEditor.svelte';
+export { default as WritePreview } from './WritePreview.svelte';
 export { default as PeoplePicker } from './PeoplePicker.svelte';
 export { default as PrivateRoomForm } from './PrivateRoomForm.svelte';
 export { default as PrivateIntro } from './PrivateIntro.svelte';
