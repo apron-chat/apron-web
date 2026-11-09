@@ -192,30 +192,40 @@
 		lineHeight ||= parseFloat(getComputedStyle(field).lineHeight) || 22;
 		const line = lineHeight;
 		let frame = 0;
-		/** The field's width while grown by wrapping: another is the pane resizing, so whether it wraps is asked again. */
-		let grownWidth = 0;
-		/** A change of layout, drawn before this frame paints; the field's new size is looked at from the next frame, so it is no loop. */
-		const relayout = (change: () => void): void => {
-			observer.unobserve(field);
-			grownWidth = 0;
-			change();
-			frame = requestAnimationFrame(() => observer.observe(field));
+		/** The box's width, which growing doesn't change: another is the pane resizing, so whether a wrap still holds is asked again. */
+		let boxWidth = 0;
+		const box = form;
+		/**
+		 * A change of layout, drawn before this frame paints. The box and field are looked at again from the next frame, so
+		 * their new sizes are no loop; the box's width is kept, so a resize in between is still seen then.
+		 */
+		const watch = (): void => {
+			observer.observe(box, { box: 'border-box' });
+			observer.observe(field);
 		};
-		const observer = new ResizeObserver(([entry]) => {
-			const { width, height } = entry.contentRect;
-			if (grown) {
-				if (!wrapped || breaks) return;
-				if (grownWidth && width !== grownWidth) relayout(() => (wrapAt = lastWrapAt = 0));
-				else grownWidth = width;
-				return;
+		const relayout = (change: () => void): void => {
+			observer.disconnect();
+			change();
+			frame = requestAnimationFrame(watch);
+		};
+		const observer = new ResizeObserver((entries) => {
+			for (const entry of entries) {
+				if (entry.target === box) {
+					const width = entry.borderBoxSize[0]?.inlineSize ?? entry.contentRect.width;
+					const resized = boxWidth > 0 && width !== boxWidth;
+					boxWidth = width;
+					if (resized && wrapped && !breaks) return relayout(() => (wrapAt = lastWrapAt = 0));
+					continue;
+				}
+				const { height } = entry.contentRect;
+				const length = value.length;
+				// An empty field taller than a line is its placeholder wrapping (the textarea's), not the draft.
+				if (grown || !length || height <= line * 1.5) continue;
+				const lines = Math.max(2, Math.round(height / line));
+				return relayout(() => (wrapAt = lines > 2 || length < lastWrapAt ? Math.ceil(length / lines) : length));
 			}
-			const length = value.length;
-			// An empty field taller than a line is its placeholder wrapping (the textarea's), not the draft.
-			if (!length || height <= line * 1.5) return;
-			const lines = Math.max(2, Math.round(height / line));
-			relayout(() => (wrapAt = lines > 2 || length < lastWrapAt ? Math.ceil(length / lines) : length));
 		});
-		observer.observe(field);
+		watch();
 		return () => {
 			cancelAnimationFrame(frame);
 			observer.disconnect();

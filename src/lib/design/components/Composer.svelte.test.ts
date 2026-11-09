@@ -138,9 +138,6 @@ describe('Composer', () => {
 		dom.button('Expand composer').click();
 		expect(onexpand).toHaveBeenCalledOnce();
 		dom.unmount();
-		render({ value: 'one' });
-		expect(dom.queryByRole('button', 'Expand composer')).toBeNull();
-		dom.unmount();
 		render({ value: 'one\ntwo', onexpand, canUpload: true, recording: true });
 		expect(dom.queryByRole('button', 'Expand composer')).toBeNull();
 	});

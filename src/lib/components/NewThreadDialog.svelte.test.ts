@@ -20,29 +20,23 @@ describe('NewThreadDialog', () => {
 	const text = () => field('dialog').textContent ?? '';
 	const submitLabel = () => field('dialog button[type="submit"]').textContent;
 
-	it('starts from a message: its first line as the title, selected, and the message quoted as the description', async () => {
-		const { oncreate, onclose } = render({ title: 'Deploy failed', description: '> Deploy failed\n>\n> Runner looked fine.' });
+	it('starts from a message: its first line as the title, selected, and the message quoted as the description, its mentions as chips', async () => {
+		const { oncreate, onclose } = render({ title: 'Deploy failed', description: '> Deploy failed\n>\n> @ada says the runner looked fine.', people: [{ id: 'ada', name: 'Ada Lovelace' }] });
 		const dialog = field<HTMLDialogElement>('dialog');
 		expect(dialog.open).toBe(true);
 		expect(text()).toContain('Start thread');
 		expect(text()).toContain('In ops');
-		expect(field('[data-testid="description-input"]').textContent).toBe('> Deploy failed\n>\n> Runner looked fine.');
+		const description = field('[data-testid="description-input"]');
+		expect(description.querySelector('[data-user-id="ada"]')?.textContent).toContain('Ada Lovelace');
 		await tick();
 		const input = field<HTMLInputElement>('input.ap-field');
 		expect(document.activeElement).toBe(input);
 		expect([input.selectionStart, input.selectionEnd]).toEqual([0, 'Deploy failed'.length]);
 		dom.type(input, '  Why the 4pm deploy failed ');
 		await dom.submit();
-		expect(oncreate).toHaveBeenCalledWith({ title: 'Why the 4pm deploy failed', description: '> Deploy failed\n>\n> Runner looked fine.' });
+		// Sent as it was written: the chip is its `@ada`.
+		expect(oncreate).toHaveBeenCalledWith({ title: 'Why the 4pm deploy failed', description: '> Deploy failed\n>\n> @ada says the runner looked fine.' });
 		expect(onclose).toHaveBeenCalled();
-	});
-
-	it('shows the quoted message’s mentions as chips, as the composer does, and sends them as they were written', async () => {
-		const { oncreate } = render({ title: 'Ask Ada', description: '> @ada can you look?', people: [{ id: 'ada', name: 'Ada Lovelace' }] });
-		const description = field('[data-testid="description-input"]');
-		expect(description.querySelector('[data-user-id="ada"]')?.textContent).toContain('Ada Lovelace');
-		await dom.submit();
-		expect(oncreate).toHaveBeenCalledWith({ title: 'Ask Ada', description: '> @ada can you look?' });
 	});
 
 	it('starts from a room with nothing filled in, needs a title, and stays open with the reason when creating fails', async () => {
