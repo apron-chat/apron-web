@@ -1262,8 +1262,8 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-description-closable { padding-inline-end: 36px; }
 /* × sits beside the first line, centred on it. */
 .ap-description-close { position: absolute; z-index: var(--z-raised); top: 6px; inset-inline-end: 6px; width: var(--control-sm); height: var(--control-sm); }
-/* A preview of three lines, faded where it's cut; opened, it scrolls within the pinned box past a third of the pane. */
-.ap-description-text { max-height: 60px; overflow: hidden; margin: 0; font-size: var(--text-field); line-height: var(--leading-field); color: var(--ink); }
+/* A preview of five and a half lines, faded where it's cut, so the half line says there's more; opened, it scrolls within the pinned box past a third of the pane. */
+.ap-description-text { max-height: calc(var(--leading-field) * 5.5); overflow: hidden; margin: 0; font-size: var(--text-field); line-height: var(--leading-field); color: var(--ink); }
 .ap-description-clipped { mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent); }
 .ap-description-clipped, .ap-description-open { cursor: pointer; }
 .ap-description-open { max-height: 33vh; overflow-y: auto; }
