@@ -291,12 +291,12 @@ describe('a message row’s toolbar', () => {
 		expect(dom.queryByRole('group', 'Quick reactions')).toBeNull();
 	});
 
-	it('shows each action as its icon, named in its tooltip with its key, the key badged for the keyboard', () => {
+	it('shows each action as its icon, named in its tooltip with its key, its words there for the keyboard', () => {
 		const row = render({ caps: { ...NONE, reply: true, edit: true, startThread: true } });
 		engage(row);
 		const reply = dom.button('Reply to message');
 		expect(reply.querySelector('svg')).not.toBeNull();
-		expect([reply.title, reply.getAttribute('aria-keyshortcuts'), reply.dataset.key]).toEqual(['Reply (R)', 'r', 'R']);
+		expect([reply.title, reply.getAttribute('aria-keyshortcuts'), reply.dataset.key, reply.querySelector('.ap-actions-label')?.textContent]).toEqual(['Reply (R)', 'r', 'R', 'Reply']);
 		expect(dom.button('Edit message').title).toBe('Edit (E)');
 		expect([dom.button('Start thread').title, dom.button('Start thread').dataset.key]).toEqual(['Start thread', undefined]);
 	});
@@ -482,8 +482,9 @@ describe('select gestures', () => {
 		expect(held(row)).toBe(true);
 		expect(dom.byRole('toolbar', 'Message actions').classList.contains('ap-actions-touch')).toBe(true);
 		expect(buttons()).toEqual(['React', 'Reply to message', 'More actions']);
-		// Icons alone up front; as rows, each icon beside its words.
-		expect(dom.button('Reply to message').textContent).toBe('');
+		// Icons up front, their words there only for the keyboard, which touch's bar doesn't box; as rows, each icon beside its words.
+		expect(dom.button('Reply to message').classList.contains('ap-actions-icon')).toBe(true);
+		expect(dom.button('Reply to message').dataset.key).toBeUndefined();
 		// The click that ends the press does nothing else.
 		click(text);
 		flushSync();
@@ -493,6 +494,7 @@ describe('select gestures', () => {
 		expect(dom.byRole('toolbar', 'Message actions').getAttribute('aria-orientation')).toBe('vertical');
 		expect(buttons()).toEqual(['React', 'Reply to message', 'Start thread', 'Select message', 'Copy text', 'Copy link to message']);
 		expect(dom.button('Reply to message').textContent).toBe('Reply');
+		expect(dom.button('Reply to message').classList.contains('ap-actions-row')).toBe(true);
 		expect(dom.button('Reply to message').querySelector('svg')).not.toBeNull();
 		dom.button('Copy text').click();
 		expect(copyText).toHaveBeenCalledOnce();

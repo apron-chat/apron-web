@@ -360,7 +360,7 @@ test.describe('a guest who only reads', () => {
 	});
 });
 
-test('the timeline is one Tab stop: ← → go through a message, its keys badged for the keyboard; thread cards are stops; Shift+↑ ↓ select a run', async ({ preview, page }) => {
+test('the timeline is one Tab stop: ← → go through a message, its words shown and keys boxed for the keyboard; thread cards are stops; Shift+↑ ↓ select a run', async ({ preview, page }) => {
 	await preview.open();
 	const composer = preview.composer();
 	const list = page.getByTestId('message-list');
@@ -387,11 +387,14 @@ test('the timeline is one Tab stop: ← → go through a message, its keys badge
 		await expect(three).toBeFocused();
 	});
 
-	await test.step('→ goes into its links and buttons, ← → through them, Escape back to the row; R and E badged for the keyboard', async () => {
-		// Its key badged on its icon (`::after`, from `data-key`).
-		const badge = (element: Element) => getComputedStyle(element, '::after').display;
+	await test.step('→ goes into its links and buttons, ← → through them, Escape back to the row; words shown and R and E boxed for the keyboard', async () => {
+		// Each icon's words beside it, the letter of its key boxed (`::first-letter`).
+		const label = (element: Element) => {
+			const words = element.querySelector('.ap-actions-label')!;
+			return [getComputedStyle(words).display !== 'none', getComputedStyle(words, '::first-letter').backgroundColor !== 'rgba(0, 0, 0, 0)'];
+		};
 		const reply = three.getByRole('button', { name: 'Reply to message', exact: true });
-		expect(await reply.evaluate(badge)).toBe('block');
+		expect(await reply.evaluate(label)).toEqual([true, true]);
 		const seen: string[] = [];
 		// Past its links, the quick reactions, React and Reply, to Edit.
 		for (let i = 0; i < 12; i++) {
@@ -403,10 +406,10 @@ test('the timeline is one Tab stop: ← → go through a message, its keys badge
 		expect(await three.evaluate((row) => row.contains(document.activeElement) && row !== document.activeElement)).toBe(true);
 		await page.keyboard.press('Escape');
 		await expect(three).toBeFocused();
-		// A pointer on a message alone doesn't box them.
+		// A pointer on a message alone shows icons alone.
 		await composer.click();
 		await preview.message('alpha-1').hover();
-		expect(await preview.message('alpha-1').getByRole('button', { name: 'Reply to message', exact: true }).evaluate((element) => getComputedStyle(element, '::after').display)).toBe('none');
+		expect(await preview.message('alpha-1').getByRole('button', { name: 'Reply to message', exact: true }).evaluate((element) => getComputedStyle(element.querySelector('.ap-actions-label')!).display)).toBe('none');
 	});
 
 	await test.step('Shift+↑ selects up from the message, Shift+↓ gives them back', async () => {

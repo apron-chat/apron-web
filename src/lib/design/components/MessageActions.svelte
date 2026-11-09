@@ -70,7 +70,10 @@
 
 	const noAttach = () => {};
 
-	/** Touch's menu: a row each, its icon beside its words. Elsewhere an action with an icon shows the icon alone. */
+	/**
+	 * Touch's menu: a row each, its icon beside its words. Elsewhere an action with an icon shows the icon alone, its
+	 * words (in the markup, for the keyboard) showing beside it only while the keyboard is on the message (apron.css).
+	 */
 	const menu = $derived(touch && open);
 	/** The tooltip: its name, and its key. */
 	const tip = (it: MessageAction) => {
@@ -103,7 +106,7 @@
 			aria-expanded={it.popup ? Boolean(it.expanded) : undefined}
 			{@attach it.attach ?? noAttach}
 			onclick={(event) => press(it, event)}
-		>{#if icon && !menu}{@render icon()}{:else}{#if icon}{@render icon()}{/if}{said ? (said.glyph ?? said.label) : (it.glyph ?? it.label)}{/if}</button>
+		>{#if icon}{@render icon()}<span class="ap-actions-label">{said ? (said.glyph ?? said.label) : (it.glyph ?? it.label)}</span>{:else}{said ? (said.glyph ?? said.label) : (it.glyph ?? it.label)}{/if}</button>
 	{/each}
 	{#if hasMore}<button class="ap-actions-btn ap-actions-icon" type="button" aria-label="More actions" aria-expanded="false" title="More" onclick={showMore}>{@render ellipsis()}</button>{/if}
 </div>
