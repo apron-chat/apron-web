@@ -312,12 +312,20 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 /* A task list item (`- [ ]`, `- [x]`): a round check in its bullet's place, green once done, its text then quieter.
    Where you may tick it (yours, or one that mentions you) it takes a hover; elsewhere its ring is dashed.
    A list with tasks has no indent of its own: its checks line up with the text above it (a nested list's with
-   its item's text), each in a gutter its wrapped lines keep clear of, centred on the first line. Its other items
-   keep their bullet in that gutter, their text in line with the tasks'. */
+   its item's text), each in a gutter its wrapped lines keep clear of. Its other items keep their bullet in that
+   gutter, their text in line with the tasks'.
+   The check is inline, the first thing on its item's first line, hung out into the gutter by its margins (which
+   sum to nothing, so the text starts where it would without it). It takes the text's font, so `vertical-align`
+   centres it on the capitals of whatever font that is, as `middle` would on the lowercase letters; `overflow`
+   pins its baseline to its bottom edge, which that offset is measured from. A line may break after an inline box,
+   so it comes in a span that doesn't wrap (`ap-task-box`) and ends in a word joiner, drawn there rather than
+   written into the text so it isn't copied: together they keep its first word beside it. */
 .ap-task-list { padding-inline-start: 0; }
 .ap-task-list > li { margin-inline-start: var(--space-6); }
-.ap-task-list > .ap-task-item { position: relative; margin-inline-start: 0; padding-inline-start: var(--space-6); list-style: none; }
+.ap-task-list > .ap-task-item { margin-inline-start: 0; padding-inline-start: var(--space-6); list-style: none; }
 .ap-task-done { color: var(--ink-muted); }
+.ap-task-box { white-space: nowrap; }
+.ap-task-box::after { content: '\2060'; }
 /* A checklist item's `- [ ] ` in the composer, drawn as its check: the same ring, clickable, its Markdown underneath. */
 .ap-task-chip { display: inline-grid; place-items: center; box-sizing: border-box; width: 17px; height: 17px; margin-inline-end: 0.4em; vertical-align: middle; translate: 0 -1px; border: 1.5px solid var(--line-strong); border-radius: var(--radius-full); cursor: pointer; user-select: none; }
 .ap-task-chip::after { content: ''; width: 8px; height: 4px; border: 2px solid var(--bg-100); border-top: 0; border-right: 0; transform: translateY(-1px) rotate(-45deg); opacity: 0; }
@@ -325,8 +333,8 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-task-chip-done { border-color: var(--ok); background: var(--ok); }
 .ap-task-chip-done::after { opacity: 1; }
 .ap-task-done > :is(ul, ol) { color: var(--ink); }
-.ap-task { appearance: none; position: absolute; inset-inline-start: 0; line-height: inherit; top: calc((var(--leading-body) - 17px) / 2); top: calc((1lh - 17px) / 2); display: grid; place-items: center; box-sizing: border-box; width: 17px; height: 17px; margin: 0; border: 1.5px solid var(--line-strong); border-radius: var(--radius-full); background: transparent; }
-.ap-task::after { content: ''; width: 8px; height: 4px; border: 2px solid var(--bg-100); border-top: 0; border-right: 0; transform: translateY(-1px) rotate(-45deg); opacity: 0; }
+.ap-task { appearance: none; position: relative; display: inline-block; overflow: hidden; vertical-align: middle; vertical-align: calc(0.5cap - 8.5px); font: inherit; box-sizing: border-box; width: 17px; height: 17px; margin: 0; margin-inline: calc(-1 * var(--space-6)) calc(var(--space-6) - 17px); border: 1.5px solid var(--line-strong); border-radius: var(--radius-full); background: transparent; }
+.ap-task::after { content: ''; position: absolute; inset: 0; margin: auto; width: 8px; height: 4px; border: 2px solid var(--bg-100); border-top: 0; border-right: 0; transform: translateY(-1px) rotate(-45deg); opacity: 0; }
 .ap-task:checked { border-color: var(--ok); background: var(--ok); }
 .ap-task:checked::after { opacity: 1; }
 .ap-task:enabled { cursor: pointer; }

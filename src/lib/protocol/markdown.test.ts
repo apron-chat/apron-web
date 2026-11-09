@@ -477,8 +477,8 @@ describe('role mentions in Markdown', () => {
 describe('task lists', () => {
 	it('draws `[ ]` and `[x]` items as disabled checkboxes, each with its source line', () => {
 		const html = renderMarkdown('Todo:\n\n- [ ] Foo\n- [x] Bar\n- [X] Baz');
-		expect(html).toContain('<li class="ap-task-item"><input type="checkbox" class="ap-task" data-task-line="2" disabled="">Foo</li>');
-		expect(html).toContain('<li class="ap-task-item ap-task-done"><input type="checkbox" class="ap-task" data-task-line="3" checked="" disabled="">Bar</li>');
+		expect(html).toContain('<li class="ap-task-item"><span class="ap-task-box"><input type="checkbox" class="ap-task" data-task-line="2" disabled=""></span>Foo</li>');
+		expect(html).toContain('<li class="ap-task-item ap-task-done"><span class="ap-task-box"><input type="checkbox" class="ap-task" data-task-line="3" checked="" disabled=""></span>Bar</li>');
 		expect(html).toContain('data-task-line="4" checked=""');
 	});
 
@@ -490,7 +490,7 @@ describe('task lists', () => {
 
 	it('counts lines in nested lists and quotes, and keeps the text after the marker', () => {
 		const html = renderMarkdown('> - a\n>   - [ ] **deep**');
-		expect(html).toContain('data-task-line="1" disabled=""><strong>deep</strong>');
+		expect(html).toContain('data-task-line="1" disabled=""></span><strong>deep</strong>');
 	});
 
 	it('leaves anything else as text', () => {
