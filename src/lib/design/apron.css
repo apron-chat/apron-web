@@ -274,9 +274,13 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
  * text, isolated from the line's: under dir="rtl" an English time would otherwise read "PM 3:42" and a date "22 Oct ,Thu".
  */
 :where(.ap-msg-meta time, .ap-msg-hovertime, .ap-msg-system-time, .ap-notice-time, .ap-linkcard-title time, .ap-thread-last, .ap-divider > span, .ap-dayfloat-pill) { unicode-bidi: plaintext; }
-.ap-msg-text { overflow-wrap: anywhere; font-family: var(--font-chat); }
+.ap-msg-text { font-family: var(--font-chat); }
 .ap-msg-text p { margin: 0; }
 .ap-msg-text p + p { margin-top: var(--space-2); }
+/* Wherever Markdown is drawn, a word too long for its line breaks rather than running out of its box, except in a
+   table, whose columns would otherwise narrow to a letter. */
+:where(.ap-msg-text, .ap-description-text, .ap-welcome, .ap-connect-server-desc, .ap-servcard-description) { overflow-wrap: anywhere; }
+:where(.ap-msg-text, .ap-description-text, .ap-welcome, .ap-connect-server-desc, .ap-servcard-description) table { overflow-wrap: normal; }
 /* Wherever Markdown is drawn, a list's items, and a nested list under its item, a little apart: a mention or link chip
    on one line clears the next's. */
 :where(.ap-msg-text, .ap-description-text, .ap-welcome, .ap-connect-server-desc, .ap-servcard-description) :is(li + li, li > :is(ul, ol)) { margin-top: var(--space-1); }
@@ -305,7 +309,7 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-msg-text .hljs-emphasis { font-style: italic; }
 .ap-msg-text .hljs-strong { font-weight: 700; }
 .ap-msg-text .ap-table { max-width: 100%; overflow-x: auto; margin: var(--space-1) 0; }
-.ap-msg-text table { border-collapse: collapse; overflow-wrap: normal; }
+.ap-msg-text table { border-collapse: collapse; }
 .ap-msg-text th, .ap-msg-text td { padding: var(--space-1) var(--space-3); border: 1px solid var(--line); text-align: start; vertical-align: top; }
 .ap-msg-text th { font-weight: 600; background: var(--bg-200); }
 .ap-msg-text .ap-align-center { text-align: center; }
@@ -1146,7 +1150,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-servcard-connection { flex: none; color: var(--ink); }
 .ap-servcard-sep { flex: none; padding-inline: 2px; color: var(--ink-muted); }
 .ap-servcard-host { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: ltr; unicode-bidi: plaintext; }
-.ap-servcard-description { font-size: var(--text-ui); line-height: var(--leading-ui); color: var(--ink); overflow-wrap: anywhere; }
+.ap-servcard-description { font-size: var(--text-ui); line-height: var(--leading-ui); color: var(--ink); }
 .ap-servcard-description > :first-child { margin-top: 0; }
 .ap-servcard-description > :last-child { margin-bottom: 0; }
 .ap-servcard-description a { color: var(--denim); }
