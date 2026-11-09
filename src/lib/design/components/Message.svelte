@@ -17,6 +17,7 @@
 	import ReplyPreview from './ReplyPreview.svelte';
 	import RoleBadges from './RoleBadges.svelte';
 	import TypingDots from './TypingDots.svelte';
+	import * as icons from './ActionIcons.svelte';
 	import type { MessageAction, MessageEmbed, MessageTestids, MessageView } from './types';
 	import { times } from './util';
 
@@ -68,9 +69,10 @@
 	const toolbar = $derived(engaged && !view.editing && !view.selecting && actionable);
 
 	/**
-	 * The toolbar's actions, in order; the rarer ones wait behind ⋯. Reply's and Edit's labels name them in apron.css too,
-	 * which boxes the first letter of each (`r`, `e`) for the keyboard: change one, change both. Touch's menu (`held`) keeps only Reply and React
-	 * up front, with everything else behind ⋯, and offers Copy text, since its rows take no text selection.
+	 * The toolbar's actions, in order: React first, beside the quick reactions; the rarer ones wait behind ⋯. Each
+	 * shows as its icon, its `key` (Reply's `r`, Edit's `e`, which `keydown` handles) badged for the keyboard. Touch's
+	 * menu (`held`) keeps only React and Reply up front, with everything else behind ⋯, and offers Copy text, since its
+	 * rows take no text selection.
 	 */
 	function actions(): { quick: MessageAction[]; items: MessageAction[]; more?: MessageAction[] } {
 		const can = caps!;
@@ -85,26 +87,26 @@
 				if (held && row) release(row);
 			} }))
 			: [];
-		const unreplied: MessageAction | undefined = view.deleted && can.removeReply ? { id: 'unreply', label: 'Remove reply reference', glyph: 'Remove reply', onclick: () => on.removeReply?.(view) } : undefined;
-		const reply: MessageAction | undefined = can.reply ? { id: 'reply', label: 'Reply to message', glyph: 'Reply', onclick: () => on.reply?.(view) } : undefined;
+		const unreplied: MessageAction | undefined = view.deleted && can.removeReply ? { id: 'unreply', label: 'Remove reply reference', title: 'Remove reply', glyph: 'Remove reply', icon: icons.unlink, onclick: () => on.removeReply?.(view) } : undefined;
+		const reply: MessageAction | undefined = can.reply ? { id: 'reply', label: 'Reply to message', title: 'Reply', glyph: 'Reply', icon: icons.reply, key: 'R', onclick: () => on.reply?.(view) } : undefined;
 		const react: MessageAction | undefined = can.react && !view.deleted
-			? { id: 'react', label: 'React', title: 'React', popup: true, expanded: on.picking?.(view), attach: on.pickAnchor, onclick: (event) => on.pick?.(view, event.currentTarget as HTMLElement) }
+			? { id: 'react', label: 'React', title: 'React', icon: icons.smilePlus, popup: true, expanded: on.picking?.(view), attach: on.pickAnchor, onclick: (event) => on.pick?.(view, event.currentTarget as HTMLElement) }
 			: undefined;
-		const thread: MessageAction | undefined = can.startThread ? { id: 'thread', label: 'Start thread', title: 'Start thread', onclick: () => on.startThread?.(view) } : undefined;
-		const edit: MessageAction | undefined = can.edit ? { id: 'edit', label: 'Edit message', title: 'Edit', glyph: 'Edit', onclick: () => ((held = false), on.edit?.(view)) } : undefined;
-		const unreply: MessageAction | undefined = can.edit && !can.textOnly && view.reply ? { id: 'unreply', label: 'Remove reply reference', glyph: 'Remove reply', onclick: () => on.removeReply?.(view) } : undefined;
-		const select: MessageAction | undefined = can.select ? { id: 'select', label: 'Select message', title: 'Select', glyph: 'Select', testid: testids?.select, onclick: () => ((held = false), on.beginSelect?.(view)) } : undefined;
-		const copy: MessageAction | undefined = held && view.body && on.copyText ? { id: 'copy', label: 'Copy text', glyph: 'Copy text', done: { label: 'Text copied', glyph: 'Copied' }, onclick: () => on.copyText?.(view) } : undefined;
-		const link: MessageAction | undefined = can.link ? { id: 'link', label: 'Copy link to message', title: 'Copy link', glyph: 'Copy link', done: { label: 'Link copied', glyph: 'Copied' }, onclick: () => on.copyLink?.(view) } : undefined;
-		const remove: MessageAction | undefined = can.edit && !can.textOnly ? { id: 'delete', label: 'Delete message', title: 'Delete', glyph: 'Delete', danger: true, onclick: () => on.delete?.(view) } : undefined;
+		const thread: MessageAction | undefined = can.startThread ? { id: 'thread', label: 'Start thread', title: 'Start thread', icon: icons.thread, onclick: () => on.startThread?.(view) } : undefined;
+		const edit: MessageAction | undefined = can.edit ? { id: 'edit', label: 'Edit message', title: 'Edit', glyph: 'Edit', icon: icons.pencil, key: 'E', onclick: () => ((held = false), on.edit?.(view)) } : undefined;
+		const unreply: MessageAction | undefined = can.edit && !can.textOnly && view.reply ? { id: 'unreply', label: 'Remove reply reference', title: 'Remove reply', glyph: 'Remove reply', icon: icons.unlink, onclick: () => on.removeReply?.(view) } : undefined;
+		const select: MessageAction | undefined = can.select ? { id: 'select', label: 'Select message', title: 'Select', glyph: 'Select', icon: icons.squareCheck, testid: testids?.select, onclick: () => ((held = false), on.beginSelect?.(view)) } : undefined;
+		const copy: MessageAction | undefined = held && view.body && on.copyText ? { id: 'copy', label: 'Copy text', title: 'Copy text', glyph: 'Copy text', icon: icons.copy, done: { label: 'Text copied', glyph: 'Copied' }, onclick: () => on.copyText?.(view) } : undefined;
+		const link: MessageAction | undefined = can.link ? { id: 'link', label: 'Copy link to message', title: 'Copy link', glyph: 'Copy link', icon: icons.link, done: { label: 'Link copied', glyph: 'Copied' }, onclick: () => on.copyLink?.(view) } : undefined;
+		const remove: MessageAction | undefined = can.edit && !can.textOnly ? { id: 'delete', label: 'Delete message', title: 'Delete', glyph: 'Delete', icon: icons.trash, danger: true, onclick: () => on.delete?.(view) } : undefined;
 		const present = (list: Array<MessageAction | undefined>) => list.filter((it): it is MessageAction => it !== undefined);
 		if (held) {
-			const front = present([reply, react]);
+			const front = present([react, reply]);
 			const rest = present([unreplied, thread, edit, select, copy, link, unreply, remove]);
 			return front.length ? { quick, items: front, more: rest } : { quick, items: rest };
 		}
 		const more = present([unreply, select, link, remove]);
-		return { quick, items: present([unreplied, reply, react, thread, edit]), ...(more.length ? { more } : {}) };
+		return { quick, items: present([unreplied, react, reply, thread, edit]), ...(more.length ? { more } : {}) };
 	}
 
 	/** Where text is written, whose keys and clicks are its own: `x` there is a letter. */

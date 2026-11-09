@@ -147,10 +147,9 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-msg:not(.ap-msg-mention, .ap-msg-highlighted, .ap-msg-selected):focus-visible { background: var(--hover-soft); }
 .ap-msg:focus-visible::before { content: ''; position: absolute; inset-inline-start: var(--bar-at, 0); top: var(--bar-inset, var(--space-1)); bottom: var(--bar-inset, var(--space-1)); width: 3px; border-radius: var(--radius-full); background: var(--ink-muted); pointer-events: none; }
 .ap-msg:focus { scroll-margin-top: var(--space-8); }
-/* The letter of a toolbar action's key, the first of its label (R in Reply, E in Edit: Message.svelte's labels, named
-   here so the buttons need no markup of their own), boxed while the keyboard is on the message or in its toolbar; a
-   shadow rather than padding, so the label doesn't move as it shows. */
-:is(.ap-msg:focus-visible, .ap-actions:has(.ap-actions-btn:focus-visible)) .ap-actions-btn:is([aria-label="Reply to message"], [aria-label="Edit message"])::first-letter { background: color-mix(in srgb, var(--ink) 12%, transparent); box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--ink) 12%, transparent); border-radius: var(--radius-sm); color: var(--ink); }
+/* A toolbar action's key (Reply's R, Edit's E: `key` in Message.svelte), badged on its icon while the keyboard is on
+   the message or in its toolbar. */
+:is(.ap-msg:focus-visible, .ap-actions:has(.ap-actions-btn:focus-visible)) .ap-actions-icon[data-key]::after { display: block; }
 /* The toolbar stays up while its React button's emoji picker is open. */
 .ap-msg-actions:has([aria-expanded='true']) { visibility: visible; }
 /* While a message's picker or menu is open it keeps its hover look, and the rest don't take it: new messages
@@ -587,6 +586,12 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-actions-btn { font: inherit; font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 500; min-width: var(--control-md); height: var(--control-md); padding: 0 var(--space-2); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink-muted); cursor: pointer; }
 .ap-actions-btn:hover { background: var(--hover); color: var(--ink); }
 .ap-actions-danger:hover { color: var(--danger); }
+/* ActionIcons: lucide's stroke, sized where each sits. */
+.ap-icon { flex: none; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ap-actions-touch .ap-icon { width: 20px; height: 20px; }
+/* An action shown as its icon alone (its name in the tooltip), and the key badged on its corner for the keyboard. */
+.ap-actions-icon { position: relative; display: inline-grid; place-items: center; padding: 0; }
+.ap-actions-icon[data-key]::after { content: attr(data-key); display: none; position: absolute; inset-inline-end: 0; bottom: 0; min-width: 14px; padding: 0 var(--space-0_5); box-sizing: border-box; border-radius: var(--radius-sm); background: var(--bg-300); box-shadow: 0 0 0 1px var(--line-strong); color: var(--ink); font: 600 9px/14px var(--font-sans); text-align: center; pointer-events: none; }
 /* Quick reactions, ahead of the rest and set apart from them by a rule; one already yours is marked as a chip is. */
 .ap-actions-quick { display: contents; }
 .ap-actions-emoji { padding: 0; font-family: var(--font-emoji); font-size: 18px; line-height: 1; }
@@ -597,6 +602,9 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-actions-menu { flex-direction: column; align-items: stretch; min-width: 12rem; border-radius: var(--radius-lg); }
 .ap-actions-menu .ap-actions-btn { border-radius: var(--radius-sm); text-align: start; }
 .ap-actions-menu .ap-actions-danger { color: var(--danger); }
+.ap-actions-row { display: flex; align-items: center; gap: var(--space-3); }
+.ap-actions-row > .ap-icon { color: var(--ink-muted); }
+.ap-actions-danger.ap-actions-row > .ap-icon { color: inherit; }
 .ap-actions-touch .ap-actions-emoji { padding: 0; font-size: 22px; line-height: 1; }
 .ap-actions-touch .ap-actions-sep { height: calc(var(--control-xl) - var(--space-3)); }
 /* In the menu the quick reactions keep a row of their own along its top, a rule under them. */

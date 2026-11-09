@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { tick } from 'svelte';
+	import { check, ellipsis } from './ActionIcons.svelte';
 	import type { MessageAction } from './types';
 
 	/** How long a `done` action says so before the ⋯ actions close. */
@@ -68,9 +69,17 @@
 	}
 
 	const noAttach = () => {};
+
+	/** Touch's menu: a row each, its icon beside its words. Elsewhere an action with an icon shows the icon alone. */
+	const menu = $derived(touch && open);
+	/** The tooltip: its name, and its key. */
+	const tip = (it: MessageAction) => {
+		const name = it.title ?? (it.icon ? it.label : undefined);
+		return name && it.key ? `${name} (${it.key})` : name;
+	};
 </script>
 
-<div bind:this={bar} class={['ap-actions', touch && 'ap-actions-touch', touch && open && 'ap-actions-menu']} role="toolbar" aria-label="Message actions" aria-orientation={touch && open ? 'vertical' : undefined}>
+<div bind:this={bar} class={['ap-actions', touch && 'ap-actions-touch', touch && open && 'ap-actions-menu']} role="toolbar" aria-label="Message actions" aria-orientation={menu ? 'vertical' : undefined}>
 	{#if quickShown.length}
 		<div class="ap-actions-quick" role="group" aria-label="Quick reactions">
 			{#each quickShown as it (it.id ?? it.label)}
@@ -81,17 +90,20 @@
 	{/if}
 	{#each shown as it (it.id ?? it.label)}
 		{@const said = it.done && done === (it.id ?? it.label) ? it.done : undefined}
+		{@const icon = said && it.icon ? check : it.icon}
 		<button
-			class={['ap-actions-btn', it.danger && 'ap-actions-danger']}
+			class={['ap-actions-btn', it.danger && 'ap-actions-danger', icon && (menu ? 'ap-actions-row' : 'ap-actions-icon')]}
 			type="button"
 			data-testid={it.testid}
 			aria-label={said?.label ?? it.label}
-			title={it.title}
+			aria-keyshortcuts={it.key?.toLowerCase()}
+			data-key={touch ? undefined : it.key}
+			title={menu ? undefined : tip(it)}
 			aria-haspopup={it.popup ? 'dialog' : undefined}
 			aria-expanded={it.popup ? Boolean(it.expanded) : undefined}
 			{@attach it.attach ?? noAttach}
 			onclick={(event) => press(it, event)}
-		>{said ? (said.glyph ?? said.label) : (it.glyph ?? it.label)}</button>
+		>{#if icon && !menu}{@render icon()}{:else}{#if icon}{@render icon()}{/if}{said ? (said.glyph ?? said.label) : (it.glyph ?? it.label)}{/if}</button>
 	{/each}
-	{#if hasMore}<button class="ap-actions-btn" type="button" aria-label="More actions" aria-expanded="false" title="More" onclick={showMore}>⋯</button>{/if}
+	{#if hasMore}<button class="ap-actions-btn ap-actions-icon" type="button" aria-label="More actions" aria-expanded="false" title="More" onclick={showMore}>{@render ellipsis()}</button>{/if}
 </div>

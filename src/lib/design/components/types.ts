@@ -110,6 +110,13 @@ export interface MessageAction {
 	label: string;
 	/** A short text glyph; omitted, the label shows. */
 	glyph?: string;
+	/**
+	 * An icon (ActionIcons'): the toolbar shows it alone, its name in the tooltip, and touch's menu shows it
+	 * beside the glyph or label.
+	 */
+	icon?: Snippet;
+	/** The key that does it while the message is focused (`R`): in the tooltip, and badged on it for the keyboard. */
+	key?: string;
 	/** The tooltip; none when omitted. */
 	title?: string;
 	/** A press. One that returns a promise resolving true, on an action with `done`, says so for a moment. */

@@ -234,14 +234,14 @@ describe('a message row’s toolbar', () => {
 		const row = render({ caps: ALL, reply: { id: '7', name: 'Bob' } }, on);
 		engage(row);
 		const toolbar = dom.byRole('toolbar', 'Message actions');
-		expect([...toolbar.querySelectorAll('button')].map(dom.nameOf)).toEqual(['Reply to message', 'React', 'Start thread', 'Edit message', 'More actions']);
+		expect([...toolbar.querySelectorAll('button')].map(dom.nameOf)).toEqual(['React', 'Reply to message', 'Start thread', 'Edit message', 'More actions']);
 		dom.button('Reply to message').click();
 		dom.button('Start thread').click();
 		dom.button('Edit message').click();
 		expect([on.reply, on.startThread, on.edit].map((handler) => handler.mock.calls.length)).toEqual([1, 1, 1]);
 		dom.button('More actions').click();
 		flushSync();
-		expect([...toolbar.querySelectorAll('button')].map(dom.nameOf)).toEqual(['Reply to message', 'React', 'Start thread', 'Edit message', 'Remove reply reference', 'Select message', 'Copy link to message', 'Delete message']);
+		expect([...toolbar.querySelectorAll('button')].map(dom.nameOf)).toEqual(['React', 'Reply to message', 'Start thread', 'Edit message', 'Remove reply reference', 'Select message', 'Copy link to message', 'Delete message']);
 		// Using one puts the rest away again.
 		dom.button('Delete message').click();
 		flushSync();
@@ -262,7 +262,7 @@ describe('a message row’s toolbar', () => {
 		const row = render({ caps: { ...NONE, react: true, reply: true }, reactions: [{ emoji: '❤', count: 1, mine: true }] }, { react, quick: () => ['👍', '❤️', '😂'] });
 		engage(row);
 		const toolbar = dom.byRole('toolbar', 'Message actions');
-		expect([...toolbar.querySelectorAll('button')].map(dom.nameOf)).toEqual(['React with 👍', 'React with ❤️', 'React with 😂', 'Reply to message', 'React']);
+		expect([...toolbar.querySelectorAll('button')].map(dom.nameOf)).toEqual(['React with 👍', 'React with ❤️', 'React with 😂', 'React', 'Reply to message']);
 		expect(dom.byRole('group', 'Quick reactions').querySelectorAll('[aria-pressed="true"]').length).toBe(1);
 		expect(dom.button('React with ❤️').getAttribute('aria-pressed')).toBe('true');
 		dom.button('React with 😂').click();
@@ -289,6 +289,16 @@ describe('a message row’s toolbar', () => {
 		row = render({ deleted: true, caps: { ...NONE, react: true, removeReply: true } }, { quick: () => ['👍'] });
 		engage(row);
 		expect(dom.queryByRole('group', 'Quick reactions')).toBeNull();
+	});
+
+	it('shows each action as its icon, named in its tooltip with its key, the key badged for the keyboard', () => {
+		const row = render({ caps: { ...NONE, reply: true, edit: true, startThread: true } });
+		engage(row);
+		const reply = dom.button('Reply to message');
+		expect(reply.querySelector('svg')).not.toBeNull();
+		expect([reply.title, reply.getAttribute('aria-keyshortcuts'), reply.dataset.key]).toEqual(['Reply (R)', 'r', 'R']);
+		expect(dom.button('Edit message').title).toBe('Edit (E)');
+		expect([dom.button('Start thread').title, dom.button('Start thread').dataset.key]).toEqual(['Start thread', undefined]);
 	});
 
 	it('offers Remove reply under ⋯ only on a reply', () => {
@@ -323,7 +333,9 @@ describe('a message row’s toolbar', () => {
 		flushSync();
 		dom.button('Copy link to message').click();
 		await vi.waitFor(() => expect(dom.queryByRole('button', 'Link copied')).not.toBeNull());
-		expect(dom.button('Link copied').textContent).toBe('Copied');
+		// Its icon turns to a check (ActionIcons'), and its tooltip still names it.
+		expect(dom.button('Link copied').querySelector('path[d="M20 6 9 17l-5-5"]')).not.toBeNull();
+		expect(dom.button('Link copied').title).toBe('Copy link');
 		vi.advanceTimersByTime(1200);
 		flushSync();
 		expect(dom.queryByRole('button', 'Link copied')).toBeNull();
@@ -460,7 +472,7 @@ describe('select gestures', () => {
 	const held = (row: Element) => row.classList.contains('ap-msg-held');
 	const buttons = () => [...dom.byRole('toolbar', 'Message actions').querySelectorAll('button')].map(dom.nameOf);
 
-	it('opens a larger menu from a long touch press, Reply and React up front and the rest behind ⋯ as rows, Select on anyone’s', () => {
+	it('opens a larger menu from a long touch press, React and Reply up front and the rest behind ⋯ as rows, Select on anyone’s', () => {
 		vi.useFakeTimers();
 		const copyText = vi.fn(async () => true);
 		// Not yours: Select is still there.
@@ -469,7 +481,9 @@ describe('select gestures', () => {
 		hold(text);
 		expect(held(row)).toBe(true);
 		expect(dom.byRole('toolbar', 'Message actions').classList.contains('ap-actions-touch')).toBe(true);
-		expect(buttons()).toEqual(['Reply to message', 'React', 'More actions']);
+		expect(buttons()).toEqual(['React', 'Reply to message', 'More actions']);
+		// Icons alone up front; as rows, each icon beside its words.
+		expect(dom.button('Reply to message').textContent).toBe('');
 		// The click that ends the press does nothing else.
 		click(text);
 		flushSync();
@@ -477,7 +491,9 @@ describe('select gestures', () => {
 		dom.button('More actions').click();
 		flushSync();
 		expect(dom.byRole('toolbar', 'Message actions').getAttribute('aria-orientation')).toBe('vertical');
-		expect(buttons()).toEqual(['Reply to message', 'React', 'Start thread', 'Select message', 'Copy text', 'Copy link to message']);
+		expect(buttons()).toEqual(['React', 'Reply to message', 'Start thread', 'Select message', 'Copy text', 'Copy link to message']);
+		expect(dom.button('Reply to message').textContent).toBe('Reply');
+		expect(dom.button('Reply to message').querySelector('svg')).not.toBeNull();
 		dom.button('Copy text').click();
 		expect(copyText).toHaveBeenCalledOnce();
 	});

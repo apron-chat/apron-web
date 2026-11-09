@@ -360,7 +360,7 @@ test.describe('a guest who only reads', () => {
 	});
 });
 
-test('the timeline is one Tab stop: ← → go through a message, its keys boxed for the keyboard; thread cards are stops; Shift+↑ ↓ select a run', async ({ preview, page }) => {
+test('the timeline is one Tab stop: ← → go through a message, its keys badged for the keyboard; thread cards are stops; Shift+↑ ↓ select a run', async ({ preview, page }) => {
 	await preview.open();
 	const composer = preview.composer();
 	const list = page.getByTestId('message-list');
@@ -387,12 +387,14 @@ test('the timeline is one Tab stop: ← → go through a message, its keys boxed
 		await expect(three).toBeFocused();
 	});
 
-	await test.step('→ goes into its links and buttons, ← → through them, Escape back to the row; R and E boxed for the keyboard', async () => {
-		// Its key's letter, the first of the label, boxed (`::first-letter`).
+	await test.step('→ goes into its links and buttons, ← → through them, Escape back to the row; R and E badged for the keyboard', async () => {
+		// Its key badged on its icon (`::after`, from `data-key`).
+		const badge = (element: Element) => getComputedStyle(element, '::after').display;
 		const reply = three.getByRole('button', { name: 'Reply to message', exact: true });
-		expect(await reply.evaluate((element) => getComputedStyle(element, '::first-letter').backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
+		expect(await reply.evaluate(badge)).toBe('block');
 		const seen: string[] = [];
-		for (let i = 0; i < 8; i++) {
+		// Past its links, the quick reactions, React and Reply, to Edit.
+		for (let i = 0; i < 12; i++) {
 			await page.keyboard.press('ArrowRight');
 			seen.push(await page.evaluate(() => document.activeElement?.getAttribute('aria-label') ?? document.activeElement?.textContent ?? ''));
 		}
@@ -404,7 +406,7 @@ test('the timeline is one Tab stop: ← → go through a message, its keys boxed
 		// A pointer on a message alone doesn't box them.
 		await composer.click();
 		await preview.message('alpha-1').hover();
-		expect(await preview.message('alpha-1').getByRole('button', { name: 'Reply to message', exact: true }).evaluate((element) => getComputedStyle(element, '::first-letter').backgroundColor)).toBe('rgba(0, 0, 0, 0)');
+		expect(await preview.message('alpha-1').getByRole('button', { name: 'Reply to message', exact: true }).evaluate((element) => getComputedStyle(element, '::after').display)).toBe('none');
 	});
 
 	await test.step('Shift+↑ selects up from the message, Shift+↓ gives them back', async () => {
