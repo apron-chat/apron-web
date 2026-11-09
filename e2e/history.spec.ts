@@ -17,8 +17,11 @@ const FLUSH_MS = 2_000;
 const ada = { user_id: 'ada', name: 'Ada' };
 const you = { user_id: 'kept_1', name: 'Kept' };
 
-/** A server with one room of `messages`, a guest sign-in that hands out a token, and a token resume. */
-async function keptServer(page: Page, messages: Array<Record<string, unknown>>, frames: Frame[]): Promise<void> {
+/**
+ * A server with one room of `messages`, a guest sign-in that hands out a token, and a token resume. `server` adds to
+ * its `server` frame, which it sends once `ready` lets it.
+ */
+async function keptServer(page: Page, messages: Array<Record<string, unknown>>, frames: Frame[], options: { server?: Record<string, unknown>; ready?: () => Promise<void> } = {}): Promise<void> {
 	await page.route(OFFSITE, (route) => route.abort());
 	await page.routeWebSocket(/.*/, (ws) => {
 		const latest = () => String(messages.at(-1)!.log_id);
@@ -31,7 +34,7 @@ async function keptServer(page: Page, messages: Array<Record<string, unknown>>, 
 			switch (frame.method) {
 				case 'ping': return ws.send(JSON.stringify({ method: 'pong' }));
 				case 'auth': return reply({ you, token: 'kept-token' });
-				case 'room_list': return reply({ joined: [general()], users: [you, ada] });
+				case 'room_list': return reply({ joined: [general()], users: [you, messages[0].from ?? ada] });
 				case 'history': {
 					const after = params.after === undefined ? -Infinity : Number(params.after);
 					const before = params.before === undefined ? Infinity : Number(params.before);
@@ -45,7 +48,8 @@ async function keptServer(page: Page, messages: Array<Record<string, unknown>>, 
 					if (frame.id !== undefined) reply({});
 			}
 		});
-		ws.send(JSON.stringify({ method: 'server', params: { apron: 10, agent: 'apron-e2e-kept', auth: ['guest', 'token'], ping: 60, capabilities: ['history', 'rooms'] } }));
+		const server = { apron: 10, agent: 'apron-e2e-kept', auth: ['guest', 'token'], ping: 60, capabilities: ['history', 'rooms'], ...options.server };
+		void (options.ready?.() ?? Promise.resolve()).then(() => ws.send(JSON.stringify({ method: 'server', params: server })));
 	});
 }
 
@@ -120,6 +124,43 @@ test('a reload shows what it kept, and asks only for what came since', async ({ 
 	await expect(retention).toHaveValue('30');
 	await retention.selectOption('off');
 	await expect.poll(() => keptServers(page)).toBe(0);
+});
+
+test('a reload draws the avatars it kept from the media origin the server named, before the server answers', async ({ page }) => {
+	const base = process.env.E2E_URL;
+	await page.clock.install();
+	await page.clock.setFixedTime(NOW);
+	const start = NOW.getTime() - DAY;
+	const avatar = 'https://media.example/ada.png';
+	const sender = { ...ada, avatar };
+	const messages = Array.from({ length: 5 }, (_, n) => ({ message_id: String(start + n * 1000), log_id: String(start + n * 1000), room_id: 'general', from: sender, body: { text: `Message ${n}` } }));
+	let answer = () => {};
+	let held = Promise.resolve();
+	await keptServer(page, messages, [], {
+		// The media origin is named by the server alone (`ext:media`), not this app's or the server's own.
+		server: { capabilities: ['history', 'rooms', 'ext:media'], ext: { media: { origins: ['https://media.example'] } } },
+		ready: () => held
+	});
+	const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
+	await page.route(avatar, (route) => route.fulfill({ contentType: 'image/png', body: png }));
+	const face = page.getByTestId('message-list').locator(`img[src="${avatar}"]`).first();
+
+	await page.goto(`${base}/`);
+	await expect(page.getByText('Message 4', { exact: true })).toBeVisible();
+	await expect(face).toBeVisible();
+	await keptAfterFlush(page, 5);
+
+	// Reloaded while the server is slow to answer: the kept view shows, its avatars with it, not initials until the
+	// server's frame says where they may load from.
+	held = new Promise((resolve) => (answer = resolve));
+	await page.reload();
+	await expect(page.getByText('Message 4', { exact: true })).toBeVisible();
+	await expect(face).toBeVisible();
+	// Then the server's own frame takes over: what came since shows, and the avatars stay.
+	messages.push({ ...messages[4], message_id: String(start + 5000), log_id: String(start + 5000), body: { text: 'While you were away' } });
+	answer();
+	await expect(page.getByText('While you were away')).toBeVisible();
+	await expect(face).toBeVisible();
 });
 
 test('Sign out keeps history for the account by default, and History clears one account or all', async ({ page }) => {

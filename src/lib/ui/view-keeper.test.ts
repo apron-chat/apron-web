@@ -115,6 +115,18 @@ describe('showing the kept view', () => {
 		expect(await restored(some, client())).toBeUndefined();
 	});
 
+	it('shows nothing once the client has gone to another server while it was read', async () => {
+		const { keeper: some } = keeper();
+		await some.keep(client(), view, ada);
+		const moving = { url: SERVER, keptSessionFor: () => true };
+		let shown: HeldSession | undefined;
+		const restoring = some.restore(moving, (kept) => (shown = kept));
+		// A push or a link takes the page to another server before IndexedDB answers.
+		moving.url = 'wss://other.example/';
+		await restoring;
+		expect(shown).toBeUndefined();
+	});
+
 	it('shows only the view of the account whose session is saved here, where that is noted', async () => {
 		const values = new Map<string, string>();
 		vi.stubGlobal('localStorage', memoryStorage(values));

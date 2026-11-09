@@ -278,7 +278,9 @@ from the worker so tests can run them. `media-settings.svelte.ts`
 (`MediaSettings`) keeps where media loads from (Preferences, Media), and
 `directory.mediaOrigins` is what it trusts on the active server: the server's
 `ext:media` origins and the viewer's trusted origins, or `ANY_ORIGIN` under Any
-site.
+site. The server's are read from `session.server`, which is the held view's
+frame while that view stands in (a reload's kept view, a reconnect), so its
+avatars draw before the server answers.
 
 Media loads only through one gate, by construction. `media-gate.ts` is the only
 place a URL becomes a `MediaSrc`, the type the design system's `MediaSrc`

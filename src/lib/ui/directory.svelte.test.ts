@@ -190,6 +190,26 @@ describe('directory', () => {
 	});
 
 
+	it('loads media by the frame it is given, the session\'s, over the snapshot\'s', () => {
+		const cy: Identity = { user_id: 'cy', name: 'Cy', avatar: 'https://media.example/cy.png' };
+		const frame = (origins: string[]) => ({ apron: 10, auth: ['guest'], capabilities: ['ext:media'], ext: { media: { origins } } });
+		const named = frame(['https://media.example']);
+		try {
+			mediaSettings.update('trusted', []);
+			// Still connecting: the kept view's frame stands in for the one the connection hasn't sent.
+			directory.apply(blankSnapshot(), 'https://example.com', 'wss://example.com/', named);
+			expect(directory.avatar(cy)).toBe('https://media.example/cy.png');
+			// The frame given wins over the snapshot's, either way.
+			directory.apply(snapshot([ada], { server: named }), 'https://example.com', 'wss://example.com/', frame([]));
+			expect(directory.avatar(cy)).toBeUndefined();
+			directory.apply(snapshot([ada], { server: frame([]) }), 'https://example.com', 'wss://example.com/', named);
+			expect(directory.avatar(cy)).toBe('https://media.example/cy.png');
+		} finally {
+			directory.apply(blankSnapshot(), undefined);
+			mediaSettings.update('trusted', [], []);
+		}
+	});
+
 	it('loads avatars and images in messages from where media may load from, as Preferences choose', () => {
 		const away: Identity = { user_id: 'cy', name: 'Cy', avatar: 'https://gravatar.example/cy.png' };
 		const home: Identity = { user_id: 'di', name: 'Di', avatar: 'https://example.com/di.png' };
