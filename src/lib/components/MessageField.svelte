@@ -78,6 +78,11 @@
 		draft.insert(text);
 	}
 
+	/** The draft has more than one line (`DraftField.multiline`). */
+	export function multiline(): boolean {
+		return draft.multiline;
+	}
+
 	/** Makes a formatting change to the draft and its selection, as typing it would (`DraftField.apply`). */
 	export function apply(change: (edit: TextEdit) => TextEdit | undefined): boolean {
 		return draft.apply(change);

@@ -10,7 +10,7 @@
 	import Paperclip from '@lucide/svelte/icons/paperclip';
 	import Smile from '@lucide/svelte/icons/smile';
 	import Square from '@lucide/svelte/icons/square';
-	import type { Snippet } from 'svelte';
+	import { untrack, type Snippet } from 'svelte';
 	import type { ClassValue } from 'svelte/elements';
 	import Attachments from './Attachments.svelte';
 	import Button from './Button.svelte';
@@ -104,8 +104,9 @@
 		/** Classes for the default field, the textarea, added to its own; a `field` of your own takes its own. */
 		class?: ClassValue;
 		/**
-		 * Offers the full panel: an Expand button beside the field, for writing at length with formatting. It doesn't
-		 * show while recording, or for a command or live text. Omit to hide it.
+		 * Offers the full panel: an Expand button (its glyph alone) beside the field, for writing at length with
+		 * formatting; it flashes as it appears. It doesn't show while recording, or for a command or live text. Omit to
+		 * hide it, as the app does until a draft has a second line.
 		 */
 		onexpand?: () => void;
 		/**
@@ -126,6 +127,12 @@
 		onpreview?: (previewing: boolean) => void;
 		/** The keys that send from the full panel, shown at its foot, such as `['Ctrl', 'Enter']`. */
 		sendKeys?: string[];
+		/**
+		 * The draft has a line break, where your field can tell it more cheaply than `value`, which is read on every key
+		 * otherwise. Past one line, by a break or by wrapping, the field takes the box's whole width and the buttons drop
+		 * to a row under it.
+		 */
+		multiline?: boolean;
 		/** `data-testid` on the Expand button. */
 		expandTestid?: string;
 		/** `data-testid` on the full panel. */
@@ -135,7 +142,7 @@
 		room, placeholder, value = $bindable(''), oninput, onsend, canSend, waitUntil, canUpload, onfiles, accept, disabled, canRecord, onrecord, onstoprecording, recording, recordingTime, thread, canCommand, live,
 		field, onemoji, emojiOpen, emojiButton = $bindable(), reply, replyText, oncancelreply, attachments, previews, preview, onremovepreview, picker,
 		replyTestid, attachmentsTestid, previewsTestid, fileInputTestid, commandTestid, liveTestid, emojiTestid, sendTestid, class: className,
-		onexpand, expanded = false, oncollapse, toolbar, rendered, previewing = false, onpreview, sendKeys, expandTestid, panelTestid
+		onexpand, expanded = false, oncollapse, toolbar, rendered, previewing = false, onpreview, sendKeys, multiline, expandTestid, panelTestid
 	}: Props = $props();
 
 	const ph = $derived(placeholder || (thread ? `Reply in ${roomName(thread.name, thread.thread, { thread: true })}` : `Message ${room || ''}`));
@@ -151,6 +158,68 @@
 	/** What's left of a wait on sending, while there is one. */
 	const waitLeft = $derived(waitUntil === undefined ? 0 : Math.max(0, waitUntil - secondNow()));
 	let fileInput = $state<HTMLInputElement>();
+	let form = $state<HTMLFormElement>();
+	/**
+	 * Past one line by wrapping, while the draft is at least this long (else 0): about what the narrow field held as it
+	 * wrapped, so the wider field fitting the draft on one line again doesn't flip it back and forth. It is the draft's
+	 * length as it wraps while typing; for a draft that arrives wrapped (pasted, or kept from another pane), or once that
+	 * guess proved too long, the least that one line of it can hold, so deleting it doesn't flip it back on every key.
+	 */
+	let wrapAt = $state(0);
+	/** The last `wrapAt`, once the draft got shorter than it: a wrap seen again below it means the guess was too long. */
+	let lastWrapAt = 0;
+	const wrapped = $derived(wrapAt > 0 && value.length >= wrapAt);
+	const breaks = $derived(multiline ?? value.includes('\n'));
+	/**
+	 * Past one line, by a line break or by wrapping: the field takes the box's whole width and the buttons sit in a row
+	 * under it (ap-composer-grown), as at the full panel's foot. Not while recording, whose line takes no typing.
+	 */
+	const grown = $derived(!expanded && !recording && (breaks || wrapped));
+	$effect(() => {
+		if (!wrapAt || wrapped) return;
+		// Emptied (sent): the next wrap is a fresh one.
+		lastWrapAt = untrack(() => value.length) ? wrapAt : 0;
+		wrapAt = 0;
+	});
+	/** The field's line height, read once. */
+	let lineHeight = 0;
+	// The field wrapping onto a second line, seen by its size (a ResizeObserver: no layout read on any key).
+	$effect(() => {
+		if (expanded || recording || !form || typeof ResizeObserver !== 'function') return;
+		const field = form.querySelector<HTMLElement>('.ap-composer-field');
+		if (!field) return;
+		lineHeight ||= parseFloat(getComputedStyle(field).lineHeight) || 22;
+		const line = lineHeight;
+		let frame = 0;
+		/** The field's width while grown by wrapping: another is the pane resizing, so whether it wraps is asked again. */
+		let grownWidth = 0;
+		/** A change of layout, drawn before this frame paints; the field's new size is looked at from the next frame, so it is no loop. */
+		const relayout = (change: () => void): void => {
+			observer.unobserve(field);
+			grownWidth = 0;
+			change();
+			frame = requestAnimationFrame(() => observer.observe(field));
+		};
+		const observer = new ResizeObserver(([entry]) => {
+			const { width, height } = entry.contentRect;
+			if (grown) {
+				if (!wrapped || breaks) return;
+				if (grownWidth && width !== grownWidth) relayout(() => (wrapAt = lastWrapAt = 0));
+				else grownWidth = width;
+				return;
+			}
+			const length = value.length;
+			// An empty field taller than a line is its placeholder wrapping (the textarea's), not the draft.
+			if (!length || height <= line * 1.5) return;
+			const lines = Math.max(2, Math.round(height / line));
+			relayout(() => (wrapAt = lines > 2 || length < lastWrapAt ? Math.ceil(length / lines) : length));
+		});
+		observer.observe(field);
+		return () => {
+			cancelAnimationFrame(frame);
+			observer.disconnect();
+		};
+	});
 
 	function submit(event: SubmitEvent): void {
 		event.preventDefault();
@@ -186,7 +255,7 @@
 	<!-- The picker anchors to the field's row and grows upward. -->
 	<div class="ap-composer-wrap">
 		{@render picker?.()}
-		<form class={['ap-composer', disabled && 'ap-composer-disabled', cmd && 'ap-composer-cmd', expanded && previewing && rendered && 'ap-composer-previewing']} aria-label="Send a message" onsubmit={submit}>
+		<form class={['ap-composer', disabled && 'ap-composer-disabled', cmd && 'ap-composer-cmd', grown && 'ap-composer-grown', expanded && previewing && rendered && 'ap-composer-previewing']} aria-label="Send a message" onsubmit={submit} bind:this={form}>
 			{#if expanded}
 				<div class="ap-composer-head">
 					{#if !previewing}{@render toolbar?.()}{/if}
@@ -232,9 +301,10 @@
 			{#if onemoji || expandable}
 				<span class="ap-composer-tools ap-composer-tools-end">
 					{#if expandable}
-						<Button variant="ghost" size="sm" class="ap-composer-expand" data-testid={expandTestid} aria-label="Expand composer" title="Expand to the full panel" onmousedown={(e) => e.preventDefault()} onclick={onexpand}>
-							{#snippet children()}<Maximize size={14} aria-hidden="true" /><span class="ap-composer-expand-label">Expand</span>{/snippet}
-						</Button>
+						<!-- Flashes as it appears (ap-composer-expand), so the way to more room is noticed. -->
+						<button type="button" class="ap-iconbtn ap-composer-expand" data-testid={expandTestid} aria-label="Expand composer" title="Expand to the full panel" onmousedown={(e) => e.preventDefault()} onclick={onexpand}>
+							<Maximize size={16} aria-hidden="true" />
+						</button>
 					{/if}
 					{#if onemoji}
 						<button type="button" class={['ap-iconbtn', emojiOpen && 'ap-iconbtn-on']} data-testid={emojiTestid} aria-label="Insert emoji" title="Insert emoji" aria-haspopup="dialog" aria-expanded={!!emojiOpen} disabled={disabled || recording} bind:this={emojiButton} onclick={onemoji}>
