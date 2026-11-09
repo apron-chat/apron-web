@@ -145,6 +145,26 @@ describe('Composer', () => {
 		expect(dom.queryByRole('button', 'Expand composer')).toBeNull();
 	});
 
+	it('past one line, puts the buttons in a row under the field: by a line break in the draft, or as the field says', () => {
+		const form = () => document.querySelector('form')!;
+		render({ value: 'one line', canUpload: true });
+		expect(form().classList.contains('ap-composer-grown')).toBe(false);
+		dom.unmount();
+		render({ value: 'one\ntwo', canUpload: true });
+		expect(form().classList.contains('ap-composer-grown')).toBe(true);
+		dom.unmount();
+		// The field's own word wins over the draft's text, which it then doesn't read on every key.
+		render({ value: 'one line', multiline: true });
+		expect(form().classList.contains('ap-composer-grown')).toBe(true);
+		dom.unmount();
+		// Not while recording, nor as the full panel, which lay out their own.
+		render({ value: 'one\ntwo', canUpload: true, recording: true });
+		expect(form().classList.contains('ap-composer-grown')).toBe(false);
+		dom.unmount();
+		render({ value: 'one\ntwo', expanded: true });
+		expect(form().classList.contains('ap-composer-grown')).toBe(false);
+	});
+
 	it('as the full panel, puts the toolbar on top, the reply and files inside, and Send at the foot with its keys', () => {
 		const oncollapse = vi.fn();
 		const onsend = vi.fn();

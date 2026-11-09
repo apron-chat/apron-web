@@ -127,6 +127,12 @@
 		onpreview?: (previewing: boolean) => void;
 		/** The keys that send from the full panel, shown at its foot, such as `['Ctrl', 'Enter']`. */
 		sendKeys?: string[];
+		/**
+		 * The draft has a line break, where your field can tell it more cheaply than `value`, which is read on every key
+		 * otherwise. Past one line, by a break or by wrapping, the field takes the box's whole width and the buttons drop
+		 * to a row under it.
+		 */
+		multiline?: boolean;
 		/** `data-testid` on the Expand button. */
 		expandTestid?: string;
 		/** `data-testid` on the full panel. */
@@ -136,7 +142,7 @@
 		room, placeholder, value = $bindable(''), oninput, onsend, canSend, waitUntil, canUpload, onfiles, accept, disabled, canRecord, onrecord, onstoprecording, recording, recordingTime, thread, canCommand, live,
 		field, onemoji, emojiOpen, emojiButton = $bindable(), reply, replyText, oncancelreply, attachments, previews, preview, onremovepreview, picker,
 		replyTestid, attachmentsTestid, previewsTestid, fileInputTestid, commandTestid, liveTestid, emojiTestid, sendTestid, class: className,
-		onexpand, expanded = false, oncollapse, toolbar, rendered, previewing = false, onpreview, sendKeys, expandTestid, panelTestid
+		onexpand, expanded = false, oncollapse, toolbar, rendered, previewing = false, onpreview, sendKeys, multiline, expandTestid, panelTestid
 	}: Props = $props();
 
 	const ph = $derived(placeholder || (thread ? `Reply in ${roomName(thread.name, thread.thread, { thread: true })}` : `Message ${room || ''}`));
@@ -152,6 +158,41 @@
 	/** What's left of a wait on sending, while there is one. */
 	const waitLeft = $derived(waitUntil === undefined ? 0 : Math.max(0, waitUntil - secondNow()));
 	let fileInput = $state<HTMLInputElement>();
+	let form = $state<HTMLFormElement>();
+	/**
+	 * The draft's length when the field last wrapped onto a second line in one row, else 0. It stays grown while the
+	 * draft is at least that long, though the wider field fits it on one line again, so it doesn't flip back and forth.
+	 */
+	let wrapAt = $state(0);
+	const wrapped = $derived(wrapAt > 0 && value.length >= wrapAt);
+	/**
+	 * Past one line, by a line break or by wrapping: the field takes the box's whole width and the buttons sit in a row
+	 * under it (ap-composer-grown), as at the full panel's foot. Not while recording, whose line takes no typing.
+	 */
+	const grown = $derived(!expanded && !recording && ((multiline ?? value.includes('\n')) || wrapped));
+	$effect(() => {
+		if (wrapAt && !wrapped) wrapAt = 0;
+	});
+	// The field wrapping onto a second line, seen by its size (a ResizeObserver: no layout read on any key).
+	$effect(() => {
+		if (expanded || recording || !form || typeof ResizeObserver !== 'function') return;
+		const field = form.querySelector<HTMLElement>('.ap-composer-field');
+		if (!field) return;
+		const line = parseFloat(getComputedStyle(field).lineHeight) || 22;
+		let frame = 0;
+		const observer = new ResizeObserver(([entry]) => {
+			if (grown || entry.contentRect.height <= line * 1.5) return;
+			// Laid out anew before this frame paints. The field's new size is looked at from the next frame, so it is no loop.
+			observer.unobserve(field);
+			wrapAt = value.length || 1;
+			frame = requestAnimationFrame(() => observer.observe(field));
+		});
+		observer.observe(field);
+		return () => {
+			cancelAnimationFrame(frame);
+			observer.disconnect();
+		};
+	});
 
 	function submit(event: SubmitEvent): void {
 		event.preventDefault();
@@ -187,7 +228,7 @@
 	<!-- The picker anchors to the field's row and grows upward. -->
 	<div class="ap-composer-wrap">
 		{@render picker?.()}
-		<form class={['ap-composer', disabled && 'ap-composer-disabled', cmd && 'ap-composer-cmd', expanded && previewing && rendered && 'ap-composer-previewing']} aria-label="Send a message" onsubmit={submit}>
+		<form class={['ap-composer', disabled && 'ap-composer-disabled', cmd && 'ap-composer-cmd', grown && 'ap-composer-grown', expanded && previewing && rendered && 'ap-composer-previewing']} aria-label="Send a message" onsubmit={submit} bind:this={form}>
 			{#if expanded}
 				<div class="ap-composer-head">
 					{#if !previewing}{@render toolbar?.()}{/if}

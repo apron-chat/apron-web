@@ -274,6 +274,35 @@ test.describe('files pasted outside the composer', () => {
 	});
 });
 
+test.describe('a draft past one line', () => {
+	test('takes the box\'s width with the buttons in a row under it, once it wraps or breaks, and goes back to one row', async ({ preview, page }) => {
+		const form = page.locator('form.ap-composer');
+		const errors: string[] = [];
+		page.on('pageerror', (error) => errors.push(error.message));
+		await preview.open();
+		await preview.composer().click();
+		await page.keyboard.type('Canary looks healthy');
+		await expect(form).not.toHaveClass(/ap-composer-grown/);
+		// Wrapping onto a second line, with no line break.
+		await page.keyboard.type(', rolling to the fleet in two waves after lunch, and watching p99 latency and the error rate as we go along');
+		await expect(form).toHaveClass(/ap-composer-grown/);
+		const [field, box] = await Promise.all([preview.composer().boundingBox(), form.boundingBox()]);
+		expect(field!.width).toBeGreaterThan(box!.width * 0.9);
+		await expect(page.getByTestId('composer-expand')).toHaveCount(0);
+		// A line break: Expand too, and still the row under it.
+		await page.keyboard.press('Shift+Enter');
+		await page.keyboard.type('Roll back if 5xx goes over 0.5%');
+		await expect(page.getByTestId('composer-expand')).toBeVisible();
+		await expect(form).toHaveClass(/ap-composer-grown/);
+		// Short again: one row.
+		await page.keyboard.press('ControlOrMeta+a');
+		await page.keyboard.press('Backspace');
+		await page.keyboard.type('Short again');
+		await expect(form).not.toHaveClass(/ap-composer-grown/);
+		expect(errors).toEqual([]);
+	});
+});
+
 test.describe('the full panel', () => {
 	test.use(DEVICES.desktop);
 

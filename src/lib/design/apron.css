@@ -460,6 +460,16 @@ a.ap-embed-card:hover { background: var(--hover); }
 /* Expand, beside the field once a draft has a second line, for the full panel: it lights up in the accent as it appears, then settles (a change of colour, not of place). */
 .ap-composer-expand { animation: ap-composer-expand-in 1.2s ease-out 1; }
 @keyframes ap-composer-expand-in { 0%, 25% { background: var(--accent-soft); color: var(--accent); } }
+/*
+ * A draft past one line (by a break or by wrapping): the field takes the box's whole width, and the buttons drop to a row
+ * under it, the attach and microphone buttons at its start and a tag after them, Expand, emoji and Send at its end.
+ */
+.ap-composer-grown { display: grid; grid-template: "body body body body body" auto "start tag . end send" auto / auto auto minmax(0, 1fr) auto auto; align-items: center; gap: var(--space-1) var(--space-2); padding: var(--space-2); }
+.ap-composer-grown .ap-composer-field { grid-area: body; align-self: stretch; padding-inline: var(--space-2); }
+.ap-composer-grown .ap-composer-tools-start { grid-area: start; }
+.ap-composer-grown .ap-composer-cmdtag { grid-area: tag; }
+.ap-composer-grown .ap-composer-tools-end { grid-area: end; }
+.ap-composer-grown > .ap-btn-primary { grid-area: send; }
 /* What holds the composer's parts adds nothing to the layout, until it is the full panel. */
 .ap-composer-box { display: contents; }
 /*

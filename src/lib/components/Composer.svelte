@@ -314,6 +314,7 @@
 	{previewing}
 	onpreview={(on) => (previewing = on)}
 	{sendKeys}
+	multiline={field?.multiline() ?? false}
 	expandTestid="composer-expand"
 	panelTestid="composer-panel"
 />
