@@ -321,29 +321,31 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
    gutter, their text in line with the tasks'. */
 .ap-task-list { padding-inline-start: 0; }
 .ap-task-list > li { margin-inline-start: var(--space-6); }
-.ap-task-list > .ap-task-item { margin-inline-start: 0; padding-inline-start: var(--space-6); list-style: none; }
+.ap-task-list > .ap-task-item { position: relative; margin-inline-start: 0; padding-inline-start: var(--space-6); list-style: none; }
 .ap-task-done { color: var(--ink-muted); }
 .ap-task-done > :is(ul, ol) { color: var(--ink); }
 /* A check, the one ring every checklist draws: a message's (`.ap-task`, a checkbox) and the composer's (`.ap-task-chip`,
    standing in for its `- [ ] `, clickable, its Markdown underneath).
-   It is inline, the first thing on its line, and takes the text's font, so `vertical-align` centres it on the
-   capitals of whatever font that is (as `middle` would on the lowercase letters, where `cap` is unknown);
-   `overflow` pins its baseline to its bottom edge, which that offset is measured from. A line may break after an
-   inline box, so it comes in a span that doesn't wrap (`ap-task-box`) and ends in a word joiner, drawn there rather
-   than written into the text so it isn't copied: together they keep its first word beside it. */
-.ap-task-box { white-space: nowrap; }
-.ap-task-box::after { content: '\2060'; }
-:is(.ap-task, .ap-task-chip) { appearance: none; position: relative; display: inline-block; overflow: hidden; vertical-align: middle; vertical-align: calc(0.5cap - var(--check-size) / 2); font: inherit; box-sizing: border-box; width: var(--check-size); height: var(--check-size); margin: 0; border: 1.5px solid var(--line-strong); border-radius: var(--radius-full); background: transparent; }
+   It is centred on its first line as the line's other boxes are (a mention or room chip, an emoji), so it lines up
+   with them in any font and browser: from the line's top, half of what its height leaves of the line's (`lh`, its
+   own line-height being the text's). */
+:is(.ap-task, .ap-task-chip) { appearance: none; position: relative; display: inline-block; vertical-align: top; font: inherit; box-sizing: border-box; width: var(--check-size); height: var(--check-size); margin: 0; margin-top: calc((1lh - var(--check-size)) / 2); border: 1.5px solid var(--line-strong); border-radius: var(--radius-full); background: transparent; }
 :is(.ap-task, .ap-task-chip)::after { content: ''; position: absolute; inset: 0; margin: auto; width: 8px; height: 4px; border: 2px solid var(--bg-100); border-top: 0; border-right: 0; transform: translateY(-1px) rotate(-45deg); opacity: 0; }
 :is(.ap-task:checked, .ap-task-chip-done) { border-color: var(--ok); background: var(--ok); }
 :is(.ap-task:checked, .ap-task-chip-done)::after { opacity: 1; }
 :is(.ap-task:enabled, .ap-task-chip) { cursor: pointer; }
 :is(.ap-task:enabled:hover:not(:checked), .ap-task-chip:hover:not(.ap-task-chip-done)) { border-color: var(--ok); background: color-mix(in srgb, var(--ok) 16%, transparent); }
-/* A message's hangs in its item's gutter, its margins summing to nothing so the text starts where it would without it. */
-.ap-task { margin-inline: calc(-1 * var(--space-6)) calc(var(--space-6) - var(--check-size)); }
+/* A message's sits in its item's gutter, out of the text's way whichever way that runs, on its first line. */
+.ap-task { position: absolute; inset-inline-start: 0; top: 0; }
 .ap-task:disabled { border-style: dashed; }
 .ap-task:disabled:checked { border-style: solid; opacity: var(--opacity-dim); }
-.ap-task-chip { margin-inline-end: 0.4em; user-select: none; }
+.ap-task-chip { user-select: none; }
+/* The composer's is inline, the first thing on its line. A line may break after an inline box, so it comes in a span
+   that doesn't wrap and ends in a word joiner, drawn there rather than written into the text so it isn't copied:
+   together they keep its first word beside it. The space after it is the span's, outside the span, so a click there
+   puts the caret before that word rather than ticking it. */
+.ap-task-box { white-space: nowrap; margin-inline-end: 0.4em; }
+.ap-task-box::after { content: '\2060'; }
 .ap-msg-tomb { font-style: italic; color: var(--ink-muted); }
 .ap-msg-embeds { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); margin-top: var(--space-2); }
 /* An absent format is plain (§3.5): its line breaks kept. A Markdown body's quotes set apart on a muted ground. */

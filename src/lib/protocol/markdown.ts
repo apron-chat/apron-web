@@ -44,8 +44,7 @@ md.core.ruler.after('inline', 'task_lists', (state) => {
 		if (!marker || line === undefined || (marker[0].length === first.content.length && children.length < 2)) continue;
 		first.content = first.content.slice(marker[0].length);
 		const box = new state.Token('html_inline', '', 0);
-		// In a span that keeps a line from breaking between it and its text (`.ap-task-box` in apron.css).
-		box.content = `<span class="ap-task-box"><input type="checkbox" class="ap-task" data-task-line="${line}"${marker[1] === ' ' ? '' : ' checked'} disabled></span>`;
+		box.content = `<input type="checkbox" class="ap-task" data-task-line="${line}"${marker[1] === ' ' ? '' : ' checked'} disabled>`;
 		children.unshift(box);
 		item.attrJoin('class', marker[1] === ' ' ? 'ap-task-item' : 'ap-task-item ap-task-done');
 		// Its list, once: drawn without its own indent, so its checks line up with the text above it.

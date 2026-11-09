@@ -608,8 +608,8 @@ describe('test ids', () => {
 });
 
 describe('task list checkboxes', () => {
-	// As `renderMarkdown` writes it: the checkbox in its `ap-task-box` span.
-	const html = '<ul class="ap-task-list"><li class="ap-task-item"><span class="ap-task-box"><input type="checkbox" class="ap-task" data-task-line="0" disabled=""></span>Foo</li></ul>';
+	// As `renderMarkdown` writes it.
+	const html = '<ul class="ap-task-list"><li class="ap-task-item"><input type="checkbox" class="ap-task" data-task-line="0" disabled="">Foo</li></ul>';
 	const box = () => document.querySelector<HTMLInputElement>('input.ap-task')!;
 
 	it('stay disabled where you may not tick them, even on one you may edit', () => {
