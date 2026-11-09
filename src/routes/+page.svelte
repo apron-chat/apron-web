@@ -1284,12 +1284,12 @@
 		openConnect();
 	}
 
-	/** The connect form was submitted: whatever belonged to the previous backend goes. */
 	/** The directory, from the session: media loads by its server frame, the kept view's until the server sends its own. */
 	function showDirectory(chat: ChatClient): void {
 		directory.apply(session.snapshot, serverOrigin(chat.url), chat.url, session.server);
 	}
 
+	/** The connect form was submitted: whatever belonged to the previous backend goes. */
 	function leaveBackend(): void {
 		drafts.open(undefined);
 		selectedRoomId = undefined;
