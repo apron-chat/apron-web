@@ -214,9 +214,13 @@ describe('DraftField', () => {
 		f.type('Plan:\n- [ ] Ship');
 		const box = () => f.element.querySelector<HTMLElement>('[data-task]')!;
 		expect(box().getAttribute('aria-label')).toBe('Checklist item');
-		// A click on the checkbox itself ticks it.
+		// Its ring, in the span a rendered check comes in.
+		expect(box().classList.contains('ap-task-box')).toBe(true);
+		const ring = box().querySelector('.ap-task-chip')!;
+		expect(ring).not.toBeNull();
+		// A click on the ring itself ticks it.
 		const click = new MouseEvent('click', { cancelable: true });
-		Object.defineProperty(click, 'target', { value: box() });
+		Object.defineProperty(click, 'target', { value: ring });
 		f.draft.click(click);
 		expect(f.value()).toBe('Plan:\n- [x] Ship');
 		expect(box().getAttribute('aria-label')).toBe('Checklist item, done');

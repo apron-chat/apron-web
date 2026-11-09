@@ -149,6 +149,7 @@
 	--control-lg: 32px;  /* buttons and fields, a header's back, the gear */
 	--control-xl: 40px;  /* the floating jump-to-latest button */
 	--chip-h: 28px;      /* a reaction chip, and its + */
+	--check-size: 17px;  /* a checklist's round check, in a message and in the composer */
 	--touch-target: 44px; /* the least a control meant for a finger takes: the media viewer's ‹ and › */
 
 	/* Floating widths. */

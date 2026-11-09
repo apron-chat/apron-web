@@ -663,8 +663,12 @@ export class DraftField {
 	/** A chip: the Mention component as a non-editable span, its ID on hover. */
 	private chip(part: DraftChip): HTMLSpanElement {
 		if (part.task) {
+			// The check in the span a rendered one comes in (`.ap-task-box`), which keeps its first word beside it.
 			const box = document.createElement('span');
-			box.className = part.task === 'x' ? 'ap-task-chip ap-task-chip-done' : 'ap-task-chip';
+			box.className = 'ap-task-box';
+			const ring = document.createElement('span');
+			ring.className = part.task === 'x' ? 'ap-task-chip ap-task-chip-done' : 'ap-task-chip';
+			box.append(ring);
 			box.contentEditable = 'false';
 			box.dataset.task = part.task;
 			// Named for what it is; the keyboard can't tick it, so it doesn't claim to be a checkbox.
