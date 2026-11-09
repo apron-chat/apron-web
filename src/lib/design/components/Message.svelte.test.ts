@@ -608,7 +608,8 @@ describe('test ids', () => {
 });
 
 describe('task list checkboxes', () => {
-	const html = '<ul><li class="ap-task-item"><input type="checkbox" class="ap-task" data-task-line="0" disabled="">Foo</li></ul>';
+	// As `renderMarkdown` writes it: the checkbox in its `ap-task-box` span.
+	const html = '<ul class="ap-task-list"><li class="ap-task-item"><span class="ap-task-box"><input type="checkbox" class="ap-task" data-task-line="0" disabled=""></span>Foo</li></ul>';
 	const box = () => document.querySelector<HTMLInputElement>('input.ap-task')!;
 
 	it('stay disabled where you may not tick them, even on one you may edit', () => {
@@ -639,14 +640,14 @@ describe('task list checkboxes', () => {
 		await tick();
 		expect(toggled).toEqual([[0, true]]);
 		expect(box().checked).toBe(true);
-		expect(box().parentElement!.classList.contains('ap-task-done')).toBe(true);
+		expect(box().closest('.ap-task-item')!.classList.contains('ap-task-done')).toBe(true);
 		result = false;
 		box().click();
 		await Promise.resolve();
 		await tick();
 		expect(toggled).toEqual([[0, true], [0, false]]);
 		expect(box().checked).toBe(true);
-		expect(box().parentElement!.classList.contains('ap-task-done')).toBe(true);
+		expect(box().closest('.ap-task-item')!.classList.contains('ap-task-done')).toBe(true);
 		dom.cleanup();
 	});
 });

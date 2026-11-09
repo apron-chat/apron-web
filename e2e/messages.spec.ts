@@ -1,3 +1,4 @@
+import type { Locator } from '@playwright/test';
 import { DEVICES, expect, test, type Preview } from './fixtures';
 
 /**
@@ -81,6 +82,44 @@ test.describe('a task list', () => {
 		expect(edit.body).toMatchObject({ text: 'Ship it:\n\n- [x] Foo\n- [x] Bar', format: 'markdown' });
 		await expect(mine.nth(0)).toBeChecked();
 		await expect(mine.nth(0)).toBeEnabled();
+	});
+
+	test('keeps each check on its first word\'s line, centred on its capitals, in a message and in the composer', async ({ preview, page }) => {
+		// A first word with nowhere to break, wider than any line: a line may break after an inline box, which would
+		// leave the check alone above it.
+		const long = `Long${'o'.repeat(160)}`;
+		/** How far the check's centre sits below the middle of the capitals of `long`, in px: about a line's height if it went to a line of its own. */
+		const offset = (check: Locator) =>
+			check.evaluate((box) => {
+				const item = box.closest('.ap-task-item, .ap-composer-editable')!;
+				const walker = document.createTreeWalker(item, NodeFilter.SHOW_TEXT, (node) => (node.textContent!.includes('Long') ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP));
+				const text = walker.nextNode()!;
+				const range = document.createRange();
+				const at = text.textContent!.indexOf('Long');
+				range.setStart(text, at);
+				range.setEnd(text, at + 1);
+				// A letter's box runs from the font's ascent to its descent, so its baseline is that descent above its foot.
+				const style = getComputedStyle(text.parentElement!);
+				const context = document.createElement('canvas').getContext('2d')!;
+				context.font = `${style.fontSize} ${style.fontFamily}`;
+				const metrics = context.measureText('H');
+				const baseline = range.getBoundingClientRect().bottom - metrics.fontBoundingBoxDescent;
+				const cap = metrics.actualBoundingBoxAscent;
+				const ring = box.getBoundingClientRect();
+				return (ring.top + ring.bottom) / 2 - (baseline - cap / 2);
+			});
+
+		await preview.open();
+		await preview.post('general', 'preview_guest', `Odd one:\n\n- [ ] ${long}`);
+		const check = preview.message('Odd one:').getByRole('checkbox').first();
+		await expect(check).toBeVisible();
+		expect(Math.abs(await offset(check))).toBeLessThan(1);
+
+		await preview.composer().click();
+		await page.keyboard.type(`- [ ] ${long}`);
+		const chip = preview.composer().locator('.ap-task-chip');
+		await expect(chip).toHaveCount(1);
+		expect(Math.abs(await offset(chip))).toBeLessThan(1);
 	});
 });
 
