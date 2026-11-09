@@ -1105,7 +1105,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 @media (prefers-reduced-motion: reduce) {
   .ap-btn, .ap-room, .ap-thread, .ap-msg, .ap-rail-tile, .ap-actions-btn, .ap-profile-me, .ap-jumpbar-btn, .ap-composer, .ap-field { transition: none; }
   .ap-typing-dots i { animation: none; opacity: var(--opacity-dim); }
-  .ap-composer-recdot, .ap-composer-livedot { animation: none; }
+  .ap-composer-recdot, .ap-composer-livedot, .ap-composer-expand { animation: none; }
   .ap-msg-pinged { animation: none; }
   .ap-embed-livebadge i { animation: none; }
 }

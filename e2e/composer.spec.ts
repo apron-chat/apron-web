@@ -301,6 +301,33 @@ test.describe('a draft past one line', () => {
 		await expect(form).not.toHaveClass(/ap-composer-grown/);
 		expect(errors).toEqual([]);
 	});
+
+	test('a pasted paragraph deleted key by key settles in one row without flipping back on every key, and a wider pane asks again', async ({ preview, page }) => {
+		const form = page.locator('form.ap-composer');
+		await page.setViewportSize({ width: 900, height: 700 });
+		await preview.open();
+		await preview.composer().click();
+		await page.keyboard.insertText('Canary looks healthy, rolling to the fleet in two waves after lunch, watching p99 latency and the error rate as we go, and rolling back if 5xx goes over half a percent.');
+		await expect(form).toHaveClass(/ap-composer-grown/);
+		// Each change of layout, counted while the draft is deleted down to a few words.
+		await form.evaluate((el) => {
+			const w = window as unknown as { flips: number };
+			w.flips = 0;
+			new MutationObserver(() => w.flips++).observe(el, { attributes: true, attributeFilter: ['class'] });
+		});
+		await page.keyboard.press('End');
+		for (let i = 0; i < 150; i++) await page.keyboard.press('Backspace');
+		await expect(form).not.toHaveClass(/ap-composer-grown/);
+		expect(await page.evaluate(() => (window as unknown as { flips: number }).flips)).toBeLessThanOrEqual(5);
+
+		// Grown by wrapping in a narrow pane, then the pane widens: one row again.
+		await page.keyboard.press('ControlOrMeta+a');
+		await page.keyboard.insertText('Canary looks healthy, rolling to the fleet in two waves after lunch');
+		await page.setViewportSize({ width: 600, height: 700 });
+		await expect(form).toHaveClass(/ap-composer-grown/);
+		await page.setViewportSize({ width: 1400, height: 700 });
+		await expect(form).not.toHaveClass(/ap-composer-grown/);
+	});
 });
 
 test.describe('the full panel', () => {

@@ -10,7 +10,7 @@
 	import Paperclip from '@lucide/svelte/icons/paperclip';
 	import Smile from '@lucide/svelte/icons/smile';
 	import Square from '@lucide/svelte/icons/square';
-	import type { Snippet } from 'svelte';
+	import { untrack, type Snippet } from 'svelte';
 	import type { ClassValue } from 'svelte/elements';
 	import Attachments from './Attachments.svelte';
 	import Button from './Button.svelte';
@@ -160,32 +160,59 @@
 	let fileInput = $state<HTMLInputElement>();
 	let form = $state<HTMLFormElement>();
 	/**
-	 * The draft's length when the field last wrapped onto a second line in one row, else 0. It stays grown while the
-	 * draft is at least that long, though the wider field fits it on one line again, so it doesn't flip back and forth.
+	 * Past one line by wrapping, while the draft is at least this long (else 0): about what the narrow field held as it
+	 * wrapped, so the wider field fitting the draft on one line again doesn't flip it back and forth. It is the draft's
+	 * length as it wraps while typing; for a draft that arrives wrapped (pasted, or kept from another pane), or once that
+	 * guess proved too long, the least that one line of it can hold, so deleting it doesn't flip it back on every key.
 	 */
 	let wrapAt = $state(0);
+	/** The last `wrapAt`, once the draft got shorter than it: a wrap seen again below it means the guess was too long. */
+	let lastWrapAt = 0;
 	const wrapped = $derived(wrapAt > 0 && value.length >= wrapAt);
+	const breaks = $derived(multiline ?? value.includes('\n'));
 	/**
 	 * Past one line, by a line break or by wrapping: the field takes the box's whole width and the buttons sit in a row
 	 * under it (ap-composer-grown), as at the full panel's foot. Not while recording, whose line takes no typing.
 	 */
-	const grown = $derived(!expanded && !recording && ((multiline ?? value.includes('\n')) || wrapped));
+	const grown = $derived(!expanded && !recording && (breaks || wrapped));
 	$effect(() => {
-		if (wrapAt && !wrapped) wrapAt = 0;
+		if (!wrapAt || wrapped) return;
+		// Emptied (sent): the next wrap is a fresh one.
+		lastWrapAt = untrack(() => value.length) ? wrapAt : 0;
+		wrapAt = 0;
 	});
+	/** The field's line height, read once. */
+	let lineHeight = 0;
 	// The field wrapping onto a second line, seen by its size (a ResizeObserver: no layout read on any key).
 	$effect(() => {
 		if (expanded || recording || !form || typeof ResizeObserver !== 'function') return;
 		const field = form.querySelector<HTMLElement>('.ap-composer-field');
 		if (!field) return;
-		const line = parseFloat(getComputedStyle(field).lineHeight) || 22;
+		lineHeight ||= parseFloat(getComputedStyle(field).lineHeight) || 22;
+		const line = lineHeight;
 		let frame = 0;
-		const observer = new ResizeObserver(([entry]) => {
-			if (grown || entry.contentRect.height <= line * 1.5) return;
-			// Laid out anew before this frame paints. The field's new size is looked at from the next frame, so it is no loop.
+		/** The field's width while grown by wrapping: another is the pane resizing, so whether it wraps is asked again. */
+		let grownWidth = 0;
+		/** A change of layout, drawn before this frame paints; the field's new size is looked at from the next frame, so it is no loop. */
+		const relayout = (change: () => void): void => {
 			observer.unobserve(field);
-			wrapAt = value.length || 1;
+			grownWidth = 0;
+			change();
 			frame = requestAnimationFrame(() => observer.observe(field));
+		};
+		const observer = new ResizeObserver(([entry]) => {
+			const { width, height } = entry.contentRect;
+			if (grown) {
+				if (!wrapped || breaks) return;
+				if (grownWidth && width !== grownWidth) relayout(() => (wrapAt = lastWrapAt = 0));
+				else grownWidth = width;
+				return;
+			}
+			const length = value.length;
+			// An empty field taller than a line is its placeholder wrapping (the textarea's), not the draft.
+			if (!length || height <= line * 1.5) return;
+			const lines = Math.max(2, Math.round(height / line));
+			relayout(() => (wrapAt = lines > 2 || length < lastWrapAt ? Math.ceil(length / lines) : length));
 		});
 		observer.observe(field);
 		return () => {
