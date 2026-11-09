@@ -315,9 +315,8 @@ class Directory {
 	 * mentions, room links and emoji known here; empty for blank text. `links`: links to rooms and messages as chips,
 	 * as a message draws them; a description draws them plain.
 	 */
-	markdown(text: string | undefined, links = false): string {
-		return text?.trim() ? renderMarkdown(text, this.resolve, this.resolveRoom, links ? this.resolveLink : undefined, this.resolveEmoji, this.mediaGate) : '';
-	}
+	readonly markdown = (text: string | undefined, links = false): string =>
+		text?.trim() ? renderMarkdown(text, this.resolve, this.resolveRoom, links ? this.resolveLink : undefined, this.resolveEmoji, this.mediaGate) : '';
 }
 
 /** Whether two `pieces` of the directory are the same, so what was rendered from one is current for the other. */

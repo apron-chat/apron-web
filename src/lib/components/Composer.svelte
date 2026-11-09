@@ -318,7 +318,7 @@
 {/snippet}
 <!-- The full panel's parts, loaded on demand as it first opens: until they come, it is a tall field with Send. -->
 {#snippet formatting()}{#if formatToolbar.component}{@const FormatToolbar = formatToolbar.component}<FormatToolbar apply={(change) => field?.apply(change) ?? false} {disabled} />{/if}{/snippet}
-{#snippet rendered()}{#if draftPreview.component}{@const DraftPreview = draftPreview.component}<DraftPreview text={value} />{/if}{/snippet}
+{#snippet rendered()}{#if draftPreview.component}{@const DraftPreview = draftPreview.component}<DraftPreview text={value} links />{/if}{/snippet}
 {#snippet replyText()}<MentionText text={reply?.text ?? ''} />{/snippet}
 {#snippet staged()}
 	{#each files as staged (staged.id)}

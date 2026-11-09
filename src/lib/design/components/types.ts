@@ -203,7 +203,7 @@ export interface ComposerField {
 	command: boolean;
 }
 
-/** What the MessageEditor gives your own `field`: put both on it, for the editor's look and the field's name. */
+/** What a MarkdownEditor gives your own `field`: its class, for the editor's look, and its name, placeholder and state. */
 export interface MarkdownEditorField {
 	/** The field's class, `ap-mdedit-field`. */
 	class: string;
@@ -226,6 +226,7 @@ export interface RoomFormField {
 	submit: () => void;
 }
 
+/** What the MessageEditor gives your own `field`: put both on it, for the editor's look and the field's name. */
 export interface MessageEditorField {
 	/** The editor's field class, `ap-msgedit-field`. */
 	class: string;

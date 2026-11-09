@@ -8,10 +8,10 @@
 	 */
 	interface Props {
 		text: string;
-		/** Links as a message draws them (chips for rooms and messages); false for a description, which draws them plain. */
+		/** Links as a message draws them (chips for rooms and messages), as the composer's Preview asks; plain, as a description draws them, by default. */
 		links?: boolean;
 	}
-	let { text, links = true }: Props = $props();
+	let { text, links = false }: Props = $props();
 	let html = $derived(directory.markdown(text, links));
 </script>
 

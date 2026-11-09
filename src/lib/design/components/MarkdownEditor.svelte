@@ -12,7 +12,7 @@
 	import type { MarkdownEditorField } from './types';
 
 	interface Props {
-		/** The text; `bind:value`. With your own `field`, it is what Preview's `rendered` shows, so keep it up to date. */
+		/** The textarea's text; `bind:value`. Unused with your own `field`, which you fill and read, as `rendered` is yours. */
 		value?: string;
 		/** The field's accessible name, such as "Room description". */
 		label: string;

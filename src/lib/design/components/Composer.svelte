@@ -211,7 +211,8 @@
 		const observer = new ResizeObserver((entries) => {
 			for (const entry of entries) {
 				if (entry.target === box) {
-					const width = entry.borderBoxSize[0]?.inlineSize ?? entry.contentRect.width;
+					const width = entry.borderBoxSize?.[0]?.inlineSize;
+					if (width === undefined) continue;
 					const resized = boxWidth > 0 && width !== boxWidth;
 					boxWidth = width;
 					if (resized && wrapped && !breaks) return relayout(() => (wrapAt = lastWrapAt = 0));

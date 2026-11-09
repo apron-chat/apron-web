@@ -2,7 +2,7 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import type { ChatClient } from '$lib/protocol/client';
 import RoomEditor from './RoomEditor.svelte';
-import { render, stubDialog, submit, unmount } from '$lib/test/dom';
+import { press, render, stubDialog, unmount } from '$lib/test/dom';
 
 beforeAll(stubDialog);
 
@@ -23,7 +23,9 @@ describe('RoomEditor', () => {
 		expect(description.textContent).toBe('Old');
 		description.textContent = 'New';
 		description.dispatchEvent(new InputEvent('input', { bubbles: true }));
-		await submit();
+		// Ctrl+Enter in the description saves, as Save does.
+		press(description, 'Enter', { ctrlKey: true });
+		await vi.waitFor(() => expect(onclose).toHaveBeenCalled());
 		expect(updateRoom).toHaveBeenCalledWith('t1', { description: 'New' });
 		expect(onclose).toHaveBeenCalled();
 		unmount();

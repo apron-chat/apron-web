@@ -202,8 +202,8 @@ test.describe('the message editor\u2019s picker', () => {
 		const mine = preview.message('edit me');
 		await expect(mine).toBeVisible();
 		// Messages after it, so it can be scrolled to the top of the timeline and edited there.
-		for (let n = 1; n <= 8; n++) await preview.post('general', 'grace', `filler ${n}`);
-		await expect(preview.message('filler 8')).toBeVisible();
+		for (let n = 1; n <= 16; n++) await preview.post('general', 'grace', `filler ${n}`);
+		await expect(preview.message('filler 16')).toBeVisible();
 		await mine.evaluate((row) => row.scrollIntoView({ block: 'start' }));
 		await expect(async () => {
 			await mine.hover();
@@ -211,14 +211,16 @@ test.describe('the message editor\u2019s picker', () => {
 		}).toPass();
 		await mine.getByRole('button', { name: 'Edit message', exact: true }).click();
 		const editor = page.getByRole('textbox', { name: 'Edit message', exact: true });
-		await editor.evaluate((field) => field.scrollIntoView({ block: 'start' }));
 		await expect(editor).toBeFocused();
 		await page.keyboard.type(' @');
 		const list = page.getByTestId('message-editor').getByRole('listbox');
 		await expect(list).toBeVisible();
 		const [box, timeline] = await Promise.all([list.boundingBox(), page.locator('.ap-timeline').boundingBox()]);
+		// Whole in the timeline that clips it, below the field, which opening it didn't move.
 		expect(box!.y).toBeGreaterThanOrEqual(timeline!.y);
+		expect(box!.y + box!.height).toBeLessThanOrEqual(timeline!.y + timeline!.height);
 		await expect(list).toHaveClass(/ap-mpick-below/);
+		expect((await editor.boundingBox())!.y).toBeLessThan(box!.y);
 	});
 });
 
