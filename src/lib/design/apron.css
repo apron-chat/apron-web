@@ -277,6 +277,8 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-msg-text { overflow-wrap: anywhere; font-family: var(--font-chat); }
 .ap-msg-text p { margin: 0; }
 .ap-msg-text p + p { margin-top: var(--space-2); }
+/* A list's items, and a nested list under its item, a little apart: a mention or link chip on one line clears the next's. */
+.ap-msg-text li + li, .ap-msg-text li > :is(ul, ol) { margin-top: var(--space-1); }
 .ap-msg-text a { color: var(--denim); }
 /* Who else saved a message's text (`ext:editors`): a quiet line under it. */
 .ap-msg-edited { font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
