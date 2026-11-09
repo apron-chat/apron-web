@@ -53,7 +53,7 @@
 		"sidebar-collapse": {
 			"layouts": 3,
 			"styleRecalcs": 5,
-			"calls": 2513
+			"calls": 3015
 		},
 		"member-list-hide": {
 			"layouts": 1,
@@ -78,7 +78,7 @@
 		"scroll-timeline": {
 			"layouts": 9,
 			"styleRecalcs": 9,
-			"calls": 7591
+			"calls": 9968
 		},
 		"type-composer": {
 			"layouts": 36,
@@ -88,12 +88,12 @@
 		"hover-messages": {
 			"layouts": 7,
 			"styleRecalcs": 7,
-			"calls": 7302
+			"calls": 9677
 		}
 	},
 	"bundle": {
 		"jsGzipKB": 600.7,
-		"cssGzipKB": 27.8
+		"cssGzipKB": 28.4
 	},
 	"production": {
 		"startupFiles": 13,

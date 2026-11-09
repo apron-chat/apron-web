@@ -3,6 +3,7 @@
 	import { longPress } from './hold';
 
 	const NONE: MessageHandlers = {};
+	const NO_QUICK: readonly string[] = [];
 </script>
 
 <script lang="ts">
@@ -48,6 +49,14 @@
 	let swallow = false;
 	/** The long press this row started (`longPress`). */
 	let pressed: object | undefined;
+	/** The toolbar's quick reactions (`on.quick`), read as the pointer or focus arrives, so a press doesn't reorder them under it. */
+	let quickEmoji = $state<readonly string[]>(NO_QUICK);
+
+	function readQuick(): void {
+		const next = on.quick?.() ?? NO_QUICK;
+		if (next === quickEmoji) return;
+		if (next.length !== quickEmoji.length || next.some((emoji, i) => emoji !== quickEmoji[i])) quickEmoji = next;
+	}
 
 	const t = $derived(times(view.timestamp, view.time));
 	const quoted = $derived(Boolean(view.reply) && !view.deleted);
@@ -63,8 +72,19 @@
 	 * which boxes the first letter of each (`r`, `e`) for the keyboard: change one, change both. Touch's menu (`held`) keeps only Reply and React
 	 * up front, with everything else behind ⋯, and offers Copy text, since its rows take no text selection.
 	 */
-	function actions(): { items: MessageAction[]; more?: MessageAction[] } {
+	function actions(): { quick: MessageAction[]; items: MessageAction[]; more?: MessageAction[] } {
 		const can = caps!;
+		// One press reacts, as a chip does: pressed where the reaction is already yours (❤ and ❤️ are one).
+		const bare = (emoji: string) => emoji.replace(/\uFE0F/g, '');
+		const mine = new Set((view.reactions ?? []).filter((c) => c.mine).map((c) => bare(c.emoji)));
+		const quick: MessageAction[] = can.react && !view.deleted
+			? quickEmoji.map((emoji) => ({ id: `quick:${emoji}`, label: `React with ${emoji}`, title: emoji, glyph: emoji, pressed: mine.has(bare(emoji)), onclick: (event: MouseEvent) => {
+				on.react?.(view, emoji);
+				// On touch's menu, reacting is done with it, as a pick from the picker is.
+				const row = (event.currentTarget as HTMLElement).closest<HTMLElement>('.ap-msg');
+				if (held && row) release(row);
+			} }))
+			: [];
 		const unreplied: MessageAction | undefined = view.deleted && can.removeReply ? { id: 'unreply', label: 'Remove reply reference', glyph: 'Remove reply', onclick: () => on.removeReply?.(view) } : undefined;
 		const reply: MessageAction | undefined = can.reply ? { id: 'reply', label: 'Reply to message', glyph: 'Reply', onclick: () => on.reply?.(view) } : undefined;
 		const react: MessageAction | undefined = can.react && !view.deleted
@@ -81,10 +101,10 @@
 		if (held) {
 			const front = present([reply, react]);
 			const rest = present([unreplied, thread, edit, select, copy, link, unreply, remove]);
-			return front.length ? { items: front, more: rest } : { items: rest };
+			return front.length ? { quick, items: front, more: rest } : { quick, items: rest };
 		}
 		const more = present([unreply, select, link, remove]);
-		return { items: present([unreplied, reply, react, thread, edit]), ...(more.length ? { more } : {}) };
+		return { quick, items: present([unreplied, reply, react, thread, edit]), ...(more.length ? { more } : {}) };
 	}
 
 	/** Where text is written, whose keys and clicks are its own: `x` there is a letter. */
@@ -223,12 +243,14 @@
 	function hold(row: HTMLElement): void {
 		held = true;
 		engaged = true;
+		readQuick();
 		swallow = true;
 		row.focus({ preventScroll: true });
 	}
 
 	function engage(event: Event): void {
 		engaged = true;
+		readQuick();
 		if ((event as PointerEvent).pointerType === 'mouse') touch = false;
 	}
 
@@ -359,8 +381,8 @@
 			{#if !view.deleted && view.reactions?.length}<ReactionBar reactions={view.reactions} disabled={!caps?.react} add={Boolean(on.pick) && !view.editing && !view.selecting} adding={on.picking?.(view)} addAnchor={on.pickAnchor} onopen={(anchor) => on.pick?.(view, anchor)} ontoggle={(emoji) => on.react?.(view, emoji)} onreactors={(emoji, chip) => on.reactors?.(view, emoji, chip)} data-testid={testids?.reactions} chipTestid={testids?.chip} />{/if}
 		</div>
 		{#if toolbar}
-			{@const { items, more } = actions()}
-			<div class="ap-msg-actions"><MessageActions {items} {more} touch={held} /></div>
+			{@const { quick, items, more } = actions()}
+			<div class="ap-msg-actions"><MessageActions {quick} {items} {more} touch={held} /></div>
 		{/if}
 	</article>
 {/if}

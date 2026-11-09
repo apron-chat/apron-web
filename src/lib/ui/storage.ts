@@ -50,6 +50,8 @@ const KEY = {
 	 * `token`), by its address: chosen first on its connect screen next time. Kept through signing out.
 	 */
 	lastSignIn: 'apron.lastSignIn',
+	/** The emoji you reacted with last, latest first (`rememberReaction`): the toolbar's quick reactions. */
+	recentReactions: 'apron.recentReactions',
 	/** app.html reads this one too, to apply the theme before the app loads. */
 	appearance: 'apron.appearance'
 } as const;
@@ -273,6 +275,14 @@ function readKeyList(key: string): string[] {
 	} catch {
 		return [];
 	}
+}
+
+export function loadRecentReactions(): string[] {
+	return readKeyList(KEY.recentReactions);
+}
+
+export function saveRecentReactions(recent: readonly string[]): void {
+	write(KEY.recentReactions, JSON.stringify(recent));
 }
 
 export function loadShutMemberSections(): string[] {

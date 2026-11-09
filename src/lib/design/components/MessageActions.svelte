@@ -8,15 +8,17 @@
 	/**
 	 * A message's hover toolbar. The rarer actions wait behind ⋯: pass them as `more`, and pressing ⋯ shows them in its
 	 * place until one is used; or pass `onmore` to open a menu of your own. `touch` sizes it for a finger, and ⋯ then
-	 * opens every action as a menu, one row each.
+	 * opens every action as a menu, one row each. `quick` go first, set apart, and stay in a row of their own atop
+	 * that menu: one-press reactions, such as the emoji you used last.
 	 */
 	interface Props {
+		quick?: MessageAction[];
 		items: MessageAction[];
 		more?: MessageAction[];
 		onmore?: () => void;
 		touch?: boolean;
 	}
-	let { items, more, onmore, touch = false }: Props = $props();
+	let { quick = [], items, more, onmore, touch = false }: Props = $props();
 
 	let open = $state(false);
 	/** The `id` of the action that worked, saying so (Copied) until the timer closes the ⋯ actions. */
@@ -26,6 +28,7 @@
 
 	const visible = (list: MessageAction[] | undefined) => (list ?? []).filter((it) => it && !it.hidden);
 	const shown = $derived([...visible(items), ...(open ? visible(more) : [])]);
+	const quickShown = $derived(visible(quick));
 	const hasMore = $derived(!open && (visible(more).length > 0 || Boolean(onmore)));
 
 	async function press(it: MessageAction, event: MouseEvent): Promise<void> {
@@ -61,13 +64,21 @@
 		if (onmore && !more) return onmore();
 		const focused = event.currentTarget === document.activeElement;
 		open = true;
-		if (focused) void tick().then(() => bar?.querySelectorAll<HTMLElement>('.ap-actions-btn')[visible(items).length]?.focus());
+		if (focused) void tick().then(() => bar?.querySelectorAll<HTMLElement>('.ap-actions-btn:not(.ap-actions-emoji)')[visible(items).length]?.focus());
 	}
 
 	const noAttach = () => {};
 </script>
 
 <div bind:this={bar} class={['ap-actions', touch && 'ap-actions-touch', touch && open && 'ap-actions-menu']} role="toolbar" aria-label="Message actions" aria-orientation={touch && open ? 'vertical' : undefined}>
+	{#if quickShown.length}
+		<div class="ap-actions-quick" role="group" aria-label="Quick reactions">
+			{#each quickShown as it (it.id ?? it.label)}
+				<button class="ap-actions-btn ap-actions-emoji" type="button" aria-label={it.label} aria-pressed={Boolean(it.pressed)} title={it.title} onclick={(event) => press(it, event)}>{it.glyph}</button>
+			{/each}
+		</div>
+		<span class="ap-actions-sep" aria-hidden="true"></span>
+	{/if}
 	{#each shown as it (it.id ?? it.label)}
 		{@const said = it.done && done === (it.id ?? it.label) ? it.done : undefined}
 		<button

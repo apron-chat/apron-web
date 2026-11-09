@@ -152,8 +152,17 @@ describe('a message row', () => {
 		expect(react).toHaveBeenCalledWith(expect.objectContaining({ id: '1' }), '👍');
 		chip.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
 		expect(reactors).toHaveBeenCalledWith(expect.objectContaining({ id: '1' }), '👍', chip);
-		// No + to add one: reacting starts from the toolbar.
+		// No + to add one without a picker to open (`pick`).
 		expect(dom.queryByRole('button', 'Add a reaction')).toBeNull();
+	});
+
+	it('opens your picker beside the + after the chips, which says so while it is open', () => {
+		const pick = vi.fn();
+		render({ reactions: [{ emoji: '👍', count: 1, mine: false }], caps: { ...NONE, react: true } }, { pick, picking: () => true });
+		const add = dom.button('Add a reaction');
+		expect(add.getAttribute('aria-expanded')).toBe('true');
+		add.click();
+		expect(pick).toHaveBeenCalledWith(expect.objectContaining({ id: '1' }), add);
 	});
 
 	it('shows chips that do not toggle where you may not react', () => {
@@ -246,6 +255,40 @@ describe('a message row’s toolbar', () => {
 		flushSync();
 		dom.button('Remove reply reference').click();
 		expect([on.beginSelect, on.removeReply].map((handler) => handler.mock.calls.length)).toEqual([1, 1]);
+	});
+
+	it('offers the quick reactions first, set apart, each toggling yours and pressed where it is already yours', () => {
+		const react = vi.fn();
+		const row = render({ caps: { ...NONE, react: true, reply: true }, reactions: [{ emoji: '❤', count: 1, mine: true }] }, { react, quick: () => ['👍', '❤️', '😂'] });
+		engage(row);
+		const toolbar = dom.byRole('toolbar', 'Message actions');
+		expect([...toolbar.querySelectorAll('button')].map(dom.nameOf)).toEqual(['React with 👍', 'React with ❤️', 'React with 😂', 'Reply to message', 'React']);
+		expect(dom.byRole('group', 'Quick reactions').querySelectorAll('[aria-pressed="true"]').length).toBe(1);
+		expect(dom.button('React with ❤️').getAttribute('aria-pressed')).toBe('true');
+		dom.button('React with 😂').click();
+		expect(react).toHaveBeenCalledWith(expect.objectContaining({ id: '1' }), '😂');
+	});
+
+	it('reads the quick reactions as the pointer arrives, so a press doesn’t reorder them under it', () => {
+		let recent = ['👍', '❤️', '😂'];
+		const row = render({ caps: { ...NONE, react: true } }, { react: (_, emoji) => (recent = [emoji, ...recent.filter((it) => it !== emoji)]), quick: () => recent });
+		engage(row);
+		const names = () => [...dom.byRole('group', 'Quick reactions').querySelectorAll('button')].map(dom.nameOf);
+		dom.button('React with 😂').click();
+		flushSync();
+		expect(names()).toEqual(['React with 👍', 'React with ❤️', 'React with 😂']);
+		engage(row);
+		expect(names()).toEqual(['React with 😂', 'React with 👍', 'React with ❤️']);
+	});
+
+	it('offers no quick reactions where you may not react, or on a tombstone', () => {
+		let row = render({ caps: { ...NONE, reply: true } }, { quick: () => ['👍'] });
+		engage(row);
+		expect(dom.queryByRole('group', 'Quick reactions')).toBeNull();
+		dom.unmount();
+		row = render({ deleted: true, caps: { ...NONE, react: true, removeReply: true } }, { quick: () => ['👍'] });
+		engage(row);
+		expect(dom.queryByRole('group', 'Quick reactions')).toBeNull();
 	});
 
 	it('offers Remove reply under ⋯ only on a reply', () => {
