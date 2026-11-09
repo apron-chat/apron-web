@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { ReactionChip } from './types';
 	import { longPress } from './hold';
+	import SmilePlus from '@lucide/svelte/icons/smile-plus';
 
 	const PALETTE = ['👍', '❤️', '😂', '🎉', '😮', '😢', '👀', '✅'];
 
@@ -12,9 +13,13 @@
 		disabled?: boolean;
 		/** Toggle your own emoji; send your complete set with `reactions`. */
 		ontoggle?: (emoji: string) => void;
-		/** The + after the chips, which opens the palette; false leaves it out, such as where reacting starts elsewhere. */
+		/** The + after the chips, which opens the palette (or your own picker, beside `anchor`); false leaves it out. */
 		add?: boolean;
-		onopen?: () => void;
+		onopen?: (anchor: HTMLElement) => void;
+		/** Your own picker is open from the +: its `aria-expanded`, and it stays shown meanwhile. */
+		adding?: boolean;
+		/** An attachment for the +, such as one that closes your picker when the button goes. */
+		addAnchor?: (button: HTMLElement) => void | (() => void);
 		onclose?: () => void;
 		/**
 		 * A right-click (or the context menu key) or a long touch press on a chip: show who reacted, beside `chip`.
@@ -26,7 +31,7 @@
 		/** On the group of chips. */
 		'data-testid'?: string;
 	}
-	let { reactions, open, disabled, ontoggle, add = true, onopen, onclose, onreactors, chipTestid, 'data-testid': testid }: Props = $props();
+	let { reactions, open, disabled, ontoggle, add = true, onopen, adding, addAnchor, onclose, onreactors, chipTestid, 'data-testid': testid }: Props = $props();
 	const chips = $derived((reactions || []).filter((r) => r.count > 0));
 	const mine = $derived(new Set(chips.filter((c) => c.mine).map((c) => c.emoji)));
 
@@ -76,6 +81,8 @@
 	}
 
 	$effect(() => cancelPress);
+
+	const noAttach = () => {};
 </script>
 
 {#if chips.length > 0}
@@ -99,7 +106,7 @@
 				onpointerleave={cancelPress}
 			><span class="ap-rchip-emoji" aria-hidden="true">{#if c.image}<img class="ap-cemoji" src={c.image.src} alt="" style:aspect-ratio={c.image.width && c.image.height ? `${c.image.width} / ${c.image.height}` : '1 / 1'} />{:else if c.placeholder}<span class="ap-rchip-placeholder"></span>{:else}{c.emoji}{/if}</span><span class="ap-rchip-count" aria-hidden="true">{c.count}</span></button>
 		{/each}
-		{#if add && !disabled}<button type="button" class="ap-rchip ap-rchip-add" aria-label="Add a reaction" title="Add a reaction" onclick={onopen}>+</button>{/if}
+		{#if add && !disabled}<button type="button" class="ap-rchip ap-rchip-add" aria-label="Add a reaction" title="Add a reaction" aria-haspopup={adding === undefined ? undefined : 'dialog'} aria-expanded={adding === undefined ? undefined : adding} {@attach addAnchor ?? noAttach} onclick={(event) => onopen?.(event.currentTarget)}><SmilePlus size={16} strokeWidth={2} aria-hidden="true" /></button>{/if}
 	</div>
 {/if}
 {#if open}

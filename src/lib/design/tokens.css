@@ -112,11 +112,15 @@
 	--space-6: 24px;
 	--space-8: 32px;
 
-	/* Radii: nothing interactive has a sharp corner. */
+	/* Radii: nothing interactive has a sharp corner, and corners stay gentle. Three steps and the pill:
+	   --radius-sm  a control nested in a rounded box (the composer's buttons, a toolbar's, a segment in its track),
+	                and small inline marks (code, a mention, a tag);
+	   --radius-md  rows, cards and chips: a sidebar row, an embed or thread card, a reaction, a field, a toolbar;
+	   --radius-lg  surfaces that float or frame: dialogs, popovers, menus, banners, the composer;
+	   --radius-full only what is round by nature: avatars, dots, counts, switches, round icon buttons, pill buttons. */
 	--radius-sm: 6px;
-	--radius-inner: 8px; /* a control nested in a rounded box: the composer's buttons and icon buttons (--radius-lg less its --space-2), a segment in its --radius-md track, a row's Exit */
-	--radius-md: 10px;
-	--radius-lg: 16px;
+	--radius-md: 8px;
+	--radius-lg: 12px;
 	--radius-full: 9999px;
 
 	/* Sizes the client is responsible for. */
@@ -144,7 +148,7 @@
 	--control-md: 28px;  /* icon buttons, small buttons and fields, the composer's line, toolbar buttons */
 	--control-lg: 32px;  /* buttons and fields, a header's back, the gear */
 	--control-xl: 40px;  /* the floating jump-to-latest button */
-	--chip-h: 26px;      /* a reaction chip, and its + */
+	--chip-h: 28px;      /* a reaction chip, and its + */
 	--touch-target: 44px; /* the least a control meant for a finger takes: the media viewer's ‹ and › */
 
 	/* Floating widths. */
