@@ -1,14 +1,18 @@
 <script lang="ts">
-	import { renderMarkdown } from '$lib/protocol/markdown';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { highlightCode } from '$lib/ui/highlight';
 
 	/**
-	 * The full panel's Preview: the draft as its message will show once sent, rendered and sanitized as a message body
-	 * is (`message-view.ts`), with its mentions, room links and code. Loaded on demand with the panel.
+	 * Preview, of the composer's full panel or a description: the text as it will show, rendered and sanitized as a
+	 * message body is (`message-view.ts`), with its mentions, room links and code. Loaded on demand.
 	 */
-	let { text }: { text: string } = $props();
-	let html = $derived(text.trim() ? renderMarkdown(text, directory.resolve, directory.resolveRoom, directory.resolveLink, directory.resolveEmoji, directory.mediaGate) : '');
+	interface Props {
+		text: string;
+		/** Links as a message draws them (chips for rooms and messages), as the composer's Preview asks; plain, as a description draws them, by default. */
+		links?: boolean;
+	}
+	let { text, links = false }: Props = $props();
+	let html = $derived(directory.markdown(text, links));
 </script>
 
 {#if html}

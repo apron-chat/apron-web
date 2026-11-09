@@ -4,7 +4,6 @@
 	import { PROTOCOL_VERSION } from '$lib/protocol/client-internals';
 	import type { ServerParams } from '$lib/protocol/types';
 	import { serverLabel } from '$lib/ui/connection';
-	import { renderMarkdown } from '$lib/protocol/markdown';
 	import { directory } from '$lib/ui/directory.svelte';
 	import type { SessionView } from '$lib/ui/session.svelte';
 	import { versionWarning, type ConnectStep, type Scheme, type SignOutHandler } from '$lib/ui/sign-in';
@@ -51,11 +50,6 @@
 	/** Each recent server by its title, else its host and path, with its address. */
 	let recent = $derived(recentServers.map((entry) => ({ url: entry.url, label: entry.title ?? (serverLabel(entry.url) || entry.url), avatar: directory.avatarGateFor(entry.url).src(entry.avatar), starred: entry.starred })));
 
-	/** CommonMark from a server (its welcome, its description), sanitized as a message is. */
-	function markdown(text: string | undefined): string {
-		return text ? renderMarkdown(text, directory.resolve, directory.resolveRoom, undefined, directory.resolveEmoji, directory.mediaGate) : '';
-	}
-
 	/** How the server that answered shows itself (§3.1): its title, else its host and path (`serverLabel`), always with its address beside it (§5.3). */
 	function shown(server: ServerParams, address: string) {
 		const look = serverLook(server, address);
@@ -66,8 +60,8 @@
 
 <!-- The design system's ConnectPage draws the page; the app's SignIn runs the form, with a ConnectHeader at its top. -->
 {#snippet header(step: ConnectStep)}
-	{@const welcome = markdown(step.server?.welcome)}
-	{@const description = step.server ? markdown(serverLook(step.server, step.address).description) : ''}
+	{@const welcome = directory.markdown(step.server?.welcome)}
+	{@const description = step.server ? directory.markdown(serverLook(step.server, step.address).description) : ''}
 	{#snippet welcomeHtml()}{@html welcome}{/snippet}
 	{#snippet descriptionHtml()}{@html description}{/snippet}
 	<ConnectHeader

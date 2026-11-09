@@ -202,8 +202,8 @@ test.describe('the message editor\u2019s picker', () => {
 		const mine = preview.message('edit me');
 		await expect(mine).toBeVisible();
 		// Messages after it, so it can be scrolled to the top of the timeline and edited there.
-		for (let n = 1; n <= 8; n++) await preview.post('general', 'grace', `filler ${n}`);
-		await expect(preview.message('filler 8')).toBeVisible();
+		for (let n = 1; n <= 16; n++) await preview.post('general', 'grace', `filler ${n}`);
+		await expect(preview.message('filler 16')).toBeVisible();
 		await mine.evaluate((row) => row.scrollIntoView({ block: 'start' }));
 		await expect(async () => {
 			await mine.hover();
@@ -211,14 +211,16 @@ test.describe('the message editor\u2019s picker', () => {
 		}).toPass();
 		await mine.getByRole('button', { name: 'Edit message', exact: true }).click();
 		const editor = page.getByRole('textbox', { name: 'Edit message', exact: true });
-		await editor.evaluate((field) => field.scrollIntoView({ block: 'start' }));
 		await expect(editor).toBeFocused();
 		await page.keyboard.type(' @');
 		const list = page.getByTestId('message-editor').getByRole('listbox');
 		await expect(list).toBeVisible();
 		const [box, timeline] = await Promise.all([list.boundingBox(), page.locator('.ap-timeline').boundingBox()]);
+		// Whole in the timeline that clips it, below the field, which opening it didn't move.
 		expect(box!.y).toBeGreaterThanOrEqual(timeline!.y);
+		expect(box!.y + box!.height).toBeLessThanOrEqual(timeline!.y + timeline!.height);
 		await expect(list).toHaveClass(/ap-mpick-below/);
+		expect((await editor.boundingBox())!.y).toBeLessThan(box!.y);
 	});
 });
 
@@ -275,58 +277,105 @@ test.describe('files pasted outside the composer', () => {
 });
 
 test.describe('a draft past one line', () => {
-	test('takes the box\'s width with the buttons in a row under it, once it wraps or breaks, and goes back to one row', async ({ preview, page }) => {
+	test('takes the box\'s width with the buttons in a row under it, by wrapping or a line break, and settles back to one row', async ({ preview, page }) => {
 		const form = page.locator('form.ap-composer');
 		const errors: string[] = [];
 		page.on('pageerror', (error) => errors.push(error.message));
+		await page.setViewportSize({ width: 900, height: 700 });
 		await preview.open();
 		await preview.composer().click();
 		await page.keyboard.type('Canary looks healthy');
 		await expect(form).not.toHaveClass(/ap-composer-grown/);
-		// Wrapping onto a second line, with no line break.
-		await page.keyboard.type(', rolling to the fleet in two waves after lunch, and watching p99 latency and the error rate as we go along');
-		await expect(form).toHaveClass(/ap-composer-grown/);
-		const [field, box] = await Promise.all([preview.composer().boundingBox(), form.boundingBox()]);
-		expect(field!.width).toBeGreaterThan(box!.width * 0.9);
-		await expect(page.getByTestId('composer-expand')).toHaveCount(0);
-		// A line break: Expand too, and still the row under it.
-		await page.keyboard.press('Shift+Enter');
-		await page.keyboard.type('Roll back if 5xx goes over 0.5%');
-		await expect(page.getByTestId('composer-expand')).toBeVisible();
-		await expect(form).toHaveClass(/ap-composer-grown/);
-		// Short again: one row.
-		await page.keyboard.press('ControlOrMeta+a');
-		await page.keyboard.press('Backspace');
-		await page.keyboard.type('Short again');
-		await expect(form).not.toHaveClass(/ap-composer-grown/);
+
+		await test.step('wrapping onto a second line grows it, with no Expand', async () => {
+			await page.keyboard.type(', rolling to the fleet in two waves after lunch, and watching p99 latency');
+			await expect(form).toHaveClass(/ap-composer-grown/);
+			const [field, box] = await Promise.all([preview.composer().boundingBox(), form.boundingBox()]);
+			expect(field!.width).toBeGreaterThan(box!.width * 0.9);
+			await expect(page.getByTestId('composer-expand')).toHaveCount(0);
+		});
+
+		await test.step('a line break offers Expand, and it stays grown', async () => {
+			await page.keyboard.press('Shift+Enter');
+			await page.keyboard.type('Roll back if 5xx goes over 0.5%');
+			await expect(page.getByTestId('composer-expand')).toBeVisible();
+			await expect(form).toHaveClass(/ap-composer-grown/);
+		});
+
+		await test.step('a pasted paragraph deleted key by key goes back to one row without flipping on every key', async () => {
+			await page.keyboard.press('ControlOrMeta+a');
+			await page.keyboard.insertText('Canary looks healthy, rolling to the fleet in two waves after lunch, watching p99 latency and the error rate as we go, and rolling back if 5xx goes over half a percent.');
+			await expect(form).toHaveClass(/ap-composer-grown/);
+			await form.evaluate((el) => {
+				const w = window as unknown as { flips: number };
+				w.flips = 0;
+				new MutationObserver(() => w.flips++).observe(el, { attributes: true, attributeFilter: ['class'] });
+			});
+			await page.keyboard.press('End');
+			for (let i = 0; i < 150; i++) await page.keyboard.press('Backspace');
+			await expect(form).not.toHaveClass(/ap-composer-grown/);
+			expect(await page.evaluate(() => (window as unknown as { flips: number }).flips)).toBeLessThanOrEqual(5);
+		});
+
+		await test.step('grown in a narrow pane, it goes back to one row as the pane widens', async () => {
+			await page.keyboard.press('ControlOrMeta+a');
+			await page.keyboard.insertText('Canary looks healthy, rolling to the fleet in two waves after lunch');
+			await page.setViewportSize({ width: 600, height: 700 });
+			await expect(form).toHaveClass(/ap-composer-grown/);
+			await page.setViewportSize({ width: 1400, height: 700 });
+			await expect(form).not.toHaveClass(/ap-composer-grown/);
+		});
 		expect(errors).toEqual([]);
 	});
+});
 
-	test('a pasted paragraph deleted key by key settles in one row without flipping back on every key, and a wider pane asks again', async ({ preview, page }) => {
-		const form = page.locator('form.ap-composer');
-		await page.setViewportSize({ width: 900, height: 700 });
+test.describe('a room’s description', () => {
+	test('is written as in the composer: mentions as chips from the picker, formatting, Preview, and Ctrl+Enter saves', async ({ preview, page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', (error) => errors.push(error.message));
 		await preview.open();
-		await preview.composer().click();
-		await page.keyboard.insertText('Canary looks healthy, rolling to the fleet in two waves after lunch, watching p99 latency and the error rate as we go, and rolling back if 5xx goes over half a percent.');
-		await expect(form).toHaveClass(/ap-composer-grown/);
-		// Each change of layout, counted while the draft is deleted down to a few words.
-		await form.evaluate((el) => {
-			const w = window as unknown as { flips: number };
-			w.flips = 0;
-			new MutationObserver(() => w.flips++).observe(el, { attributes: true, attributeFilter: ['class'] });
-		});
-		await page.keyboard.press('End');
-		for (let i = 0; i < 150; i++) await page.keyboard.press('Backspace');
-		await expect(form).not.toHaveClass(/ap-composer-grown/);
-		expect(await page.evaluate(() => (window as unknown as { flips: number }).flips)).toBeLessThanOrEqual(5);
-
-		// Grown by wrapping in a narrow pane, then the pane widens: one row again.
+		await page.getByTestId('room-actions').click();
+		await page.getByTestId('edit-room').click();
+		const dialog = page.getByRole('dialog', { name: 'Edit room', exact: true });
+		const field = dialog.getByRole('textbox', { name: 'Room description', exact: true });
+		await field.click();
 		await page.keyboard.press('ControlOrMeta+a');
-		await page.keyboard.insertText('Canary looks healthy, rolling to the fleet in two waves after lunch');
-		await page.setViewportSize({ width: 600, height: 700 });
-		await expect(form).toHaveClass(/ap-composer-grown/);
-		await page.setViewportSize({ width: 1400, height: 700 });
-		await expect(form).not.toHaveClass(/ap-composer-grown/);
+		await page.keyboard.press('Backspace');
+		await page.keyboard.type('Ask @ad');
+		const list = page.getByTestId('description-picker');
+		await expect(list.getByRole('option').first()).toHaveText(/Ada Lovelace/);
+		// The picker shows whole, in the window, over the dialog rather than cut off by it.
+		const [box, viewport] = [await list.boundingBox(), page.viewportSize()!];
+		expect(box!.y).toBeGreaterThanOrEqual(0);
+		expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
+		// Escape closes the picker, not the dialog.
+		await page.keyboard.press('Escape');
+		await expect(list).toHaveCount(0);
+		await expect(dialog).toBeVisible();
+		await page.keyboard.type('a');
+		await expect(list.getByRole('option').first()).toHaveText(/Ada Lovelace/);
+		await page.keyboard.press('Tab');
+		await expect(field.locator('.ap-mention[data-user-id="ada"]')).toBeVisible();
+		// Enter starts a line, and a list carries on.
+		await page.keyboard.type('about deploys');
+		await page.keyboard.press('Enter');
+		await page.keyboard.type('- canary');
+		await page.keyboard.press('Enter');
+		await page.keyboard.type('fleet');
+		for (let i = 0; i < 'fleet'.length; i++) await page.keyboard.press('Shift+ArrowLeft');
+		await dialog.getByRole('button', { name: 'Bold', exact: true }).click();
+		await dialog.getByRole('radio', { name: 'Preview', exact: true }).click();
+		const rendered = dialog.getByTestId('draft-preview');
+		await expect(rendered.locator('strong')).toHaveText('fleet');
+		await expect(rendered.locator('.ap-mention')).toContainText('Ada Lovelace');
+		await dialog.getByRole('radio', { name: 'Write', exact: true }).click();
+		await expect(field).toBeFocused();
+		await page.keyboard.press('ControlOrMeta+Enter');
+		const saved = await preview.waitForSent('room_set', (p) => p.room_id === 'general');
+		expect(saved.description).toBe('Ask @ada about deploys\n- canary\n- **fleet**');
+		await expect(dialog).toHaveCount(0);
+		await expect(page.getByTestId('pane-description').locator('strong')).toHaveText('fleet');
+		expect(errors).toEqual([]);
 	});
 });
 
@@ -337,7 +386,7 @@ test.describe('the full panel', () => {
 	/** The field's text, its line breaks included (an element, which textContent leaves out). */
 	const written = (preview: Preview) => preview.composer().evaluate((el) => (el as HTMLElement).innerText.replace(/\n$/, ''));
 
-	test('opens from Expand once a draft has two lines, keeps the caret, formats with its toolbar, previews, and sends with Ctrl+Enter', async ({ preview, page }) => {
+	test('opens from Expand on a draft of two lines, keeps the caret, formats with its toolbar, previews, and sends with Ctrl+Enter', async ({ preview, page }) => {
 		await preview.open();
 		await preview.composer().click();
 		await page.keyboard.type('first @ad');
@@ -346,9 +395,7 @@ test.describe('the full panel', () => {
 		await expect(chip(preview)).toHaveAttribute('data-user-id', 'ada');
 		// Picking a mention puts a space after it.
 		await page.keyboard.type('line');
-		await expect(page.getByTestId('composer-expand')).toHaveCount(0);
 		await page.keyboard.press('Shift+Enter');
-		await expect(page.getByTestId('composer-expand')).toBeVisible();
 		await page.keyboard.type('second line');
 
 		await test.step('Expand opens the panel under a strip of the conversation, the caret where it was', async () => {

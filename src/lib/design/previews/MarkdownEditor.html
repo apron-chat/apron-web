@@ -1,0 +1,16 @@
+<!-- @dsCard group="Input" height=360 subtitle="A Markdown field in a form, such as a room’s or thread’s description: formatting along its top, and Write and Preview; the same Write and Preview as the Composer’s full panel" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>MarkdownEditor</title></head>
+<body>
+<div id="root" style="display:grid;gap:16px;padding:8px;max-width:560px"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  function add(props) { var box = document.createElement('div'); root.appendChild(box); return A.render(A.MarkdownEditor, box, props); }
+  add({ label: 'Room description', rows: 4, value: 'Where **deploys** are announced and rolled back.\n\n- Post the build number\n- Say when the canary is healthy',
+    toolbar: A.html('<div class="ap-composer-format" role="toolbar" aria-label="Formatting"><button type="button" class="ap-iconbtn" aria-label="Bold"><b>B</b></button><button type="button" class="ap-iconbtn" aria-label="Italic"><i>I</i></button></div>'),
+    rendered: A.html('<div class="ap-msg-text ap-msg-markdown"><p>Where <strong>deploys</strong> are announced and rolled back.</p><ul><li>Post the build number</li><li>Say when the canary is healthy</li></ul></div>') });
+  add({ label: 'Thread description', rows: 3, placeholder: 'What this thread is about, or what it settled.' });
+</script>
+</body>
+</html>

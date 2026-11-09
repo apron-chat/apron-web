@@ -25,11 +25,16 @@
 	import SidebarHead from '$lib/design/components/SidebarHead.svelte';
 	import { serverPane } from '$lib/ui/server-pane.svelte';
 	import SidebarSection from '$lib/design/components/SidebarSection.svelte';
+	import type { MentionPerson } from '$lib/protocol/markdown';
+	import type { RoomSuggestion } from '$lib/ui/room-autocomplete';
 
 	interface Props {
 		client: ChatClient;
 		session: SessionView;
 		backendLabel: string;
+		/** Who an `@` in a new room's description can name, and the rooms and threads a `#` can, as in the composer. */
+		people?: MentionPerson[];
+		roomSuggestions?: RoomSuggestion[];
 		/** How the server shows itself (§3.1): its title in place of `backendLabel`, and its avatar. */
 		serverLook?: ServerLook;
 		/** The server's address (§1), the head's tooltip. */
@@ -95,7 +100,7 @@
 		 */
 		drawRooms?: boolean;
 	}
-	let { drawRooms = true, client, session, backendLabel, serverLook, serverAddress, account, order = new RoomOrder(), threads, activeThread, mentions, unread, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, returnTo, onreturn, onroom, onthread, onopenthread, onjoin, onopenroom, onleavethread, oncreateroom, onnewthread, onnewprivate, onsignout, keptHistory, onsignin }: Props = $props();
+	let { drawRooms = true, client, session, backendLabel, people = [], roomSuggestions = [], serverLook, serverAddress, account, order = new RoomOrder(), threads, activeThread, mentions, unread, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, returnTo, onreturn, onroom, onthread, onopenthread, onjoin, onopenroom, onleavethread, oncreateroom, onnewthread, onnewprivate, onsignout, keptHistory, onsignin }: Props = $props();
 	/** The head's server button: the server pane sits beside it. */
 	let serverHead = $state<HTMLButtonElement | undefined>();
 	/** Threads are listed under their parent, not as rooms of their own; private rooms in a list of their own. */
@@ -394,5 +399,5 @@
 	<ProfileBar {client} {session} {backendLabel} bind:displayName {passkeyUnavailable} {notificationsEnabled} {notificationsSupported} {notificationPermission} {notifyScopes} {onnotifications} {onnotifyscopes} {ontestnotifications} {webPush} {onwebpush} {oninstallapp} {pause} {onpause} {onresume} {onsignout} {keptHistory} {onsignin} />
 </aside>
 
-{#if createOpen && newRoomDialog.component}{@const NewRoomDialog = newRoomDialog.component}<NewRoomDialog {client} enabled={canCreateRoom} oncreated={oncreateroom} onclose={() => (createOpen = false)} />{/if}
+{#if createOpen && newRoomDialog.component}{@const NewRoomDialog = newRoomDialog.component}<NewRoomDialog {client} enabled={canCreateRoom} {people} rooms={roomSuggestions} oncreated={oncreateroom} onclose={() => (createOpen = false)} />{/if}
 

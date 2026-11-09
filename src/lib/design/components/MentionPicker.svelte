@@ -2,7 +2,8 @@
 	/*
 	 * Above the Composer while you type `@name` (people, and roles: `@&role` mentions everyone else here who holds it), `#room` (rooms and threads) or `:shortcode` (emoji); ↑ ↓ move, Tab or
 	 * Enter takes one. It opens below the field instead where what scrolls around it has no room above, as over the first
-	 * message of a timeline being edited.
+	 * message of a timeline being edited; where neither side has room for all of it, as in a dialog, it scrolls in what
+	 * there is.
 	 */
 	import type { Snippet } from 'svelte';
 	import type { ClassValue } from 'svelte/elements';
@@ -10,6 +11,11 @@
 	import Avatar from './Avatar.svelte';
 	import type { PickerEmoji, PickerRole, PickerRoom, Sender } from './types';
 	import { uid } from './util';
+
+	/** Between the list and its field, and a margin to spare from the edge that clips it. */
+	const PICKER_GAP = 8;
+	/** The least height it takes however short the room, about two options: below that it is cut off rather than useless. */
+	const PICKER_LEAST = 88;
 
 	/** The list is a listbox, as its options need. */
 	interface Props {
@@ -50,13 +56,16 @@
 	let none = $state<HTMLDivElement>();
 	/** Opens below the field, for want of room above. */
 	let below = $state(false);
+	/** Its height, where neither side has room for all of it (a field in a dialog): it scrolls in what there is. */
+	let cap = $state<number | undefined>();
 
 	function split(text: string): [string, string, string] | null {
 		const i = q ? text.toLowerCase().indexOf(q) : -1;
 		return i < 0 ? null : [text.slice(0, i), text.slice(i, i + q.length), text.slice(i + q.length)];
 	}
 
-	// Where it opens, as it opens and as its length changes: above, unless what clips it has more room below.
+	// Where it opens, as it opens and as its length changes: above, unless what clips it has more room below; and no
+	// taller than the room on that side, less its gap, so its first options aren't cut off out of reach.
 	$effect(() => {
 		void items.length;
 		const box = list ?? none;
@@ -65,7 +74,10 @@
 		const clip = clipOf(anchor);
 		const at = anchor.getBoundingClientRect();
 		const room = { above: at.top - clip.top, below: clip.bottom - at.bottom };
-		below = room.above < box.offsetHeight && room.below > room.above;
+		const height = Math.max(box.offsetHeight, box.scrollHeight);
+		below = room.above < height && room.below > room.above;
+		const space = Math.floor((below ? room.below : room.above) - PICKER_GAP);
+		cap = space < height ? Math.max(space, PICKER_LEAST) : undefined;
 	});
 
 	/** The edges of the nearest box around `node` that clips what overflows it, else the window's. */
@@ -76,10 +88,15 @@
 		return { top: 0, bottom: window.innerHeight };
 	}
 
-	// The highlighted option stays in view as the keys move it through a list that scrolls.
+	// The highlighted option stays in view as the keys move it through a list that scrolls: the list alone scrolls, as
+	// `scrollIntoView` would scroll what is around it too (the timeline, a dialog), moving the field away as it opens.
 	$effect(() => {
-		if (!items[active] || !list) return;
-		list.querySelectorAll<HTMLElement>('[role="option"]')[active]?.scrollIntoView?.({ block: 'nearest' });
+		const option = list && items[active] ? list.querySelectorAll<HTMLElement>('[role="option"]')[active] : undefined;
+		if (!list || !option) return;
+		const top = option.offsetTop;
+		const bottom = top + option.offsetHeight;
+		if (top < list.scrollTop) list.scrollTop = top;
+		else if (bottom > list.scrollTop + list.clientHeight) list.scrollTop = bottom - list.clientHeight;
 	});
 </script>
 
@@ -90,7 +107,7 @@
 	<!-- A listbox even with no options, as the field's `aria-controls` names it. -->
 	<div {id} aria-label={listLabel} data-testid={testid} class={['ap-mpick', below && 'ap-mpick-below', className]} role="listbox" bind:this={none}><div class="ap-mpick-empty">{emptyText}</div></div>
 {:else}
-	<ul {id} aria-label={listLabel} data-testid={testid} class={['ap-mpick', below && 'ap-mpick-below', className]} role="listbox" bind:this={list}>
+	<ul {id} aria-label={listLabel} data-testid={testid} class={['ap-mpick', below && 'ap-mpick-below', className]} style:max-height={cap === undefined ? undefined : `${cap}px`} role="listbox" bind:this={list}>
 		{#each items as item, i (key(item, i))}
 			<li id={id && `${id}-${i}`} role="option" aria-selected={i === active} class={['ap-mpick-item', i === active && 'ap-mpick-active']} onmousedown={(e) => { e.preventDefault(); onpick?.(item, i); }} onmouseenter={() => onhover?.(i)}>
 				{#if 'user_id' in item}

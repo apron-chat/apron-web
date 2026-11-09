@@ -1,6 +1,5 @@
 <script lang="ts">
 	import Description from '$lib/design/components/ThreadDescription.svelte';
-	import { renderMarkdown } from '$lib/protocol/markdown';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { openProfileFrom } from '$lib/ui/profile-card.svelte';
 	import { highlightCode } from '$lib/ui/highlight';
@@ -12,7 +11,7 @@
 	 * lines, and its × puts it away (`ondismiss`).
 	 */
 	let { description, thread, onopenroom, ondismiss }: { description: string; thread: boolean; onopenroom: (roomId: string) => void; ondismiss: () => void } = $props();
-	let html = $derived(renderMarkdown(description, directory.resolve, directory.resolveRoom, undefined, directory.resolveEmoji, directory.mediaGate));
+	let html = $derived(directory.markdown(description));
 
 	function click(event: MouseEvent): void {
 		const roomLink = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-room-id]');

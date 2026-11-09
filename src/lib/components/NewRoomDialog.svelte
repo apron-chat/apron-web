@@ -1,9 +1,11 @@
 <script lang="ts">
 	import RoomForm from '$lib/design/components/RoomForm.svelte';
+	import type { RoomFormField } from '$lib/design/components/types';
+	import DescriptionField, { type DescriptionSources } from './DescriptionField.svelte';
 	import type { ChatClient } from '$lib/protocol/client';
 	import { messageOf, Task } from '$lib/ui/task.svelte';
 
-	interface Props {
+	interface Props extends DescriptionSources {
 		client: ChatClient;
 		/** False while creating isn't allowed (capability `rooms`, signed in, not read-only); the form stays open but won't create. */
 		enabled: boolean;
@@ -17,7 +19,7 @@
 		/** It closed: created, or put away. */
 		onclose: () => void;
 	}
-	let { client, enabled, oncreated, onclose }: Props = $props();
+	let { client, enabled, people = [], rooms = [], onmention, oncreated, onclose }: Props = $props();
 
 	// The caller mounts it for each new room, so the form starts empty.
 	let open = $state(true);
@@ -55,4 +57,8 @@
 	}
 </script>
 
-<RoomForm bind:open kind="room" mode="create" bind:name={title} bind:description bind:private={isPrivate} status={task.busy ? 'saving' : 'idle'} error={task.note} disabled={!enabled} onsubmit={create} {onclose} />
+<RoomForm bind:open kind="room" mode="create" bind:name={title} field={descriptionField} bind:private={isPrivate} status={task.busy ? 'saving' : 'idle'} error={task.note} disabled={!enabled} onsubmit={create} {onclose} />
+
+{#snippet descriptionField(form: RoomFormField)}
+	<DescriptionField bind:value={description} {form} {people} {rooms} {onmention} />
+{/snippet}
