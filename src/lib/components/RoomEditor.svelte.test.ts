@@ -2,7 +2,7 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import type { ChatClient } from '$lib/protocol/client';
 import RoomEditor from './RoomEditor.svelte';
-import { render, stubDialog, submit, type, unmount } from '$lib/test/dom';
+import { press, render, stubDialog, submit, unmount } from '$lib/test/dom';
 
 beforeAll(stubDialog);
 
@@ -18,7 +18,18 @@ describe('RoomEditor', () => {
 		const dialog = field<HTMLDialogElement>('dialog');
 		expect(dialog.textContent).toContain('Edit thread');
 		expect(dialog.textContent).toContain('Description');
-		type(field('textarea'), 'New');
+		// The description is written as in the composer: Enter starts a line, Ctrl+Enter saves.
+		const description = field('[data-testid="description-input"]');
+		expect(description.getAttribute('aria-label')).toBe('Thread description');
+		expect(description.textContent).toBe('Old');
+		description.textContent = 'New';
+		description.dispatchEvent(new InputEvent('input', { bubbles: true }));
+		document.execCommand = vi.fn(() => true);
+		press(description, 'Enter');
+		expect(updateRoom).not.toHaveBeenCalled();
+		press(description, 'Enter', { ctrlKey: true });
+		// @ts-expect-error: jsdom has no editing commands; put it back as it was.
+		delete document.execCommand;
 		await submit();
 		expect(updateRoom).toHaveBeenCalledWith('t1', { description: 'New' });
 		expect(onclose).toHaveBeenCalled();

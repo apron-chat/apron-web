@@ -16,6 +16,7 @@
 	import Button from './Button.svelte';
 	import Embed from './Embed.svelte';
 	import EmbedRemove from './EmbedRemove.svelte';
+	import WritePreview from './WritePreview.svelte';
 	import { secondNow } from './clock.svelte';
 	import { isCommand } from './compose';
 	import type { ComposerField, EmbedProps } from './types';
@@ -261,10 +262,7 @@
 					{#if !previewing}{@render toolbar?.()}{/if}
 					<span class="ap-composer-grow"></span>
 					{#if rendered}
-						<div class="ap-seg ap-composer-views" role="radiogroup" aria-label="View">
-							<button type="button" role="radio" aria-checked={!previewing} class={['ap-seg-item', !previewing && 'ap-seg-on']} onclick={() => onpreview?.(false)}>Write</button>
-							<button type="button" role="radio" aria-checked={previewing} class={['ap-seg-item', previewing && 'ap-seg-on']} onclick={() => onpreview?.(true)}>Preview</button>
-						</div>
+						<WritePreview {previewing} {onpreview} />
 					{/if}
 					{#if oncollapse}
 						<button type="button" class="ap-iconbtn" aria-label="Collapse composer" title="Collapse (Esc)" onclick={oncollapse}>

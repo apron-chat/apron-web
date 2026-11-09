@@ -4,11 +4,16 @@
 	import { highlightCode } from '$lib/ui/highlight';
 
 	/**
-	 * The full panel's Preview: the draft as its message will show once sent, rendered and sanitized as a message body
-	 * is (`message-view.ts`), with its mentions, room links and code. Loaded on demand with the panel.
+	 * Preview, of the composer's full panel or a description: the text as it will show, rendered and sanitized as a
+	 * message body is (`message-view.ts`), with its mentions, room links and code. Loaded on demand.
 	 */
-	let { text }: { text: string } = $props();
-	let html = $derived(text.trim() ? renderMarkdown(text, directory.resolve, directory.resolveRoom, directory.resolveLink, directory.resolveEmoji, directory.mediaGate) : '');
+	interface Props {
+		text: string;
+		/** Links as a message draws them (chips for rooms and messages); false for a description, which draws them plain. */
+		links?: boolean;
+	}
+	let { text, links = true }: Props = $props();
+	let html = $derived(text.trim() ? renderMarkdown(text, directory.resolve, directory.resolveRoom, links ? directory.resolveLink : undefined, directory.resolveEmoji, directory.mediaGate) : '');
 </script>
 
 {#if html}

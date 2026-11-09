@@ -29,7 +29,9 @@ describe('NewRoomDialog', () => {
 		expect(createRoom).not.toHaveBeenCalled();
 		expect(document.querySelector('[role="alert"]')?.textContent).toBe('Enter a room title.');
 		dom.type(field('input.ap-field'), ' Ops ');
-		dom.type(field('textarea'), 'Deploys');
+		const description = field('[data-testid="description-input"]');
+		description.textContent = 'Deploys';
+		description.dispatchEvent(new InputEvent('input', { bubbles: true }));
 		checkbox().click();
 		flushSync();
 		await dom.submit();

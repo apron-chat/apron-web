@@ -330,6 +330,56 @@ test.describe('a draft past one line', () => {
 	});
 });
 
+test.describe('a room’s description', () => {
+	test('is written as in the composer: mentions as chips from the picker, formatting, Preview, and Ctrl+Enter saves', async ({ preview, page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', (error) => errors.push(error.message));
+		await preview.open();
+		await page.getByTestId('room-actions').click();
+		await page.getByTestId('edit-room').click();
+		const dialog = page.getByRole('dialog', { name: 'Edit room', exact: true });
+		const field = dialog.getByRole('textbox', { name: 'Room description', exact: true });
+		await field.click();
+		await page.keyboard.press('ControlOrMeta+a');
+		await page.keyboard.press('Backspace');
+		await page.keyboard.type('Ask @ad');
+		const list = page.getByTestId('description-picker');
+		await expect(list.getByRole('option').first()).toHaveText(/Ada Lovelace/);
+		// The picker shows whole, in the window, over the dialog rather than cut off by it.
+		const [box, viewport] = [await list.boundingBox(), page.viewportSize()!];
+		expect(box!.y).toBeGreaterThanOrEqual(0);
+		expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
+		// Escape closes the picker, not the dialog.
+		await page.keyboard.press('Escape');
+		await expect(list).toHaveCount(0);
+		await expect(dialog).toBeVisible();
+		await page.keyboard.type('a');
+		await expect(list.getByRole('option').first()).toHaveText(/Ada Lovelace/);
+		await page.keyboard.press('Tab');
+		await expect(field.locator('.ap-mention[data-user-id="ada"]')).toBeVisible();
+		// Enter starts a line, and a list carries on.
+		await page.keyboard.type('about deploys');
+		await page.keyboard.press('Enter');
+		await page.keyboard.type('- canary');
+		await page.keyboard.press('Enter');
+		await page.keyboard.type('fleet');
+		for (let i = 0; i < 'fleet'.length; i++) await page.keyboard.press('Shift+ArrowLeft');
+		await dialog.getByRole('button', { name: 'Bold', exact: true }).click();
+		await dialog.getByRole('radio', { name: 'Preview', exact: true }).click();
+		const rendered = dialog.getByTestId('draft-preview');
+		await expect(rendered.locator('strong')).toHaveText('fleet');
+		await expect(rendered.locator('.ap-mention')).toContainText('Ada Lovelace');
+		await dialog.getByRole('radio', { name: 'Write', exact: true }).click();
+		await expect(field).toBeFocused();
+		await page.keyboard.press('ControlOrMeta+Enter');
+		const saved = await preview.waitForSent('room_set', (p) => p.room_id === 'general');
+		expect(saved.description).toBe('Ask @ada about deploys\n- canary\n- **fleet**');
+		await expect(dialog).toHaveCount(0);
+		await expect(page.getByTestId('pane-description').locator('strong')).toHaveText('fleet');
+		expect(errors).toEqual([]);
+	});
+});
+
 test.describe('the full panel', () => {
 	test.use(DEVICES.desktop);
 

@@ -1,6 +1,10 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import RoomForm from '$lib/design/components/RoomForm.svelte';
+	import type { RoomFormField } from '$lib/design/components/types';
+	import type { MentionPerson } from '$lib/protocol/markdown';
+	import type { RoomSuggestion } from '$lib/ui/room-autocomplete';
+	import DescriptionField from './DescriptionField.svelte';
 	import { messageOf, Task } from '$lib/ui/task.svelte';
 
 	interface Props {
@@ -18,10 +22,16 @@
 		 * rejection is shown in the form, which stays open to try again; once it resolves, the form closes.
 		 */
 		oncreate: (thread: { title: string; description?: string }) => Promise<void>;
+		/** Who an `@` in the description can name, as in the composer. */
+		people?: MentionPerson[];
+		/** Rooms and threads a `#` in it can name. */
+		rooms?: RoomSuggestion[];
+		/** The mention picker opened: a moment to refresh who can be named. */
+		onmention?: () => void;
 		/** It closed: started, or put away. */
 		onclose: () => void;
 	}
-	let { room, title: suggestedTitle = '', description: suggestedDescription = '', moving = 0, enabled, oncreate, onclose }: Props = $props();
+	let { room, title: suggestedTitle = '', description: suggestedDescription = '', moving = 0, enabled, people = [], rooms = [], onmention, oncreate, onclose }: Props = $props();
 
 	// The form starts from what it was opened with; the caller remounts it for each new thread.
 	let open = $state(true);
@@ -42,4 +52,8 @@
 	}
 </script>
 
-<RoomForm bind:open kind="thread" mode="create" subtitle="In {room.title}" private={room.private === true} {moving} bind:name={title} bind:description status={task.busy ? 'saving' : 'idle'} error={task.note} disabled={!enabled} onsubmit={start} {onclose} />
+<RoomForm bind:open kind="thread" mode="create" subtitle="In {room.title}" private={room.private === true} {moving} bind:name={title} field={descriptionField} status={task.busy ? 'saving' : 'idle'} error={task.note} disabled={!enabled} onsubmit={start} {onclose} />
+
+{#snippet descriptionField(args: RoomFormField)}
+	<DescriptionField bind:value={description} {people} {rooms} {onmention} label={args.label} placeholder={args.placeholder} disabled={args.disabled} rows={args.rows} submit={args.submit} />
+{/snippet}

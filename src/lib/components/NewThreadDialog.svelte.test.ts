@@ -11,7 +11,7 @@ function field<T extends HTMLElement>(selector: string): T {
 }
 
 describe('NewThreadDialog', () => {
-	type Props = { room?: { id: string; title: string; private?: boolean }; title?: string; description?: string; moving?: number };
+	type Props = { room?: { id: string; title: string; private?: boolean }; title?: string; description?: string; moving?: number; people?: { id: string; name?: string }[] };
 	function render(props: Props = {}, oncreate = vi.fn((_thread: { title: string; description?: string }) => Promise.resolve())) {
 		const onclose = vi.fn();
 		dom.render(NewThreadDialog, { room: { id: 'ops', title: 'ops' }, enabled: true, oncreate, onclose, ...props });
@@ -26,7 +26,7 @@ describe('NewThreadDialog', () => {
 		expect(dialog.open).toBe(true);
 		expect(text()).toContain('Start thread');
 		expect(text()).toContain('In ops');
-		expect(field<HTMLTextAreaElement>('textarea').value).toBe('> Deploy failed\n>\n> Runner looked fine.');
+		expect(field('[data-testid="description-input"]').textContent).toBe('> Deploy failed\n>\n> Runner looked fine.');
 		await tick();
 		const input = field<HTMLInputElement>('input.ap-field');
 		expect(document.activeElement).toBe(input);
@@ -35,6 +35,14 @@ describe('NewThreadDialog', () => {
 		await dom.submit();
 		expect(oncreate).toHaveBeenCalledWith({ title: 'Why the 4pm deploy failed', description: '> Deploy failed\n>\n> Runner looked fine.' });
 		expect(onclose).toHaveBeenCalled();
+	});
+
+	it('shows the quoted message’s mentions as chips, as the composer does, and sends them as they were written', async () => {
+		const { oncreate } = render({ title: 'Ask Ada', description: '> @ada can you look?', people: [{ id: 'ada', name: 'Ada Lovelace' }] });
+		const description = field('[data-testid="description-input"]');
+		expect(description.querySelector('[data-user-id="ada"]')?.textContent).toContain('Ada Lovelace');
+		await dom.submit();
+		expect(oncreate).toHaveBeenCalledWith({ title: 'Ask Ada', description: '> @ada can you look?' });
 	});
 
 	it('starts from a room with nothing filled in, needs a title, and stays open with the reason when creating fails', async () => {
