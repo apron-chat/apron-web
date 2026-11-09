@@ -1,3 +1,4 @@
+import type { Locator } from '@playwright/test';
 import { DEVICES, expect, test, type Preview } from './fixtures';
 
 /**
@@ -81,6 +82,60 @@ test.describe('a task list', () => {
 		expect(edit.body).toMatchObject({ text: 'Ship it:\n\n- [x] Foo\n- [x] Bar', format: 'markdown' });
 		await expect(mine.nth(0)).toBeChecked();
 		await expect(mine.nth(0)).toBeEnabled();
+	});
+
+	test('keeps each check on its first word\'s line, centred as the line\'s chips are, in a message and in the composer', async ({ preview, page }) => {
+		// A first word with nowhere to break, wider than any line: a line may break after an inline box, which would
+		// leave the check alone above it.
+		const long = `Long${'o'.repeat(160)}`;
+		/** The vertical centre of a box. */
+		const centre = (box: { y: number; height: number } | null) => box!.y + box!.height / 2;
+		/**
+		 * How far the check's centre sits below that of the first letter of `long` (the box a chip or any other inline
+		 * box on the line centres on), in px: about a line's height if it went to a line of its own.
+		 */
+		const offset = (check: Locator) =>
+			check.evaluate((box) => {
+				const item = box.closest('.ap-task-item, .ap-composer-editable')!;
+				const walker = document.createTreeWalker(item, NodeFilter.SHOW_TEXT, (node) => (node.textContent!.includes('Long') ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP));
+				const text = walker.nextNode()!;
+				const range = document.createRange();
+				const at = text.textContent!.indexOf('Long');
+				range.setStart(text, at);
+				range.setEnd(text, at + 1);
+				const middle = (rect: DOMRect) => (rect.top + rect.bottom) / 2;
+				return middle(box.getBoundingClientRect()) - middle(range.getBoundingClientRect());
+			});
+
+		await preview.open();
+		await preview.post('general', 'preview_guest', `Odd one:\n\n- [ ] ${long}\n- [ ] @ada\n- [ ] مرحبا بالعالم`);
+		const checks = preview.message('Odd one:').getByRole('checkbox');
+		await expect(checks).toHaveCount(3);
+		expect(Math.abs(await offset(checks.first()))).toBeLessThan(1);
+		// An item that is only a mention: the check level with its chip.
+		const chipItem = preview.message('Odd one:').locator('li').nth(1);
+		const [check, mention] = await Promise.all([chipItem.getByRole('checkbox').boundingBox(), chipItem.locator('.ap-mention').boundingBox()]);
+		expect(Math.abs(centre(check) - centre(mention))).toBeLessThan(0.5);
+		// An item whose text runs the other way from the page's (each item takes its own direction): its check stays in
+		// the gutter, clear of the text.
+		const overlap = await checks.nth(2).evaluate((box) => {
+			const range = document.createRange();
+			range.selectNodeContents(box.closest('li')!);
+			range.setStartAfter(box);
+			const ring = box.getBoundingClientRect();
+			return [...range.getClientRects()].some((rect) => rect.width > 0 && rect.left < ring.right && rect.right > ring.left);
+		});
+		expect(overlap).toBe(false);
+
+		await preview.composer().click();
+		await page.keyboard.type(`- [ ] ${long}`);
+		const chip = preview.composer().locator('.ap-task-chip');
+		await expect(chip).toHaveCount(1);
+		expect(Math.abs(await offset(chip))).toBeLessThan(1);
+		// A click in the space after it puts the caret there, and doesn't tick it.
+		const ring = (await chip.boundingBox())!;
+		await page.mouse.click(ring.x + ring.width + 3, ring.y + ring.height / 2);
+		await expect(chip).not.toHaveClass(/ap-task-chip-done/);
 	});
 });
 
