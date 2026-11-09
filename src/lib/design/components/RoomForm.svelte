@@ -3,6 +3,7 @@
 	import type { ClassValue } from 'svelte/elements';
 	import Button from './Button.svelte';
 	import Dialog from './Dialog.svelte';
+	import MarkdownEditor from './MarkdownEditor.svelte';
 	import type { RoomFormField } from './types';
 
 	interface Props {
@@ -29,7 +30,7 @@
 		/** The room's or thread's `description` (§3.4), Markdown. `bind:description`. */
 		description?: string;
 		/**
-		 * Your own description field in place of the textarea, such as a MarkdownEditor around a ComposerEditable, for
+		 * Your own description field in place of a plain MarkdownEditor, such as one around a ComposerEditable, for
 		 * formatting, a preview and mentions as chips. It is yours to fill and read (`description` then goes unused).
 		 */
 		field?: Snippet<[RoomFormField]>;
@@ -61,11 +62,14 @@
 		isPrivate ? 'Private, like its room: only the room’s members see it.' : ''
 	].filter(Boolean).join(' ') : '');
 	let nameInput = $state<HTMLInputElement | undefined>();
-	const label = $derived(thread ? 'Thread description' : 'Room description');
-	const placeholder = $derived(thread ? 'What this thread is about, or what it settled. Shows on its card and at the top of the thread.' : 'What this room is for.');
-	const rows = $derived(creating && !description ? 4 : 8);
-	/** What your `field` is drawn with, kept as one object while its parts are the same. */
-	const fieldArgs = $derived<RoomFormField>({ label, placeholder, disabled: saving, rows: creating ? 4 : 8, submit: () => { if (!saving && !disabled) onsubmit?.(); } });
+	/** What the description's field is drawn with, yours or the MarkdownEditor's, kept as one object while its parts are the same. */
+	const fieldArgs = $derived<RoomFormField>({
+		label: thread ? 'Thread description' : 'Room description',
+		placeholder: thread ? 'What this thread is about, or what it settled. Shows on its card and at the top of the thread.' : 'What this room is for.',
+		disabled: saving,
+		rows: creating ? 4 : 8,
+		submit: () => { if (!saving && !disabled) onsubmit?.(); }
+	});
 
 	$effect(() => {
 		if (!open) return;
@@ -83,16 +87,10 @@
 		<input id="{uid}-name" class="ap-field" aria-label="{thread ? 'Thread' : 'Room'} title" aria-required={creating} bind:this={nameInput} bind:value={name} disabled={saving} maxlength="120" autocomplete="off" spellcheck="true" dir="auto"
 			placeholder={creating ? (thread ? 'What it’s about' : 'What to call it') : ''} />
 	</label>
-	{#if field}
-		<!-- A field of your own is named by its `label`; this heads it. -->
-		<div class="ap-fieldlabel"><span class="ap-fieldlabel-row"><span>Description</span><span class="ap-fieldlabel-hint">Markdown{creating ? ', optional' : ''}</span></span>
-			{@render field(fieldArgs)}
-		</div>
-	{:else}
-		<label class="ap-fieldlabel" for="{uid}-description"><span class="ap-fieldlabel-row"><span>Description</span><span class="ap-fieldlabel-hint">Markdown{creating ? ', optional' : ''}</span></span>
-			<textarea id="{uid}-description" class="ap-field ap-field-multi" aria-label={label} {rows} bind:value={description} disabled={saving} spellcheck="true" dir="auto" {placeholder}></textarea>
-		</label>
-	{/if}
+	<!-- The field is named by its `label`; this heads it. -->
+	<div class="ap-fieldlabel"><span class="ap-fieldlabel-row"><span>Description</span><span class="ap-fieldlabel-hint">Markdown{creating ? ', optional' : ''}</span></span>
+		{#if field}{@render field(fieldArgs)}{:else}<MarkdownEditor bind:value={description} label={fieldArgs.label} placeholder={fieldArgs.placeholder} disabled={saving} rows={fieldArgs.rows} />{/if}
+	</div>
 	{#if creating && !thread}
 		<label class={['ap-choice-item', 'ap-checklist-item', isPrivate && 'ap-choice-on']}>
 			<input class="ap-checklist-box" type="checkbox" bind:checked={isPrivate} disabled={saving} />

@@ -3,7 +3,7 @@ import { bioOf, serverMedia, userIn } from '$lib/protocol/client-views';
 import { safeLink, serverOrigin } from '$lib/protocol/embeds';
 import { mediaGate as gateFor, type MediaGate, type MediaSrc } from './media-gate';
 import { shownPerson, withoutBidiOverrides } from '$lib/protocol/plain-text';
-import type { EmojiResolver, LinkResolver, MentionResolver, MentionTarget, RoomMentionResolver } from '$lib/protocol/markdown';
+import { renderMarkdown, type EmojiResolver, type LinkResolver, type MentionResolver, type MentionTarget, type RoomMentionResolver } from '$lib/protocol/markdown';
 import type { Identity, ServerParams } from '$lib/protocol/types';
 import { readPlaceLink, writeApronLink } from './apron-link';
 import { serverLabel } from './connection';
@@ -309,6 +309,15 @@ class Directory {
 		if (this.sharesName(from)) target.shared = true;
 		return target;
 	};
+
+	/**
+	 * CommonMark (a description, a server's welcome, a message), rendered and sanitized as a message body is, with the
+	 * mentions, room links and emoji known here; empty for blank text. `links`: links to rooms and messages as chips,
+	 * as a message draws them; a description draws them plain.
+	 */
+	markdown(text: string | undefined, links = false): string {
+		return text?.trim() ? renderMarkdown(text, this.resolve, this.resolveRoom, links ? this.resolveLink : undefined, this.resolveEmoji, this.mediaGate) : '';
+	}
 }
 
 /** Whether two `pieces` of the directory are the same, so what was rendered from one is current for the other. */

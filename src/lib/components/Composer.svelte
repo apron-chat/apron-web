@@ -19,7 +19,6 @@
 	import MessageField from './MessageField.svelte';
 	import { VoiceRecorder, type VoiceFormat } from '$lib/ui/voice-recorder.svelte';
 	import type { ComposerField } from '$lib/design/components/types';
-	import type { TextEdit } from '$lib/ui/text-edit';
 	import { draftPreview, formatToolbar } from './lazy';
 
 	/** How long typing pauses before the draft's links are looked up; a paste looks them up at once. */
@@ -215,11 +214,6 @@
 		void tick().then(() => field?.focus());
 	}
 
-	/** A formatting change in the field (`DraftField.apply`). */
-	function apply(change: (edit: TextEdit) => TextEdit | undefined): boolean {
-		return field?.apply(change) ?? false;
-	}
-
 	/**
 	 * The field's keys no picker took: Escape puts away an ask about the draft, else closes the full panel, else cancels
 	 * a reply, and ↑ in the empty compact field goes up to the messages.
@@ -323,7 +317,7 @@
 	<MessageField bind:this={field} bind:value bind:mentions {people} {rooms} {placeholder} {disabled} newlineOnEnter={expanded} id="message-input" data-testid="message-input" pickerTestid="mention-picker" onsubmit={send} onkey={key} {oninput} oncleared={cleared} {onmention} onpaste={paste} />
 {/snippet}
 <!-- The full panel's parts, loaded on demand as it first opens: until they come, it is a tall field with Send. -->
-{#snippet formatting()}{#if formatToolbar.component}{@const FormatToolbar = formatToolbar.component}<FormatToolbar {apply} {disabled} />{/if}{/snippet}
+{#snippet formatting()}{#if formatToolbar.component}{@const FormatToolbar = formatToolbar.component}<FormatToolbar apply={(change) => field?.apply(change) ?? false} {disabled} />{/if}{/snippet}
 {#snippet rendered()}{#if draftPreview.component}{@const DraftPreview = draftPreview.component}<DraftPreview text={value} />{/if}{/snippet}
 {#snippet replyText()}<MentionText text={reply?.text ?? ''} />{/snippet}
 {#snippet staged()}

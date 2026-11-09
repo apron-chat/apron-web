@@ -258,9 +258,9 @@
 		{@render picker?.()}
 		<form class={['ap-composer', disabled && 'ap-composer-disabled', cmd && 'ap-composer-cmd', grown && 'ap-composer-grown', expanded && previewing && rendered && 'ap-composer-previewing']} aria-label="Send a message" onsubmit={submit} bind:this={form}>
 			{#if expanded}
-				<div class="ap-composer-head">
+				<div class="ap-mdhead">
 					{#if !previewing}{@render toolbar?.()}{/if}
-					<span class="ap-composer-grow"></span>
+					<span class="ap-mdhead-grow"></span>
 					{#if rendered}
 						<WritePreview {previewing} {onpreview} />
 					{/if}

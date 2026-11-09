@@ -12,7 +12,7 @@ describe('MarkdownEditor', () => {
 		const field = dom.byRole<HTMLTextAreaElement>('textbox', 'Room description');
 		expect(field.value).toBe('Deploys');
 		expect(field.placeholder).toBe('What this room is for.');
-		expect(document.querySelector('.ap-mdedit-head')).toBeNull();
+		expect(document.querySelector('.ap-mdhead')).toBeNull();
 		expect(dom.queryByRole('radiogroup', 'View')).toBeNull();
 	});
 

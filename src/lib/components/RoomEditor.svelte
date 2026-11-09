@@ -2,13 +2,11 @@
 	import { untrack } from 'svelte';
 	import RoomForm from '$lib/design/components/RoomForm.svelte';
 	import type { RoomFormField } from '$lib/design/components/types';
-	import type { MentionPerson } from '$lib/protocol/markdown';
-	import type { RoomSuggestion } from '$lib/ui/room-autocomplete';
-	import DescriptionField from './DescriptionField.svelte';
+	import DescriptionField, { type DescriptionSources } from './DescriptionField.svelte';
 	import type { ChatClient } from '$lib/protocol/client';
 	import { messageOf, Task } from '$lib/ui/task.svelte';
 
-	interface Props {
+	interface Props extends DescriptionSources {
 		client: ChatClient;
 		/** The room or thread to edit, as it was when the editor opened. */
 		room: { id: string; title: string; description?: string };
@@ -16,12 +14,6 @@
 		thread: boolean;
 		/** False while the session can't take requests; the form stays open but won't save. */
 		enabled: boolean;
-		/** Who an `@` in the description can name, as in the composer. */
-		people?: MentionPerson[];
-		/** Rooms and threads a `#` in it can name. */
-		rooms?: RoomSuggestion[];
-		/** The mention picker opened: a moment to refresh who can be named. */
-		onmention?: () => void;
 		/** It closed: saved, or put away. */
 		onclose: () => void;
 	}
@@ -62,6 +54,6 @@
 
 <RoomForm bind:open kind={thread ? 'thread' : 'room'} mode="edit" bind:name={title} field={descriptionField} status={task.busy ? 'saving' : 'idle'} error={task.note} disabled={!enabled} onsubmit={save} {onclose} />
 
-{#snippet descriptionField(args: RoomFormField)}
-	<DescriptionField bind:value={description} {people} {rooms} {onmention} label={args.label} placeholder={args.placeholder} disabled={args.disabled} rows={args.rows} submit={args.submit} />
+{#snippet descriptionField(form: RoomFormField)}
+	<DescriptionField bind:value={description} {form} {people} {rooms} {onmention} />
 {/snippet}

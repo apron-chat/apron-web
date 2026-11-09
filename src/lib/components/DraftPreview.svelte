@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { renderMarkdown } from '$lib/protocol/markdown';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { highlightCode } from '$lib/ui/highlight';
 
@@ -13,7 +12,7 @@
 		links?: boolean;
 	}
 	let { text, links = true }: Props = $props();
-	let html = $derived(text.trim() ? renderMarkdown(text, directory.resolve, directory.resolveRoom, links ? directory.resolveLink : undefined, directory.resolveEmoji, directory.mediaGate) : '');
+	let html = $derived(directory.markdown(text, links));
 </script>
 
 {#if html}

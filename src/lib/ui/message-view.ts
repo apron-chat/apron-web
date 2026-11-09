@@ -1,6 +1,6 @@
 import { loadableOg } from '$lib/components/embeds/og';
 import type { Notice, RoomListing, RoomSnapshot, UploadState } from '$lib/protocol/client';
-import { markdownText, mentionLabel, mentionSegments, renderMarkdown, renderPlain } from '$lib/protocol/markdown';
+import { markdownText, mentionLabel, mentionSegments, renderPlain } from '$lib/protocol/markdown';
 import { editedBy } from '$lib/protocol/editors';
 import { withoutBidiOverrides } from '$lib/protocol/plain-text';
 import { systemScope, type Embed, type Identity, type MessageBody, type MessageRecord } from '$lib/protocol/types';
@@ -79,7 +79,7 @@ export interface MessageContext {
 function bodyOf(body: MessageBody | undefined, text = typeof body?.text === 'string' ? body.text : '', settle = false): NonNullable<MessageView['body']> {
 	const markdown = body?.format === 'markdown';
 	const html = markdown
-		? renderMarkdown(settle ? settleMarkdown(text) : text, directory.resolve, directory.resolveRoom, directory.resolveLink, directory.resolveEmoji, directory.mediaGate)
+		? directory.markdown(settle ? settleMarkdown(text) : text, true)
 		: renderPlain(text, directory.resolve, directory.resolveRoom, directory.resolveLink, directory.resolveEmoji, directory.mediaGate);
 	return { html, markdown, code: html.includes('<pre'), ...(markdown && html.includes('class="ap-task"') ? { tasks: true } : {}) };
 }

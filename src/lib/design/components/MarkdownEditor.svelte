@@ -53,9 +53,9 @@
 
 <div class={['ap-mdedit', showing && 'ap-mdedit-previewing', disabled && 'ap-mdedit-disabled', className]} style:--ap-mdedit-rows={rows} data-testid={testid}>
 	{#if toolbar || rendered}
-		<div class="ap-mdedit-head">
+		<div class="ap-mdhead">
 			{#if !showing}{@render toolbar?.()}{/if}
-			<span class="ap-mdedit-grow"></span>
+			<span class="ap-mdhead-grow"></span>
 			{#if rendered}<WritePreview {previewing} onpreview={(on) => void choose(on)} />{/if}
 		</div>
 	{/if}

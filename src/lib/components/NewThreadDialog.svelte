@@ -2,12 +2,10 @@
 	import { untrack } from 'svelte';
 	import RoomForm from '$lib/design/components/RoomForm.svelte';
 	import type { RoomFormField } from '$lib/design/components/types';
-	import type { MentionPerson } from '$lib/protocol/markdown';
-	import type { RoomSuggestion } from '$lib/ui/room-autocomplete';
-	import DescriptionField from './DescriptionField.svelte';
+	import DescriptionField, { type DescriptionSources } from './DescriptionField.svelte';
 	import { messageOf, Task } from '$lib/ui/task.svelte';
 
-	interface Props {
+	interface Props extends DescriptionSources {
 		/** The room the thread goes under (`parent_room_id`, §3.4); a thread of a private room is private too (§4.2.4). */
 		room: { id: string; title: string; private?: boolean };
 		/** What the form starts with: empty from a room, or suggested from the message(s) it starts from. */
@@ -22,12 +20,6 @@
 		 * rejection is shown in the form, which stays open to try again; once it resolves, the form closes.
 		 */
 		oncreate: (thread: { title: string; description?: string }) => Promise<void>;
-		/** Who an `@` in the description can name, as in the composer. */
-		people?: MentionPerson[];
-		/** Rooms and threads a `#` in it can name. */
-		rooms?: RoomSuggestion[];
-		/** The mention picker opened: a moment to refresh who can be named. */
-		onmention?: () => void;
 		/** It closed: started, or put away. */
 		onclose: () => void;
 	}
@@ -54,6 +46,6 @@
 
 <RoomForm bind:open kind="thread" mode="create" subtitle="In {room.title}" private={room.private === true} {moving} bind:name={title} field={descriptionField} status={task.busy ? 'saving' : 'idle'} error={task.note} disabled={!enabled} onsubmit={start} {onclose} />
 
-{#snippet descriptionField(args: RoomFormField)}
-	<DescriptionField bind:value={description} {people} {rooms} {onmention} label={args.label} placeholder={args.placeholder} disabled={args.disabled} rows={args.rows} submit={args.submit} />
+{#snippet descriptionField(form: RoomFormField)}
+	<DescriptionField bind:value={description} {form} {people} {rooms} {onmention} />
 {/snippet}
