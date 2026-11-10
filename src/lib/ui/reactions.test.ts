@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ReactionSummary } from '$lib/protocol/client';
-import { reactionChips, reactorsOf, whoReacted } from './reactions';
+import { QUICK_REACTIONS_DEFAULT, quickReactions, reactedWith, reactionChips, reactorsOf, rememberReaction, whoReacted } from './reactions';
 import { media } from '$lib/test/media';
 
 /** The words as read, without the isolates around each name. */
@@ -64,3 +64,28 @@ describe('reaction keys (§4.7, ext:emoji)', () => {
 	});
 });
 
+describe('quick reactions', () => {
+	it('start as the defaults, then take your latest first, each once, as many as the toolbar offers', () => {
+		expect(quickReactions([])).toEqual(QUICK_REACTIONS_DEFAULT);
+		let recent: string[] = [];
+		recent = rememberReaction(recent, '🎉');
+		expect(quickReactions(recent)).toEqual(['🎉', '👍', '❤️']);
+		recent = rememberReaction(recent, '❤'); // ❤ and ❤️ are one
+		expect(quickReactions(recent)).toEqual(['❤', '🎉', '👍']);
+		recent = rememberReaction(rememberReaction(recent, '🔥'), '🎉');
+		expect(recent).toEqual(['🎉', '🔥', '❤']);
+		expect(quickReactions(recent)).toEqual(['🎉', '🔥', '❤']);
+	});
+
+	it('remember only emoji, not keys, whose image a quick reaction couldn’t show', () => {
+		expect(rememberReaction(['🎉'], ':party:')).toEqual(['🎉']);
+		expect(quickReactions([':party:', 'not emoji'])).toEqual(QUICK_REACTIONS_DEFAULT);
+	});
+
+	it('know whether a reaction is already yours, ❤ and ❤️ as one', () => {
+		const chips = reactionChips([summary('❤️', ['me', 'bob'], true), summary('👍', ['bob'])], 'me', false);
+		expect(reactedWith(chips, '❤')).toBe(true);
+		expect(reactedWith(chips, '👍')).toBe(false);
+		expect(reactedWith(chips, '🎉')).toBe(false);
+	});
+});

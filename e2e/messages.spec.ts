@@ -38,6 +38,38 @@ test.describe('a message row', () => {
 			await expect(page.getByTestId('reactors')).toHaveCount(0);
 		});
 
+		await test.step('the add button after the chips opens the same picker beside it, and a pick adds to them', async () => {
+			const row = preview.message('Open a thread, react to a message');
+			await row.hover();
+			const add = row.getByRole('button', { name: 'Add a reaction', exact: true });
+			await add.click();
+			await expect(add).toHaveAttribute('aria-expanded', 'true');
+			const picker = page.getByRole('dialog', { name: 'Emoji picker', exact: true });
+			await expect(picker).toHaveAttribute('data-state', 'ready');
+			await picker.locator('em-emoji-picker input[type="search"]').fill('fire');
+			await picker.getByRole('button', { name: '🔥', exact: true }).first().click();
+			await preview.waitForSent('reactions', (params) => params.message_id === '1710000000004' && params.emojis?.includes('🔥'));
+			await expect(row.getByTestId('reaction-chip')).toHaveCount(2);
+			await row.hover();
+			await expect(add).toHaveAttribute('aria-expanded', 'false');
+		});
+
+		await test.step('the toolbar offers the emoji you reacted with last, latest first, and one press reacts with one', async () => {
+			const row = preview.message('Try markdown');
+			await row.hover();
+			const quick = row.getByRole('group', { name: 'Quick reactions' }).getByRole('button');
+			await expect(quick).toHaveText(['🔥', '🎉', '👍']);
+			await quick.filter({ hasText: '👍' }).click();
+			await preview.waitForSent('reactions', (params) => params.message_id !== '1710000000004' && params.emojis?.includes('👍'));
+			await expect(row.getByTestId('reaction-chip')).toHaveCount(1);
+			// It keeps its place while the pointer stays, and comes first the next time.
+			await expect(quick).toHaveText(['🔥', '🎉', '👍']);
+			await page.mouse.move(0, 0);
+			await row.hover();
+			await expect(quick).toHaveText(['👍', '🔥', '🎉']);
+			await expect(quick.filter({ hasText: '👍' })).toHaveAttribute('aria-pressed', 'true');
+		});
+
 		await test.step('an image embed opens full screen', async () => {
 			await preview.message('Two from the ridge').getByRole('img', { name: /Layered purple hills/ }).click();
 			await expect(page.getByRole('dialog').getByRole('button', { name: 'Next image' })).toBeVisible();

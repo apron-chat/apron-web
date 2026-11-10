@@ -53,7 +53,7 @@
 		"sidebar-collapse": {
 			"layouts": 3,
 			"styleRecalcs": 5,
-			"calls": 2513
+			"calls": 3688
 		},
 		"member-list-hide": {
 			"layouts": 1,
@@ -78,7 +78,7 @@
 		"scroll-timeline": {
 			"layouts": 9,
 			"styleRecalcs": 9,
-			"calls": 7591
+			"calls": 13193
 		},
 		"type-composer": {
 			"layouts": 36,
@@ -88,7 +88,7 @@
 		"hover-messages": {
 			"layouts": 7,
 			"styleRecalcs": 7,
-			"calls": 7302
+			"calls": 12930
 		}
 	},
 	"bundle": {

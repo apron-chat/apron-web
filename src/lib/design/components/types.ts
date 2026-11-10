@@ -110,12 +110,21 @@ export interface MessageAction {
 	label: string;
 	/** A short text glyph; omitted, the label shows. */
 	glyph?: string;
+	/**
+	 * An icon (ActionIcons'): the toolbar shows it alone, its name in the tooltip, and touch's menu shows it
+	 * beside the glyph or label.
+	 */
+	icon?: Snippet;
+	/** The key that does it while the message is focused (`R`): in the tooltip, and badged on it for the keyboard. */
+	key?: string;
 	/** The tooltip; none when omitted. */
 	title?: string;
 	/** A press. One that returns a promise resolving true, on an action with `done`, says so for a moment. */
 	onclick?: (event: MouseEvent) => unknown;
 	/** What the button says for a moment after its press worked, before the ⋯ actions close (Copy link: Copied). */
 	done?: { label: string; glyph?: string };
+	/** A toggle (`aria-pressed`), such as a quick reaction that is already yours. */
+	pressed?: boolean;
 	/** It opens a dialog beside it (`aria-haspopup`); `expanded` says whether that is open. */
 	popup?: boolean;
 	expanded?: boolean;
@@ -457,6 +466,11 @@ export interface MessageHandlers {
 	reply?: (view: MessageView) => void;
 	/** Toggle your reaction with this emoji (a chip, or a pick). */
 	react?: (view: MessageView, emoji: string) => void;
+	/**
+	 * The emoji the toolbar offers to react with in one press, ahead of React, such as the ones you used last. Read as
+	 * the pointer or focus reaches the row, so they keep their places while it is there.
+	 */
+	quick?: () => readonly string[];
 	/** The React action: open your picker beside its button. */
 	pick?: (view: MessageView, anchor: HTMLElement) => void;
 	/** Whether that picker is open for this message, for the button's `aria-expanded`. */

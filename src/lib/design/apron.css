@@ -75,7 +75,7 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-popover, .ap-profedit[role='dialog'], .ap-nudge { background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-popover); }
 /* An icon button: a glyph with no frame, tinted under the pointer. ap-iconbtn-lg is a header's (--control-lg), ap-iconbtn-round a
    circle; a component's own class sets anything else (a smaller size, where it sits). */
-.ap-iconbtn { font: inherit; display: inline-grid; place-items: center; width: var(--control-md); height: var(--control-md); padding: 0; border: 0; border-radius: var(--radius-inner); background: transparent; color: var(--ink-muted); cursor: pointer; }
+.ap-iconbtn { font: inherit; display: inline-grid; place-items: center; width: var(--control-md); height: var(--control-md); padding: 0; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink-muted); cursor: pointer; }
 .ap-iconbtn:hover:not(:disabled) { background: var(--hover); color: var(--ink); }
 .ap-iconbtn-lg { width: var(--control-lg); height: var(--control-lg); border-radius: var(--radius-md); }
 .ap-iconbtn-round { border-radius: var(--radius-full); }
@@ -147,10 +147,11 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-msg:not(.ap-msg-mention, .ap-msg-highlighted, .ap-msg-selected):focus-visible { background: var(--hover-soft); }
 .ap-msg:focus-visible::before { content: ''; position: absolute; inset-inline-start: var(--bar-at, 0); top: var(--bar-inset, var(--space-1)); bottom: var(--bar-inset, var(--space-1)); width: 3px; border-radius: var(--radius-full); background: var(--ink-muted); pointer-events: none; }
 .ap-msg:focus { scroll-margin-top: var(--space-8); }
-/* The letter of a toolbar action's key, the first of its label (R in Reply, E in Edit: Message.svelte's labels, named
-   here so the buttons need no markup of their own), boxed while the keyboard is on the message or in its toolbar; a
-   shadow rather than padding, so the label doesn't move as it shows. */
-:is(.ap-msg:focus-visible, .ap-actions:has(.ap-actions-btn:focus-visible)) .ap-actions-btn:is([aria-label="Reply to message"], [aria-label="Edit message"])::first-letter { background: color-mix(in srgb, var(--ink) 12%, transparent); box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--ink) 12%, transparent); border-radius: var(--radius-sm); color: var(--ink); }
+/* While the keyboard is on a message or in its toolbar, which no tooltip reaches, each icon shows its words beside it,
+   the letter of its key (`data-key`: Reply's R, Edit's E, the first of each) boxed. Not on touch, whose bar stays icons. */
+:is(.ap-msg:focus-visible, .ap-msg-actions:has(.ap-actions-btn:focus-visible)) .ap-actions:not(.ap-actions-touch) .ap-actions-icon { gap: var(--space-1); padding: 0 var(--space-2); }
+:is(.ap-msg:focus-visible, .ap-msg-actions:has(.ap-actions-btn:focus-visible)) .ap-actions:not(.ap-actions-touch) .ap-actions-label { display: inline-block; }
+:is(.ap-msg:focus-visible, .ap-msg-actions:has(.ap-actions-btn:focus-visible)) .ap-actions-icon[data-key] .ap-actions-label::first-letter { background: color-mix(in srgb, var(--ink) 12%, transparent); box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--ink) 12%, transparent); border-radius: var(--radius-sm); color: var(--ink); }
 /* The toolbar stays up while its React button's emoji picker is open. */
 .ap-msg-actions:has([aria-expanded='true']) { visibility: visible; }
 /* While a message's picker or menu is open it keeps its hover look, and the rest don't take it: new messages
@@ -366,7 +367,7 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-embed-slot .ap-embed-terminal { width: var(--embed-terminal-w); max-width: 100%; }
 
 /* Embed */
-.ap-embed { display: block; max-width: min(100%, var(--embed-max-w)); border-radius: var(--radius-lg); box-sizing: border-box; }
+.ap-embed { display: block; max-width: min(100%, var(--embed-max-w)); border-radius: var(--radius-md); box-sizing: border-box; }
 .ap-embed-media { max-height: var(--embed-max-h); width: auto; height: auto; background: var(--bg-200); border: 1px solid var(--line); object-fit: contain; }
 .ap-embed-card { display: flex; flex-direction: column; gap: var(--space-0_5); min-width: 240px; padding: var(--space-3) var(--space-4); background: var(--bg-200); border: 1px solid var(--line); color: var(--ink); text-decoration: none; }
 a.ap-embed-card:hover { background: var(--hover); }
@@ -446,7 +447,7 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-composer-recdot { flex: none; width: 8px; height: 8px; border-radius: var(--radius-full); background: var(--danger); animation: ap-blink 1s steps(1) infinite; }
 .ap-composer-rectime { font-variant-numeric: tabular-nums; color: var(--ink-muted); }
 @keyframes ap-blink { 50% { opacity: .25; } }
-.ap-composer .ap-btn { border-radius: var(--radius-inner); }
+.ap-composer .ap-btn { border-radius: var(--radius-sm); }
 .ap-composer-field { flex: 1; box-sizing: border-box; height: var(--control-md); field-sizing: content; min-height: var(--control-md); max-height: 200px; resize: none; border: 0; outline: 0; background: transparent; color: var(--ink); font: inherit; font-size: var(--text-body); line-height: var(--leading-body); padding: 3px var(--space-1); }
 .ap-composer-field::placeholder { color: var(--ink-muted); }
 .ap-composer-field:focus-visible { outline: 0; }
@@ -600,15 +601,36 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-nudge-actions .ap-btn-ghost:hover:not(:disabled) { color: var(--ink); }
 
 /* MessageActions — floating toolbar on message hover/focus */
-.ap-actions { display: inline-flex; gap: var(--space-0_5); padding: 3px; background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-full); box-shadow: var(--shadow-float); }
-.ap-actions-btn { font: inherit; font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 500; min-width: var(--control-md); height: var(--control-md); padding: 0 var(--space-2); border: 0; border-radius: var(--radius-full); background: transparent; color: var(--ink-muted); cursor: pointer; }
+.ap-actions { display: inline-flex; gap: var(--space-0_5); padding: 3px; background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-float); }
+.ap-actions-btn { font: inherit; font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 500; min-width: var(--control-md); height: var(--control-md); padding: 0 var(--space-2); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink-muted); cursor: pointer; }
 .ap-actions-btn:hover { background: var(--hover); color: var(--ink); }
 .ap-actions-danger:hover { color: var(--danger); }
+/* ActionIcons: lucide's stroke, sized where each sits. */
+.ap-icon { flex: none; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ap-actions-touch .ap-icon { width: 20px; height: 20px; }
+/* An action shown as its icon alone, its name in the tooltip, and its words in the markup for the keyboard (above) and touch's menu. */
+.ap-actions-icon { display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+.ap-actions-label { display: none; }
+/* Quick reactions, ahead of the rest and set apart from them by a rule; one already yours is marked as a chip is. */
+.ap-actions-quick { display: contents; }
+.ap-actions-emoji { padding: 0; font-family: var(--font-emoji); font-size: 18px; line-height: 1; }
+.ap-actions-emoji[aria-pressed='true'] { background: var(--accent-soft); }
+.ap-actions-sep { flex: none; align-self: center; width: 1px; height: calc(var(--control-md) - var(--space-2)); margin: 0 var(--space-1); background: var(--line); }
 /* Touch's menu, opened by a long press: buttons a finger can hit, and ⋯ opening every action as a menu, one row each. */
 .ap-actions-touch .ap-actions-btn { min-width: var(--control-xl); height: var(--control-xl); padding: 0 var(--space-3); font-size: var(--text-ui); line-height: var(--leading-ui); color: var(--ink); }
 .ap-actions-menu { flex-direction: column; align-items: stretch; min-width: 12rem; border-radius: var(--radius-lg); }
-.ap-actions-menu .ap-actions-btn { border-radius: var(--radius-md); text-align: start; }
+.ap-actions-menu .ap-actions-btn { border-radius: var(--radius-sm); text-align: start; }
 .ap-actions-menu .ap-actions-danger { color: var(--danger); }
+.ap-actions-row { display: flex; align-items: center; gap: var(--space-3); }
+.ap-actions-menu .ap-actions-label { display: inline; }
+.ap-actions-row > .ap-icon { color: var(--ink-muted); }
+.ap-actions-danger.ap-actions-row > .ap-icon { color: inherit; }
+.ap-actions-touch .ap-actions-emoji { padding: 0; font-size: 22px; line-height: 1; }
+.ap-actions-touch .ap-actions-sep { height: calc(var(--control-xl) - var(--space-3)); }
+/* In the menu the quick reactions keep a row of their own along its top, a rule under them. */
+.ap-actions-menu .ap-actions-quick { display: flex; gap: var(--space-0_5); }
+.ap-actions-menu .ap-actions-quick .ap-actions-btn { flex: 1; text-align: center; }
+.ap-actions-menu .ap-actions-sep { align-self: stretch; width: auto; height: 1px; margin: var(--space-1) 0; }
 
 /* JumpBar — bar above the composer, or a floating button */
 .ap-jumpbar { display: flex; align-items: center; gap: var(--space-3); margin: 0 var(--space-4); padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3); background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-full); box-shadow: var(--shadow-float); font-size: var(--text-ui); line-height: var(--leading-ui); }
@@ -1033,7 +1055,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-shell-sidehead-chevron { flex: none; color: var(--ink-muted); transition: transform var(--duration-fast) ease; }
 .ap-shell-sidehead-expanded .ap-shell-sidehead-chevron { transform: rotate(180deg); }
 @media (prefers-reduced-motion: reduce) { .ap-shell-sidehead-chevron { transition: none; } }
-.ap-shell-sidehead-avatar { flex: none; width: var(--control-lg); height: var(--control-lg); border-radius: var(--radius-inner); object-fit: cover; }
+.ap-shell-sidehead-avatar { flex: none; width: var(--control-lg); height: var(--control-lg); border-radius: var(--radius-sm); object-fit: cover; }
 .ap-shell-sidehead-initials { display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); font-size: var(--text-ui); line-height: 1; font-weight: 600; user-select: none; }
 .ap-shell-sidehead-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .ap-shell-sidehead-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-body); line-height: var(--leading-ui); font-weight: 600; }
@@ -1344,10 +1366,10 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-welcome ul, .ap-welcome ol { margin-bottom: 0; }
 .ap-welcome :is(ul, ol):not(.ap-task-list) { padding-inline-start: var(--space-6); }
 .ap-connect-actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); margin-top: var(--space-1); }
-.ap-connect-actions .ap-btn { border-radius: var(--radius-inner); }
+.ap-connect-actions .ap-btn { border-radius: var(--radius-sm); }
 .ap-connect-other { align-self: flex-start; font-size: var(--text-ui); }
 .ap-seg { display: flex; gap: var(--space-0_5); padding: var(--space-0_5); margin-top: var(--space-0_5); background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-md); }
-.ap-seg-item { font: inherit; flex: 1; height: var(--control-md); border: 0; border-radius: var(--radius-inner); background: transparent; color: var(--ink-muted); font-size: var(--text-ui); font-weight: 600; cursor: pointer; }
+.ap-seg-item { font: inherit; flex: 1; height: var(--control-md); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink-muted); font-size: var(--text-ui); font-weight: 600; cursor: pointer; }
 .ap-seg-item:hover:not(:disabled) { color: var(--ink); }
 .ap-seg-on, .ap-seg-on:hover { background: var(--chosen); color: var(--ink); box-shadow: var(--shadow-chosen); }
 /* Choice — two paths of equal weight, each a title and a line saying what it does (Sign in · Create account) */
@@ -1532,7 +1554,7 @@ pre.ap-termviewer-text { width: 80ch; font-family: var(--font-mono); font-size: 
 
 /* SelectionBar — replaces the composer while messages are being picked */
 .ap-selbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-3); margin: var(--space-2) var(--space-4) calc(var(--space-4) + var(--corner-clear)); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4); background: var(--bg-200); border: 1px solid var(--accent); border-radius: var(--radius-lg); font-size: var(--text-ui); line-height: var(--leading-ui); }
-.ap-selbar .ap-btn { border-radius: var(--radius-inner); }
+.ap-selbar .ap-btn { border-radius: var(--radius-sm); }
 .ap-selbar-count { font-weight: 600; font-variant-numeric: tabular-nums; }
 .ap-selbar-info { display: inline-flex; align-items: center; gap: var(--space-3); white-space: nowrap; }
 /* The actions wrap, right-aligned, rather than run past the bar's edge where it is narrow; each button keeps its label on one line. */
@@ -1715,8 +1737,8 @@ button.ap-mention, a.ap-linkchip { max-width: 100%; white-space: normal; overflo
 
 /* Embeds v4 — upload (pending / image / video / audio / file), terminal, og card */
 .ap-embed-figure { margin: 0; display: flex; flex-direction: column; gap: var(--space-1); }
-.ap-embed-figure .ap-embed-media { display: block; max-width: 100%; border-radius: var(--radius-lg); }
-.ap-embed-imagelink { display: block; border-radius: var(--radius-lg); }
+.ap-embed-figure .ap-embed-media { display: block; max-width: 100%; border-radius: var(--radius-md); }
+.ap-embed-imagelink { display: block; border-radius: var(--radius-md); }
 .ap-embed-caption { font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
 .ap-embed-caption a { color: var(--denim); }
 .ap-embed-file, .ap-embed-pending { flex-direction: row; align-items: center; gap: var(--space-3); min-width: 260px; }
@@ -1780,7 +1802,7 @@ button.ap-mention, a.ap-linkchip { max-width: 100%; white-space: normal; overflo
 .ap-attachment .ap-embed-card { min-width: 200px; }
 /* An audio clip on a draft takes the widest a tile does, so its player keeps its times and scrubber */
 .ap-attachment .ap-embed-audiocard { width: 320px; }
-.ap-attachment-thumb { position: relative; display: block; margin: 0; height: 96px; min-width: 96px; max-width: 200px; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--bg-200); }
+.ap-attachment-thumb { position: relative; display: block; margin: 0; height: 96px; min-width: 96px; max-width: 200px; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--bg-200); }
 .ap-attachment-thumb img { display: block; height: 100%; width: auto; min-width: 96px; max-width: 200px; object-fit: cover; }
 .ap-attachment-label { position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; padding: 3px var(--space-2) var(--space-1); background: color-mix(in srgb, var(--bg-100) 88%, transparent); backdrop-filter: blur(6px); font-size: var(--text-xs); line-height: var(--leading-xs); color: var(--ink); }
 .ap-attachment-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
@@ -1838,7 +1860,7 @@ pre.ap-embed-termtext { font-family: var(--font-mono); font-size: var(--text-ui)
 a.ap-embed-ogcard:hover { background: var(--hover); }
 /* Media that waits for a click (MediaAsk, and the sanitizer's copy of it in message bodies): a dashed box on a line of
    its own, where the image would be, what and where it is on one line, its buttons on the next. */
-.ap-media-ask { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); width: fit-content; max-width: 100%; margin-block: var(--space-2); padding: var(--space-3) var(--space-4); border: 1px dashed var(--line-strong); border-radius: var(--radius-lg); background: var(--bg-200); color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); box-sizing: border-box; }
+.ap-media-ask { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); width: fit-content; max-width: 100%; margin-block: var(--space-2); padding: var(--space-3) var(--space-4); border: 1px dashed var(--line-strong); border-radius: var(--radius-md); background: var(--bg-200); color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); box-sizing: border-box; }
 .ap-media-ask-label { overflow-wrap: anywhere; }
 .ap-media-ask-what { font-weight: 600; }
 /* An icon of its kind before what it is, drawn in its text colour: from CSS, so the sanitizer's copy gets it too. */
@@ -1864,7 +1886,7 @@ a.ap-embed-ogcard:hover { background: var(--hover); }
 /* ReactionBar — chips under a message, and the palette */
 .ap-reactions { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-top: var(--space-1); max-width: 100%; }
 /* A long press on a chip lists who reacted: no text selection or callout on top of it. A disabled chip stays focusable for that, so it is aria-disabled. */
-.ap-rchip { font: inherit; display: inline-flex; align-items: center; gap: var(--space-1); height: var(--chip-h); padding: 0 var(--space-2); box-sizing: border-box; border: 1px solid var(--line); border-radius: var(--radius-full); background: var(--bg-200); color: var(--ink-muted); font-size: var(--text-ui); line-height: var(--leading-sm); font-variant-numeric: tabular-nums; cursor: pointer; transition: background-color var(--duration-fast) ease, border-color var(--duration-fast) ease, color var(--duration-fast) ease; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.ap-rchip { font: inherit; display: inline-flex; align-items: center; gap: var(--space-1_5); height: var(--chip-h); padding: 0 calc(var(--space-2) + 1px); box-sizing: border-box; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--bg-200); color: var(--ink-muted); font-size: var(--text-ui); line-height: var(--leading-sm); font-variant-numeric: tabular-nums; cursor: pointer; transition: background-color var(--duration-fast) ease, border-color var(--duration-fast) ease, color var(--duration-fast) ease; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 .ap-rchip:hover:not([aria-disabled='true']) { background: var(--hover); color: var(--ink); }
 .ap-rchip-mine { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
 .ap-rchip[aria-disabled='true'] { cursor: default; }
@@ -1873,11 +1895,11 @@ a.ap-embed-ogcard:hover { background: var(--hover); }
 /* A custom emoji in a chip, and the placeholder for a key the client can't show (§4.7): its key is the tooltip. */
 .ap-rchip-emoji .ap-cemoji { height: 1.25em; vertical-align: middle; }
 .ap-rchip-placeholder { display: inline-block; width: 1em; height: 1em; box-sizing: border-box; border: 1.5px dashed currentColor; border-radius: var(--radius-sm); vertical-align: middle; opacity: var(--opacity-dim); }
-.ap-rchip-add { width: var(--chip-h); justify-content: center; padding: 0; font-size: var(--text-body); visibility: hidden; }
+.ap-rchip-add { width: calc(var(--chip-h) + var(--space-2)); justify-content: center; padding: 0; visibility: hidden; }
 .ap-rpalette { display: inline-flex; align-self: flex-start; max-width: 100%; flex-wrap: wrap; gap: var(--space-0_5); margin-top: var(--space-1); padding: 3px; background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-float); }
 .ap-rpick { font-size: 18px; line-height: 1; }
 .ap-rpick-mine { background: var(--accent-soft); }
-.ap-msg:hover .ap-rchip-add, .ap-msg:focus-within .ap-rchip-add { visibility: visible; }
+.ap-msg:hover .ap-rchip-add, .ap-msg:focus-within .ap-rchip-add, .ap-rchip-add[aria-expanded='true'] { visibility: visible; }
 @media (prefers-reduced-motion: reduce) { .ap-rchip { transition: none; } }
 
 /* Room mentions and unknown mentions */

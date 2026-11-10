@@ -3,6 +3,7 @@
 	import { longPress } from './hold';
 
 	const NONE: MessageHandlers = {};
+	const NO_QUICK: readonly string[] = [];
 </script>
 
 <script lang="ts">
@@ -16,6 +17,7 @@
 	import ReplyPreview from './ReplyPreview.svelte';
 	import RoleBadges from './RoleBadges.svelte';
 	import TypingDots from './TypingDots.svelte';
+	import * as icons from './ActionIcons.svelte';
 	import type { MessageAction, MessageEmbed, MessageTestids, MessageView } from './types';
 	import { times } from './util';
 
@@ -48,6 +50,14 @@
 	let swallow = false;
 	/** The long press this row started (`longPress`). */
 	let pressed: object | undefined;
+	/** The toolbar's quick reactions (`on.quick`), read as the pointer or focus arrives, so a press doesn't reorder them under it. */
+	let quickEmoji = $state<readonly string[]>(NO_QUICK);
+
+	function readQuick(): void {
+		const next = on.quick?.() ?? NO_QUICK;
+		if (next === quickEmoji) return;
+		if (next.length !== quickEmoji.length || next.some((emoji, i) => emoji !== quickEmoji[i])) quickEmoji = next;
+	}
 
 	const t = $derived(times(view.timestamp, view.time));
 	const quoted = $derived(Boolean(view.reply) && !view.deleted);
@@ -59,32 +69,44 @@
 	const toolbar = $derived(engaged && !view.editing && !view.selecting && actionable);
 
 	/**
-	 * The toolbar's actions, in order; the rarer ones wait behind ⋯. Reply's and Edit's labels name them in apron.css too,
-	 * which boxes the first letter of each (`r`, `e`) for the keyboard: change one, change both. Touch's menu (`held`) keeps only Reply and React
-	 * up front, with everything else behind ⋯, and offers Copy text, since its rows take no text selection.
+	 * The toolbar's actions, in order: React first, beside the quick reactions; the rarer ones wait behind ⋯. Each
+	 * shows as its icon, its `key` (Reply's `r`, Edit's `e`, which `keydown` handles) badged for the keyboard. Touch's
+	 * menu (`held`) keeps only React and Reply up front, with everything else behind ⋯, and offers Copy text, since its
+	 * rows take no text selection.
 	 */
-	function actions(): { items: MessageAction[]; more?: MessageAction[] } {
+	function actions(): { quick: MessageAction[]; items: MessageAction[]; more?: MessageAction[] } {
 		const can = caps!;
-		const unreplied: MessageAction | undefined = view.deleted && can.removeReply ? { id: 'unreply', label: 'Remove reply reference', glyph: 'Remove reply', onclick: () => on.removeReply?.(view) } : undefined;
-		const reply: MessageAction | undefined = can.reply ? { id: 'reply', label: 'Reply to message', glyph: 'Reply', onclick: () => on.reply?.(view) } : undefined;
+		// One press reacts, as a chip does: pressed where the reaction is already yours (❤ and ❤️ are one).
+		const bare = (emoji: string) => emoji.replace(/\uFE0F/g, '');
+		const mine = new Set((view.reactions ?? []).filter((c) => c.mine).map((c) => bare(c.emoji)));
+		const quick: MessageAction[] = can.react && !view.deleted
+			? quickEmoji.map((emoji) => ({ id: `quick:${emoji}`, label: `React with ${emoji}`, title: emoji, glyph: emoji, pressed: mine.has(bare(emoji)), onclick: (event: MouseEvent) => {
+				on.react?.(view, emoji);
+				// On touch's menu, reacting is done with it, as a pick from the picker is.
+				const row = (event.currentTarget as HTMLElement).closest<HTMLElement>('.ap-msg');
+				if (held && row) release(row);
+			} }))
+			: [];
+		const unreplied: MessageAction | undefined = view.deleted && can.removeReply ? { id: 'unreply', label: 'Remove reply reference', title: 'Remove reply', glyph: 'Remove reply', icon: icons.unlink, onclick: () => on.removeReply?.(view) } : undefined;
+		const reply: MessageAction | undefined = can.reply ? { id: 'reply', label: 'Reply to message', title: 'Reply', glyph: 'Reply', icon: icons.reply, key: 'R', onclick: () => on.reply?.(view) } : undefined;
 		const react: MessageAction | undefined = can.react && !view.deleted
-			? { id: 'react', label: 'React', title: 'React', popup: true, expanded: on.picking?.(view), attach: on.pickAnchor, onclick: (event) => on.pick?.(view, event.currentTarget as HTMLElement) }
+			? { id: 'react', label: 'React', title: 'React', icon: icons.smilePlus, popup: true, expanded: on.picking?.(view), attach: on.pickAnchor, onclick: (event) => on.pick?.(view, event.currentTarget as HTMLElement) }
 			: undefined;
-		const thread: MessageAction | undefined = can.startThread ? { id: 'thread', label: 'Start thread', title: 'Start thread', onclick: () => on.startThread?.(view) } : undefined;
-		const edit: MessageAction | undefined = can.edit ? { id: 'edit', label: 'Edit message', title: 'Edit', glyph: 'Edit', onclick: () => ((held = false), on.edit?.(view)) } : undefined;
-		const unreply: MessageAction | undefined = can.edit && !can.textOnly && view.reply ? { id: 'unreply', label: 'Remove reply reference', glyph: 'Remove reply', onclick: () => on.removeReply?.(view) } : undefined;
-		const select: MessageAction | undefined = can.select ? { id: 'select', label: 'Select message', title: 'Select', glyph: 'Select', testid: testids?.select, onclick: () => ((held = false), on.beginSelect?.(view)) } : undefined;
-		const copy: MessageAction | undefined = held && view.body && on.copyText ? { id: 'copy', label: 'Copy text', glyph: 'Copy text', done: { label: 'Text copied', glyph: 'Copied' }, onclick: () => on.copyText?.(view) } : undefined;
-		const link: MessageAction | undefined = can.link ? { id: 'link', label: 'Copy link to message', title: 'Copy link', glyph: 'Copy link', done: { label: 'Link copied', glyph: 'Copied' }, onclick: () => on.copyLink?.(view) } : undefined;
-		const remove: MessageAction | undefined = can.edit && !can.textOnly ? { id: 'delete', label: 'Delete message', title: 'Delete', glyph: 'Delete', danger: true, onclick: () => on.delete?.(view) } : undefined;
+		const thread: MessageAction | undefined = can.startThread ? { id: 'thread', label: 'Start thread', title: 'Start thread', icon: icons.thread, onclick: () => on.startThread?.(view) } : undefined;
+		const edit: MessageAction | undefined = can.edit ? { id: 'edit', label: 'Edit message', title: 'Edit', glyph: 'Edit', icon: icons.pencil, key: 'E', onclick: () => ((held = false), on.edit?.(view)) } : undefined;
+		const unreply: MessageAction | undefined = can.edit && !can.textOnly && view.reply ? { id: 'unreply', label: 'Remove reply reference', title: 'Remove reply', glyph: 'Remove reply', icon: icons.unlink, onclick: () => on.removeReply?.(view) } : undefined;
+		const select: MessageAction | undefined = can.select ? { id: 'select', label: 'Select message', title: 'Select', glyph: 'Select', icon: icons.squareCheck, testid: testids?.select, onclick: () => ((held = false), on.beginSelect?.(view)) } : undefined;
+		const copy: MessageAction | undefined = held && view.body && on.copyText ? { id: 'copy', label: 'Copy text', title: 'Copy text', glyph: 'Copy text', icon: icons.copy, done: { label: 'Text copied', glyph: 'Copied' }, onclick: () => on.copyText?.(view) } : undefined;
+		const link: MessageAction | undefined = can.link ? { id: 'link', label: 'Copy link to message', title: 'Copy link', glyph: 'Copy link', icon: icons.link, done: { label: 'Link copied', glyph: 'Copied' }, onclick: () => on.copyLink?.(view) } : undefined;
+		const remove: MessageAction | undefined = can.edit && !can.textOnly ? { id: 'delete', label: 'Delete message', title: 'Delete', glyph: 'Delete', icon: icons.trash, danger: true, onclick: () => on.delete?.(view) } : undefined;
 		const present = (list: Array<MessageAction | undefined>) => list.filter((it): it is MessageAction => it !== undefined);
 		if (held) {
-			const front = present([reply, react]);
+			const front = present([react, reply]);
 			const rest = present([unreplied, thread, edit, select, copy, link, unreply, remove]);
-			return front.length ? { items: front, more: rest } : { items: rest };
+			return front.length ? { quick, items: front, more: rest } : { quick, items: rest };
 		}
 		const more = present([unreply, select, link, remove]);
-		return { items: present([unreplied, reply, react, thread, edit]), ...(more.length ? { more } : {}) };
+		return { quick, items: present([unreplied, react, reply, thread, edit]), ...(more.length ? { more } : {}) };
 	}
 
 	/** Where text is written, whose keys and clicks are its own: `x` there is a letter. */
@@ -223,12 +245,14 @@
 	function hold(row: HTMLElement): void {
 		held = true;
 		engaged = true;
+		readQuick();
 		swallow = true;
 		row.focus({ preventScroll: true });
 	}
 
 	function engage(event: Event): void {
 		engaged = true;
+		readQuick();
 		if ((event as PointerEvent).pointerType === 'mouse') touch = false;
 	}
 
@@ -356,11 +380,11 @@
 				{#if view.linkCards?.length}<div class="ap-msg-linkcards">{#each view.linkCards as card (card.href)}<LinkCard {card} data-testid={testids?.linkCard} />{/each}</div>{/if}
 				{#if view.embeds?.length}<MessageEmbeds embeds={view.embeds} {embed} onremove={(item) => on.removeEmbed?.(view, item)} />{/if}
 			{/if}
-			{#if !view.deleted && view.reactions?.length}<ReactionBar reactions={view.reactions} disabled={!caps?.react} add={false} ontoggle={(emoji) => on.react?.(view, emoji)} onreactors={(emoji, chip) => on.reactors?.(view, emoji, chip)} data-testid={testids?.reactions} chipTestid={testids?.chip} />{/if}
+			{#if !view.deleted && view.reactions?.length}<ReactionBar reactions={view.reactions} disabled={!caps?.react} add={Boolean(on.pick) && !view.editing && !view.selecting} adding={on.picking?.(view)} addAnchor={on.pickAnchor} onopen={(anchor) => on.pick?.(view, anchor)} ontoggle={(emoji) => on.react?.(view, emoji)} onreactors={(emoji, chip) => on.reactors?.(view, emoji, chip)} data-testid={testids?.reactions} chipTestid={testids?.chip} />{/if}
 		</div>
 		{#if toolbar}
-			{@const { items, more } = actions()}
-			<div class="ap-msg-actions"><MessageActions {items} {more} touch={held} /></div>
+			{@const { quick, items, more } = actions()}
+			<div class="ap-msg-actions"><MessageActions {quick} {items} {more} touch={held} /></div>
 		{/if}
 	</article>
 {/if}

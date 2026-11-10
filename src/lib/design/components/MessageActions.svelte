@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { tick } from 'svelte';
+	import { check, ellipsis } from './ActionIcons.svelte';
 	import type { MessageAction } from './types';
 
 	/** How long a `done` action says so before the ⋯ actions close. */
@@ -8,15 +9,17 @@
 	/**
 	 * A message's hover toolbar. The rarer actions wait behind ⋯: pass them as `more`, and pressing ⋯ shows them in its
 	 * place until one is used; or pass `onmore` to open a menu of your own. `touch` sizes it for a finger, and ⋯ then
-	 * opens every action as a menu, one row each.
+	 * opens every action as a menu, one row each. `quick` go first, set apart, and stay in a row of their own atop
+	 * that menu: one-press reactions, such as the emoji you used last.
 	 */
 	interface Props {
+		quick?: MessageAction[];
 		items: MessageAction[];
 		more?: MessageAction[];
 		onmore?: () => void;
 		touch?: boolean;
 	}
-	let { items, more, onmore, touch = false }: Props = $props();
+	let { quick = [], items, more, onmore, touch = false }: Props = $props();
 
 	let open = $state(false);
 	/** The `id` of the action that worked, saying so (Copied) until the timer closes the ⋯ actions. */
@@ -26,6 +29,7 @@
 
 	const visible = (list: MessageAction[] | undefined) => (list ?? []).filter((it) => it && !it.hidden);
 	const shown = $derived([...visible(items), ...(open ? visible(more) : [])]);
+	const quickShown = $derived(visible(quick));
 	const hasMore = $derived(!open && (visible(more).length > 0 || Boolean(onmore)));
 
 	async function press(it: MessageAction, event: MouseEvent): Promise<void> {
@@ -61,26 +65,48 @@
 		if (onmore && !more) return onmore();
 		const focused = event.currentTarget === document.activeElement;
 		open = true;
-		if (focused) void tick().then(() => bar?.querySelectorAll<HTMLElement>('.ap-actions-btn')[visible(items).length]?.focus());
+		if (focused) void tick().then(() => bar?.querySelectorAll<HTMLElement>('.ap-actions-btn:not(.ap-actions-emoji)')[visible(items).length]?.focus());
 	}
 
 	const noAttach = () => {};
+
+	/**
+	 * Touch's menu: a row each, its icon beside its words. Elsewhere an action with an icon shows the icon alone, its
+	 * words (in the markup, for the keyboard) showing beside it only while the keyboard is on the message (apron.css).
+	 */
+	const menu = $derived(touch && open);
+	/** The tooltip: its name, and its key. */
+	const tip = (it: MessageAction) => {
+		const name = it.title ?? (it.icon ? it.label : undefined);
+		return name && it.key ? `${name} (${it.key})` : name;
+	};
 </script>
 
-<div bind:this={bar} class={['ap-actions', touch && 'ap-actions-touch', touch && open && 'ap-actions-menu']} role="toolbar" aria-label="Message actions" aria-orientation={touch && open ? 'vertical' : undefined}>
+<div bind:this={bar} class={['ap-actions', touch && 'ap-actions-touch', touch && open && 'ap-actions-menu']} role="toolbar" aria-label="Message actions" aria-orientation={menu ? 'vertical' : undefined}>
+	{#if quickShown.length}
+		<div class="ap-actions-quick" role="group" aria-label="Quick reactions">
+			{#each quickShown as it (it.id ?? it.label)}
+				<button class="ap-actions-btn ap-actions-emoji" type="button" aria-label={it.label} aria-pressed={Boolean(it.pressed)} title={it.title} onclick={(event) => press(it, event)}>{it.glyph}</button>
+			{/each}
+		</div>
+		<span class="ap-actions-sep" aria-hidden="true"></span>
+	{/if}
 	{#each shown as it (it.id ?? it.label)}
 		{@const said = it.done && done === (it.id ?? it.label) ? it.done : undefined}
+		{@const icon = said && it.icon ? check : it.icon}
 		<button
-			class={['ap-actions-btn', it.danger && 'ap-actions-danger']}
+			class={['ap-actions-btn', it.danger && 'ap-actions-danger', icon && (menu ? 'ap-actions-row' : 'ap-actions-icon')]}
 			type="button"
 			data-testid={it.testid}
 			aria-label={said?.label ?? it.label}
-			title={it.title}
+			aria-keyshortcuts={it.key?.toLowerCase()}
+			data-key={touch ? undefined : it.key}
+			title={menu ? undefined : tip(it)}
 			aria-haspopup={it.popup ? 'dialog' : undefined}
 			aria-expanded={it.popup ? Boolean(it.expanded) : undefined}
 			{@attach it.attach ?? noAttach}
 			onclick={(event) => press(it, event)}
-		>{said ? (said.glyph ?? said.label) : (it.glyph ?? it.label)}</button>
+		>{#if icon}{@render icon()}<span class="ap-actions-label">{said ? (said.glyph ?? said.label) : (it.glyph ?? it.label)}</span>{:else}{said ? (said.glyph ?? said.label) : (it.glyph ?? it.label)}{/if}</button>
 	{/each}
-	{#if hasMore}<button class="ap-actions-btn" type="button" aria-label="More actions" aria-expanded="false" title="More" onclick={showMore}>⋯</button>{/if}
+	{#if hasMore}<button class="ap-actions-btn ap-actions-icon" type="button" aria-label="More actions" aria-expanded="false" title="More" onclick={showMore}>{@render ellipsis()}</button>{/if}
 </div>

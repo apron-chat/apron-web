@@ -1,6 +1,6 @@
 import type { ReactionChip as DesignReactionChip } from '$lib/design/components/types';
 import type { ReactionSummary } from '$lib/protocol/client';
-import { isEmojiSequence } from '$lib/protocol/custom-emoji';
+import { isEmojiSequence, reactionKey } from '$lib/protocol/custom-emoji';
 import type { Identity } from '$lib/protocol/types';
 import { withoutBidiOverrides } from '$lib/protocol/plain-text';
 
@@ -96,4 +96,39 @@ export function reactionChips(
 				reactors: reactorsOf(summary, you)
 			};
 		});
+}
+
+/** How many quick reactions the message toolbar offers, ahead of React. */
+export const QUICK_REACTIONS = 3;
+/** What the quick reactions start as, before you have reacted with enough of your own. */
+export const QUICK_REACTIONS_DEFAULT = ['👍', '❤️', '😂'];
+
+/**
+ * The emoji you reacted with last, latest first, with `emoji` added: as many as the quick reactions take, each
+ * once (❤ and ❤️ are one). Only emoji sequences: a key (a custom emoji) would need its image to show.
+ */
+export function rememberReaction(recent: readonly string[], emoji: string): string[] {
+	if (!isEmojiSequence(emoji)) return [...recent];
+	const key = reactionKey(emoji);
+	return [emoji, ...recent.filter((it) => reactionKey(it) !== key)].slice(0, QUICK_REACTIONS);
+}
+
+/** Whether you already reacted with `emoji` (❤ and ❤️ are one): toggling it takes yours away. */
+export function reactedWith(chips: readonly ReactionChip[], emoji: string): boolean {
+	const key = reactionKey(emoji);
+	return chips.some((chip) => chip.mine && reactionKey(chip.emoji) === key);
+}
+
+/** The toolbar's quick reactions: your latest, then the defaults you haven't used, as many as it takes. */
+export function quickReactions(recent: readonly string[]): string[] {
+	const seen = new Set<string>();
+	const quick: string[] = [];
+	for (const emoji of [...recent.filter(isEmojiSequence), ...QUICK_REACTIONS_DEFAULT]) {
+		const key = reactionKey(emoji);
+		if (seen.has(key)) continue;
+		seen.add(key);
+		quick.push(emoji);
+		if (quick.length === QUICK_REACTIONS) break;
+	}
+	return quick;
 }

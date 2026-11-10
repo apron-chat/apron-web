@@ -68,12 +68,12 @@
 	import { embedsOf, isOwn, mayMove, mentionsMe, peopleIn, messageSnippet, plainTextOf, senderName, textOf } from '$lib/ui/messages';
 	import { removeEmbedQuestion } from '$lib/ui/attachments';
 	import { messageLog, messageLogHtml } from '$lib/ui/message-log';
-	import { reactionChips, type ReactionChip } from '$lib/ui/reactions';
+	import { quickReactions, reactedWith, reactionChips, rememberReaction, type ReactionChip } from '$lib/ui/reactions';
 	import { MessageSelection, type MoveAuthors } from '$lib/ui/selection.svelte';
 	import { SessionView } from '$lib/ui/session.svelte';
 	import { MEMBER_LIST_WIDTHS, ROOMS_LIST_WIDTHS, SidebarLayout } from '$lib/ui/sidebar.svelte';
 	import { NARROW_MAX, WIDE_MIN } from '$lib/ui/breakpoints';
-	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, installOfferAnswered, answerInstallOffer, loadRecentServers, loadServerUrl, loadSidebarPrefs, refreshRecentServer, rememberServer, saveDisplayName, saveLastSignIn, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, HIDDEN_DESCRIPTIONS_KEY, INSTALL_OFFER_KEY, loadAddedRooms, saveAddedRooms, loadHiddenDescriptions, hideDescription, showDescription, descriptionHidden, type RecentServer } from '$lib/ui/storage';
+	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, installOfferAnswered, answerInstallOffer, loadRecentReactions, saveRecentReactions, loadRecentServers, loadServerUrl, loadSidebarPrefs, refreshRecentServer, rememberServer, saveDisplayName, saveLastSignIn, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, HIDDEN_DESCRIPTIONS_KEY, INSTALL_OFFER_KEY, loadAddedRooms, saveAddedRooms, loadHiddenDescriptions, hideDescription, showDescription, descriptionHidden, type RecentServer } from '$lib/ui/storage';
 	import TimelineLoading from '$lib/design/components/TimelineLoading.svelte';
 	import RateLimitNotice from '$lib/design/components/RateLimitNotice.svelte';
 	import SystemLine from '$lib/design/components/SystemLine.svelte';
@@ -2585,8 +2585,18 @@
 		return reactionChips(room?.timeline.reactions[event.message_id], session.you?.user_id, event.deleted === true, (user) => directory.name(user), directory.emojiImage);
 	}
 
+	/** The emoji you reacted with last, latest first: read the first time a row's toolbar asks for its quick reactions. */
+	let recentReactions: string[] | undefined;
+	/** The toolbar's quick reactions from them, made again only once they change: every row asks as the pointer reaches it. */
+	let quickList: readonly string[] | undefined;
+
 	function react(event: MessageRecord, emoji: string): void {
 		if (!client || !session.canReact || event.deleted) return;
+		// Adding one (not taking yours away) makes it your latest, first among the toolbar's quick reactions.
+		if (!reactedWith(reactionsFor(event), emoji)) {
+			saveRecentReactions((recentReactions = rememberReaction(recentReactions ?? loadRecentReactions(), emoji)));
+			quickList = undefined;
+		}
 		feedback.track(client.toggleReaction(event.message_id, emoji), 'Reacting…');
 	}
 
@@ -2647,6 +2657,7 @@
 		})(view),
 		picking: (view) => emojiPicker.current !== undefined && emojiPicker.current === reactPick?.request && reactPick.id === view.id,
 		pickAnchor: emojiAnchor,
+		quick: () => (quickList ??= quickReactions((recentReactions ??= loadRecentReactions()))),
 		// Who reacted, read from the current chips, so the open list follows changes.
 		reactors: (view, emoji, anchor) => showReactors(anchor, emoji, () => {
 			const event = rowEvent(view);
