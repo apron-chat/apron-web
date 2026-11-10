@@ -11,10 +11,12 @@ export { default as RoomEditor } from './RoomEditor.svelte';
 export { default as SearchDialog } from './SearchDialog.svelte';
 export { default as ShortcutsDialog } from './ShortcutsDialog.svelte';
 export { default as SignInLinkDialog } from './SignInLinkDialog.svelte';
-// Hosts that draw nothing until their state (eager) asks, rendered from then on (`Lazy.once`): the page's popovers.
+// Hosts that draw nothing until their state (eager) asks, rendered from then on (`Lazy.once`): the page's popovers,
+// and the document viewer (here rather than with the layout's overlays: it shares code highlighting with the page).
 export { default as ProfileCard } from './ProfileCard.svelte';
 export { default as ReactorsPopover } from './ReactorsPopover.svelte';
 export { default as ServerPane } from './ServerPane.svelte';
+export { default as DocViewerHost } from './DocViewerHost.svelte';
 // What only a click or typing shows: the composer's autocomplete, the selection's bar, adding members, the install offer,
 // the ask to add who a message mentions, and the ask whether they may edit it.
 export { default as AddMembersDialog } from './AddMembersDialog.svelte';

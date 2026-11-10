@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { editorsNudge, installNudge, mentionAddNudge, messageEditor, newPrivateDialog, newThreadDialog, profileCardHost, reactorsPopover, roomEditor, searchDialog, selectionBar, serverPaneHost, shortcutsDialog, signInLinkDialog } from '$lib/components/lazy';
+	import { docViewerHost, editorsNudge, installNudge, mentionAddNudge, messageEditor, newPrivateDialog, newThreadDialog, profileCardHost, reactorsPopover, roomEditor, searchDialog, selectionBar, serverPaneHost, shortcutsDialog, signInLinkDialog } from '$lib/components/lazy';
 	import { onMount, tick, untrack } from 'svelte';
 	import { fromAction } from 'svelte/attachments';
 	import { pushState, replaceState } from '$app/navigation';
@@ -28,6 +28,7 @@
 	import { decorateCode } from '$lib/ui/copy-code';
 	import { emojiAnchor, emojiPicker, type EmojiPickerRequest } from '$lib/ui/emoji-picker.svelte';
 	import { openProfileFrom, profileCard } from '$lib/ui/profile-card.svelte';
+	import { docViewer } from '$lib/ui/doc-viewer.svelte';
 	import { reactorsList, showReactors } from '$lib/ui/reactors.svelte';
 	import { serverPane } from '$lib/ui/server-pane.svelte';
 	import RoomHeader from '$lib/components/RoomHeader.svelte';
@@ -3651,6 +3652,8 @@
 		<ProfileCard {client} {session} room={paneRoom} canChange={canAddMembers} canMention={Boolean(composer) && canCompose && !selection.active} canMessage={canStartPrivate} onmention={(userId) => composer?.mention(userId)} onnamed={(roomId) => arrivals.mine(roomId)} onopenroom={openPrivateRoom} />
 	{/if}
 	{#if reactorsPopover.once(Boolean(reactorsList.current), () => reactorsList.close(), reactorsList.current?.anchor)}{@const ReactorsPopover = reactorsPopover.component!}<ReactorsPopover />{/if}
+	<!-- An uploaded Markdown file, rendered full screen: opened from its card in the timeline. -->
+	{#if docViewerHost.once(docViewer.open, () => docViewer.closed())}{@const DocViewerHost = docViewerHost.component!}<DocViewerHost />{/if}
 	<!-- While reconnecting, the banner at the top already says what went wrong (statusLabel). -->
 	<Toasts {feedback} error={session.error && session.error !== dismissedError && session.connection !== 'reconnecting' ? session.error : undefined} ondismisserror={() => (dismissedError = session.error)} />
 </AppShell>

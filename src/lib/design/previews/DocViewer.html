@@ -1,0 +1,30 @@
+<!-- @dsCard group="Embeds" height=560 subtitle="An uploaded Markdown file full screen: its name and who sent it, Download, Close, and the file rendered as a page that scrolls" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>DocViewer</title></head>
+<body>
+<div id="root"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  // The app renders the file as a message body is (CommonMark, sanitized, its code highlighted), in `.ap-msg-text`.
+  A.render(A.DocViewer, root, {
+    open: true,
+    title: 'rollout-plan.md',
+    detail: 'Ada Lovelace · Today at 4:02 PM',
+    href: '#',
+    children: A.html(
+      '<div class="ap-msg-text ap-msg-markdown">' +
+      '<h1>Rollout plan</h1>' +
+      '<p>Canary first, then the fleet in <strong>two waves</strong> after lunch. Roll back if 5xx goes over <code>0.5%</code>.</p>' +
+      '<h2>Steps</h2>' +
+      '<ol><li>Deploy to the canary pool</li><li>Watch p99 latency for 20 minutes</li><li>Promote to wave one, then wave two</li></ol>' +
+      '<pre><code>make deploy ENV=canary\nmake promote WAVE=1</code></pre>' +
+      '<blockquote><p>Freeze starts Friday at noon.</p></blockquote>' +
+      '<hr><h2>Owners</h2>' +
+      '<div class="ap-table"><table><thead><tr><th>Area</th><th>Owner</th></tr></thead><tbody><tr><td>API</td><td>Ada</td></tr><tr><td>Web</td><td>Grace</td></tr></tbody></table></div>' +
+      '</div>'
+    )
+  });
+</script>
+</body>
+</html>

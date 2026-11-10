@@ -218,3 +218,38 @@ export function plainClick(event: MouseEvent): boolean {
 	return event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey && !event.defaultPrevented;
 }
 
+
+/**
+ * A response's body, read until it passes `max` bytes: then the download stops, and undefined. A `content-length`
+ * past it stops it before anything is read. (An AudioPlayer's waveform, and a Markdown file shown in a DocViewer.)
+ */
+export async function readCapped(response: Response, max: number): Promise<ArrayBuffer | undefined> {
+	if (Number(response.headers.get('content-length')) > max) {
+		void response.body?.cancel();
+		return undefined;
+	}
+	if (!response.body) {
+		const whole = await response.arrayBuffer();
+		return whole.byteLength > max ? undefined : whole;
+	}
+	const reader = response.body.getReader();
+	const chunks: Uint8Array[] = [];
+	let size = 0;
+	for (;;) {
+		const { done, value } = await reader.read();
+		if (done) break;
+		size += value.byteLength;
+		if (size > max) {
+			void reader.cancel();
+			return undefined;
+		}
+		chunks.push(value);
+	}
+	const bytes = new Uint8Array(size);
+	let at = 0;
+	for (const chunk of chunks) {
+		bytes.set(chunk, at);
+		at += chunk.byteLength;
+	}
+	return bytes.buffer;
+}

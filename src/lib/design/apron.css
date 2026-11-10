@@ -1518,6 +1518,30 @@ pre.ap-termviewer-text { width: 80ch; font-family: var(--font-mono); font-size: 
 	.ap-termviewer-stage { padding-top: var(--space-2); padding-bottom: calc(var(--space-2) + env(safe-area-inset-bottom, 0px) + var(--corner-clear)); }
 }
 
+/* DocViewer — a document full screen, on the MediaViewer's ground: the document as a page, in a column a line of text
+   reads well at, on the app's own ground and ink, scrolling inside the stage. Its text is a message's (`.ap-msg-text`),
+   larger, with room around headings, rules and pictures as a page has. On a phone the page takes the whole width. */
+.ap-docviewer-stage { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 0 max(var(--space-4), env(safe-area-inset-right, 0px)) calc(var(--space-6) + env(safe-area-inset-bottom, 0px)) max(var(--space-4), env(safe-area-inset-left, 0px)); }
+.ap-docviewer-page { box-sizing: border-box; max-width: 46rem; margin: 0 auto; padding: var(--space-6) var(--space-8); border-radius: var(--radius-md); background: var(--bg-100); color: var(--ink); font-size: var(--text-body); line-height: var(--leading-body); }
+.ap-docviewer-page .ap-msg-text :is(h1, h2, h3, h4, h5, h6) { margin: 1.4em 0 0.5em; }
+.ap-docviewer-page .ap-msg-text :is(h1, h2) { padding-bottom: 0.25em; border-bottom: 1px solid var(--line); }
+.ap-docviewer-page .ap-msg-text h1 { font-size: 1.75em; line-height: var(--leading-display); }
+.ap-docviewer-page .ap-msg-text h2 { font-size: 1.4em; line-height: var(--leading-title); }
+.ap-docviewer-page .ap-msg-text h3 { font-size: 1.15em; line-height: var(--leading-title); }
+.ap-docviewer-page .ap-msg-text :is(h4, h5, h6) { font-size: 1em; }
+.ap-docviewer-page .ap-msg-text > :first-child { margin-top: 0; }
+.ap-docviewer-page .ap-msg-text p + p { margin-top: var(--space-3); }
+.ap-docviewer-page .ap-msg-text :is(ul, ol, pre, blockquote, .ap-table) { margin-block: var(--space-3); }
+.ap-docviewer-page .ap-msg-text hr { margin: var(--space-6) 0; border: 0; border-top: 1px solid var(--line); }
+.ap-docviewer-page .ap-msg-text img { max-width: 100%; height: auto; }
+.ap-docviewer-status { display: flex; flex-direction: column; align-items: center; gap: var(--space-3); padding: var(--space-8) var(--space-4); text-align: center; color: var(--ap-tone, var(--viewer-ink-muted)); }
+.ap-docviewer-status p { margin: 0; }
+.ap-docviewer-download { text-decoration: none; }
+@media (max-width: 560px) {
+	.ap-docviewer-stage { padding: 0 0 calc(env(safe-area-inset-bottom, 0px) + var(--corner-clear)); }
+	.ap-docviewer-page { max-width: none; min-height: 100%; padding: var(--space-4); border-radius: 0; }
+}
+
 /* TimelineLoading — at the foot of the timeline while it catches up: a pill, and placeholder rows when there is nothing to show yet */
 /* The space below it is its own padding, not a sticky offset: an offset would pull it up onto the message above. */
 .ap-tlstatus { position: sticky; bottom: 0; z-index: var(--z-raised); display: flex; justify-content: center; margin-top: var(--space-4); padding-bottom: var(--space-2); pointer-events: none; }

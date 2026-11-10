@@ -26,6 +26,7 @@ export const selectionBar = part((m) => m.SelectionBar);
 export const profileCardHost = part((m) => m.ProfileCard);
 export const reactorsPopover = part((m) => m.ReactorsPopover);
 export const serverPaneHost = part((m) => m.ServerPane);
+export const docViewerHost = part((m) => m.DocViewerHost);
 /** The composer's full panel: its formatting buttons and its Preview. */
 export const formatToolbar = part((m) => m.FormatToolbar);
 export const draftPreview = part((m) => m.DraftPreview);

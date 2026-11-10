@@ -1,5 +1,6 @@
 <script lang="ts">
-	/* upload (§4.8.4, writes §4.8.3): pending while url is absent; og.video / og.audio / og.image preview; else a file card.
+	/* upload (§4.8.4, writes §4.8.3): pending while url is absent; og.video / og.audio / og.image preview; else a file card,
+	   which a plain click shows full screen where `onpreview` is given (a Markdown file).
 	   A preview that waits for a click (its `ask`) shows under the file card as a MediaAsk. Its `class` and `testid` go on
 	   whichever of those shows, or on what holds the file card and the ask. */
 	import FileIcon from '@lucide/svelte/icons/file';
@@ -9,7 +10,7 @@
 	import type { EmbedComponentProps } from './types';
 	import { ogRatio, plainClick, safeHttp } from './util';
 
-	let { url: rawUrl, title: rawTitle, og = {}, progress, failed, detail, onview, viewer, class: className, testid }: EmbedComponentProps = $props();
+	let { url: rawUrl, title: rawTitle, og = {}, progress, failed, detail, onview, onpreview, viewer, class: className, testid }: EmbedComponentProps = $props();
 	const url = $derived(safeHttp(rawUrl));
 	const title = $derived(rawTitle || og.title || 'File');
 	const pct = $derived(progress != null ? Math.round(progress * 100) : null);
@@ -62,7 +63,9 @@
 {/if}
 
 {#snippet file(fileClass: EmbedComponentProps['class'], fileTestid: string | undefined)}
-	<a href={url} download={title} target="_blank" rel="noreferrer noopener" data-testid={fileTestid} class={['ap-embed', 'ap-embed-card', 'ap-embed-file', fileClass]}>
+	<a href={url} download={title} target="_blank" rel="noreferrer noopener" data-testid={fileTestid} class={['ap-embed', 'ap-embed-card', 'ap-embed-file', fileClass]}
+		aria-haspopup={onpreview ? 'dialog' : undefined} title={onpreview ? `Preview ${title}` : undefined}
+		onclick={(event) => { if (onpreview && plainClick(event)) { event.preventDefault(); onpreview(event); } }}>
 		{@render glyph()}
 		<span class="ap-embed-cardtext">
 			<span class="ap-embed-title">{title}</span>

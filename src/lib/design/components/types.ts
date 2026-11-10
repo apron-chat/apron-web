@@ -46,6 +46,11 @@ export interface EmbedProps {
 	 */
 	onview?: (event: MouseEvent) => void;
 	/**
+	 * upload shown as a file card: a plain click (`plainClick`) on it calls this instead of following the link, to show
+	 * the file full screen, such as a Markdown file in a DocViewer. Other clicks still open or download it.
+	 */
+	onpreview?: (event: MouseEvent) => void;
+	/**
 	 * upload with og.image: what a MediaViewer shows of the picture, on the link around it as `data-viewer-src`,
 	 * `-title`, `-alt`, `-detail`, `-width` and `-height`, which a viewer reads to page through a timeline's images.
 	 */
