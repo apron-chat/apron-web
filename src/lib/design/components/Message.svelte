@@ -7,7 +7,7 @@
 </script>
 
 <script lang="ts">
-	import type { Snippet } from 'svelte';
+	import { untrack, type Snippet } from 'svelte';
 	import Avatar from './Avatar.svelte';
 	import MessageActions from './MessageActions.svelte';
 	import MessageEmbeds from './MessageEmbeds.svelte';
@@ -18,14 +18,15 @@
 	import RoleBadges from './RoleBadges.svelte';
 	import TypingDots from './TypingDots.svelte';
 	import * as icons from './ActionIcons.svelte';
+	import { messageDock, type DockClaim } from './message-dock.svelte';
 	import type { MessageAction, MessageEmbed, MessageTestids, MessageView } from './types';
 	import { times } from './util';
 
 	/**
 	 * One message row, drawn from a MessageView. The header, body and reactions are its own; the quote, the messages,
 	 * rooms and threads its links point to, the embeds, the hover toolbar and the editor are parts it adds only to the
-	 * rows that have them. The toolbar is built the first time a pointer or focus reaches the row, since it only shows
-	 * then.
+	 * rows that have them. The toolbar is the dock's (`message-dock.svelte.ts`), one moved into whichever row a pointer,
+	 * focus or long press reaches; a row reached while another is using it builds one of its own.
 	 */
 	interface Props {
 		view: MessageView;
@@ -38,7 +39,10 @@
 	}
 	let { view, on = NONE, testids, editor, embed }: Props = $props();
 
-	let engaged = $state(false);
+	/** Its toolbar: none yet, the dock's (in its slot), or one of its own, built when the dock was in use elsewhere. */
+	let bar = $state<'none' | 'docked' | 'own'>('none');
+	/** Its hold on the dock, made the first time it's reached. */
+	let claim: DockClaim | undefined;
 	/** The last press on the row was a touch: its toolbar shows only once a long press opens it (`held`). */
 	let touch = $state(false);
 	/**
@@ -66,7 +70,23 @@
 	const checkable = $derived(Boolean(view.selecting && view.caps?.select));
 	const caps = $derived(view.caps);
 	const actionable = $derived(caps !== undefined && (caps.reply || caps.edit || caps.removeReply || caps.react || caps.startThread || caps.link || caps.select));
-	const toolbar = $derived(engaged && !view.editing && !view.selecting && actionable);
+	/** It has a toolbar to show: not in select mode or the editor, and something it may do. */
+	const showable = $derived(!view.editing && !view.selecting && actionable);
+
+	/** Takes the dock for the row, or, while another row is using it, builds a toolbar of its own. */
+	function takeBar(): void {
+		if (bar !== 'none' || !showable) return;
+		claim ??= { bar: () => (showable ? { ...actions(), touch: held } : undefined), pinned: () => held, lost: () => (bar = 'none') };
+		bar = messageDock.claim(claim) ? 'docked' : 'own';
+	}
+
+	/** The dock's slot in the row: the toolbar moves in, and goes with the slot should the row go while holding it. */
+	function dockSlot(slot: HTMLElement): () => void {
+		const mine = claim!;
+		// Untracked: the dock's toolbar, mounted here the first time, reads what this row draws, which mustn't re-run the slot.
+		untrack(() => slot.append(messageDock.host));
+		return () => messageDock.release(mine);
+	}
 
 	/**
 	 * The toolbar's actions, in order: React first, beside the quick reactions; the rarer ones wait behind ⋯. Each
@@ -244,15 +264,15 @@
 	/** Opens touch's menu on the row, focused so that focus leaving it (a tap elsewhere, another's menu) puts it away. */
 	function hold(row: HTMLElement): void {
 		held = true;
-		engaged = true;
 		readQuick();
+		takeBar();
 		swallow = true;
 		row.focus({ preventScroll: true });
 	}
 
 	function engage(event: Event): void {
-		engaged = true;
 		readQuick();
+		takeBar();
 		if ((event as PointerEvent).pointerType === 'mouse') touch = false;
 	}
 
@@ -382,7 +402,8 @@
 			{/if}
 			{#if !view.deleted && view.reactions?.length}<ReactionBar reactions={view.reactions} disabled={!caps?.react} add={Boolean(on.pick) && !view.editing && !view.selecting} adding={on.picking?.(view)} addAnchor={on.pickAnchor} onopen={(anchor) => on.pick?.(view, anchor)} ontoggle={(emoji) => on.react?.(view, emoji)} onreactors={(emoji, chip) => on.reactors?.(view, emoji, chip)} data-testid={testids?.reactions} chipTestid={testids?.chip} />{/if}
 		</div>
-		{#if toolbar}
+		{#if bar === 'docked'}<div class="ap-msg-dock" {@attach dockSlot}></div>
+		{:else if bar === 'own' && showable}
 			{@const { quick, items, more } = actions()}
 			<div class="ap-msg-actions"><MessageActions {quick} {items} {more} touch={held} /></div>
 		{/if}

@@ -384,6 +384,8 @@ describe('a message row’s toolbar', () => {
 		expect(pick).toHaveBeenCalledWith(expect.objectContaining({ id: '1' }), react);
 		expect(react.getAttribute('aria-expanded')).toBe('true');
 		dom.unmount();
+		// The toolbar is the dock's, its own root: it empties as that root next settles.
+		flushSync();
 		expect(release).toHaveBeenCalledOnce();
 	});
 });
@@ -710,5 +712,50 @@ describe('task list checkboxes', () => {
 		expect(box().checked).toBe(true);
 		expect(box().closest('.ap-task-item')!.classList.contains('ap-task-done')).toBe(true);
 		dom.cleanup();
+	});
+});
+
+describe('the toolbar the rows share (the dock)', () => {
+	/** Two rows, each with its own view and handlers. */
+	function rows(first: Partial<MessageView>, second: Partial<MessageView>, on: MessageHandlers = {}) {
+		render({ id: 'a', ...first }, on);
+		render({ id: 'b', ...second }, on);
+		const [a, b] = [...document.querySelectorAll('article')];
+		return { a, b };
+	}
+	const toolbars = () => [...document.querySelectorAll('[role="toolbar"][aria-label="Message actions"]')];
+	const names = (row: Element) => [...row.querySelectorAll('[role="toolbar"] button')].map(dom.nameOf);
+
+	it('moves one toolbar into whichever row is reached, drawing that row’s actions', () => {
+		const reply = vi.fn();
+		const { a, b } = rows({ caps: { ...NONE, reply: true, edit: true } }, { caps: { ...NONE, reply: true } }, { reply });
+		engage(a);
+		const toolbar = toolbars()[0];
+		expect([toolbars().length, a.contains(toolbar), names(a)]).toEqual([1, true, ['Reply to message', 'Edit message', 'More actions']]);
+		engage(b);
+		// The same toolbar, now in the other row, with that row's actions.
+		expect([toolbars().length, toolbars()[0], b.contains(toolbar), a.contains(toolbar), names(b)]).toEqual([1, toolbar, true, false, ['Reply to message']]);
+		dom.button('Reply to message').click();
+		expect(reply).toHaveBeenCalledWith(expect.objectContaining({ id: 'b' }));
+	});
+
+	it('starts with ⋯ shut in the row it moves to', () => {
+		const { a, b } = rows({ caps: { ...NONE, link: true, reply: true } }, { caps: { ...NONE, link: true, reply: true } });
+		engage(a);
+		dom.button('More actions').click();
+		flushSync();
+		expect(names(a)).toContain('Copy link to message');
+		// A press elsewhere would put the rest away; reaching another row does too.
+		engage(b);
+		expect(names(b)).toEqual(['Reply to message', 'More actions']);
+	});
+
+	it('stays with the row using it, its picker open, and a row reached meanwhile builds a toolbar of its own', () => {
+		const { a, b } = rows({ caps: { ...NONE, react: true } }, { caps: { ...NONE, react: true } }, { pick: vi.fn(), picking: (view) => view.id === 'a' });
+		engage(a);
+		const toolbar = toolbars()[0];
+		expect(toolbar.querySelector('[aria-expanded="true"]')).not.toBeNull();
+		engage(b);
+		expect([toolbars().length, a.contains(toolbar), b.querySelector('[role="toolbar"]') !== null]).toEqual([2, true, true]);
 	});
 });

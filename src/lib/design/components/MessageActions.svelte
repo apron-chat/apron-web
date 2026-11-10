@@ -18,12 +18,20 @@
 		more?: MessageAction[];
 		onmore?: () => void;
 		touch?: boolean;
+		/** Whose actions these are, where one toolbar serves many (the dock): a new one starts with ⋯ shut and nothing done. */
+		owner?: unknown;
 	}
-	let { quick = [], items, more, onmore, touch = false }: Props = $props();
+	let { quick = [], items, more, onmore, touch = false, owner }: Props = $props();
 
-	let open = $state(false);
-	/** The `id` of the action that worked, saying so (Copied) until the timer closes the ⋯ actions. */
-	let done = $state<string | undefined>();
+	/** Whose actions these are: `owner`, else this toolbar's own. */
+	const self = {};
+	const whose = $derived(owner ?? self);
+	/** Whose ⋯ is open, so the next owner's starts shut. */
+	let openFor = $state.raw<unknown>();
+	const open = $derived(openFor !== undefined && openFor === whose);
+	/** The action that worked, and whose, saying so (Copied) until the timer closes the ⋯ actions. */
+	let doneFor = $state.raw<{ owner: unknown; id: string }>();
+	const done = $derived(doneFor?.owner === whose ? doneFor.id : undefined);
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	$effect(() => () => clearTimeout(timer));
 
@@ -33,18 +41,18 @@
 	const hasMore = $derived(!open && (visible(more).length > 0 || Boolean(onmore)));
 
 	async function press(it: MessageAction, event: MouseEvent): Promise<void> {
-		if (!it.done) open = false;
+		if (!it.done) openFor = undefined;
 		const result = it.onclick?.(event);
 		if (!it.done) return;
 		if (!(await result)) {
-			open = false;
+			openFor = undefined;
 			return;
 		}
 		clearTimeout(timer);
-		done = it.id ?? it.label;
+		doneFor = { owner: whose, id: it.id ?? it.label };
 		timer = setTimeout(() => {
-			done = undefined;
-			open = false;
+			doneFor = undefined;
+			openFor = undefined;
 		}, DONE_MS);
 	}
 
@@ -54,7 +62,7 @@
 	$effect(() => {
 		if (!open) return;
 		const away = (event: PointerEvent) => {
-			if (!bar?.contains(event.target as Node)) open = false;
+			if (!bar?.contains(event.target as Node)) openFor = undefined;
 		};
 		document.addEventListener('pointerdown', away, true);
 		return () => document.removeEventListener('pointerdown', away, true);
@@ -64,7 +72,7 @@
 	function showMore(event: MouseEvent): void {
 		if (onmore && !more) return onmore();
 		const focused = event.currentTarget === document.activeElement;
-		open = true;
+		openFor = whose;
 		if (focused) void tick().then(() => bar?.querySelectorAll<HTMLElement>('.ap-actions-btn:not(.ap-actions-emoji)')[visible(items).length]?.focus());
 	}
 
