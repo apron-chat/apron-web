@@ -20,12 +20,15 @@ export class Lazy<T> {
 	/** The waiting host's `cancel` (`once`), which a failed load calls: its next ask asks again. */
 	#cancel?: () => void;
 
-	/** `load` imports the code, once asked: `() => import('./on-demand').then((m) => m.Dialog)`. */
-	constructor(load: () => Promise<T>) {
+	/**
+	 * `load` imports the code, once asked: `() => import('./on-demand').then((m) => m.Dialog)`. `prefetch: false` leaves
+	 * it out of the background prefetch (`prefetchLazy`), for what is seldom opened: it loads only when first asked for.
+	 */
+	constructor(load: () => Promise<T>, { prefetch = true }: { prefetch?: boolean } = {}) {
 		let arrive!: (component: T) => void;
 		this.#arrived = new Promise((settle) => (arrive = settle));
 		this.#load = onDemand(() => load().then((component) => (arrive(component), (this.#component = component))));
-		registered.push(this);
+		if (prefetch) registered.push(this);
 	}
 
 	get component(): T | undefined {

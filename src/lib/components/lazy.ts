@@ -1,4 +1,4 @@
-import { lazyChunk } from '$lib/ui/lazy.svelte';
+import { Lazy, lazyChunk } from '$lib/ui/lazy.svelte';
 
 /** The on-demand chunk (`on-demand.ts`): the first component asked for loads them all, in one request (`lazyChunk`). */
 const part = lazyChunk(() => import('./on-demand'));
@@ -26,7 +26,6 @@ export const selectionBar = part((m) => m.SelectionBar);
 export const profileCardHost = part((m) => m.ProfileCard);
 export const reactorsPopover = part((m) => m.ReactorsPopover);
 export const serverPaneHost = part((m) => m.ServerPane);
-export const docViewerHost = part((m) => m.DocViewerHost);
 /** The composer's full panel: its formatting buttons and its Preview. */
 export const formatToolbar = part((m) => m.FormatToolbar);
 export const draftPreview = part((m) => m.DraftPreview);
@@ -34,3 +33,10 @@ export const draftPreview = part((m) => m.DraftPreview);
 export const archiveExport = part((m) => m.exportArchive);
 /** Not a component: `dragRooms`, for dragging rooms; `roomDrag.whenLoaded()` waits for it without fetching it (Sidebar's `reorderable`). */
 export const roomDrag = part((m) => m.dragRooms);
+
+/**
+ * The document viewer (an uploaded Markdown file, rendered): seldom opened, so a chunk of its own, fetched when it first
+ * opens and never in the background. Loaded by the page, not with the layout's overlays: it shares code highlighting
+ * and history with the page, which the layout importing it would split out into a startup chunk of their own.
+ */
+export const docViewerHost = new Lazy(() => import('./DocViewerHost.svelte').then((m) => m.default), { prefetch: false });

@@ -40,7 +40,7 @@ async function serve(page: Page, name: string, body: string): Promise<void> {
 test.describe('an uploaded Markdown file', () => {
 	test.use({ ...DEVICES.desktop, knobs: { capabilities: ['embed:upload'] } });
 
-	test('opens rendered on a plain click, scrolls inside the viewer, and closes back to its card', async ({ preview, page }) => {
+	test('opens rendered on a plain click, scrolls inside the viewer, and closes back to its card, Back included', async ({ preview, page }) => {
 		const errors: string[] = [];
 		page.on('pageerror', (error) => errors.push(error.message));
 		await preview.open();
@@ -92,6 +92,17 @@ test.describe('an uploaded Markdown file', () => {
 			await viewer.getByRole('button', { name: 'Close' }).click();
 			await expect(viewer).toBeHidden();
 		});
+
+		await test.step('Back closes it, back to its card, and closing it otherwise leaves no entry for Back to find', async () => {
+			// Closed above with Close and Escape: Back now leaves the room as it would have, not into a viewer.
+			await expect.poll(() => page.evaluate(() => JSON.stringify(history.state ?? {}))).not.toContain('"doc"');
+			await card.click();
+			await expect(viewer.getByTestId('doc-viewer-text').getByRole('heading', { level: 1 })).toHaveText('Rollout plan');
+			await page.goBack();
+			await expect(viewer).toBeHidden();
+			await expect(card).toBeFocused();
+			await expect(page.locator('article[data-message-id]').last()).toContainText('The plan');
+		});
 		expect(errors).toEqual([]);
 	});
 
@@ -112,7 +123,7 @@ test.describe('an uploaded Markdown file', () => {
 test.describe('an uploaded Markdown file on a phone', () => {
 	test.use({ ...DEVICES.phone, knobs: { capabilities: ['embed:upload'] } });
 
-	test('fills the screen\'s width, with nothing wider than it', async ({ preview, page }) => {
+	test('fills the screen\'s width, with nothing wider than it, and Back closes it', async ({ preview, page }) => {
 		await preview.open();
 		await serve(page, 'rollout-plan.md', README);
 		await preview.post('general', 'grace', { text: 'The plan', embeds: [{ kind: 'upload', embed_id: 'doc', url: `${FILES}/rollout-plan.md`, title: 'rollout-plan.md' }] });
@@ -123,5 +134,33 @@ test.describe('an uploaded Markdown file on a phone', () => {
 		const width = page.viewportSize()!.width;
 		expect((await article.boundingBox())!.width).toBeCloseTo(width, 0);
 		expect(await viewer.locator('.ap-docviewer-stage').evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+
+		// The phone's Back closes it, and the room is still there under it.
+		await page.goBack();
+		await expect(viewer).toBeHidden();
+		await expect(page.locator('a.ap-embed-file', { hasText: 'rollout-plan.md' })).toBeVisible();
+	});
+});
+
+test.describe('the viewer\'s code', () => {
+	test.use({ ...DEVICES.desktop, serviceWorkers: 'block', knobs: { capabilities: ['embed:upload'] } });
+
+	test('isn\'t fetched with the page\'s other on-demand code, only once a Markdown file is first opened', async ({ preview, page }) => {
+		// Scripts as they arrive: the viewer's alone draws `ap-docviewer-stage`; the on-demand chunk alone holds `ap-room-carried`.
+		const fetched: string[] = [];
+		page.on('response', async (response) => {
+			if (/\/_app\/immutable\/.*\.js$/.test(response.url())) fetched.push(await response.text().catch(() => ''));
+		});
+		const has = (pattern: RegExp) => () => fetched.some((body) => pattern.test(body));
+		await preview.open();
+		await serve(page, 'rollout-plan.md', README);
+		await preview.post('general', 'grace', { text: 'The plan', embeds: [{ kind: 'upload', embed_id: 'doc', url: `${FILES}/rollout-plan.md`, title: 'rollout-plan.md' }] });
+		// The background prefetch (`prefetchLazy`) has fetched the page's on-demand code, and not the viewer's.
+		await expect.poll(has(/ap-room-carried/), { timeout: 10_000 }).toBe(true);
+		expect(has(/ap-docviewer-stage/)()).toBe(false);
+
+		await page.locator('a.ap-embed-file', { hasText: 'rollout-plan.md' }).click();
+		await expect(page.getByRole('dialog', { name: 'rollout-plan.md' }).getByRole('heading', { level: 1 })).toHaveText('Rollout plan');
+		expect(has(/ap-docviewer-stage/)()).toBe(true);
 	});
 });
