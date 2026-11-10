@@ -97,7 +97,7 @@
 	},
 	"production": {
 		"startupFiles": 13,
-		"startupJsKB": 837.5,
-		"startupJsBrotliKB": 236.8
+		"startupJsKB": 846.6,
+		"startupJsBrotliKB": 239
 	}
 }
