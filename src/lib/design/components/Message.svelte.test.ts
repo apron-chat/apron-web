@@ -771,6 +771,49 @@ describe('the toolbar the rows share (the dock)', () => {
 		expect(names(b)).toEqual(['Reply to message', 'More actions']);
 	});
 
+	it('lets its menu go, and the toolbar with it, on an Escape anywhere or focus leaving it', async () => {
+		const { a, b } = rows({ caps: { ...NONE, link: true, reply: true } }, { caps: { ...NONE, link: true, reply: true } });
+		// Escape with the keyboard on the row, not in the menu.
+		engage(a);
+		dom.button('More actions').click();
+		flushSync();
+		a.focus();
+		a.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+		flushSync();
+		engage(b);
+		expect(names(b)).toEqual(['Reply to message', 'More actions']);
+		// Focus leaving the open menu, as Tab on to the composer would.
+		dom.button('More actions').click();
+		flushSync();
+		dom.button('Copy link to message').focus();
+		const elsewhere = document.body.appendChild(document.createElement('button'));
+		elsewhere.focus();
+		await Promise.resolve();
+		flushSync();
+		engage(a);
+		expect(names(a)).toEqual(['Reply to message', 'More actions']);
+	});
+
+	it('leaves the next row’s menu open when the last row’s Copied runs out', async () => {
+		vi.useFakeTimers();
+		const copyLink = vi.fn(async () => true);
+		const { a, b } = rows({ caps: { ...NONE, link: true, reply: true } }, { caps: { ...NONE, link: true, reply: true } }, { copyLink });
+		engage(a);
+		dom.button('More actions').click();
+		flushSync();
+		dom.button('Copy link to message').click();
+		await vi.waitFor(() => expect(dom.queryByRole('button', 'Link copied')).not.toBeNull());
+		// A press elsewhere puts a's menu away; b's opens before a's Copied runs out.
+		document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+		flushSync();
+		engage(b);
+		dom.button('More actions').click();
+		flushSync();
+		vi.advanceTimersByTime(1200);
+		flushSync();
+		expect(names(b)).toContain('Copy link to message');
+	});
+
 	it('stays with the row whose picker is open, the row reached meanwhile showing none', () => {
 		const { a, b } = rows({ caps: { ...NONE, react: true } }, { caps: { ...NONE, react: true } }, { pick: vi.fn(), picking: (view) => view.id === 'a' });
 		engage(a);

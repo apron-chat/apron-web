@@ -41,32 +41,63 @@
 	const hasMore = $derived(!open && (visible(more).length > 0 || Boolean(onmore)));
 
 	async function press(it: MessageAction, event: MouseEvent): Promise<void> {
+		// Whose press this is, before the await: the toolbar may serve another owner by the time it resolves.
+		const mine = whose;
 		if (!it.done) openFor = undefined;
 		const result = it.onclick?.(event);
 		if (!it.done) return;
 		if (!(await result)) {
-			openFor = undefined;
+			if (openFor === mine) openFor = undefined;
 			return;
 		}
 		clearTimeout(timer);
-		doneFor = { owner: whose, id: it.id ?? it.label };
+		doneFor = { owner: mine, id: it.id ?? it.label };
+		// Its owner's Copied and menu only: where one toolbar serves many (the dock), the next owner's are its own.
 		timer = setTimeout(() => {
-			doneFor = undefined;
-			openFor = undefined;
+			if (doneFor?.owner === mine) doneFor = undefined;
+			if (openFor === mine) openFor = undefined;
 		}, DONE_MS);
 	}
 
 	let bar = $state<HTMLElement | undefined>();
 
-	// A press anywhere else puts the rest away, as it would any menu, rather than leaving them for the next hover.
+	/**
+	 * While the menu is open, a press anywhere else or Escape anywhere puts it away, as any menu's would, rather than
+	 * leaving it for the next hover (where one toolbar serves many, a menu left open would keep it from the rest). Escape
+	 * comes here first, before a message's or the timeline's own, and gives ⋯ the keyboard if it was in the menu.
+	 */
 	$effect(() => {
 		if (!open) return;
 		const away = (event: PointerEvent) => {
 			if (!bar?.contains(event.target as Node)) openFor = undefined;
 		};
+		const escape = (event: KeyboardEvent) => {
+			if (event.key !== 'Escape') return;
+			event.preventDefault();
+			event.stopPropagation();
+			const inside = bar?.contains(document.activeElement);
+			openFor = undefined;
+			if (inside) void tick().then(() => bar?.querySelector<HTMLElement>('[aria-label="More actions"]')?.focus());
+		};
 		document.addEventListener('pointerdown', away, true);
-		return () => document.removeEventListener('pointerdown', away, true);
+		document.addEventListener('keydown', escape, true);
+		return () => {
+			document.removeEventListener('pointerdown', away, true);
+			document.removeEventListener('keydown', escape, true);
+		};
 	});
+
+	/**
+	 * Focus leaving the toolbar with the menu open puts the menu away (Tab on to the composer, say). A focused button
+	 * taken out (⋯ as the menu opens) blurs too, but focus hasn't left: that one is gone once this settles.
+	 */
+	function focusout(event: FocusEvent): void {
+		if (!open || (event.relatedTarget instanceof Node && bar?.contains(event.relatedTarget))) return;
+		const from = event.target as Node;
+		queueMicrotask(() => {
+			if (from.isConnected && !bar?.contains(document.activeElement)) openFor = undefined;
+		});
+	}
 
 	/** ⋯ goes as the rest show, so the focus it held moves on to the first of them rather than dropping out. */
 	function showMore(event: MouseEvent): void {
@@ -98,14 +129,6 @@
 	 */
 	const menu = $derived(open);
 
-	/** Escape shuts the menu, and the keyboard goes back to ⋯ (the message's own Escape would take it to the row). */
-	function keydown(event: KeyboardEvent): void {
-		if (event.key !== 'Escape' || !open) return;
-		event.preventDefault();
-		const inside = bar?.contains(document.activeElement);
-		openFor = undefined;
-		if (inside) void tick().then(() => bar?.querySelector<HTMLElement>('[aria-label="More actions"]')?.focus());
-	}
 	/** The tooltip: its name, and its key. */
 	const tip = (it: MessageAction) => {
 		const name = it.title ?? (it.icon ? it.label : undefined);
@@ -114,7 +137,7 @@
 </script>
 
 <!-- svelte-ignore a11y_interactive_supports_focus (its buttons are the stops; the mousedown only keeps focus where it is) -->
-<div bind:this={bar} class={['ap-actions', touch && 'ap-actions-touch', menu && 'ap-actions-menu']} role="toolbar" aria-label="Message actions" aria-orientation={menu ? 'vertical' : undefined} onmousedown={mousedown} onkeydown={keydown}>
+<div bind:this={bar} class={['ap-actions', touch && 'ap-actions-touch', menu && 'ap-actions-menu']} role="toolbar" aria-label="Message actions" aria-orientation={menu ? 'vertical' : undefined} onmousedown={mousedown} onfocusout={focusout}>
 	{#if quickShown.length}
 		<div class="ap-actions-quick" role="group" aria-label="Quick reactions">
 			{#each quickShown as it (it.id ?? it.label)}
