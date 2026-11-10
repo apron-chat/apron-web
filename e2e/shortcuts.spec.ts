@@ -410,10 +410,10 @@ test('the timeline is one Tab stop: ← → go through a message, its words show
 		await three.getByRole('button', { name: 'Edit message', exact: true }).click();
 		await expect(page.getByRole('textbox', { name: 'Edit message', exact: true })).toBeVisible();
 		await page.keyboard.press('Escape');
-		// A pointer on a message alone shows icons alone.
+		// A pointer on a message in this wide pane shows the words too, but boxes no key.
 		await composer.click();
 		await preview.message('alpha-1').hover();
-		expect(await preview.message('alpha-1').getByRole('button', { name: 'Reply to message', exact: true }).evaluate((element) => getComputedStyle(element.querySelector('.ap-actions-label')!).display)).toBe('none');
+		expect(await preview.message('alpha-1').getByRole('button', { name: 'Reply to message', exact: true }).evaluate(label)).toEqual([true, false]);
 	});
 
 	await test.step('Shift+↑ selects up from the message, Shift+↓ gives them back', async () => {

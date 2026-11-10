@@ -192,6 +192,7 @@
 	          @container (max-width: 560px) on the main pane stacks the room header's name over its topic.
 	   720px  (max-width: 719px)  one pane at a time: rooms, then the room or thread; popovers become bottom sheets.
 	          (min-width: 720px)  above it.
+	          @container (min-width: 720px) on the main pane: the message toolbar shows each icon's words.
 	   960px  (min-width: 960px)  the member list gets a column of its own; (max-width: 959px) overlays it. */
 }
 

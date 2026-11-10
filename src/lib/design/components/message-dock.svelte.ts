@@ -20,10 +20,11 @@ export interface DockClaim {
 }
 
 /**
- * The message toolbar, built once and moved into whichever row the pointer, focus or a long press reaches (Message
- * claims it), rather than one built in each row the first time it's reached: a toolbar costs some thousands of calls to
- * build, and moving it costs what differs between two rows. A row may not take it while the row that holds it is using
- * it (its picker or ⋯ open, the keyboard in it, touch's menu): that row builds a toolbar of its own, as before.
+ * The message toolbar, the only one: built once and moved into whichever row the pointer, focus or a long press
+ * reaches (Message claims it), rather than one built in each row the first time it's reached. A toolbar costs some
+ * thousands of calls to build, and moving it costs what differs between two rows. A row may not take it while the row
+ * that holds it is using it (its picker or menu open, touch's menu), and then shows none until the pointer moves over
+ * it once that's done, but a long press may: touch's new menu is the one wanted.
  */
 class MessageDock {
 	/** The claim that holds it, for its toolbar to draw. */
@@ -44,18 +45,27 @@ class MessageDock {
 		mount(DockedActions, { target: this.host, props: { dock: this } });
 	}
 
-	/** The row that holds it is using it: a popup of its open (the picker, ⋯), the keyboard in it, or touch's menu. */
+	/**
+	 * The row that holds it is using it: a popup of its open (the picker), its menu open (⋯), or touch's menu. Focus on
+	 * the row or in the toolbar isn't: it stays there long after the pointer moves on (a click leaves it on the button).
+	 */
 	#pinned(): boolean {
 		const host = this.host;
 		if (!this.#holder || !host.isConnected) return false;
-		return Boolean(this.#holder.pinned?.() || host.contains(document.activeElement) || host.querySelector('[aria-expanded="true"]'));
+		return Boolean(this.#holder.pinned?.() || host.querySelector('[aria-expanded="true"], .ap-actions-menu'));
 	}
 
-	/** Takes it for a row, unless the row that holds it is using it. True when the row now holds it. */
-	claim(claim: DockClaim): boolean {
+	/**
+	 * Takes it for a row, unless the row that holds it is using it and this isn't `taking` it anyway (a long press,
+	 * whose menu is the one wanted now). True when the row now holds it.
+	 */
+	claim(claim: DockClaim, taking = false): boolean {
 		const held = this.#holder;
 		if (held === claim) return true;
-		if (held && this.#pinned()) return false;
+		if (held && !taking && this.#pinned()) return false;
+		// Focus in it goes back to its row, as it would be lost as the toolbar moves: the keyboard keeps its place, and
+		// that row's next key brings the toolbar back.
+		if (this.host.contains(document.activeElement)) this.host.closest<HTMLElement>('.ap-msg')?.focus({ preventScroll: true });
 		this.owner = this.#holder = claim;
 		held?.lost();
 		return true;

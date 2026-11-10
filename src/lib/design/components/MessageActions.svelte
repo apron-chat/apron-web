@@ -7,10 +7,10 @@
 	const DONE_MS = 1200;
 
 	/**
-	 * A message's hover toolbar. The rarer actions wait behind ⋯: pass them as `more`, and pressing ⋯ shows them in its
-	 * place until one is used; or pass `onmore` to open a menu of your own. `touch` sizes it for a finger, and ⋯ then
-	 * opens every action as a menu, one row each. `quick` go first, set apart, and stay in a row of their own atop
-	 * that menu: one-press reactions, such as the emoji you used last.
+	 * A message's hover toolbar. The rarer actions wait behind ⋯: pass them as `more`, and pressing ⋯ opens every action
+	 * as a menu, one row each, its icon beside its words, until one is used, a press elsewhere or Escape; or pass
+	 * `onmore` to open a menu of your own. `touch` sizes it for a finger. `quick` go first, set apart, and keep a row of
+	 * their own atop the menu: one-press reactions, such as the emoji you used last.
 	 */
 	interface Props {
 		quick?: MessageAction[];
@@ -93,10 +93,19 @@
 	}
 
 	/**
-	 * Touch's menu: a row each, its icon beside its words. Elsewhere an action with an icon shows the icon alone, its
-	 * words (in the markup, for the keyboard) showing beside it only while the keyboard is on the message (apron.css).
+	 * The menu ⋯ opens: a row each, its icon beside its words. Elsewhere an action with an icon shows the icon, its words
+	 * (in the markup) beside it where the pane is wide or the keyboard is on the message (apron.css).
 	 */
-	const menu = $derived(touch && open);
+	const menu = $derived(open);
+
+	/** Escape shuts the menu, and the keyboard goes back to ⋯ (the message's own Escape would take it to the row). */
+	function keydown(event: KeyboardEvent): void {
+		if (event.key !== 'Escape' || !open) return;
+		event.preventDefault();
+		const inside = bar?.contains(document.activeElement);
+		openFor = undefined;
+		if (inside) void tick().then(() => bar?.querySelector<HTMLElement>('[aria-label="More actions"]')?.focus());
+	}
 	/** The tooltip: its name, and its key. */
 	const tip = (it: MessageAction) => {
 		const name = it.title ?? (it.icon ? it.label : undefined);
@@ -105,7 +114,7 @@
 </script>
 
 <!-- svelte-ignore a11y_interactive_supports_focus (its buttons are the stops; the mousedown only keeps focus where it is) -->
-<div bind:this={bar} class={['ap-actions', touch && 'ap-actions-touch', touch && open && 'ap-actions-menu']} role="toolbar" aria-label="Message actions" aria-orientation={menu ? 'vertical' : undefined} onmousedown={mousedown}>
+<div bind:this={bar} class={['ap-actions', touch && 'ap-actions-touch', menu && 'ap-actions-menu']} role="toolbar" aria-label="Message actions" aria-orientation={menu ? 'vertical' : undefined} onmousedown={mousedown} onkeydown={keydown}>
 	{#if quickShown.length}
 		<div class="ap-actions-quick" role="group" aria-label="Quick reactions">
 			{#each quickShown as it (it.id ?? it.label)}
