@@ -298,7 +298,8 @@ describe('a message row’s toolbar', () => {
 		expect(reply.querySelector('svg')).not.toBeNull();
 		expect([reply.title, reply.getAttribute('aria-keyshortcuts'), reply.dataset.key, reply.querySelector('.ap-actions-label')?.textContent]).toEqual(['Reply (R)', 'r', 'R', 'Reply']);
 		expect(dom.button('Edit message').title).toBe('Edit (E)');
-		expect([dom.button('Start thread').title, dom.button('Start thread').dataset.key]).toEqual(['Start thread', undefined]);
+		// Its words say Thread, a verb as Reply and Edit are; what a screen reader hears (Start thread) still holds them.
+		expect([dom.button('Start thread').title, dom.button('Start thread').querySelector('.ap-actions-label')?.textContent, dom.button('Start thread').dataset.key]).toEqual(['Thread', 'Thread', undefined]);
 	});
 
 	it('offers Remove reply under ⋯ only on a reply', () => {

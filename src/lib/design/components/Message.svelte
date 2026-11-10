@@ -115,7 +115,7 @@
 		const react: MessageAction | undefined = can.react && !view.deleted
 			? { id: 'react', label: 'React', title: 'React', icon: icons.smilePlus, popup: true, expanded: on.picking?.(view), attach: on.pickAnchor, onclick: (event) => on.pick?.(view, event.currentTarget as HTMLElement) }
 			: undefined;
-		const thread: MessageAction | undefined = can.startThread ? { id: 'thread', label: 'Start thread', title: 'Start thread', icon: icons.thread, onclick: () => on.startThread?.(view) } : undefined;
+		const thread: MessageAction | undefined = can.startThread ? { id: 'thread', label: 'Start thread', title: 'Thread', glyph: 'Thread', icon: icons.thread, onclick: () => on.startThread?.(view) } : undefined;
 		const edit: MessageAction | undefined = can.edit ? { id: 'edit', label: 'Edit message', title: 'Edit', glyph: 'Edit', icon: icons.pencil, key: 'E', onclick: () => ((held = false), on.edit?.(view)) } : undefined;
 		const unreply: MessageAction | undefined = can.edit && !can.textOnly && view.reply ? { id: 'unreply', label: 'Remove reply reference', title: 'Remove reply', glyph: 'Remove reply', icon: icons.unlink, onclick: () => on.removeReply?.(view) } : undefined;
 		const select: MessageAction | undefined = can.select ? { id: 'select', label: 'Select message', title: 'Select', glyph: 'Select', icon: icons.squareCheck, testid: testids?.select, onclick: () => ((held = false), on.beginSelect?.(view)) } : undefined;
