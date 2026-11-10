@@ -7,7 +7,7 @@
 </script>
 
 <script lang="ts">
-	import { flushSync, untrack, type Snippet } from 'svelte';
+	import { flushSync, type Snippet } from 'svelte';
 	import Avatar from './Avatar.svelte';
 	import MessageEmbeds from './MessageEmbeds.svelte';
 	import ReactionBar from './ReactionBar.svelte';
@@ -38,8 +38,15 @@
 	}
 	let { view, on = NONE, testids, editor, embed }: Props = $props();
 
-	/** It holds the dock: its toolbar is in the row, in its slot. */
-	let docked = $state(false);
+	/**
+	 * It holds the dock: its toolbar is in the row, in its slot. Not state: moving the toolbar between rows changes
+	 * neither row's markup, so going back and forth costs only what differs between their toolbars.
+	 */
+	let docked = false;
+	/** The row has held the dock: its slot is drawn, and stays for the next time (`dockSlot`). */
+	let reached = $state(false);
+	/** That slot, while drawn. */
+	let slot: HTMLElement | undefined;
 	/** Its hold on the dock, made the first time it's reached. */
 	let claim: DockClaim | undefined;
 	/** The last press on the row was a touch: its toolbar shows only once a long press opens it (`held`). */
@@ -81,14 +88,24 @@
 		claim ??= { bar: () => (showable ? { ...actions(), touch: held } : undefined), pinned: () => held, lost: () => (docked = false) };
 		docked = messageDock.claim(claim, taking);
 		wanting = !docked;
+		if (!docked) return;
+		// Into its slot now, from the event that reached it; the first time, the slot takes it as it's drawn.
+		if (slot) slot.append(messageDock.host);
+		else reached = true;
 	}
 
-	/** The dock's slot in the row: the toolbar moves in, and goes with the slot should the row go while holding it. */
-	function dockSlot(slot: HTMLElement): () => void {
+	/**
+	 * The dock's slot in the row, drawn the first time the row holds it and kept: the toolbar moves in whenever the row
+	 * takes it, and is let go should the row go while holding it, so a picker its React opened closes.
+	 */
+	function dockSlot(node: HTMLElement): () => void {
 		const mine = claim!;
-		// Untracked: the dock's toolbar, mounted here the first time, reads what this row draws, which mustn't re-run the slot.
-		untrack(() => slot.append(messageDock.host));
-		return () => messageDock.release(mine);
+		slot = node;
+		if (docked) node.append(messageDock.host);
+		return () => {
+			slot = undefined;
+			messageDock.release(mine);
+		};
 	}
 
 	/**
@@ -413,6 +430,6 @@
 			{/if}
 			{#if !view.deleted && view.reactions?.length}<ReactionBar reactions={view.reactions} disabled={!caps?.react} add={Boolean(on.pick) && !view.editing && !view.selecting} adding={on.picking?.(view)} addAnchor={on.pickAnchor} onopen={(anchor) => on.pick?.(view, anchor)} ontoggle={(emoji) => on.react?.(view, emoji)} onreactors={(emoji, chip) => on.reactors?.(view, emoji, chip)} data-testid={testids?.reactions} chipTestid={testids?.chip} />{/if}
 		</div>
-		{#if docked}<div class="ap-msg-dock" {@attach dockSlot}></div>{/if}
+		{#if reached}<div class="ap-msg-dock" {@attach dockSlot}></div>{/if}
 	</article>
 {/if}

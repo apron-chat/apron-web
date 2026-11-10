@@ -750,6 +750,10 @@ describe('the toolbar the rows share (the dock)', () => {
 		expect([toolbars().length, toolbars()[0], b.contains(toolbar), a.contains(toolbar), names(b)]).toEqual([1, toolbar, true, false, ['Reply to message']]);
 		dom.button('Reply to message').click();
 		expect(reply).toHaveBeenCalledWith(expect.objectContaining({ id: 'b' }));
+		// Back again: into the slot that row kept, its markup unchanged by the moves.
+		const slot = a.querySelector('.ap-msg-dock');
+		engage(a);
+		expect([a.querySelector('.ap-msg-dock'), a.contains(toolbar), b.contains(toolbar), names(a)]).toEqual([slot, true, false, ['Reply to message', 'Edit message', 'More actions']]);
 	});
 
 	it('stays with the row whose menu is open, the row reached meanwhile showing none, and moves on once it shuts', () => {
