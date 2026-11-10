@@ -71,6 +71,20 @@
 	const noAttach = () => {};
 
 	/**
+	 * A press of the mouse while the keyboard is on the message or in its toolbar, its words showing (apron.css): the
+	 * focus stays put, so they do too. Focus going to the button pressed would take them away, and the toolbar would
+	 * shrink between the press and the release, which would then land on another button and click none.
+	 */
+	function mousedown(event: MouseEvent): void {
+		if (touch || event.button !== 0 || !bar) return;
+		try {
+			if (bar.closest('.ap-msg')?.matches(':focus-visible') || bar.querySelector(':focus-visible')) event.preventDefault();
+		} catch {
+			// No :focus-visible here: no words for the keyboard either.
+		}
+	}
+
+	/**
 	 * Touch's menu: a row each, its icon beside its words. Elsewhere an action with an icon shows the icon alone, its
 	 * words (in the markup, for the keyboard) showing beside it only while the keyboard is on the message (apron.css).
 	 */
@@ -82,7 +96,8 @@
 	};
 </script>
 
-<div bind:this={bar} class={['ap-actions', touch && 'ap-actions-touch', touch && open && 'ap-actions-menu']} role="toolbar" aria-label="Message actions" aria-orientation={menu ? 'vertical' : undefined}>
+<!-- svelte-ignore a11y_interactive_supports_focus (its buttons are the stops; the mousedown only keeps focus where it is) -->
+<div bind:this={bar} class={['ap-actions', touch && 'ap-actions-touch', touch && open && 'ap-actions-menu']} role="toolbar" aria-label="Message actions" aria-orientation={menu ? 'vertical' : undefined} onmousedown={mousedown}>
 	{#if quickShown.length}
 		<div class="ap-actions-quick" role="group" aria-label="Quick reactions">
 			{#each quickShown as it (it.id ?? it.label)}

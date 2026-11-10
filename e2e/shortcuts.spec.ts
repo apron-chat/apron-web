@@ -406,6 +406,10 @@ test('the timeline is one Tab stop: ← → go through a message, its words show
 		expect(await three.evaluate((row) => row.contains(document.activeElement) && row !== document.activeElement)).toBe(true);
 		await page.keyboard.press('Escape');
 		await expect(three).toBeFocused();
+		// A click from there lands on the button pressed: the words stay while it's pressed, rather than going as focus would leave the row.
+		await three.getByRole('button', { name: 'Edit message', exact: true }).click();
+		await expect(page.getByRole('textbox', { name: 'Edit message', exact: true })).toBeVisible();
+		await page.keyboard.press('Escape');
 		// A pointer on a message alone shows icons alone.
 		await composer.click();
 		await preview.message('alpha-1').hover();
