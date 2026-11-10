@@ -298,7 +298,8 @@ describe('a message row’s toolbar', () => {
 		expect(reply.querySelector('svg')).not.toBeNull();
 		expect([reply.title, reply.getAttribute('aria-keyshortcuts'), reply.dataset.key, reply.querySelector('.ap-actions-label')?.textContent]).toEqual(['Reply (R)', 'r', 'R', 'Reply']);
 		expect(dom.button('Edit message').title).toBe('Edit (E)');
-		expect([dom.button('Start thread').title, dom.button('Start thread').dataset.key]).toEqual(['Start thread', undefined]);
+		// Its words say Thread, a verb as Reply and Edit are; what a screen reader hears (Start thread) still holds them.
+		expect([dom.button('Start thread').title, dom.button('Start thread').querySelector('.ap-actions-label')?.textContent, dom.button('Start thread').dataset.key]).toEqual(['Thread', 'Thread', undefined]);
 	});
 
 	it('offers Remove reply under ⋯ only on a reply', () => {
@@ -333,9 +334,10 @@ describe('a message row’s toolbar', () => {
 		flushSync();
 		dom.button('Copy link to message').click();
 		await vi.waitFor(() => expect(dom.queryByRole('button', 'Link copied')).not.toBeNull());
-		// Its icon turns to a check (ActionIcons'), and its tooltip still names it.
+		// In the menu ⋯ opened, its row's icon turns to a check (ActionIcons') and its words to Copied.
+		expect(dom.byRole('toolbar', 'Message actions').getAttribute('aria-orientation')).toBe('vertical');
 		expect(dom.button('Link copied').querySelector('path[d="M20 6 9 17l-5-5"]')).not.toBeNull();
-		expect(dom.button('Link copied').title).toBe('Copy link');
+		expect(dom.button('Link copied').textContent).toBe('Copied');
 		vi.advanceTimersByTime(1200);
 		flushSync();
 		expect(dom.queryByRole('button', 'Link copied')).toBeNull();
@@ -384,6 +386,8 @@ describe('a message row’s toolbar', () => {
 		expect(pick).toHaveBeenCalledWith(expect.objectContaining({ id: '1' }), react);
 		expect(react.getAttribute('aria-expanded')).toBe('true');
 		dom.unmount();
+		// The toolbar is the dock's, its own root: it empties as that root next settles.
+		flushSync();
 		expect(release).toHaveBeenCalledOnce();
 	});
 });
@@ -471,6 +475,17 @@ describe('select gestures', () => {
 	}
 	const held = (row: Element) => row.classList.contains('ap-msg-held');
 	const buttons = () => [...dom.byRole('toolbar', 'Message actions').querySelectorAll('button')].map(dom.nameOf);
+
+	it('moves touch’s menu to the row a new long press is on, though the other’s was open', () => {
+		vi.useFakeTimers();
+		render({ id: 'a', caps: { ...NONE, reply: true } });
+		render({ id: 'b', caps: { ...NONE, reply: true, edit: true } });
+		const [a, b] = [...document.querySelectorAll('article')];
+		hold(a.querySelector('.ap-msg-text')!);
+		expect(a.querySelector('[role="toolbar"]')).not.toBeNull();
+		hold(b.querySelector('.ap-msg-text')!);
+		expect([a.querySelector('[role="toolbar"]'), b.querySelector('[role="toolbar"]') !== null, held(b)]).toEqual([null, true, true]);
+	});
 
 	it('opens a larger menu from a long touch press, React and Reply up front and the rest behind ⋯ as rows, Select on anyone’s', () => {
 		vi.useFakeTimers();
@@ -710,5 +725,101 @@ describe('task list checkboxes', () => {
 		expect(box().checked).toBe(true);
 		expect(box().closest('.ap-task-item')!.classList.contains('ap-task-done')).toBe(true);
 		dom.cleanup();
+	});
+});
+
+describe('the toolbar the rows share (the dock)', () => {
+	/** Two rows, each with its own view and handlers. */
+	function rows(first: Partial<MessageView>, second: Partial<MessageView>, on: MessageHandlers = {}) {
+		render({ id: 'a', ...first }, on);
+		render({ id: 'b', ...second }, on);
+		const [a, b] = [...document.querySelectorAll('article')];
+		return { a, b };
+	}
+	const toolbars = () => [...document.querySelectorAll('[role="toolbar"][aria-label="Message actions"]')];
+	const names = (row: Element) => [...row.querySelectorAll('[role="toolbar"] button')].map(dom.nameOf);
+
+	it('moves one toolbar into whichever row is reached, drawing that row’s actions', () => {
+		const reply = vi.fn();
+		const { a, b } = rows({ caps: { ...NONE, reply: true, edit: true } }, { caps: { ...NONE, reply: true } }, { reply });
+		engage(a);
+		const toolbar = toolbars()[0];
+		expect([toolbars().length, a.contains(toolbar), names(a)]).toEqual([1, true, ['Reply to message', 'Edit message', 'More actions']]);
+		engage(b);
+		// The same toolbar, now in the other row, with that row's actions.
+		expect([toolbars().length, toolbars()[0], b.contains(toolbar), a.contains(toolbar), names(b)]).toEqual([1, toolbar, true, false, ['Reply to message']]);
+		dom.button('Reply to message').click();
+		expect(reply).toHaveBeenCalledWith(expect.objectContaining({ id: 'b' }));
+		// Back again: into the slot that row kept, its markup unchanged by the moves.
+		const slot = a.querySelector('.ap-msg-dock');
+		engage(a);
+		expect([a.querySelector('.ap-msg-dock'), a.contains(toolbar), b.contains(toolbar), names(a)]).toEqual([slot, true, false, ['Reply to message', 'Edit message', 'More actions']]);
+	});
+
+	it('stays with the row whose menu is open, the row reached meanwhile showing none, and moves on once it shuts', () => {
+		const { a, b } = rows({ caps: { ...NONE, link: true, reply: true } }, { caps: { ...NONE, link: true, reply: true } });
+		engage(a);
+		dom.button('More actions').click();
+		flushSync();
+		expect(names(a)).toContain('Copy link to message');
+		engage(b);
+		expect([toolbars().length, names(b)]).toEqual([1, []]);
+		// Escape shuts it; the next row reached takes the toolbar, its own shut.
+		toolbars()[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+		flushSync();
+		engage(b);
+		expect(names(b)).toEqual(['Reply to message', 'More actions']);
+	});
+
+	it('lets its menu go, and the toolbar with it, on an Escape anywhere or focus leaving it', async () => {
+		const { a, b } = rows({ caps: { ...NONE, link: true, reply: true } }, { caps: { ...NONE, link: true, reply: true } });
+		// Escape with the keyboard on the row, not in the menu.
+		engage(a);
+		dom.button('More actions').click();
+		flushSync();
+		a.focus();
+		a.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+		flushSync();
+		engage(b);
+		expect(names(b)).toEqual(['Reply to message', 'More actions']);
+		// Focus leaving the open menu, as Tab on to the composer would.
+		dom.button('More actions').click();
+		flushSync();
+		dom.button('Copy link to message').focus();
+		const elsewhere = document.body.appendChild(document.createElement('button'));
+		elsewhere.focus();
+		await Promise.resolve();
+		flushSync();
+		engage(a);
+		expect(names(a)).toEqual(['Reply to message', 'More actions']);
+	});
+
+	it('leaves the next row’s menu open when the last row’s Copied runs out', async () => {
+		vi.useFakeTimers();
+		const copyLink = vi.fn(async () => true);
+		const { a, b } = rows({ caps: { ...NONE, link: true, reply: true } }, { caps: { ...NONE, link: true, reply: true } }, { copyLink });
+		engage(a);
+		dom.button('More actions').click();
+		flushSync();
+		dom.button('Copy link to message').click();
+		await vi.waitFor(() => expect(dom.queryByRole('button', 'Link copied')).not.toBeNull());
+		// A press elsewhere puts a's menu away; b's opens before a's Copied runs out.
+		document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+		flushSync();
+		engage(b);
+		dom.button('More actions').click();
+		flushSync();
+		vi.advanceTimersByTime(1200);
+		flushSync();
+		expect(names(b)).toContain('Copy link to message');
+	});
+
+	it('stays with the row whose picker is open, the row reached meanwhile showing none', () => {
+		const { a, b } = rows({ caps: { ...NONE, react: true } }, { caps: { ...NONE, react: true } }, { pick: vi.fn(), picking: (view) => view.id === 'a' });
+		engage(a);
+		const toolbar = toolbars()[0];
+		expect(toolbar.querySelector('[aria-expanded="true"]')).not.toBeNull();
+		engage(b);
+		expect([toolbars().length, a.contains(toolbar), b.querySelector('[role="toolbar"]')]).toEqual([1, true, null]);
 	});
 });

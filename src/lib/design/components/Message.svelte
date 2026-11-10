@@ -7,9 +7,8 @@
 </script>
 
 <script lang="ts">
-	import type { Snippet } from 'svelte';
+	import { flushSync, type Snippet } from 'svelte';
 	import Avatar from './Avatar.svelte';
-	import MessageActions from './MessageActions.svelte';
 	import MessageEmbeds from './MessageEmbeds.svelte';
 	import ReactionBar from './ReactionBar.svelte';
 	import ReadReceipts from './ReadReceipts.svelte';
@@ -18,14 +17,15 @@
 	import RoleBadges from './RoleBadges.svelte';
 	import TypingDots from './TypingDots.svelte';
 	import * as icons from './ActionIcons.svelte';
+	import { messageDock, type DockClaim } from './message-dock.svelte';
 	import type { MessageAction, MessageEmbed, MessageTestids, MessageView } from './types';
 	import { times } from './util';
 
 	/**
 	 * One message row, drawn from a MessageView. The header, body and reactions are its own; the quote, the messages,
 	 * rooms and threads its links point to, the embeds, the hover toolbar and the editor are parts it adds only to the
-	 * rows that have them. The toolbar is built the first time a pointer or focus reaches the row, since it only shows
-	 * then.
+	 * rows that have them. The toolbar is the dock's (`message-dock.svelte.ts`), the only one, moved into whichever row a
+	 * pointer, focus or long press reaches; a row reached while another is using it shows none until reached again.
 	 */
 	interface Props {
 		view: MessageView;
@@ -38,7 +38,17 @@
 	}
 	let { view, on = NONE, testids, editor, embed }: Props = $props();
 
-	let engaged = $state(false);
+	/**
+	 * It holds the dock: its toolbar is in the row, in its slot. Not state: moving the toolbar between rows changes
+	 * neither row's markup, so going back and forth costs only what differs between their toolbars.
+	 */
+	let docked = false;
+	/** The row has held the dock: its slot is drawn, and stays for the next time (`dockSlot`). */
+	let reached = $state(false);
+	/** That slot, while drawn. */
+	let slot: HTMLElement | undefined;
+	/** Its hold on the dock, made the first time it's reached. */
+	let claim: DockClaim | undefined;
 	/** The last press on the row was a touch: its toolbar shows only once a long press opens it (`held`). */
 	let touch = $state(false);
 	/**
@@ -66,7 +76,37 @@
 	const checkable = $derived(Boolean(view.selecting && view.caps?.select));
 	const caps = $derived(view.caps);
 	const actionable = $derived(caps !== undefined && (caps.reply || caps.edit || caps.removeReply || caps.react || caps.startThread || caps.link || caps.select));
-	const toolbar = $derived(engaged && !view.editing && !view.selecting && actionable);
+	/** It has a toolbar to show: not in select mode or the editor, and something it may do. */
+	const showable = $derived(!view.editing && !view.selecting && actionable);
+
+	/** The row was reached while another was using the dock: the pointer moving over it asks again. */
+	let wanting = false;
+
+	/** Takes the dock for the row, unless another row is using it; `taking` (a long press) takes it all the same. */
+	function takeBar(taking = false): void {
+		if (docked || !showable) return;
+		claim ??= { bar: () => (showable ? { ...actions(), touch: held } : undefined), pinned: () => held, lost: () => (docked = false) };
+		docked = messageDock.claim(claim, taking);
+		wanting = !docked;
+		if (!docked) return;
+		// Into its slot now, from the event that reached it; the first time, the slot takes it as it's drawn.
+		if (slot) slot.append(messageDock.host);
+		else reached = true;
+	}
+
+	/**
+	 * The dock's slot in the row, drawn the first time the row holds it and kept: the toolbar moves in whenever the row
+	 * takes it, and is let go should the row go while holding it, so a picker its React opened closes.
+	 */
+	function dockSlot(node: HTMLElement): () => void {
+		const mine = claim!;
+		slot = node;
+		if (docked) node.append(messageDock.host);
+		return () => {
+			slot = undefined;
+			messageDock.release(mine);
+		};
+	}
 
 	/**
 	 * The toolbar's actions, in order: React first, beside the quick reactions; the rarer ones wait behind ⋯. Each
@@ -92,7 +132,7 @@
 		const react: MessageAction | undefined = can.react && !view.deleted
 			? { id: 'react', label: 'React', title: 'React', icon: icons.smilePlus, popup: true, expanded: on.picking?.(view), attach: on.pickAnchor, onclick: (event) => on.pick?.(view, event.currentTarget as HTMLElement) }
 			: undefined;
-		const thread: MessageAction | undefined = can.startThread ? { id: 'thread', label: 'Start thread', title: 'Start thread', icon: icons.thread, onclick: () => on.startThread?.(view) } : undefined;
+		const thread: MessageAction | undefined = can.startThread ? { id: 'thread', label: 'Start thread', title: 'Thread', glyph: 'Thread', icon: icons.thread, onclick: () => on.startThread?.(view) } : undefined;
 		const edit: MessageAction | undefined = can.edit ? { id: 'edit', label: 'Edit message', title: 'Edit', glyph: 'Edit', icon: icons.pencil, key: 'E', onclick: () => ((held = false), on.edit?.(view)) } : undefined;
 		const unreply: MessageAction | undefined = can.edit && !can.textOnly && view.reply ? { id: 'unreply', label: 'Remove reply reference', title: 'Remove reply', glyph: 'Remove reply', icon: icons.unlink, onclick: () => on.removeReply?.(view) } : undefined;
 		const select: MessageAction | undefined = can.select ? { id: 'select', label: 'Select message', title: 'Select', glyph: 'Select', icon: icons.squareCheck, testid: testids?.select, onclick: () => ((held = false), on.beginSelect?.(view)) } : undefined;
@@ -167,6 +207,12 @@
 	 * between messages is the timeline's (the page's `timelineKey`).
 	 */
 	function keydown(event: KeyboardEvent): void {
+		// The keyboard on a row whose toolbar the pointer took elsewhere: it comes back, drawn now, for → to step into.
+		if (!docked && showable) {
+			readQuick();
+			takeBar();
+			if (docked) flushSync();
+		}
 		if (event.key === 'Escape' && held) {
 			event.preventDefault();
 			release(event.currentTarget as HTMLElement);
@@ -225,6 +271,8 @@
 	/** A finger that drifts is scrolling, not holding (`longPress`). */
 	function pointermove(event: PointerEvent): void {
 		longPress.move(event);
+		// The row the pointer is on once another's picker or menu shuts: its toolbar, without leaving and coming back.
+		if (wanting && event.pointerType === 'mouse') takeBar();
 	}
 
 	/** The finger lifted: this row's long press, if one is under way, doesn't fire. */
@@ -244,15 +292,15 @@
 	/** Opens touch's menu on the row, focused so that focus leaving it (a tap elsewhere, another's menu) puts it away. */
 	function hold(row: HTMLElement): void {
 		held = true;
-		engaged = true;
 		readQuick();
+		takeBar(true);
 		swallow = true;
 		row.focus({ preventScroll: true });
 	}
 
 	function engage(event: Event): void {
-		engaged = true;
 		readQuick();
+		takeBar();
 		if ((event as PointerEvent).pointerType === 'mouse') touch = false;
 	}
 
@@ -382,9 +430,6 @@
 			{/if}
 			{#if !view.deleted && view.reactions?.length}<ReactionBar reactions={view.reactions} disabled={!caps?.react} add={Boolean(on.pick) && !view.editing && !view.selecting} adding={on.picking?.(view)} addAnchor={on.pickAnchor} onopen={(anchor) => on.pick?.(view, anchor)} ontoggle={(emoji) => on.react?.(view, emoji)} onreactors={(emoji, chip) => on.reactors?.(view, emoji, chip)} data-testid={testids?.reactions} chipTestid={testids?.chip} />{/if}
 		</div>
-		{#if toolbar}
-			{@const { quick, items, more } = actions()}
-			<div class="ap-msg-actions"><MessageActions {quick} {items} {more} touch={held} /></div>
-		{/if}
+		{#if reached}<div class="ap-msg-dock" {@attach dockSlot}></div>{/if}
 	</article>
 {/if}

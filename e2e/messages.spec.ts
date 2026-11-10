@@ -93,6 +93,39 @@ test.describe('a message row', () => {
 	});
 });
 
+/** Whether the toolbar of the message hovered shows Reply's words beside its icon. */
+async function replyWords(preview: Preview, text: string): Promise<boolean> {
+	const row = preview.message(text);
+	await row.hover();
+	const reply = row.getByRole('button', { name: 'Reply to message', exact: true });
+	await expect(reply).toBeVisible();
+	return reply.evaluate((element) => getComputedStyle(element.querySelector('.ap-actions-label')!).display !== 'none');
+}
+
+for (const [device, wide] of [['desktop', true], ['tablet', false]] as const) {
+	test.describe(`the message toolbar, ${device}`, () => {
+		test.use(DEVICES[device]);
+
+		test(wide ? 'shows each icon’s words beside it in a wide pane, and ⋯ opens a menu of them' : 'shows icons alone where the pane is narrow, and ⋯ opens a menu of their words', async ({ preview, page }) => {
+			await preview.open();
+			expect(await replyWords(preview, 'Try markdown')).toBe(wide);
+			const toolbar = preview.message('Try markdown').getByRole('toolbar', { name: 'Message actions' });
+			await toolbar.getByRole('button', { name: 'More actions', exact: true }).click();
+			await expect(toolbar).toHaveAttribute('aria-orientation', 'vertical');
+			await expect(toolbar.getByRole('button', { name: 'Copy link to message', exact: true })).toHaveText('Copy link');
+			// It stays while open, the pointer over another message; once Escape shuts it, that message gets the toolbar.
+			const other = preview.message('Open a thread');
+			await other.hover({ position: { x: 24, y: 12 } });
+			await expect(toolbar).toHaveAttribute('aria-orientation', 'vertical');
+			await expect(other.getByRole('toolbar', { name: 'Message actions' })).toHaveCount(0);
+			await page.keyboard.press('Escape');
+			await other.hover({ position: { x: 32, y: 14 } });
+			await expect(other.getByRole('toolbar', { name: 'Message actions' })).toBeVisible();
+			await expect(other.getByRole('toolbar', { name: 'Message actions' })).not.toHaveAttribute('aria-orientation', 'vertical');
+		});
+	});
+}
+
 test.describe('a task list', () => {
 	test.use(DEVICES.desktop);
 
