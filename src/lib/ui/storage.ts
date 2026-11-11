@@ -50,7 +50,7 @@ const KEY = {
 	 * `token`), by its address: chosen first on its connect screen next time. Kept through signing out.
 	 */
 	lastSignIn: 'apron.lastSignIn',
-	/** The terminal embeds closed on this device (`closedTerminals`), by `terminalKey`, closed longest ago first. */
+	/** The terminal embeds closed on this device (`closedTerminals`), by `terminalKey`, closed longest ago first. Deleted with the history of the accounts they were closed by. */
 	closedTerminals: 'apron.closedTerminals',
 	/** The emoji you reacted with last, latest first (`rememberReaction`): the toolbar's quick reactions. */
 	recentReactions: 'apron.recentReactions',
@@ -74,10 +74,8 @@ const ADDED_ROOMS_MAX = 50;
 const THREAD_FOLDS_MAX = 200;
 /** The most descriptions kept put away; the ones put away longest ago show again first. */
 const HIDDEN_DESCRIPTIONS_MAX = 200;
-/** The most read positions kept; the ones moved longest ago go first. */
-const READ_POSITIONS_MAX = 500;
-/** The most terminal embeds kept closed; the ones closed longest ago show again first. */
-const CLOSED_TERMINALS_MAX = 500;
+/** The most entries kept per message, room or thread you read: read positions, closed terminals. The oldest go first. */
+const READ_ITEMS_MAX = 500;
 /** The most servers whose last sign-in is kept; the ones signed in to longest ago go first. */
 const LAST_SIGN_IN_MAX = 50;
 
@@ -380,8 +378,18 @@ export function loadClosedTerminals(): string[] {
  */
 export function saveTerminalClosed(keys: readonly string[], key: string, closed: boolean): string[] {
 	const others = (persisting ? loadClosedTerminals() : keys).filter((entry) => entry !== key);
-	const next = closed ? [...others, key].slice(-CLOSED_TERMINALS_MAX) : others;
+	const next = closed ? [...others, key].slice(-READ_ITEMS_MAX) : others;
 	write(KEY.closedTerminals, JSON.stringify(next));
+	return next;
+}
+
+/** Shows again every closed terminal embed whose key starts with `prefix` (all, with `''`): returns the ones still closed. */
+export function forgetClosedTerminals(keys: readonly string[], prefix: string): string[] {
+	const saved = persisting ? loadClosedTerminals() : keys;
+	const next = saved.filter((entry) => !entry.startsWith(prefix));
+	if (next.length === saved.length) return next;
+	if (next.length) write(KEY.closedTerminals, JSON.stringify(next));
+	else remove(KEY.closedTerminals);
 	return next;
 }
 
@@ -422,7 +430,7 @@ export function advanceReadPositions(positions: Record<string, string>): Record<
 	const moved = Object.entries(positions).filter(([key, id]) => kept[key] === undefined || compareLogIds(id, kept[key]) > 0);
 	if (!moved.length) return kept;
 	const keys = new Set(moved.map(([key]) => key));
-	const next = Object.fromEntries([...Object.entries(kept).filter(([key]) => !keys.has(key)), ...moved].slice(-READ_POSITIONS_MAX));
+	const next = Object.fromEntries([...Object.entries(kept).filter(([key]) => !keys.has(key)), ...moved].slice(-READ_ITEMS_MAX));
 	write(KEY.readPositions, JSON.stringify(next));
 	return next;
 }

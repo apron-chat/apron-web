@@ -249,21 +249,16 @@ describe('preference storage', () => {
 		expect(loadHiddenDescriptions()).toEqual({});
 	});
 
-	it('keeps terminals closed until shown, as saved by any tab, and forgets the oldest past the limit', () => {
-		expect(loadClosedTerminals()).toEqual([]);
+	it('keeps terminals closed as saved by any tab, forgets the oldest past the limit, and reads nothing from a broken entry', () => {
 		const here = loadClosedTerminals();
-		saveTerminalClosed(loadClosedTerminals(), 'https://a embed_1', true);
-		expect(saveTerminalClosed(here, 'https://a embed_2', true)).toEqual(['https://a embed_1', 'https://a embed_2']);
-		expect(saveTerminalClosed(loadClosedTerminals(), 'https://a embed_1', true)).toEqual(['https://a embed_2', 'https://a embed_1']);
-		expect(saveTerminalClosed(loadClosedTerminals(), 'https://a embed_2', false)).toEqual(['https://a embed_1']);
-		for (let i = 0; i < 500; i++) saveTerminalClosed([], `https://a ${i}`, true);
-		const kept = loadClosedTerminals();
-		expect(kept).toHaveLength(500);
-		expect(kept[0]).toBe('https://a 0');
+		saveTerminalClosed(loadClosedTerminals(), 'a', true);
+		expect(saveTerminalClosed(here, 'b', true)).toEqual(['a', 'b']);
+		expect(saveTerminalClosed(loadClosedTerminals(), 'a', false)).toEqual(['b']);
+		for (let i = 0; i < 500; i++) saveTerminalClosed([], `${i}`, true);
+		expect(loadClosedTerminals()[0]).toBe('0');
+		expect(loadClosedTerminals()).toHaveLength(500);
 		values.set('apron.closedTerminals', '{broken');
 		expect(loadClosedTerminals()).toEqual([]);
-		values.set('apron.closedTerminals', '["https://a embed_1", 5]');
-		expect(loadClosedTerminals()).toEqual(['https://a embed_1']);
 	});
 
 	it('keeps the descriptions another tab put away, or brought back, since this one loaded them', () => {

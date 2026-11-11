@@ -71,7 +71,7 @@ export interface EmbedProps {
 	oncopy?: () => boolean | Promise<boolean>;
 	/** terminal: shows Close in the header, which calls this to close it: hide its screen, and stop reading its stream. */
 	onclose?: () => void;
-	/** terminal: closed, so only its header shows, saying Closed, with Show (which calls `onshow`) in place of Close. */
+	/** terminal: closed, so only its header shows, saying Closed, with Show (which calls `onshow`) in place of Close; only with `onshow`. */
 	closed?: boolean;
 	/** terminal, while `closed`: shows Show in the header, which calls this to show it again. */
 	onshow?: () => void;

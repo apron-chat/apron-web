@@ -60,6 +60,11 @@ class Directory {
 	}
 
 	you = $state.raw<Identity | undefined>();
+	/**
+	 * Whose account this is, for what is kept for it on this device (`notifyAccount`): the user's id, signed in (by
+	 * passkey or a kept session); undefined for a guest, whose id changes with each connection.
+	 */
+	account = $state<string | undefined>();
 	private users = $state.raw<Users>({ users: {}, recordedUsers: {}, userAliases: {} });
 	/** When this client saw each user go offline (`ClientSnapshot.sawOffline`): a floor under their `seen`. */
 	private sawOffline = $state.raw<Record<string, number>>({});
@@ -110,6 +115,8 @@ class Directory {
 		if (frame) customEmoji.apply(frame, server, (url) => this.mediaGate.src(url) !== undefined);
 		if (!snapshot.authenticated) return;
 		this.you = snapshot.you;
+		const account = snapshot.passkeySession || snapshot.keptSession ? snapshot.you?.user_id : undefined;
+		if (account !== this.account) this.account = account;
 		const current = this.users;
 		if (!sameEntries(current.users, snapshot.users) || !sameEntries(current.recordedUsers, snapshot.recordedUsers) || !sameEntries(current.userAliases, snapshot.userAliases)) {
 			this.users = { users: snapshot.users, recordedUsers: snapshot.recordedUsers, userAliases: snapshot.userAliases };
@@ -156,6 +163,7 @@ class Directory {
 
 	forget(): void {
 		this.you = undefined;
+		this.account = undefined;
 		this.users = { users: {}, recordedUsers: {}, userAliases: {} };
 		this.sawOffline = {};
 		this.beforeResume = {};
