@@ -24,7 +24,8 @@ beforeAll(stubDialog);
 beforeEach(() => {
 	reads.length = 0;
 	page.state = {};
-	vi.spyOn(history, 'back').mockImplementation(() => undefined);
+	// Back lands at once, as popstate says.
+	vi.spyOn(history, 'back').mockImplementation(() => window.dispatchEvent(new PopStateEvent('popstate')));
 });
 
 afterEach(() => {

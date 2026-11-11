@@ -9,7 +9,7 @@ beforeAll(stubDialog);
 const page = createRawSnippet(() => ({ render: () => '<div class="doc"><h1>Plan</h1><p>Ship it.</p></div>' }));
 
 describe('DocViewer', () => {
-	it('shows the document full screen as a page, titled, with Download and Close, and Close focused', () => {
+	it('shows the document full screen as a page, titled, with Download and Close, and the document focused', () => {
 		render(DocViewer, { open: true, title: 'plan.md', detail: 'Ada · 4:00 PM', href: 'https://files.example/plan.md', children: page, testid: 'viewer' });
 		const dialog = document.querySelector('dialog')!;
 		expect(dialog.open).toBe(true);
@@ -17,12 +17,15 @@ describe('DocViewer', () => {
 		expect(dialog.querySelector('h2')?.textContent).toBe('plan.md');
 		expect(dialog.getAttribute('aria-labelledby')).toBe(dialog.querySelector('h2')?.id);
 		expect(dialog.querySelector('.ap-viewer-detail')?.textContent).toBe('Ada · 4:00 PM');
-		expect(document.activeElement).toBe(button('Close'));
+		// Focused, so the keys that scroll a page scroll it: a region named by the document's title.
+		const stage = dialog.querySelector<HTMLElement>('.ap-docviewer-stage')!;
+		expect(document.activeElement).toBe(stage);
+		expect([stage.tabIndex, stage.getAttribute('role'), stage.getAttribute('aria-label')]).toEqual([0, 'region', 'plan.md']);
 		const download = dialog.querySelector<HTMLAnchorElement>('a[aria-label="Download plan.md"]')!;
 		expect([download.href, download.getAttribute('download'), download.target]).toEqual(['https://files.example/plan.md', 'plan.md', '_blank']);
 		const article = dialog.querySelector('article.ap-docviewer-page')!;
 		expect(article.querySelector('.doc h1')?.textContent).toBe('Plan');
-		expect(article.parentElement?.classList.contains('ap-docviewer-stage')).toBe(true);
+		expect(article.parentElement).toBe(stage);
 		// Its live region says it loaded, from where it said Loading.
 		expect(dialog.querySelector('[role="status"]')?.textContent).toBe('Loaded');
 	});
@@ -44,21 +47,6 @@ describe('DocViewer', () => {
 		props.href = 'javascript:alert(1)';
 		flushSync();
 		expect(document.querySelectorAll('dialog a')).toHaveLength(0);
-	});
-
-	it('scrolls the page with the scroll keys from the bar, and leaves them to what has focus in the page', () => {
-		render(DocViewer, { open: true, title: 'plan.md', children: page });
-		const stage = document.querySelector<HTMLElement>('.ap-docviewer-stage')!;
-		const scrollBy = vi.fn();
-		stage.scrollBy = scrollBy as unknown as HTMLElement['scrollBy'];
-		expect(press(button('Close'), 'ArrowDown')).toBe(false);
-		expect(press(button('Close'), 'PageUp')).toBe(false);
-		expect(press(button('Close'), 'End')).toBe(false);
-		expect(scrollBy.mock.calls.map(([options]) => Math.sign(options.top))).toEqual([1, -1, 1]);
-		// A key that isn't one, or one pressed in the page itself, is left alone.
-		expect(press(button('Close'), 'a')).toBe(true);
-		expect(press(stage.querySelector('p')!, 'ArrowDown')).toBe(true);
-		expect(scrollBy).toHaveBeenCalledTimes(3);
 	});
 
 	it('draws nothing while closed, and closes on Escape or Close, saying so', async () => {

@@ -4,8 +4,9 @@
 
 	/**
 	 * What a full-screen viewer is (MediaViewer, DocViewer): a modal `<dialog>` over everything, on a dark ground,
-	 * named by its title. A bar (the title, a line under it, the viewer's own `actions`, and Close, which has focus
-	 * once it opens) over what it shows (`children`), drawn only while open. Escape or Close closes it. Both viewers
+	 * named by its title. A bar (the title, a line under it, the viewer's own `actions`, and Close) over what it shows
+	 * (`children`), drawn only while open. Once it opens, focus goes to what it shows where that names a part of
+	 * itself for it (`data-viewer-focus`, such as a document to read and scroll), else to Close. Escape or Close closes it. Both viewers
 	 * load on demand, so this does too; TerminalViewer, which the layout draws from the start, keeps a dialog of its
 	 * own, as sharing this with it would split it out into one more file to load at startup.
 	 */
@@ -40,7 +41,7 @@
 		if (!dialog) return;
 		if (open && !dialog.open) {
 			dialog.showModal();
-			closeButton?.focus();
+			(dialog.querySelector<HTMLElement>('[data-viewer-focus]') ?? closeButton)?.focus();
 		} else if (!open && dialog.open) dialog.close();
 	});
 

@@ -40,30 +40,37 @@ export class Viewer<V> {
 }
 
 /**
+ * A Back a viewer went, on its way: set when closing one goes Back off its entry, until that Back lands (popstate).
+ * One for all the viewers: an entry pushed meanwhile, by any of them, is the one that Back would leave, closing it.
+ */
+let goingBack = $state(false);
+
+function goBack(): void {
+	goingBack = true;
+	window.addEventListener('popstate', () => (goingBack = false), { once: true });
+	history.back();
+}
+
+/**
  * A full-screen viewer as a history entry of its own, so Back closes it, as a phone's Back is expected to. Call it
  * while a component initializes: it sets up an effect. Once `isOpen` turns true, it pushes an entry marked under
  * `key` in `page.state` (with when it opened, each mark later than the last); leaving that entry, by Back or anything
  * else, calls `close`. It returns what to call once the viewer has closed, however it did: closed another way
  * (Escape, Close) while still on its entry, it goes Back off it, so Back later doesn't land on a viewer that's gone.
- * That Back lands a moment later: a viewer opened again meanwhile waits for it before pushing its own entry, which
- * the Back would otherwise leave, closing it.
+ * That Back lands a moment later: a viewer opened meanwhile, this one or another, waits for it before pushing its
+ * own entry, which the Back would otherwise leave, closing it.
  */
 export function backCloses(key: ViewerEntry, isOpen: () => boolean, close: () => void): () => void {
 	/** The entry it pushed, while it is open on it; 0 for none. */
 	let entry = 0;
-	/** The entry it went Back from, until that Back lands; 0 for none. */
-	let leaving = 0;
 	/** The last entry's mark: two opens in one millisecond (or under a stopped clock) differ. */
 	let marked = 0;
 
 	$effect(() => {
 		const here = page.state[key];
 		const open = isOpen();
+		const waiting = goingBack;
 		untrack(() => {
-			if (leaving) {
-				if (here === leaving) return;
-				leaving = 0;
-			}
 			if (entry) {
 				if (here !== entry) {
 					entry = 0;
@@ -71,7 +78,7 @@ export function backCloses(key: ViewerEntry, isOpen: () => boolean, close: () =>
 				}
 				return;
 			}
-			if (!open) return;
+			if (!open || waiting) return;
 			const mark = (marked = Math.max(Date.now(), marked + 1));
 			try {
 				pushState('', { ...page.state, [key]: mark });
@@ -83,10 +90,7 @@ export function backCloses(key: ViewerEntry, isOpen: () => boolean, close: () =>
 	});
 
 	return () => {
-		if (entry && page.state[key] === entry) {
-			leaving = entry;
-			history.back();
-		}
+		if (entry && page.state[key] === entry) goBack();
 		entry = 0;
 	};
 }

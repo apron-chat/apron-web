@@ -213,7 +213,7 @@ describe('a terminal embed, expanded (the viewer)', () => {
 		const server = serve();
 		const box = showWithViewer({ kind: 'terminal', url: 'https://chat.example/t/5' });
 		await vi.waitFor(() => expect(server.responses).toHaveLength(1));
-		const back = vi.spyOn(history, 'back').mockImplementation(() => {});
+		const back = vi.spyOn(history, 'back').mockImplementation(() => window.dispatchEvent(new PopStateEvent('popstate')));
 		const expand = button('Expand terminal', box);
 		expand.click();
 		flushSync();
@@ -240,7 +240,7 @@ describe('a terminal embed, expanded (the viewer)', () => {
 		expect(text(FakeTerminal.made[1].written)).toEqual([ESC_C, 'ok\r\n']);
 		expect(viewer()?.querySelector('.ap-viewer-detail')?.textContent).toBe('Finished');
 		// Back: the entry before it.
-		const back = vi.spyOn(history, 'back').mockImplementation(() => {});
+		const back = vi.spyOn(history, 'back').mockImplementation(() => window.dispatchEvent(new PopStateEvent('popstate')));
 		page.state = {};
 		flushSync();
 		await tick();
