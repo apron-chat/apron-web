@@ -220,11 +220,15 @@ test.describe('a link to a server not used here', () => {
 
 	const PIPER = 'wss://scene.apron.chat/piper';
 
-	/** Opens the app on its own server, then loads it again from a link to #eng on `PIPER`, as a link opens it in a new tab. */
+	/**
+	 * Opens the app on its own server, then loads it again from a link to #eng on `PIPER`, as a link opens it in a new
+	 * tab: a fresh load from a blank page. Setting the fragment on the open page and reloading raced the page, which
+	 * could take the link as a hash change and put its own address back before the reload, which then had no link.
+	 */
 	async function openLink(preview: Preview, options: Parameters<Preview['openRoot']>[0]): Promise<void> {
 		await preview.openRoot(options);
+		await preview.page.goto('about:blank');
 		await preview.page.goto(`${process.env.E2E_URL}/#server=${encodeURIComponent(PIPER)}&room=eng`);
-		await preview.page.reload();
 	}
 
 	test('shows its address alone and contacts it only on Continue, then offers just what it offers', async ({ preview, page }) => {
@@ -254,15 +258,16 @@ test.describe('a link to a server not used here', () => {
 	});
 
 	test('joins a server that only reads (a served archive) on Continue, asking no name and sending none', async ({ preview, page }) => {
-		const sent: Record<string, any>[] = [];
-		await openLink(preview, { sent, servers: { [PIPER]: { auth: ['guest'], signup: undefined, title: 'Pied Piper', capabilities: ['history', 'rooms', 'ext:permissions', 'ext:archive'], ext: { archive: { server: PIPER } } } } });
+		const sentTo: { url: string; frame: Record<string, any> }[] = [];
+		await openLink(preview, { sentTo, servers: { [PIPER]: { auth: ['guest'], signup: undefined, title: 'Pied Piper', capabilities: ['history', 'rooms', 'ext:permissions', 'ext:archive'], ext: { archive: { server: PIPER } } } } });
 		const form = page.getByRole('form', { name: 'Sign in' });
 		await expect(page.getByTestId('connect-name-input')).toHaveCount(0);
-		const before = sent.length;
 		await form.getByRole('button', { name: 'Continue', exact: true }).click();
 		await expect(form).toHaveCount(0);
 		await expect(page.getByTestId('connection-status')).toHaveText('Connected');
-		const after = sent.slice(before);
+		// Only what went to the archive: the page stays signed in where it was meanwhile, and that server's own
+		// frames (an `auth` as it reconnects after the reload) may come at any point.
+		const after = sentTo.filter((sent) => sent.url === PIPER).map((sent) => sent.frame);
 		expect(after.filter((frame) => frame.method === 'auth').map((frame) => frame.params.scheme)).toEqual(['guest']);
 		expect(after.filter((frame) => frame.method === 'me')).toEqual([]);
 	});
