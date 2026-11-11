@@ -9,7 +9,7 @@ Run only the tests that cover what you changed. Leave the full suites for the fi
 - **Unit tests:** run the files you touched and their neighbours, e.g. `npx vitest run src/lib/ui/session`. Test files that use `vi.mock` run isolated on their own; nothing else is needed for them.
 - **Types:** `npm run check` when you changed types or component props.
 - **e2e:** the specs serve `build/`, so build the preview once and rebuild after app changes: `APRON_PREVIEW=1 npx vite build`. Then run the specs for what you touched: `npx playwright test -c e2e/playwright.config.ts e2e/<spec>.spec.ts`.
-- **Broad UI changes:** use `npm run e2e:short` (~1 min). It skips the slowest specs and tests tagged `@full`.
+- **Broad UI changes:** use `npm run e2e:short` (~1 min). It skips the slowest specs, tests tagged `@full` and the interop contract's check, but runs its scenes.
 
 **Final check**, once, before pushing for review or merging:
 
