@@ -13,15 +13,15 @@ const HISTORY_DELAY_MS = 1_200;
 test.use({ ...DEVICES.phone, knobs: { historyDelayMs: HISTORY_DELAY_MS, filler: { general: 80 } } });
 
 /**
- * Runs the page's clock on, `step` at a time, until `done`; polled at once, since the clock is fake. A step shorter
- * than an answer's delay sees what shows only while one is awaited.
+ * Runs the page's clock on, `step` at a time, until `done`, for up to `within` of the page's time. A step shorter than
+ * an answer's delay sees what shows only while one is awaited. Bounded by the page's clock, not the machine's: a
+ * real-time limit (`expect.poll`'s 5 s) ran out on a busy machine, each step's checks taking longer there.
  */
-async function runUntil(page: Page, step: number, done: () => Promise<boolean>): Promise<void> {
-	await expect.poll(async () => {
-		if (await done()) return true;
+async function runUntil(page: Page, step: number, done: () => Promise<boolean>, within = 60_000): Promise<void> {
+	for (let ran = 0; !(await done()); ran += step) {
+		if (ran >= within) throw new Error(`not done after ${within} ms of the page's clock`);
 		await page.clock.fastForward(step);
-		return done();
-	}, { intervals: [0] }).toBe(true);
+	}
 }
 
 test('other rooms catching up run a line under the header, and older messages loading say so at the top', async ({ preview, page }) => {
