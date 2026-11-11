@@ -3,24 +3,19 @@
 	import { longPress } from './hold';
 	import { smilePlus } from './ActionIcons.svelte';
 
-	const PALETTE = ['👍', '❤️', '😂', '🎉', '😮', '😢', '👀', '✅'];
-
 	interface Props {
 		reactions: ReactionChip[];
-		/** The palette is open under the message. */
-		open?: boolean;
 		/** No capability `reactions`, or the session can't send now: chips render but don't toggle, and stay focusable so `onreactors` still works. */
 		disabled?: boolean;
 		/** Toggle your own emoji; send your complete set with `reactions`. */
 		ontoggle?: (emoji: string) => void;
-		/** The + after the chips, which opens the palette (or your own picker, beside `anchor`); false leaves it out. */
+		/** The + after the chips, which opens your picker beside `anchor`; false leaves it out. */
 		add?: boolean;
 		onopen?: (anchor: HTMLElement) => void;
 		/** Your own picker is open from the +: its `aria-expanded`, and it stays shown meanwhile. */
 		adding?: boolean;
 		/** An attachment for the +, such as one that closes your picker when the button goes. */
 		addAnchor?: (button: HTMLElement) => void | (() => void);
-		onclose?: () => void;
 		/**
 		 * A right-click (or the context menu key) or a long touch press on a chip: show who reacted, beside `chip`.
 		 * The click that ends a long press doesn't toggle.
@@ -31,9 +26,8 @@
 		/** On the group of chips. */
 		'data-testid'?: string;
 	}
-	let { reactions, open, disabled, ontoggle, add = true, onopen, adding, addAnchor, onclose, onreactors, chipTestid, 'data-testid': testid }: Props = $props();
+	let { reactions, disabled, ontoggle, add = true, onopen, adding, addAnchor, onreactors, chipTestid, 'data-testid': testid }: Props = $props();
 	const chips = $derived((reactions || []).filter((r) => r.count > 0));
-	const mine = $derived(new Set(chips.filter((c) => c.mine).map((c) => c.emoji)));
 
 	/** A long press showed who reacted: the click that ends it doesn't toggle. */
 	let held = false;
@@ -107,13 +101,5 @@
 			><span class="ap-rchip-emoji" aria-hidden="true">{#if c.image}<img class="ap-cemoji" src={c.image.src} alt="" style:aspect-ratio={c.image.width && c.image.height ? `${c.image.width} / ${c.image.height}` : '1 / 1'} />{:else if c.placeholder}<span class="ap-rchip-placeholder"></span>{:else}{c.emoji}{/if}</span><span class="ap-rchip-count" aria-hidden="true">{c.count}</span></button>
 		{/each}
 		{#if add && !disabled}<button type="button" class="ap-rchip ap-rchip-add" aria-label="Add a reaction" title="Add a reaction" aria-haspopup={adding === undefined ? undefined : 'dialog'} aria-expanded={adding === undefined ? undefined : adding} {@attach addAnchor ?? noAttach} onclick={(event) => onopen?.(event.currentTarget)}>{@render smilePlus()}</button>{/if}
-	</div>
-{/if}
-{#if open}
-	<div class="ap-rpalette" role="toolbar" tabindex="-1" aria-label="Pick a reaction" onkeydown={(e) => { if (e.key === 'Escape') { e.preventDefault(); onclose?.(); } }}>
-		{#each PALETTE as e (e)}
-			<button type="button" class={['ap-iconbtn', 'ap-iconbtn-lg', 'ap-iconbtn-round', 'ap-rpick', mine.has(e) && 'ap-rpick-mine']} aria-pressed={mine.has(e)} aria-label="React with {e}" title={e} {disabled} onclick={() => { onclose?.(); ontoggle?.(e); }}>{e}</button>
-		{/each}
-		<button type="button" class="ap-iconbtn ap-iconbtn-lg ap-iconbtn-round ap-rpick ap-rpick-close" aria-label="Close reactions" title="Close" onclick={onclose}>×</button>
 	</div>
 {/if}
