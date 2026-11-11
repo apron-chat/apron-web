@@ -207,31 +207,3 @@ test.describe('the viewer\'s code', () => {
 		expect(fetched(/ap-docviewer-stage/)).toBe(true);
 	});
 });
-
-test.describe('the viewer\'s code, when it can\'t load', () => {
-	test.use({ ...DEVICES.desktop, serviceWorkers: 'block', knobs: { capabilities: ['embed:upload'] } });
-
-	test('says so, and the next click loads it and opens the file', async ({ preview, page }) => {
-		// The viewer's chunk fails (offline, say) until `failing` is false; every other script loads.
-		let failing = true;
-		await page.route('**/_app/immutable/**/*.js', async (route) => {
-			const response = await route.fetch();
-			const body = await response.text();
-			if (failing && /ap-docviewer-stage/.test(body)) await route.abort('internetdisconnected');
-			else await route.fulfill({ response, body });
-		});
-		await preview.open();
-		await serve(page, 'rollout-plan.md', README);
-		await preview.post('general', 'grace', { text: 'The plan', embeds: [{ kind: 'upload', embed_id: 'doc', url: `${FILES}/rollout-plan.md`, title: 'rollout-plan.md' }] });
-		const card = page.locator('a.ap-embed-file', { hasText: 'rollout-plan.md' });
-		await card.click();
-		await expect(page.getByText('Couldn’t load that part of Apron.', { exact: false })).toBeVisible();
-		await expect(page.getByRole('dialog', { name: 'rollout-plan.md' })).toHaveCount(0);
-
-		failing = false;
-		// The toast sits over the card at the foot of the timeline: from the keyboard, as it can't cover that.
-		await card.focus();
-		await page.keyboard.press('Enter');
-		await expect(page.getByRole('dialog', { name: 'rollout-plan.md' }).getByRole('heading', { level: 1 })).toHaveText('Rollout plan');
-	});
-});

@@ -215,4 +215,21 @@ describe('Composer', () => {
 		flushSync();
 		expect(dom.byRole('textbox', 'Message')).toBe(field);
 	});
+
+	it('offers Embed as attachment beside Attach in the full panel only, and not with an empty draft', () => {
+		const onattachdraft = vi.fn();
+		const props = $state({ value: '# Plan', canUpload: true, onfiles: vi.fn(), onattachdraft, expanded: false });
+		dom.render(Composer, props);
+		flushSync();
+		const embed = () => document.querySelector<HTMLButtonElement>('button[aria-label="Embed as attachment"]');
+		expect(embed()).toBeNull();
+		props.expanded = true;
+		flushSync();
+		expect([embed()?.title, embed()?.closest('.ap-composer-tools-start') !== null, embed()?.disabled]).toEqual(['Embed as attachment', true, false]);
+		embed()!.click();
+		expect(onattachdraft).toHaveBeenCalledOnce();
+		props.value = '  ';
+		flushSync();
+		expect(embed()?.disabled).toBe(true);
+	});
 });

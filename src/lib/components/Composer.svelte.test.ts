@@ -121,4 +121,37 @@ describe('Composer', () => {
 		flushSync();
 		expect(panel()).toBeNull();
 	});
+
+	it('embeds the draft as an attachment from the full panel: message.md goes to its files, and the panel closes empty', async () => {
+		const onfiles = vi.fn();
+		const props = $state<Record<string, unknown>>({ value: '# Plan\n- canary @ada', placeholder: 'Message General', disabled: false, canUpload: true, people: [], oninput: vi.fn(), onsend: vi.fn(), onfiles, onunstage: vi.fn(), onrename: vi.fn(), oncancelreply: vi.fn() });
+		dom.render(Composer, props as never);
+		flushSync();
+		const embed = () => document.querySelector<HTMLButtonElement>('button[aria-label="Embed as attachment"]');
+		// Not in the compact composer.
+		expect(embed()).toBeNull();
+		document.querySelector<HTMLButtonElement>('[data-testid="composer-expand"]')!.click();
+		flushSync();
+		await tick();
+		expect(embed()?.title).toBe('Embed as attachment');
+
+		embed()!.click();
+		flushSync();
+		await tick();
+		const [[files]] = onfiles.mock.calls as [[File[]]];
+		expect([files.length, files[0].name, files[0].type, await files[0].text()]).toEqual([1, 'message.md', 'text/markdown', '# Plan\n- canary @ada']);
+		expect([props.value, document.querySelector('[data-testid="composer-panel"]')]).toEqual(['', null]);
+		expect(props.oninput).toHaveBeenCalled();
+	});
+
+	it('doesn\'t offer it without uploads, or for a command', async () => {
+		for (const props of [{ value: 'one\ntwo', canUpload: false }, { value: '/me one\ntwo', canUpload: true, canCommand: true }]) {
+			render(props);
+			document.querySelector<HTMLButtonElement>('[data-testid="composer-expand"]')?.click();
+			flushSync();
+			await tick();
+			expect(document.querySelector('button[aria-label="Embed as attachment"]')).toBeNull();
+			dom.unmount();
+		}
+	});
 });

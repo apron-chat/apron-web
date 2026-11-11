@@ -207,6 +207,18 @@
 
 	const expand = (): void => setExpanded(true);
 
+	/**
+	 * The full panel's Embed as attachment: the draft, Markdown as written, goes to its files as `message.md` (renamable
+	 * there) rather than into the message. Emptied from here, the field closes the panel (`cleared`), leaving the file
+	 * and the compact field for a caption.
+	 */
+	function attachDraft(): void {
+		if (!value.trim()) return;
+		onfiles([new File([value], 'message.md', { type: 'text/markdown' })]);
+		value = '';
+		oninput();
+	}
+
 	/** Opens or closes the full panel around the same field, and puts the keyboard back in it, where it was. */
 	function setExpanded(open: boolean): void {
 		expanded = open;
@@ -301,6 +313,7 @@
 	emojiTestid="emoji-button"
 	sendTestid="send-button"
 	onexpand={canExpand ? expand : undefined}
+	onattachdraft={canUpload && !live && !command ? attachDraft : undefined}
 	{expanded}
 	oncollapse={() => setExpanded(false)}
 	toolbar={formatting}

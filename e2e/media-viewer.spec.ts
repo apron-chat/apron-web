@@ -24,22 +24,10 @@ test.describe('the image viewer', () => {
 	});
 });
 
-test.describe('the image viewer, closed with Escape', () => {
+test.describe('the image viewer, closed with Escape and opened again at once', () => {
 	test.use({ ...DEVICES.desktop });
 
-	test('leaves no entry for Back to find', async ({ preview, page }) => {
-		await preview.open();
-		const link = page.locator('a.ap-embed-imagelink').first();
-		await link.click();
-		const viewer = page.getByRole('dialog', { name: DUSK });
-		await expect(viewer).toBeVisible();
-		await page.keyboard.press('Escape');
-		await expect(viewer).toBeHidden();
-		await expect(link).toBeFocused();
-		await expect.poll(() => page.evaluate(() => JSON.stringify(history.state ?? {}))).not.toContain('"media"');
-	});
-
-	test('opened again in the moment it closes, before its close event has come, stays open', async ({ preview, page }) => {
+	test('before its close event has come, stays open, and closed, leaves no entry for Back to find', async ({ preview, page }) => {
 		await preview.open();
 		const links = page.locator('a.ap-embed-imagelink');
 		await links.first().click();
