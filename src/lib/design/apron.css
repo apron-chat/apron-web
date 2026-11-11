@@ -1505,7 +1505,9 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-termviewer .ap-viewer-bar { gap: var(--space-3); }
 .ap-termviewer .ap-embed-livebadge, .ap-termviewer .ap-viewer-detail { flex: none; font-size: var(--text-sm); line-height: var(--leading-sm); }
 .ap-termviewer .ap-embed-livebadge { color: var(--viewer-ink); }
-.ap-termviewer-stage { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: var(--space-3) max(var(--space-4), env(safe-area-inset-right, 0px)) calc(var(--space-4) + env(safe-area-inset-bottom, 0px)) max(var(--space-4), env(safe-area-inset-left, 0px)); }
+/* A viewer's stage that scrolls (a terminal's screen, a document): inside the viewer, never the page. */
+.ap-termviewer-stage, .ap-docviewer-stage { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; padding-inline: max(var(--space-4), env(safe-area-inset-left, 0px)) max(var(--space-4), env(safe-area-inset-right, 0px)); }
+.ap-termviewer-stage { padding-block: var(--space-3) calc(var(--space-4) + env(safe-area-inset-bottom, 0px)); }
 .ap-termviewer-screen { width: max-content; margin: 0 auto; overflow: hidden; background: var(--bg-rail); box-shadow: 0 0 0 var(--space-2) var(--bg-rail); color: var(--ink); }
 .ap-termviewer-screen .xterm-viewport { overflow: hidden; }
 .ap-termviewer-screen .xterm-scrollable-element > .scrollbar.vertical { width: var(--space-1_5) !important; }
@@ -1521,7 +1523,7 @@ pre.ap-termviewer-text { width: 80ch; font-family: var(--font-mono); font-size: 
 /* DocViewer — a document full screen, on the MediaViewer's ground: the document as a page, in a column a line of text
    reads well at, on the app's own ground and ink, scrolling inside the stage. Its text is a message's (`.ap-msg-text`),
    larger, with room around headings, rules and pictures as a page has. On a phone the page takes the whole width. */
-.ap-docviewer-stage { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 0 max(var(--space-4), env(safe-area-inset-right, 0px)) calc(var(--space-6) + env(safe-area-inset-bottom, 0px)) max(var(--space-4), env(safe-area-inset-left, 0px)); }
+.ap-docviewer-stage { padding-block: 0 calc(var(--space-6) + env(safe-area-inset-bottom, 0px)); }
 .ap-docviewer-page { box-sizing: border-box; max-width: 46rem; margin: 0 auto; padding: var(--space-6) var(--space-8); border-radius: var(--radius-md); background: var(--bg-100); color: var(--ink); font-size: var(--text-body); line-height: var(--leading-body); }
 .ap-docviewer-page .ap-msg-text :is(h1, h2, h3, h4, h5, h6) { margin: 1.4em 0 0.5em; }
 .ap-docviewer-page .ap-msg-text :is(h1, h2) { padding-bottom: 0.25em; border-bottom: 1px solid var(--line); }

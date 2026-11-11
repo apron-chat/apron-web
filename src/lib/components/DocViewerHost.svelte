@@ -3,8 +3,9 @@
 	import { renderDocument } from '$lib/protocol/markdown';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { headingFor, readDoc, type DocText } from '$lib/ui/doc-text';
-	import { backCloses, docViewer, type DocView } from '$lib/ui/doc-viewer.svelte';
+	import { docViewer, type DocView } from '$lib/ui/doc-viewer.svelte';
 	import { highlightCode } from '$lib/ui/highlight';
+	import { backCloses } from '$lib/ui/viewer.svelte';
 
 	/**
 	 * The one document viewer, loaded when it first opens (`lazy.ts`) and mounted by the page from then on; a Markdown

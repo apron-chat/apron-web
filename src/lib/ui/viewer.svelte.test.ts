@@ -2,7 +2,7 @@
 import { flushSync } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { page, pushes } from '$lib/test/app-page.svelte';
-import { backCloses } from './back-closes.svelte';
+import { backCloses } from './viewer.svelte';
 
 vi.mock('$app/state', async () => ({ page: (await import('$lib/test/app-page.svelte')).page }));
 vi.mock('$app/navigation', async () => ({ pushState: (await import('$lib/test/app-page.svelte')).pushState }));

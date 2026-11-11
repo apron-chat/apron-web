@@ -26,11 +26,7 @@
 	/** What the viewer reads from the image's link (`mediaItemOf`). */
 	let viewer = $derived({ src: og.image?.url || undefined, title, alt: og.image?.alt || undefined, detail, width: og.image?.width, height: og.image?.height });
 	/** A Markdown file's card shows it rendered (`docViewer`); any other file's card is a plain link. */
-	let preview = $derived.by(() => {
-		const href = url;
-		if (!href || !isMarkdownName(title)) return undefined;
-		return (event: MouseEvent) => docViewer.show({ url: href, title, detail }, event.currentTarget as HTMLElement);
-	});
+	let preview = $derived(url && isMarkdownName(title) ? (event: MouseEvent) => docViewer.show({ url: url!, title, detail }, event.currentTarget as HTMLElement) : undefined);
 </script>
 
 <DesignEmbedUpload kind="upload" {url} title={embed.title} {og} progress={upload?.progress} failed={upload?.failed} detail={url ? undefined : size}

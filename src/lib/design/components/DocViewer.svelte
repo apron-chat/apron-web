@@ -2,6 +2,7 @@
 	import type { Snippet } from 'svelte';
 	import type { ClassValue } from 'svelte/elements';
 	import { safeHttp } from './util';
+	import ViewerDialog from './ViewerDialog.svelte';
 
 	/**
 	 * A document full screen, over everything, on the MediaViewer's dark ground: its title and what it is, Download and
@@ -35,24 +36,8 @@
 	}
 	let { open = $bindable(false), title, detail, href: rawHref, status, failed = false, children, onclose, class: className, testid }: Props = $props();
 
-	let dialog = $state<HTMLDialogElement | undefined>();
-	let closeButton = $state<HTMLButtonElement | undefined>();
 	let stage = $state<HTMLElement | undefined>();
-	const uid = $props.id();
 	const href = $derived(safeHttp(rawHref));
-
-	$effect(() => {
-		if (!dialog) return;
-		if (open && !dialog.open) {
-			dialog.showModal();
-			closeButton?.focus();
-		} else if (!open && dialog.open) dialog.close();
-	});
-
-	function closed(): void {
-		open = false;
-		onclose?.();
-	}
 
 	/** How far each scroll key moves the page: a line, a screen less a line, or all the way; undefined for any other key. */
 	function distance(key: string, page: HTMLElement): number | undefined {
@@ -62,16 +47,8 @@
 		return ({ ArrowDown: line, ArrowUp: -line, PageDown: screen, PageUp: -screen, End: all, Home: -all } as Record<string, number>)[key];
 	}
 
-	/**
-	 * Escape closes it, here rather than by the browser's cancel, which may be skipped for a dialog opened without a
-	 * press. A scroll key scrolls the page from a button or link in the bar too, where it would do nothing.
-	 */
+	/** A scroll key scrolls the page from a button or link in the bar too, where it would do nothing. */
 	function keydown(event: KeyboardEvent): void {
-		if (event.key === 'Escape') {
-			event.preventDefault();
-			dialog?.close();
-			return;
-		}
 		if (!stage || event.altKey || event.ctrlKey || event.metaKey || stage.contains(event.target as Node)) return;
 		const by = distance(event.key, stage);
 		if (by === undefined) return;
@@ -82,29 +59,19 @@
 
 {#snippet downloadIcon()}<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3" /><path d="m7 10 5 5 5-5" /><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /></svg>{/snippet}
 
-<!-- Its title names it. -->
-<dialog bind:this={dialog} class={['ap-viewer', 'ap-docviewer', className]} aria-labelledby={`${uid}-title`} data-testid={testid} onclose={closed} onkeydown={keydown}>
-	{#if open}
-		<header class="ap-viewer-bar">
-			<div class="ap-viewer-text">
-				<h2 class="ap-viewer-title" id={`${uid}-title`}>{title}</h2>
-				{#if detail}<p class="ap-viewer-detail">{detail}</p>{/if}
+<ViewerDialog bind:open {title} {detail} {onclose} onkeydown={keydown} class={['ap-docviewer', className]} {testid}>
+	{#snippet actions()}
+		{#if href}<a class="ap-viewer-btn" {href} download={title} target="_blank" rel="noreferrer noopener" aria-label={`Download ${title}`} title="Download">{@render downloadIcon()}</a>{/if}
+	{/snippet}
+	<div class="ap-docviewer-stage" bind:this={stage}>
+		<p class="ap-sr" role="status">{status ?? 'Loaded'}</p>
+		{#if status}
+			<div class="ap-docviewer-status">
+				<p aria-hidden="true">{status}</p>
+				{#if failed && href}<a class="ap-btn ap-btn-quiet ap-docviewer-download" {href} download={title} target="_blank" rel="noreferrer noopener">{@render downloadIcon()}Download</a>{/if}
 			</div>
-			{#if href}<a class="ap-viewer-btn" {href} download={title} target="_blank" rel="noreferrer noopener" aria-label={`Download ${title}`} title="Download">{@render downloadIcon()}</a>{/if}
-			<button bind:this={closeButton} class="ap-viewer-btn" type="button" aria-label="Close" title="Close" onclick={() => dialog?.close()}>
-				<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
-			</button>
-		</header>
-		<div class="ap-docviewer-stage" bind:this={stage}>
-			<p class="ap-sr" role="status">{status ?? 'Loaded'}</p>
-			{#if status}
-				<div class="ap-docviewer-status">
-					<p aria-hidden="true">{status}</p>
-					{#if failed && href}<a class="ap-btn ap-btn-quiet ap-docviewer-download" {href} download={title} target="_blank" rel="noreferrer noopener">{@render downloadIcon()}Download</a>{/if}
-				</div>
-			{:else}
-				<article class="ap-docviewer-page" aria-labelledby={`${uid}-title`}>{@render children?.()}</article>
-			{/if}
-		</div>
-	{/if}
-</dialog>
+		{:else}
+			<article class="ap-docviewer-page" aria-label={title}>{@render children?.()}</article>
+		{/if}
+	</div>
+</ViewerDialog>

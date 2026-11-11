@@ -1,7 +1,7 @@
 <script lang="ts">
 	import TerminalViewer from '$lib/design/components/TerminalViewer.svelte';
-	import { backCloses } from '$lib/ui/back-closes.svelte';
 	import { terminalViewer } from '$lib/ui/terminal-viewer.svelte';
+	import { backCloses } from '$lib/ui/viewer.svelte';
 	import { loadTerminalScreen } from '$lib/ui/xterm';
 
 	/**

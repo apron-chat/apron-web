@@ -41,7 +41,9 @@
 		} else if (!open && dialog.open) dialog.close();
 	});
 
+	/** It closed; not if shown again before the `close` event came (as `ViewerDialog`'s doesn't). */
 	function closed(): void {
+		if (dialog?.open) return;
 		open = false;
 		onclose?.();
 	}

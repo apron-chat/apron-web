@@ -3,13 +3,7 @@
  * shows the file rendered as a message body is, on a page that scrolls. `DocViewerHost` (loaded on demand, and
  * mounted by the page once it first opens) reads the file and draws it.
  */
-
-/*
- * Back closing it (`backCloses`), for `DocViewerHost`, comes through here: the page loads this from the start, as the
- * layout loads it for the terminal viewer, so it stays in the chunk the two share. Imported by the viewer's own chunk
- * alone, it would be split out into one more file to load at startup.
- */
-export { backCloses } from './back-closes.svelte';
+import { Viewer } from './viewer.svelte';
 
 /** The file the viewer shows: where to read it, its name, and who sent it and when. */
 export interface DocView {
@@ -26,26 +20,4 @@ export function isMarkdownName(name: string | undefined): boolean {
 	return Boolean(name && MARKDOWN.test(name.trim()));
 }
 
-class DocViewer {
-	open = $state(false);
-	view = $state.raw<DocView>();
-	#opener: HTMLElement | undefined;
-
-	/** Opens on `view`; `opener` (the file's card) gets focus back once it closes. */
-	show(view: DocView, opener?: HTMLElement): void {
-		this.view = view;
-		this.#opener = opener;
-		this.open = true;
-	}
-
-	/** It closed: focus goes back to the card that opened it, where it still is. */
-	closed(): void {
-		this.open = false;
-		this.view = undefined;
-		const opener = this.#opener;
-		this.#opener = undefined;
-		if (opener?.isConnected) opener.focus({ preventScroll: false });
-	}
-}
-
-export const docViewer = new DocViewer();
+export const docViewer = new Viewer<DocView>();
