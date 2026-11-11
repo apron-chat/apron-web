@@ -121,4 +121,64 @@ describe('Composer', () => {
 		flushSync();
 		expect(panel()).toBeNull();
 	});
+
+	describe('a long paste', () => {
+		/** About 1.4 KB of Markdown, pasted with Windows line breaks. */
+		const LONG = Array.from({ length: 40 }, (_, n) => `${n + 1}. Promote the next slice of hosts.`).join('\r\n');
+		const DRAFTED = LONG.replace(/\r\n/g, '\n');
+
+		/** A paste of `text` on the field, which the browser has put in the draft (the props' `value`). */
+		function pasteText(field: HTMLElement, text: string): void {
+			const event = new Event('paste', { bubbles: true, cancelable: true });
+			Object.defineProperty(event, 'clipboardData', { value: { items: [], files: [], getData: () => text } });
+			field.dispatchEvent(event);
+			flushSync();
+		}
+		const offer = () => document.querySelector<HTMLButtonElement>('button[aria-label="Attach as file instead"]');
+		/** The composer, with `props` as they are, kept reactive (`render` spreads its props into an object of its own). */
+		function mount<P extends Record<string, unknown>>(props: P): HTMLElement {
+			dom.render(Composer, props as never);
+			flushSync();
+			return document.querySelector<HTMLElement>('[data-testid="message-input"]')!;
+		}
+		const base = () => ({ placeholder: 'Message General', disabled: false, people: [], onsend: vi.fn(), onunstage: vi.fn(), onrename: vi.fn(), oncancelreply: vi.fn() });
+
+		it('is offered where files can be attached, and taken, becomes pasted.md, leaving what was typed around it', async () => {
+			const onfiles = vi.fn();
+			const oninput = vi.fn();
+			const props = $state({ ...base(), value: '', canUpload: true, onfiles, oninput });
+			const field = mount(props);
+			props.value = `Here is the plan: ${DRAFTED} Thoughts?`;
+			pasteText(field, LONG);
+			expect(offer()?.title).toBe('Send the pasted text as pasted.md (1 KB) rather than in the message');
+
+			offer()!.click();
+			flushSync();
+			expect(props.value).toBe('Here is the plan:  Thoughts?');
+			expect(oninput).toHaveBeenCalled();
+			const [[files]] = onfiles.mock.calls as [[File[]]];
+			expect([files.length, files[0].name, files[0].type]).toEqual([1, 'pasted.md', 'text/markdown']);
+			expect(await files[0].text()).toBe(DRAFTED);
+			expect(offer()).toBeNull();
+		});
+
+		it('isn\'t offered for a short paste, without uploads, or once the draft no longer holds what was pasted', () => {
+			const props = $state({ ...base(), value: 'a short line', canUpload: true, onfiles: vi.fn(), oninput: vi.fn() });
+			const field = mount(props);
+			pasteText(field, 'a short line');
+			expect(offer()).toBeNull();
+
+			props.value = DRAFTED;
+			pasteText(field, LONG);
+			expect(offer()).not.toBeNull();
+			props.value = DRAFTED.replace('1. Promote', '1. Prompt');
+			flushSync();
+			expect(offer()).toBeNull();
+			dom.unmount();
+
+			const off = $state({ ...base(), value: DRAFTED, canUpload: false, onfiles: vi.fn(), oninput: vi.fn() });
+			pasteText(mount(off), LONG);
+			expect(offer()).toBeNull();
+		});
+	});
 });

@@ -9,6 +9,7 @@
 	import { directory } from '$lib/ui/directory.svelte';
 	import { loadableOg } from './embeds/og';
 	import { pastedFiles } from '$lib/ui/file-transfer';
+	import { fileSize } from '$lib/ui/images';
 	import { clockLabel } from '$lib/ui/time';
 	import { handheld, onMac } from '$lib/ui/handheld';
 	import type { StagedFile as Staged } from '$lib/ui/pane-drafts.svelte';
@@ -25,6 +26,10 @@
 	const PREVIEW_TYPING_PAUSE_MS = 800;
 	/** What a clip may be recorded as where the server states the types it takes, by preference. */
 	const VOICE_TYPES = ['audio/webm', 'audio/ogg', 'audio/mp4'];
+	/** Text pasted at once this long (UTF-8 bytes, a dozen lines or so) is offered as a file instead: Attach as file instead. */
+	const PASTE_AS_FILE_BYTES = 1024;
+	/** The file it becomes: Markdown, as the draft is, which the document viewer shows rendered. */
+	const PASTE_FILE_NAME = 'pasted.md';
 
 	interface Props {
 		/** The draft as sent: mentions are `@user_id` (Appendix A.3); the field shows them as name chips. */
@@ -135,6 +140,12 @@
 	 * gains or loses a line (`multiline`), so typing on a line doesn't ask again.
 	 */
 	let canExpand = $derived(!expanded && !disabled && (field?.multiline() ?? false));
+	/** The last paste of text at least `PASTE_AS_FILE_BYTES` long, as the draft holds it; undefined after a shorter one. */
+	let longPaste = $state<string>();
+	/** The long paste while the draft still holds it, where files can be attached: Attach as file instead offers it. */
+	let pasteAsFile = $derived(canUpload && !live && longPaste !== undefined && value.includes(longPaste) ? longPaste : undefined);
+	/** What Attach as file instead does, for its tooltip: which file, and how large. */
+	let attachPasteTitle = $derived(pasteAsFile === undefined ? undefined : `Send the pasted text as ${PASTE_FILE_NAME} (${fileSize(new TextEncoder().encode(pasteAsFile).length)}) rather than in the message`);
 	/** Bumped when a fetched preview arrives, so the previews below are redrawn. */
 	let previewsArrived = $state(0);
 	/**
@@ -241,7 +252,10 @@
 		focus();
 	}
 
-	/** A pasted image (or file) is attached like a picked one, unless the paste is text (`pastedFiles`). */
+	/**
+	 * A pasted image (or file) is attached like a picked one, unless the paste is text (`pastedFiles`). Text lands in
+	 * the draft as pasted; a long one (`PASTE_AS_FILE_BYTES`) is remembered, for Attach as file instead.
+	 */
 	function paste(event: ClipboardEvent): void {
 		const files = pastedFiles(event.clipboardData);
 		if (canUpload && !disabled && !recording && files.length) {
@@ -249,7 +263,28 @@
 			onfiles(files);
 			return;
 		}
-		void linkPreviews.prefetch(event.clipboardData?.getData('text/plain') ?? '');
+		const text = event.clipboardData?.getData('text/plain') ?? '';
+		// As the field holds it: its line breaks are `\n`.
+		const pasted = text.replace(/\r\n?/g, '\n');
+		longPaste = new TextEncoder().encode(pasted).length >= PASTE_AS_FILE_BYTES ? pasted : undefined;
+		void linkPreviews.prefetch(text);
+	}
+
+	/**
+	 * Attach as file instead: the long paste comes out of the draft (where it last is in it, as the field holds it
+	 * since it was pasted) and goes to the draft's files as `pasted.md`, which can be renamed there. What was typed
+	 * around it stays the message.
+	 */
+	function attachPaste(): void {
+		const pasted = pasteAsFile;
+		if (pasted === undefined) return;
+		const at = value.lastIndexOf(pasted);
+		const rest = value.slice(0, at) + value.slice(at + pasted.length);
+		longPaste = undefined;
+		value = rest.trim() ? rest : '';
+		oninput();
+		onfiles([new File([pasted], PASTE_FILE_NAME, { type: 'text/markdown' })]);
+		focus();
 	}
 
 	/** Microphone: record, then hand the clip over as an audio file. */
@@ -274,6 +309,8 @@
 	{canUpload}
 	{canRecord}
 	{onfiles}
+	onattachpaste={pasteAsFile === undefined ? undefined : attachPaste}
+	{attachPasteTitle}
 	{accept}
 	onrecord={startRecording}
 	onstoprecording={() => stopRecording()}

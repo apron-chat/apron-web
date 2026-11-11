@@ -3,6 +3,7 @@
 	 * The message field and what sits above it until the message is sent: the message being replied to, the draft's files
 	 * and its links' previews, and an autocomplete picker. The field is a textarea, or your own (`field`).
 	 */
+	import FileText from '@lucide/svelte/icons/file-text';
 	import Hourglass from '@lucide/svelte/icons/hourglass';
 	import Maximize from '@lucide/svelte/icons/maximize-2';
 	import Minimize from '@lucide/svelte/icons/minimize-2';
@@ -43,6 +44,13 @@
 		onfiles?: (files: File[]) => void;
 		/** The types the file picker offers, as its `accept`, such as `image/*,audio/*`. Omit for any file. */
 		accept?: string;
+		/**
+		 * Long text was pasted into the draft: "Attach as file instead" beside Attach calls this, to send the pasted
+		 * text as a file rather than in the message. `attachPasteTitle` is its tooltip, which assistive tech reads as
+		 * its description, saying what it does (such as which file, and how large).
+		 */
+		onattachpaste?: () => void;
+		attachPasteTitle?: string;
 		disabled?: boolean;
 		/** Hide the microphone (no getUserMedia, or a policy choice). */
 		canRecord?: boolean;
@@ -140,7 +148,7 @@
 		panelTestid?: string;
 	}
 	let {
-		room, placeholder, value = $bindable(''), oninput, onsend, canSend, waitUntil, canUpload, onfiles, accept, disabled, canRecord, onrecord, onstoprecording, recording, recordingTime, thread, canCommand, live,
+		room, placeholder, value = $bindable(''), oninput, onsend, canSend, waitUntil, canUpload, onfiles, accept, onattachpaste, attachPasteTitle, disabled, canRecord, onrecord, onstoprecording, recording, recordingTime, thread, canCommand, live,
 		field, onemoji, emojiOpen, emojiButton = $bindable(), reply, replyText, oncancelreply, attachments, previews, preview, onremovepreview, picker,
 		replyTestid, attachmentsTestid, previewsTestid, fileInputTestid, commandTestid, liveTestid, emojiTestid, sendTestid, class: className,
 		onexpand, expanded = false, oncollapse, toolbar, rendered, previewing = false, onpreview, sendKeys, multiline, expandTestid, panelTestid
@@ -292,6 +300,12 @@
 						<button type="button" class={['ap-iconbtn', recording && 'ap-iconbtn-rec']} onclick={recording ? onstoprecording : onrecord} {disabled} aria-label={recording ? 'Stop recording' : 'Record a voice message'} aria-pressed={!!recording} title={recording ? 'Stop recording' : 'Record a voice message'}>
 							{#if recording}<Square size={12} fill="currentColor" stroke="currentColor" strokeWidth={0} aria-hidden="true" />
 							{:else}<Mic size={18} aria-hidden="true" />{/if}
+						</button>
+					{/if}
+					{#if onattachpaste && !recording}
+						<!-- Its words, shortened where the pane is narrow, as a phone's is: its name stays them in full. -->
+						<button type="button" class="ap-btn ap-btn-quiet ap-btn-sm ap-composer-asfile" onclick={onattachpaste} {disabled} title={attachPasteTitle} aria-label="Attach as file instead">
+							<FileText size={16} aria-hidden="true" /><span class="ap-composer-asfile-long">Attach as file instead</span><span class="ap-composer-asfile-short">As file</span>
 						</button>
 					{/if}
 				</span>

@@ -215,4 +215,18 @@ describe('Composer', () => {
 		flushSync();
 		expect(dom.byRole('textbox', 'Message')).toBe(field);
 	});
+
+	it('offers Attach as file instead beside Attach where it is given, named in full, saying what it does', () => {
+		const onattachpaste = vi.fn();
+		render({ canUpload: true, onfiles: vi.fn(), onattachpaste, attachPasteTitle: 'Send the pasted text as pasted.md (3 KB) rather than in the message' });
+		const offer = dom.button('Attach as file instead');
+		expect(offer.title).toBe('Send the pasted text as pasted.md (3 KB) rather than in the message');
+		expect(offer.closest('.ap-composer-tools-start')).not.toBeNull();
+		offer.click();
+		expect(onattachpaste).toHaveBeenCalledOnce();
+		dom.unmount();
+
+		render({ canUpload: true, onfiles: vi.fn() });
+		expect(document.querySelector('.ap-composer-asfile')).toBeNull();
+	});
 });
