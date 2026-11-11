@@ -228,6 +228,9 @@ describe('prepareUpload with the server\'s limits (ext:media)', () => {
 		const readme = file(bytes('# Hi'), 'README.md', '');
 		expect((await prepareUpload(readme, { codec, limits: { 'text/markdown': {} } })).file.type).toBe('text/markdown');
 		expect(await prepareUpload(readme, { codec, limits: { 'application/octet-stream': {} } })).toEqual({ file: readme });
+		// So does one typed as an unregistered Markdown type; an image named .md stays an image.
+		expect((await prepareUpload(file(bytes('# Hi'), 'notes.MD', 'text/x-markdown'), { codec, limits: { 'text/*': {} } })).file.type).toBe('text/markdown');
+		expect((await prepareUpload(file(png(), 'pic.md', ''), { codec: undefined, limits: { 'text/markdown': {}, 'application/octet-stream': {} } })).file.type).toBe('');
 	});
 
 	it('fits a custom emoji to the emoji category: stills re-encoded within it, animations as they are', async () => {

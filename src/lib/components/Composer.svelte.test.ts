@@ -168,12 +168,20 @@ describe('Composer', () => {
 		flushSync();
 		expect((onfiles.mock.calls[0][0] as File[])[0].type).toBe('text/markdown');
 		expect(props.value).toBe('one\ntwo');
-		// A type it fits as goes instead.
-		props.uploadLimits = { 'text/markdown': { max_bytes: 4 }, 'text/plain': {} };
+		expect(document.querySelector('[data-testid="composer-panel"]')).not.toBeNull();
+		// Too large for every type: offered as the one with the largest limit, so the refusal names that.
+		props.uploadLimits = { 'text/markdown': { max_bytes: 4 }, 'text/plain': { max_bytes: 6 } };
 		flushSync();
 		embed().click();
 		flushSync();
 		expect((onfiles.mock.calls[1][0] as File[])[0].type).toBe('text/plain');
+		expect(props.value).toBe('one\ntwo');
+		// A type it fits as goes, and the draft empties.
+		props.uploadLimits = { 'text/markdown': { max_bytes: 4 }, 'text/plain': {} };
+		flushSync();
+		embed().click();
+		flushSync();
+		expect((onfiles.mock.calls[2][0] as File[])[0].type).toBe('text/plain');
 		expect(props.value).toBe('');
 	});
 

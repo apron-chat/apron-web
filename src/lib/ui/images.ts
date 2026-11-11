@@ -16,6 +16,9 @@
 
 import { isMarkdownName, mediaLimit, type MediaTypes } from '$lib/protocol/client-views';
 
+/** What some systems type a Markdown file as, in place of `text/markdown`. */
+const UNREGISTERED_MARKDOWN = ['text/x-markdown', 'text/x-md'];
+
 /** What the client aims for: uploads under 5 MB, avatars under 256 KB. */
 export const UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
 export const AVATAR_MAX_BYTES = 256 * 1024;
@@ -246,16 +249,16 @@ export async function prepareUpload(
 	file: File,
 	{ maxBytes = UPLOAD_MAX_BYTES, maxSide = UPLOAD_MAX_SIDE, limits, codec = browserCodec() }: { maxBytes?: number; maxSide?: number; limits?: MediaTypes; codec?: ImageCodec | undefined } = {}
 ): Promise<Attachment> {
-	// A Markdown file its system gave no type (Windows, often) goes as Markdown where the server takes it, rather than
-	// as `application/octet-stream`, which it may not.
-	if (!file.type && isMarkdownName(file.name) && (!limits || mediaLimit(limits, 'text/markdown'))) {
-		file = new File([file], file.name, { type: 'text/markdown', lastModified: file.lastModified });
-	}
 	const asIs = (size?: { width: number; height: number }, sent = file): Attachment => {
 		accept(sent, limits);
 		return { file: sent, ...size };
 	};
 	const facts = sniffImage(await headOf(file));
+	// A Markdown file its system gave no type (Windows, often) or an unregistered one goes as `text/markdown` where the
+	// server takes that, rather than as a type it may not; an image named `.md` stays an image.
+	if (!facts && (!file.type || UNREGISTERED_MARKDOWN.includes(file.type)) && isMarkdownName(file.name) && (!limits || mediaLimit(limits, 'text/markdown'))) {
+		file = new File([file], file.name, { type: 'text/markdown', lastModified: file.lastModified });
+	}
 	// Other formats the browser decodes (HEIC, AVIF, BMP) are converted, since not every browser shows them.
 	if (!facts && !file.type.startsWith('image/')) return asIs();
 	if (facts?.animated) return asIs(codec ? await dimensions(codec, file) : undefined, facts.metadata ? await withoutMetadata(file, facts.type) : file);

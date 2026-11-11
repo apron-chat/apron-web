@@ -5,6 +5,7 @@
 	import { emojiAnchor, emojiPicker } from '$lib/ui/emoji-picker.svelte';
 	import { isCommand } from '$lib/ui/commands';
 	import { mediaLimit, type MediaTypes } from '$lib/protocol/client';
+	import { MARKDOWN_EXTENSIONS } from '$lib/protocol/client-views';
 	import { linkPreviews } from '$lib/ui/link-previews';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { loadableOg } from './embeds/og';
@@ -111,13 +112,12 @@
 	const sendKeys = handheld() ? undefined : [onMac() ? '⌘' : 'Ctrl', 'Enter'];
 
 	let recording = $derived(recorder.phase === 'recording');
-	/** The file picker's `accept`: the patterns the server takes, unless one is any type. */
 	/**
 	 * The file picker's `accept`: the patterns the server takes, unless one is any type. Markdown's extensions go with
 	 * `text/markdown`, as not every system types a `.md` file.
 	 */
 	let accept = $derived(uploadLimits && !Object.hasOwn(uploadLimits, '*/*')
-		? [...Object.keys(uploadLimits), ...(mediaLimit(uploadLimits, 'text/markdown') ? ['.md', '.markdown'] : [])].join(',')
+		? [...Object.keys(uploadLimits), ...(mediaLimit(uploadLimits, 'text/markdown') ? MARKDOWN_EXTENSIONS : [])].join(',')
 		: undefined);
 	/**
 	 * What a voice clip is recorded as, and its `max_bytes`: the browser's own
@@ -220,19 +220,17 @@
 	/**
 	 * The full panel's Embed as attachment: the draft, Markdown as written, goes to its files as `message.md` (renamable
 	 * there) rather than into the message. Emptied from here, the field closes the panel (`cleared`), leaving the file
-	 * and the compact field for a caption. It goes as the first of `DRAFT_TYPES` the server takes it at, size included;
-	 * a draft too large for any is still offered, so the files say why they refused it, and the draft stays.
+	 * and the compact field for a caption. It goes as the first of `DRAFT_TYPES` the server takes it at, size included.
+	 * A draft too large for every one is still offered, as the type with the largest limit, so the files say why they
+	 * refused it and how large it may be; the draft stays.
 	 */
 	function attachDraft(): void {
 		if (!value.trim() || !draftType) return;
 		const size = new Blob([value]).size;
-		const limit = (type: string) => (uploadLimits ? mediaLimit(uploadLimits, type) : {});
-		const fits = (type: string) => {
-			const max = limit(type)?.max_bytes;
-			return Boolean(limit(type)) && (max === undefined || size <= max);
-		};
-		const type = DRAFT_TYPES.find(fits);
-		onfiles([new File([value], 'message.md', { type: type ?? draftType })]);
+		const max = (type: string) => (uploadLimits ? mediaLimit(uploadLimits, type)?.max_bytes : undefined) ?? Infinity;
+		const taken = DRAFT_TYPES.filter((type) => !uploadLimits || mediaLimit(uploadLimits, type));
+		const type = taken.find((each) => size <= max(each));
+		onfiles([new File([value], 'message.md', { type: type ?? taken.reduce((a, b) => (max(b) > max(a) ? b : a)) })]);
 		if (!type) return;
 		value = '';
 		oninput();

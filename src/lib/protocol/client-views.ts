@@ -309,12 +309,13 @@ function mediaTypes(value: unknown): MediaTypes | undefined {
 	return types;
 }
 
-/** The names a Markdown file goes by. */
-const MARKDOWN = /\.(?:md|markdown|mdown|mkd)$/i;
+/** The extensions a Markdown file goes by, as a file picker's `accept` lists them. */
+export const MARKDOWN_EXTENSIONS = ['.md', '.markdown', '.mdown', '.mkd'] as const;
 
 /** Whether a file named `name` is Markdown, as its name says: an upload embed carries no type (§4.8.4). */
 export function isMarkdownName(name: string | undefined): boolean {
-	return Boolean(name && MARKDOWN.test(name.trim()));
+	const lower = name?.trim().toLowerCase();
+	return Boolean(lower && MARKDOWN_EXTENSIONS.some((extension) => lower.endsWith(extension)));
 }
 
 /**
