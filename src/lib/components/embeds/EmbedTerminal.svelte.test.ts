@@ -190,10 +190,10 @@ describe('a terminal embed, closed', () => {
 		expect(document.activeElement).toBe(button('Close terminal', box));
 	});
 
-	it('stays closed after a reload, reading nothing, for the account that closed it', async () => {
+	it('stays closed after a reload, reading nothing, for the account that closed it, and a guest across connections', async () => {
 		const server = serve();
 		const embed = { kind: 'terminal', embed_id: 'embed_8', url: 'https://chat.example/t/8' } satisfies EmbedRecord;
-		const as = (user_id: string) => directory.apply({ ...blankSnapshot(), authenticated: true, you: { user_id } } as ReturnType<typeof blankSnapshot>, 'https://chat.example', 'wss://chat.example/ws');
+		const as = (user_id: string, keptSession = true) => directory.apply({ ...blankSnapshot(), authenticated: true, keptSession, you: { user_id } } as ReturnType<typeof blankSnapshot>, 'https://chat.example', 'wss://chat.example/ws');
 		as('ada');
 		let box = show(embed);
 		button('Close terminal', box).click();
@@ -207,6 +207,13 @@ describe('a terminal embed, closed', () => {
 		as('bob');
 		flushSync();
 		expect(box.querySelector('.ap-embed-livebadge')?.textContent).toBe('Live');
+		// A guest's id changes with each connection: its guests' are kept as one.
+		as('guest_1', false);
+		box = show({ ...embed, embed_id: 'embed_10' });
+		button('Close terminal', box).click();
+		as('guest_2', false);
+		flushSync();
+		expect(box.querySelector('.ap-embed-detail')?.textContent).toBe('Closed');
 	});
 
 	it('closed in another tab, stops reading here, and its viewer closes too', async () => {

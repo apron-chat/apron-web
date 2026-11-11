@@ -31,7 +31,7 @@
 	let page = $derived(terminalPageUrl(url, embed.title));
 	let output = $derived(typeof embed.output === 'string' ? embed.output : undefined);
 	const feed = new TerminalFeed();
-	let key = $derived(terminalKey(directory.server, directory.you?.user_id, embed));
+	let key = $derived(terminalKey(directory.server, directory.account, embed));
 	/** Closed without a key (`terminalKey`): kept here only. */
 	let closedHere = $state(false);
 	let closed = $derived(key ? closedTerminals.has(key) : closedHere);

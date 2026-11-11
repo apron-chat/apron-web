@@ -385,7 +385,9 @@ export function saveTerminalClosed(keys: readonly string[], key: string, closed:
 
 /** Shows again every closed terminal embed whose key starts with `prefix` (all, with `''`): returns the ones still closed. */
 export function forgetClosedTerminals(keys: readonly string[], prefix: string): string[] {
-	const next = (persisting ? loadClosedTerminals() : keys).filter((entry) => !entry.startsWith(prefix));
+	const saved = persisting ? loadClosedTerminals() : keys;
+	const next = saved.filter((entry) => !entry.startsWith(prefix));
+	if (next.length === saved.length) return next;
 	if (next.length) write(KEY.closedTerminals, JSON.stringify(next));
 	else remove(KEY.closedTerminals);
 	return next;

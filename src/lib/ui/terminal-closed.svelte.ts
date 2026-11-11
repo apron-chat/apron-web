@@ -12,7 +12,7 @@ import { CLOSED_TERMINALS_KEY, forgetClosedTerminals, loadClosedTerminals, saveT
 
 /**
  * What names an embed here: the account it is seen by (`notifyAccount`, the
- * server's WebSocket URL and the user), then its `embed_id` (each server
+ * server's WebSocket URL and the signed-in user, or its guests), then its `embed_id` (each server
  * assigns its own, §4.8.2), else its `url`. Without a server, or either, it
  * has none, and the embed's own component keeps whether it is closed, for as
  * long as it is drawn.
