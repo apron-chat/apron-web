@@ -309,6 +309,14 @@ function mediaTypes(value: unknown): MediaTypes | undefined {
 	return types;
 }
 
+/** The names a Markdown file goes by. */
+const MARKDOWN = /\.(?:md|markdown|mdown|mkd)$/i;
+
+/** Whether a file named `name` is Markdown, as its name says: an upload embed carries no type (§4.8.4). */
+export function isMarkdownName(name: string | undefined): boolean {
+	return Boolean(name && MARKDOWN.test(name.trim()));
+}
+
 /**
  * What a category takes of a file of `type`, the type the client declares
  * for it (`File.type`, or `application/octet-stream` without one): the
