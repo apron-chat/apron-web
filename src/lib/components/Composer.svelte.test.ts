@@ -155,6 +155,28 @@ describe('Composer', () => {
 		expect([files[0].name, files[0].type]).toEqual(['message.md', 'text/plain']);
 	});
 
+	it('keeps a draft too large for the server, offering it so the files say why', async () => {
+		const onfiles = vi.fn();
+		const props = $state<Record<string, unknown>>({ value: 'one\ntwo', placeholder: 'Message General', disabled: false, canUpload: true, uploadLimits: { 'text/markdown': { max_bytes: 4 } }, people: [], oninput: vi.fn(), onsend: vi.fn(), onfiles, onunstage: vi.fn(), onrename: vi.fn(), oncancelreply: vi.fn() });
+		dom.render(Composer, props as never);
+		flushSync();
+		document.querySelector<HTMLButtonElement>('[data-testid="composer-expand"]')!.click();
+		flushSync();
+		await tick();
+		const embed = () => document.querySelector<HTMLButtonElement>('button[aria-label="Embed as attachment"]')!;
+		embed().click();
+		flushSync();
+		expect((onfiles.mock.calls[0][0] as File[])[0].type).toBe('text/markdown');
+		expect(props.value).toBe('one\ntwo');
+		// A type it fits as goes instead.
+		props.uploadLimits = { 'text/markdown': { max_bytes: 4 }, 'text/plain': {} };
+		flushSync();
+		embed().click();
+		flushSync();
+		expect((onfiles.mock.calls[1][0] as File[])[0].type).toBe('text/plain');
+		expect(props.value).toBe('');
+	});
+
 	it('doesn\'t offer it without uploads, where the server takes no text, or for a command', async () => {
 		for (const props of [{ value: 'one\ntwo', canUpload: false }, { value: 'one\ntwo', canUpload: true, uploadLimits: { 'image/*': {}, 'audio/*': {} } }, { value: '/me one\ntwo', canUpload: true, canCommand: true }]) {
 			render(props);

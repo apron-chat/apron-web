@@ -15,6 +15,7 @@
  */
 
 import { mediaLimit, type MediaTypes } from '$lib/protocol/client-views';
+import { isMarkdownName } from './doc-viewer.svelte';
 
 /** What the client aims for: uploads under 5 MB, avatars under 256 KB. */
 export const UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
@@ -246,6 +247,11 @@ export async function prepareUpload(
 	file: File,
 	{ maxBytes = UPLOAD_MAX_BYTES, maxSide = UPLOAD_MAX_SIDE, limits, codec = browserCodec() }: { maxBytes?: number; maxSide?: number; limits?: MediaTypes; codec?: ImageCodec | undefined } = {}
 ): Promise<Attachment> {
+	// A Markdown file its system gave no type (Windows, often) goes as Markdown where the server takes it, rather than
+	// as `application/octet-stream`, which it may not.
+	if (!file.type && isMarkdownName(file.name) && (!limits || mediaLimit(limits, 'text/markdown'))) {
+		file = new File([file], file.name, { type: 'text/markdown', lastModified: file.lastModified });
+	}
 	const asIs = (size?: { width: number; height: number }, sent = file): Attachment => {
 		accept(sent, limits);
 		return { file: sent, ...size };

@@ -224,6 +224,10 @@ describe('prepareUpload with the server\'s limits (ext:media)', () => {
 		// A file without a type is `application/octet-stream`.
 		const blob = file(bytes('?'), 'blob', '');
 		expect(await prepareUpload(blob, { codec, limits: { 'application/octet-stream': {} } })).toEqual({ file: blob });
+		// A Markdown file without a type goes as Markdown where the server takes it, else as it is.
+		const readme = file(bytes('# Hi'), 'README.md', '');
+		expect((await prepareUpload(readme, { codec, limits: { 'text/markdown': {} } })).file.type).toBe('text/markdown');
+		expect(await prepareUpload(readme, { codec, limits: { 'application/octet-stream': {} } })).toEqual({ file: readme });
 	});
 
 	it('fits a custom emoji to the emoji category: stills re-encoded within it, animations as they are', async () => {

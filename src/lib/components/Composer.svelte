@@ -112,7 +112,13 @@
 
 	let recording = $derived(recorder.phase === 'recording');
 	/** The file picker's `accept`: the patterns the server takes, unless one is any type. */
-	let accept = $derived(uploadLimits && !Object.hasOwn(uploadLimits, '*/*') ? Object.keys(uploadLimits).join(',') : undefined);
+	/**
+	 * The file picker's `accept`: the patterns the server takes, unless one is any type. Markdown's extensions go with
+	 * `text/markdown`, as not every system types a `.md` file.
+	 */
+	let accept = $derived(uploadLimits && !Object.hasOwn(uploadLimits, '*/*')
+		? [...Object.keys(uploadLimits), ...(mediaLimit(uploadLimits, 'text/markdown') ? ['.md', '.markdown'] : [])].join(',')
+		: undefined);
 	/**
 	 * What a voice clip is recorded as, and its `max_bytes`: the browser's own
 	 * type without stated limits, else the first of `VOICE_TYPES` that the
@@ -214,11 +220,20 @@
 	/**
 	 * The full panel's Embed as attachment: the draft, Markdown as written, goes to its files as `message.md` (renamable
 	 * there) rather than into the message. Emptied from here, the field closes the panel (`cleared`), leaving the file
-	 * and the compact field for a caption.
+	 * and the compact field for a caption. It goes as the first of `DRAFT_TYPES` the server takes it at, size included;
+	 * a draft too large for any is still offered, so the files say why they refused it, and the draft stays.
 	 */
 	function attachDraft(): void {
 		if (!value.trim() || !draftType) return;
-		onfiles([new File([value], 'message.md', { type: draftType })]);
+		const size = new Blob([value]).size;
+		const limit = (type: string) => (uploadLimits ? mediaLimit(uploadLimits, type) : {});
+		const fits = (type: string) => {
+			const max = limit(type)?.max_bytes;
+			return Boolean(limit(type)) && (max === undefined || size <= max);
+		};
+		const type = DRAFT_TYPES.find(fits);
+		onfiles([new File([value], 'message.md', { type: type ?? draftType })]);
+		if (!type) return;
 		value = '';
 		oninput();
 	}
