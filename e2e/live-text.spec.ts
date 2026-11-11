@@ -67,6 +67,25 @@ test.describe('a terminal embed', () => {
 		expect(await page.evaluate(() => (window as unknown as { copied: string[] }).copied)).toEqual(['$ make test\nok  store     0.41s\n256 true\ncoverage 100%']);
 	});
 
+	test('closes, reading no more of its stream, and shows again from the start of what the server kept', async ({ preview }) => {
+		await preview.open();
+		const id = await preview.startLive('general', 'ada', 'terminal', { title: 'make test' });
+		const terminal = terminalOf(preview);
+		await preview.liveWrite(id, BUILD);
+		await expect.poll(async () => (await screenText(preview))[0]?.trimEnd()).toBe('$ make test');
+		expect(await preview.liveReads(id)).toBe(1);
+		await terminal.getByRole('button', { name: 'Close terminal' }).click();
+		await expect(terminal.locator('.ap-embed-termscreen')).toHaveCount(0);
+		await expect(terminal.locator('.ap-embed-detail')).toHaveText('Closed');
+		await expect(terminal.getByRole('button', { name: 'Show terminal' })).toBeFocused();
+		await preview.liveWrite(id, 'coverage 100%\r\n');
+		expect(await preview.liveReads(id)).toBe(1);
+		await terminal.getByRole('button', { name: 'Show terminal' }).click();
+		await expect(terminal.locator('.ap-embed-livebadge')).toHaveText('Live');
+		await expect.poll(async () => (await screenText(preview))[3]?.trimEnd()).toBe('coverage 100%');
+		expect(await preview.liveReads(id)).toBe(2);
+	});
+
 	test('the full-screen alternate screen shows all 40 rows', async ({ preview }) => {
 		await preview.open();
 		const id = await preview.startLive('general', 'ada', 'terminal');
