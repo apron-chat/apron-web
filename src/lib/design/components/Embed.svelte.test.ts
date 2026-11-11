@@ -36,6 +36,25 @@ describe('EmbedUpload', () => {
 		expect(click.defaultPrevented).toBe(true);
 		expect(onview).toHaveBeenCalledOnce();
 	});
+
+	it('previews a file card on a plain click where it can, and leaves other clicks and other files to the link', () => {
+		const onpreview = vi.fn();
+		render(EmbedUpload, { kind: 'upload', url: 'https://files.example/plan.md', title: 'plan.md', onpreview });
+		const card = document.querySelector<HTMLAnchorElement>('a.ap-embed-file')!;
+		expect([card.title, card.getAttribute('aria-haspopup')]).toEqual(['Preview plan.md', 'dialog']);
+		const plain = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
+		card.dispatchEvent(plain);
+		expect([plain.defaultPrevented, onpreview.mock.calls.length]).toEqual([true, 1]);
+		// Cmd-click: a new tab, as the link does.
+		const modified = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0, metaKey: true });
+		card.dispatchEvent(modified);
+		expect(onpreview).toHaveBeenCalledOnce();
+		unmount();
+
+		render(EmbedUpload, { kind: 'upload', url: 'https://files.example/a.zip', title: 'a.zip' });
+		const plainCard = document.querySelector<HTMLAnchorElement>('a.ap-embed-file')!;
+		expect([plainCard.hasAttribute('title'), plainCard.hasAttribute('aria-haspopup')]).toEqual([false, false]);
+	});
 });
 
 describe('media that waits for a click', () => {

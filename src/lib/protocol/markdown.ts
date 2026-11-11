@@ -224,6 +224,24 @@ export function renderMarkdown(text: string, resolve?: MentionResolver, resolveR
 	return sanitizeHtml(linkText(markdown(source), resolve, resolveRoom, resolveLink, resolveEmoji), 'message', media);
 }
 
+/** A link with a scheme or a host of its own (`https:`, `mailto:`, `//host`): one a file read away from where it lives can follow. */
+const PLACED = /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i;
+
+/**
+ * A Markdown file as HTML (an upload the document viewer shows): rendered and sanitized as a message body is, but a
+ * file isn't a message, so `@names`, `#rooms` and `:emoji:` stay as written. Its links: one to a heading in it
+ * (`#install`) stays, for the viewer to follow; one relative to where the file lives (`./setup.md`, `/docs`) has
+ * nowhere to lead from here, so its text stays and the link goes. Kept in neither cache: a file is opened seldom and
+ * can be as large as the viewer reads (a megabyte), which the caches, sized for messages, would hold long after.
+ */
+export function renderDocument(source: string, media: MediaCheck): string {
+	const text = withoutBidiOverrides(source);
+	if (!canSanitize) return linkifyText(escapeHtml(text));
+	// markdown-it writes each link as `<a href="…">` (a title after), never one inside another.
+	const html = md.render(text).replace(/<a href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/g, (link, href: string, inner: string) => (PLACED.test(href) || href.startsWith('#') ? link : inner));
+	return sanitizeHtml(linkText(html), 'message', media, false);
+}
+
 /** A plain body as HTML: escaped, with bare links and mentions linked. Line breaks are kept by CSS (`pre-wrap`). */
 export function renderPlain(source: string, resolve?: MentionResolver, resolveRoom?: RoomMentionResolver, resolveLink?: LinkResolver, resolveEmoji?: EmojiResolver, media: MediaCheck = NOWHERE): string {
 	const html = linkifyText(escapeHtml(withoutBidiOverrides(source)), resolve, resolveRoom, false, resolveLink, resolveEmoji);

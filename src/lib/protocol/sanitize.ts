@@ -84,9 +84,11 @@ const sanitized = new Map<string, string>();
  * `html`, sanitized as `kind` allows, its media only from where `media` lets it load. DOMPurify parses every call
  * into a document of its own, and the same body is sanitized each time its row renders (a room reopened, a held view
  * replaced by the live one, a reply's quote); the same markup with the same gate always comes out the same, so each
- * is kept.
+ * is kept. `keep: false` keeps none: for markup seldom made again and as large as a whole file (`renderDocument`),
+ * which would otherwise stay in memory until a thousand messages had pushed it out.
  */
-export function sanitizeHtml(html: string, kind: SanitizeKind, media: MediaCheck): string {
+export function sanitizeHtml(html: string, kind: SanitizeKind, media: MediaCheck, keep = true): string {
+	if (!keep) return gateMedia(DOMPurify.sanitize(html, CONFIGS[kind]), media, kind === 'embed');
 	// The gate's key by its length: it holds line breaks of its own (the URLs clicked to load), so no separator tells where it ends.
 	const key = `${kind} ${media.key.length} ${media.key}${html}`;
 	let clean = sanitized.get(key);

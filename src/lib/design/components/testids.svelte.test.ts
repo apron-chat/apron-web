@@ -30,6 +30,7 @@ import SignInForm from './SignInForm.svelte';
 import StatusBanner from './StatusBanner.svelte';
 import SystemLine from './SystemLine.svelte';
 import TerminalViewer from './TerminalViewer.svelte';
+import DocViewer from './DocViewer.svelte';
 import ThreadItem from './ThreadItem.svelte';
 import ThreadList from './ThreadList.svelte';
 import ThreadMarker from './ThreadMarker.svelte';
@@ -41,7 +42,7 @@ import { byLabel, byText } from '$lib/test/queries';
 beforeEach(() => {
 	// Popovers bind their height.
 	dom.stubResizeObserver();
-	// The TerminalViewer opens its <dialog>.
+	// The TerminalViewer and DocViewer open their <dialog>.
 	dom.stubDialog();
 });
 
@@ -169,6 +170,7 @@ const rows: Row[] = [
 	['EmojiPopover', EmojiPopover, { testid: 'picker' }, { picker: () => dom.byRole('dialog', 'Emoji picker') }],
 	['EmbedTerminal', EmbedTerminal, { kind: 'terminal', text: 'ok', testid: 'terminal' }, { terminal: () => document.querySelector('.ap-embed-terminal')! }],
 	['TerminalViewer', TerminalViewer, { open: true, text: 'ok', testid: 'viewer' }, { viewer: () => dom.byRole('dialog') }],
+	['DocViewer', DocViewer, { open: true, title: 'notes.md', status: 'Loading…', testid: 'viewer' }, { viewer: () => dom.byRole('dialog') }],
 	['SystemLine', SystemLine, { text: 'Ada joined', testid: 'line' }, { line: () => around('Ada joined') }],
 	['TimelineDivider', TimelineDivider, { kind: 'new', testid: 'divider' }, { divider: () => dom.byRole('separator', 'New') }],
 	['FloatingDay', FloatingDay, { label: 'Today', testid: 'day' }, { day: () => around('Today') }],

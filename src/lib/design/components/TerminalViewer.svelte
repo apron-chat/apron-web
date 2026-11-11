@@ -41,7 +41,12 @@
 		} else if (!open && dialog.open) dialog.close();
 	});
 
+	/**
+	 * It closed; not if shown again before the `close` event came, and Escape and Close set `open` false at once, so an
+	 * open in between shows (as `ViewerDialog` does).
+	 */
 	function closed(): void {
+		if (dialog?.open) return;
 		open = false;
 		onclose?.();
 	}
@@ -50,7 +55,7 @@
 	function keydown(event: KeyboardEvent): void {
 		if (event.key !== 'Escape') return;
 		event.preventDefault();
-		dialog?.close();
+		open = false;
 	}
 </script>
 
@@ -63,7 +68,7 @@
 			</div>
 			{#if live}<span class="ap-embed-livebadge" role="status"><i aria-hidden="true"></i>Live</span>
 			{:else}<span class="ap-viewer-detail">{status || 'Finished'}</span>{/if}
-			<button bind:this={closeButton} class="ap-viewer-btn" type="button" aria-label="Close" title="Close" onclick={() => dialog?.close()}>
+			<button bind:this={closeButton} class="ap-viewer-btn" type="button" aria-label="Close" title="Close" onclick={() => (open = false)}>
 				<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
 			</button>
 		</header>

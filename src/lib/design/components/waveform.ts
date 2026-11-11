@@ -4,6 +4,7 @@
  * as many bars as its width has room for (`resample`). Decoding also gives the clip's length, which a recording made in
  * the browser doesn't report until it has played through.
  */
+import { readCapped } from './util';
 
 export interface Wave {
 	/** One per bar, 0 to 1, the loudest bar 1. */
@@ -71,41 +72,12 @@ export function wavePath(peaks: readonly number[]): string {
 	}).join('');
 }
 
-/** The response's body, read until it passes `MAX_BYTES`: then the download stops, and undefined. */
-async function body(response: Response): Promise<ArrayBuffer | undefined> {
-	if (Number(response.headers.get('content-length')) > MAX_BYTES) {
-		void response.body?.cancel();
-		return undefined;
-	}
-	if (!response.body) return response.arrayBuffer();
-	const reader = response.body.getReader();
-	const chunks: Uint8Array[] = [];
-	let size = 0;
-	for (;;) {
-		const { done, value } = await reader.read();
-		if (done) break;
-		size += value.byteLength;
-		if (size > MAX_BYTES) {
-			void reader.cancel();
-			return undefined;
-		}
-		chunks.push(value);
-	}
-	const bytes = new Uint8Array(size);
-	let at = 0;
-	for (const chunk of chunks) {
-		bytes.set(chunk, at);
-		at += chunk.byteLength;
-	}
-	return bytes.buffer;
-}
-
 /** The clip's wave; undefined when it is too large to draw. Throws when it can't be had now (a failed fetch or decode). */
 async function decode(src: string, bars: number): Promise<Wave | undefined> {
 	if (typeof OfflineAudioContext !== 'function') return undefined;
 	const response = await fetch(src);
 	if (!response.ok) throw new Error(`HTTP ${response.status}`);
-	const bytes = await body(response);
+	const bytes = await readCapped(response, MAX_BYTES);
 	if (!bytes) return undefined;
 	const audio = await new OfflineAudioContext(1, 1, SAMPLE_RATE).decodeAudioData(bytes);
 	return { peaks: bucketPeaks(audio.getChannelData(0), bars), duration: audio.duration };

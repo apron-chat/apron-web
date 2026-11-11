@@ -13,8 +13,12 @@ declare global {
 			thread?: string;
 			/** The phone's rooms list is open over that room or thread: Back returns to it. */
 			rooms?: true;
+			/** The image viewer is open over it, since this time (ms): Back closes it. */
+			media?: number;
 			/** The terminal viewer is open over it, since this time (ms): Back closes it. */
 			terminal?: number;
+			/** The document viewer is open over it, since this time (ms): Back closes it. */
+			doc?: number;
 			/** Preferences is open, this many entries since it opened: closing it goes Back as many. */
 			preferences?: number;
 		}
