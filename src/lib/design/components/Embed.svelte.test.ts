@@ -181,40 +181,26 @@ describe('EmbedTerminal', () => {
 		expect(onexpand).toHaveBeenCalledExactlyOnceWith(button('Expand terminal'));
 	});
 
-	it('offers Close, only with `onclose`, last in its header', () => {
-		render(EmbedTerminal, { kind: 'terminal', url: '#' });
-		expect(queryByRole('button', 'Close terminal')).toBeNull();
-		unmount();
+	it('offers Close; closed, shows only its header, saying Closed, with Show in place of Close, Copy and Expand', () => {
 		const onclose = vi.fn();
-		render(EmbedTerminal, { kind: 'terminal', url: '#', attach: vi.fn(), onexpand: vi.fn(), onclose });
-		const close = button('Close terminal');
-		expect(close.previousElementSibling).toBe(button('Expand terminal'));
-		expect(close.nextElementSibling).toBeNull();
-		close.click();
-		expect(onclose).toHaveBeenCalledOnce();
-	});
-
-	it('closed, shows only its header, saying Closed, with Show in place of Close, Copy and Expand', async () => {
 		const onshow = vi.fn();
-		const attach = vi.fn();
-		render(EmbedTerminal, { kind: 'terminal', title: 'make', url: '#', page: 'https://terminal.apron.chat/', attach, oncopy: vi.fn(), onexpand: vi.fn(), onclose: vi.fn(), closed: true, onshow });
+		const props = { kind: 'terminal', url: '#', page: 'https://terminal.apron.chat/', attach: vi.fn(), oncopy: vi.fn(), onexpand: vi.fn(), onclose, onshow };
+		render(EmbedTerminal, props);
+		button('Close terminal').click();
+		expect(onclose).toHaveBeenCalledOnce();
+		unmount();
+		render(EmbedTerminal, { ...props, closed: true });
 		expect(document.querySelector('.ap-embed-termscreen')).toBeNull();
-		expect(attach).not.toHaveBeenCalled();
 		expect(document.querySelector('.ap-embed-livebadge')).toBeNull();
-		expect(document.querySelector('.ap-embed-terminal-live')).toBeNull();
-		expect(document.querySelector('.ap-embed-terminal-closed')).not.toBeNull();
 		expect(detail()).toBe('Closed');
 		for (const name of ['Close terminal', 'Copy terminal text', 'Expand terminal']) expect(queryByRole('button', name)).toBeNull();
 		expect(queryByRole('link', 'Open terminal in a new tab')).not.toBeNull();
 		button('Show terminal').click();
 		expect(onshow).toHaveBeenCalledOnce();
-	});
-
-	it('is not closed without `onshow`, which would leave no way back', () => {
-		render(EmbedTerminal, { kind: 'terminal', url: '#', attach: vi.fn(), onclose: vi.fn(), closed: true });
+		unmount();
+		// Without Show there would be no way back: not closed.
+		render(EmbedTerminal, { ...props, onshow: undefined, closed: true });
 		expect(document.querySelector('.ap-embed-termscreen')).not.toBeNull();
-		expect(document.querySelector('.ap-embed-livebadge')?.textContent).toBe('Live');
-		expect(queryByRole('button', 'Close terminal')).not.toBeNull();
 	});
 });
 

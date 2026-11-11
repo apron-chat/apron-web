@@ -72,7 +72,6 @@
 
 	/** Hides its screen and its viewer, and stops reading `url`. */
 	function close(): void {
-		terminalViewer.forget(view);
 		if (key) closedTerminals.close(key);
 		else closedHere = true;
 	}
@@ -133,8 +132,11 @@
 		return () => controller.abort();
 	});
 
-	// Gone, its viewer goes too: nothing would feed it.
+	// Gone or closed (here or in another tab), its viewer goes too: nothing would feed it.
 	$effect(() => () => terminalViewer.forget(view));
+	$effect(() => {
+		if (closed) terminalViewer.forget(view);
+	});
 </script>
 
 <DesignEmbedTerminal kind="terminal" {url} done={!live} title={embed.title} {status} {page} {attach} oncopy={copy} onexpand={(button) => terminalViewer.show(view, button)} {closed} onclose={close} onshow={reopen} testid="terminal-embed" />

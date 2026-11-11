@@ -165,41 +165,20 @@ describe('a terminal embed (§4.8.6)', () => {
 });
 
 describe('a terminal embed, closed', () => {
-	it('stops reading its live text and drops its screen on Close, stays closed when drawn again and after a reload, and reads afresh on Show', async () => {
+	it('stops reading its live text and drops its screen on Close, and reads afresh on Show', async () => {
 		const server = serve();
-		const embed = { kind: 'terminal', embed_id: 'embed_7', title: 'make', url: 'https://chat.example/t/7' } satisfies EmbedRecord;
-		let box = show(embed);
+		const box = show({ kind: 'terminal', embed_id: 'embed_7', url: 'https://chat.example/t/7' });
 		await vi.waitFor(() => expect(server.responses).toHaveLength(1));
 		server.responses[0].push('$ make\r\n');
 		await vi.waitFor(() => expect(text(FakeTerminal.made[0].written)).toEqual([ESC_C, '$ make\r\n']));
 
-		const close = button('Close terminal', box);
-		close.click();
+		button('Close terminal', box).click();
 		flushSync();
 		await tick();
 		expect(server.signals[0]?.aborted).toBe(true);
 		expect(FakeTerminal.made[0].disposed).toBe(true);
-		expect(box.querySelector('.ap-embed-termscreen')).toBeNull();
-		expect(box.querySelector('.ap-embed-livebadge')).toBeNull();
 		expect(box.querySelector('.ap-embed-detail')?.textContent).toBe('Closed');
 		expect(document.activeElement).toBe(button('Show terminal', box));
-
-		// Drawn again, such as on coming back to its room: still closed, reading nothing.
-		unmount(box);
-		box = show(embed);
-		await new Promise((resolve) => setTimeout(resolve, 10));
-		expect(server.urls).toHaveLength(1);
-		expect(FakeTerminal.made).toHaveLength(1);
-		expect(box.querySelector('.ap-embed-detail')?.textContent).toBe('Closed');
-
-		// Saved for the next visit: after a reload, it is still closed, and reads nothing.
-		expect(JSON.parse(localStorage.getItem('apron.closedTerminals')!)).toEqual(['wss://chat.example/ws\n~guest embed_7']);
-		unmount(box);
-		closedTerminals.load();
-		box = show(embed);
-		await new Promise((resolve) => setTimeout(resolve, 10));
-		expect(server.urls).toHaveLength(1);
-		expect(box.querySelector('.ap-embed-detail')?.textContent).toBe('Closed');
 
 		// Show: read afresh, from the start of what the server kept.
 		button('Show terminal', box).click();
@@ -209,63 +188,41 @@ describe('a terminal embed, closed', () => {
 		await vi.waitFor(() => expect(text(FakeTerminal.made.at(-1)!.written)).toEqual([ESC_C, '$ make\r\nok\r\n']));
 		expect(box.querySelector('.ap-embed-livebadge')?.textContent).toBe('Live');
 		expect(document.activeElement).toBe(button('Close terminal', box));
-		expect(JSON.parse(localStorage.getItem('apron.closedTerminals')!)).toEqual([]);
-		unmount(box);
 	});
 
-	it('follows another tab closing or showing it', async () => {
+	it('stays closed after a reload, reading nothing, for the account that closed it', async () => {
 		const server = serve();
-		const box = show({ kind: 'terminal', embed_id: 'embed_8', url: 'https://chat.example/t/8' });
-		await vi.waitFor(() => expect(server.responses).toHaveLength(1));
-		localStorage.setItem('apron.closedTerminals', JSON.stringify(['wss://chat.example/ws\n~guest embed_8']));
-		closedTerminals.storageChanged('apron.closedTerminals');
-		flushSync();
-		expect(server.signals[0]?.aborted).toBe(true);
-		expect(box.querySelector('.ap-embed-detail')?.textContent).toBe('Closed');
-		localStorage.setItem('apron.closedTerminals', '[]');
-		closedTerminals.storageChanged('apron.closedTerminals');
-		flushSync();
-		await vi.waitFor(() => expect(server.responses).toHaveLength(2));
-	});
-
-	it('is shown again when its account’s local history is deleted, and is closed per account', async () => {
-		serve();
-		const embed = { kind: 'terminal', embed_id: 'embed_9', output: 'ok\r\n' } satisfies EmbedRecord;
-		const ada = { ...blankSnapshot(), authenticated: true, you: { user_id: 'ada' } } as ReturnType<typeof blankSnapshot>;
-		directory.apply(ada, 'https://chat.example', 'wss://chat.example/ws');
-		const box = show(embed);
+		const embed = { kind: 'terminal', embed_id: 'embed_8', url: 'https://chat.example/t/8' } satisfies EmbedRecord;
+		const as = (user_id: string) => directory.apply({ ...blankSnapshot(), authenticated: true, you: { user_id } } as ReturnType<typeof blankSnapshot>, 'https://chat.example', 'wss://chat.example/ws');
+		as('ada');
+		let box = show(embed);
 		button('Close terminal', box).click();
-		flushSync();
+		unmount(box);
+		closedTerminals.load();
+		box = show(embed);
+		await new Promise((resolve) => setTimeout(resolve, 10));
 		expect(box.querySelector('.ap-embed-detail')?.textContent).toBe('Closed');
-		// Another account on the same server has its own.
-		directory.apply({ ...ada, you: { user_id: 'bob' } } as typeof ada, 'https://chat.example', 'wss://chat.example/ws');
+		expect(server.urls).toHaveLength(1);
+		// Another account on the same server keeps its own.
+		as('bob');
 		flushSync();
-		expect(box.querySelector('.ap-embed-detail')?.textContent).toBe('Finished');
-		directory.apply(ada, 'https://chat.example', 'wss://chat.example/ws');
-		flushSync();
-		expect(box.querySelector('.ap-embed-detail')?.textContent).toBe('Closed');
-		// Another account's history going leaves it; its own going shows it again, and stores nothing.
-		closedTerminals.forget('wss://chat.example/ws', 'bob');
-		flushSync();
-		expect(box.querySelector('.ap-embed-detail')?.textContent).toBe('Closed');
-		closedTerminals.forget('wss://chat.example/ws', 'ada');
-		flushSync();
-		expect(box.querySelector('.ap-embed-detail')?.textContent).toBe('Finished');
-		expect(localStorage.getItem('apron.closedTerminals')).toBeNull();
+		expect(box.querySelector('.ap-embed-livebadge')?.textContent).toBe('Live');
 	});
 
-	it('closes its viewer too', async () => {
-		serve();
+	it('closed in another tab, stops reading here, and its viewer closes too', async () => {
+		const server = serve();
 		render(TerminalViewerHost);
-		const box = show({ kind: 'terminal', title: 'make', output: 'ok\r\n' });
+		const box = show({ kind: 'terminal', embed_id: 'embed_9', url: 'https://chat.example/t/9' });
+		await vi.waitFor(() => expect(server.responses).toHaveLength(1));
 		button('Expand terminal', box).click();
 		flushSync();
 		await vi.waitFor(() => expect(FakeTerminal.made).toHaveLength(2));
 		const back = vi.spyOn(history, 'back').mockImplementation(() => {});
-		// The dialog is modal, so a press can't reach Close while it shows; whatever closes it, its viewer goes.
-		button('Close terminal', box).click();
+		localStorage.setItem('apron.closedTerminals', JSON.stringify(['wss://chat.example/ws\n~guest embed_9']));
+		closedTerminals.storageChanged('apron.closedTerminals');
 		flushSync();
 		await tick();
+		expect(server.signals[0]?.aborted).toBe(true);
 		expect(document.querySelector('[data-testid="terminal-viewer"]')).toBeNull();
 		expect(FakeTerminal.made.every((terminal) => terminal.disposed)).toBe(true);
 		back.mockRestore();

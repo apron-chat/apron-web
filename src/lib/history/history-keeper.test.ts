@@ -604,19 +604,21 @@ describe('HistoryKeeper', () => {
 		}
 	});
 
-	it('shows again the terminals an account closed with its history', async () => {
+	it('shows again the terminals closed by the accounts whose history goes', async () => {
 		vi.stubGlobal('localStorage', memoryStorage());
 		try {
 			closedTerminals.load();
 			const keeper = new HistoryKeeper({ indexedDB: new IDBFactory(), locks: null });
-			const ada = terminalKey(URL, 'ada', { embed_id: 'embed_1' })!;
-			const zed = terminalKey(URL, 'zed', { embed_id: 'embed_1' })!;
-			closedTerminals.close(ada);
-			closedTerminals.close(zed);
+			const other = 'wss://other.example/';
+			const keys = [terminalKey(URL, 'ada', { embed_id: 'e' })!, terminalKey(URL, 'zed', { embed_id: 'e' })!, terminalKey(other, 'ada', { embed_id: 'e' })!];
+			const closed = () => keys.map((key) => closedTerminals.has(key));
+			for (const key of keys) closedTerminals.close(key);
 			await keeper.forget(URL, 'zed');
-			expect([closedTerminals.has(ada), closedTerminals.has(zed)]).toEqual([true, false]);
+			expect(closed()).toEqual([true, false, true]);
+			await keeper.forget(URL);
+			expect(closed()).toEqual([false, false, true]);
 			await keeper.forget();
-			expect(closedTerminals.has(ada)).toBe(false);
+			expect(closed()).toEqual([false, false, false]);
 		} finally {
 			vi.unstubAllGlobals();
 			closedTerminals.load();
