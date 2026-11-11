@@ -2,7 +2,7 @@
 import { flushSync } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { page, pushes } from '$lib/test/app-page.svelte';
-import { backCloses } from './viewer.svelte';
+import { backCloses, Viewer } from './viewer.svelte';
 
 vi.mock('$app/state', async () => ({ page: (await import('$lib/test/app-page.svelte')).page }));
 vi.mock('$app/navigation', async () => ({ pushState: (await import('$lib/test/app-page.svelte')).pushState }));
@@ -38,6 +38,18 @@ function land(): void {
 	page.state = before;
 	flushSync();
 }
+
+describe('Viewer', () => {
+	it('opens on what it shows, and gives focus back to what opened it once it closes', () => {
+		const viewer = new Viewer<{ title: string }>();
+		const card = document.body.appendChild(document.createElement('button'));
+		viewer.show({ title: 'plan.md' }, card);
+		expect([viewer.open, viewer.view?.title]).toEqual([true, 'plan.md']);
+		viewer.closed();
+		expect([viewer.open, viewer.view, document.activeElement]).toEqual([false, undefined, card]);
+		card.remove();
+	});
+});
 
 describe('backCloses', () => {
 	it('pushes an entry as it opens, keeping the page\'s state, and Back closes it', () => {
@@ -88,7 +100,7 @@ describe('backCloses', () => {
 		v.stop();
 	});
 
-	it('waits while the page is still on the entry the Back left, and no longer once anything has moved it off', () => {
+	it('any viewer opened meanwhile waits while the page is still on the entry that Back left, until anything moves it off', () => {
 		const doc = viewer('doc');
 		const media = viewer('media');
 		doc.state.open = true;
@@ -106,23 +118,6 @@ describe('backCloses', () => {
 		flushSync();
 		expect(pushes[1]).toEqual({ room: 'ops', media: expect.any(Number) });
 		expect(media.close).not.toHaveBeenCalled();
-		doc.stop();
-		media.stop();
-	});
-
-	it('another viewer opened before that Back lands waits for it too, so the Back doesn\'t close it', () => {
-		const doc = viewer('doc');
-		const media = viewer('media');
-		doc.state.open = true;
-		flushSync();
-		doc.state.open = false;
-		doc.leave();
-		media.state.open = true;
-		flushSync();
-		expect(pushes.map((state) => Object.keys(state).filter((key) => key !== 'room'))).toEqual([['doc']]);
-		land();
-		expect(media.close).not.toHaveBeenCalled();
-		expect(pushes[1]).toEqual({ room: 'general', media: expect.any(Number) });
 		doc.stop();
 		media.stop();
 	});

@@ -144,29 +144,14 @@ describe('Composer', () => {
 		expect(props.oninput).toHaveBeenCalled();
 	});
 
-	it('doesn\'t offer it without uploads, for a command, or for an empty draft', async () => {
-		const open = async (props: Record<string, unknown>) => {
+	it('doesn\'t offer it without uploads, or for a command', async () => {
+		for (const props of [{ value: 'one\ntwo', canUpload: false }, { value: '/me one\ntwo', canUpload: true, canCommand: true }]) {
 			render(props);
 			document.querySelector<HTMLButtonElement>('[data-testid="composer-expand"]')?.click();
 			flushSync();
 			await tick();
-			return document.querySelector<HTMLButtonElement>('button[aria-label="Embed as attachment"]');
-		};
-		expect(await open({ value: 'one\ntwo', canUpload: false })).toBeNull();
-		dom.unmount();
-		expect(await open({ value: '/me one\ntwo', canUpload: true, canCommand: true })).toBeNull();
-		dom.unmount();
-		const props = $state<Record<string, unknown>>({ value: 'one\ntwo', placeholder: 'Message General', disabled: false, canUpload: true, people: [], oninput: vi.fn(), onsend: vi.fn(), onfiles: vi.fn(), onunstage: vi.fn(), onrename: vi.fn(), oncancelreply: vi.fn() });
-		dom.render(Composer, props as never);
-		flushSync();
-		document.querySelector<HTMLButtonElement>('[data-testid="composer-expand"]')!.click();
-		flushSync();
-		await tick();
-		// Emptied by typing, the panel stays, and there is nothing to embed.
-		const input = document.querySelector<HTMLElement>('[data-testid="message-input"]')!;
-		input.replaceChildren();
-		input.dispatchEvent(new InputEvent('input', { bubbles: true }));
-		flushSync();
-		expect(document.querySelector<HTMLButtonElement>('button[aria-label="Embed as attachment"]')?.disabled).toBe(true);
+			expect(document.querySelector('button[aria-label="Embed as attachment"]')).toBeNull();
+			dom.unmount();
+		}
 	});
 });

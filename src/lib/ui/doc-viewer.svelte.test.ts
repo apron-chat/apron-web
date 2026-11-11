@@ -1,24 +1,12 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import { headingFor, MAX_DOC_BYTES, readDoc } from './doc-text';
-import { docViewer, isMarkdownName } from './doc-viewer.svelte';
+import { isMarkdownName } from './doc-viewer.svelte';
 
 describe('isMarkdownName', () => {
 	it('knows a Markdown file by its name, whatever its case', () => {
 		expect(['README.md', 'notes.MD', 'plan.markdown', 'a.mdown', 'b.mkd', ' spaced.md '].map(isMarkdownName)).toEqual([true, true, true, true, true, true]);
 		expect(['md', '.md.txt', 'notes.mdx', 'a.txt', 'File', '', undefined].map(isMarkdownName)).toEqual([false, false, false, false, false, false, false]);
-	});
-});
-
-describe('docViewer', () => {
-	it('opens on a file, and gives focus back to its card once it closes', () => {
-		const card = document.body.appendChild(document.createElement('a'));
-		card.href = 'https://files.example/plan.md';
-		docViewer.show({ url: 'https://files.example/plan.md', title: 'plan.md', detail: 'Ada' }, card);
-		expect([docViewer.open, docViewer.view?.title]).toEqual([true, 'plan.md']);
-		docViewer.closed();
-		expect([docViewer.open, docViewer.view, document.activeElement]).toEqual([false, undefined, card]);
-		card.remove();
 	});
 });
 
