@@ -37,10 +37,15 @@ describe('renderDocument', () => {
 
 	it('is sanitized, and keeps nothing for later: the same file is sanitized again each time', () => {
 		const sanitize = vi.spyOn(DOMPurify, 'sanitize');
-		const markdown = '[x](javascript:alert(1)) <img src=x onerror=alert(1)>';
+		// markdown-it keeps the script link and raw HTML as text before the sanitizer sees them; a link to a scheme the
+		// sanitizer doesn't allow, and a picture from where media may not load, get past it, and only the sanitizer stops them.
+		const markdown = '[x](javascript:alert(1)) <img src=x onerror=alert(1)> [y](foo:alert(1)) ![z](https://tracker.example/z.png)';
 		const box = rendered(markdown);
-		// Neither a link nor a picture: the script link and the raw HTML stay text.
-		expect(box.querySelector('a, img, [onerror]')).toBeNull();
+		expect(box.querySelector('img, [onerror], a[href^="javascript"]')).toBeNull();
+		const [script, picture] = box.querySelectorAll('a');
+		expect([script.textContent, script.hasAttribute('href')]).toEqual(['y', false]);
+		// The picture doesn't load: it is a link to it, as in a message.
+		expect([picture.textContent, picture.getAttribute('href')]).toEqual(['z', 'https://tracker.example/z.png']);
 		rendered(markdown);
 		expect(sanitize).toHaveBeenCalledTimes(2);
 	});

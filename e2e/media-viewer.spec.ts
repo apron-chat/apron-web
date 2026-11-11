@@ -27,7 +27,7 @@ test.describe('the image viewer', () => {
 test.describe('the image viewer, closed with Escape', () => {
 	test.use({ ...DEVICES.desktop });
 
-	test('leaves no entry for Back to find, and opens again at once', async ({ preview, page }) => {
+	test('leaves no entry for Back to find', async ({ preview, page }) => {
 		await preview.open();
 		const link = page.locator('a.ap-embed-imagelink').first();
 		await link.click();
@@ -36,11 +36,30 @@ test.describe('the image viewer, closed with Escape', () => {
 		await page.keyboard.press('Escape');
 		await expect(viewer).toBeHidden();
 		await expect(link).toBeFocused();
-		// Opened again straight away, before the Back that closing went has landed: it stays open.
-		await page.keyboard.press('Enter');
+		await expect.poll(() => page.evaluate(() => JSON.stringify(history.state ?? {}))).not.toContain('"media"');
+	});
+
+	test('opened again in the moment it closes, before its close event has come, stays open', async ({ preview, page }) => {
+		await preview.open();
+		const links = page.locator('a.ap-embed-imagelink');
+		await links.first().click();
+		await expect(page.getByRole('dialog', { name: DUSK })).toBeVisible();
+		// Escape, then a click on the other image once the dialog has closed but before its `close` event (a task later).
+		const between = await page.evaluate(async () => {
+			const dialog = document.querySelector('dialog[open]')!;
+			dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+			await new Promise<void>((settle) => queueMicrotask(settle));
+			const closed = !dialog.open;
+			document.querySelectorAll<HTMLElement>('a.ap-embed-imagelink')[1].click();
+			return closed;
+		});
+		expect(between).toBe(true);
+		const viewer = page.getByRole('dialog', { name: DAWN });
 		await expect(viewer).toBeVisible();
-		await expect.poll(() => page.evaluate(() => JSON.stringify(history.state ?? {}))).toContain('"media"');
+		// Still open once the late close event, and any Back, have come and gone; and on its history entry.
+		await page.waitForTimeout(300);
 		await expect(viewer).toBeVisible();
+		expect(await page.evaluate(() => JSON.stringify(history.state ?? {}))).toContain('"media"');
 		await viewer.getByRole('button', { name: 'Close' }).click();
 		await expect(viewer).toBeHidden();
 		await expect.poll(() => page.evaluate(() => JSON.stringify(history.state ?? {}))).not.toContain('"media"');

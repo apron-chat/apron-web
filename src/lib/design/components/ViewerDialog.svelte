@@ -46,7 +46,8 @@
 
 	/**
 	 * It closed. The `close` event comes a moment after: shown again meanwhile (Escape, then Enter at once on what opened
-	 * it), it never closed, as far as anyone is concerned.
+	 * it), it never closed, as far as anyone is concerned. Closing it here (Escape, Close) sets `open` false at once, not
+	 * when the event comes, so an open in between is a change the dialog sees and shows, whatever it opens on.
 	 */
 	function closed(): void {
 		if (dialog?.open) return;
@@ -58,7 +59,7 @@
 	function keydown(event: KeyboardEvent): void {
 		if (event.key === 'Escape') {
 			event.preventDefault();
-			dialog?.close();
+			open = false;
 		} else onkeydown?.(event);
 	}
 </script>
@@ -72,7 +73,7 @@
 				{#if detail}<p class="ap-viewer-detail">{detail}</p>{/if}
 			</div>
 			{@render actions?.()}
-			<button bind:this={closeButton} class="ap-viewer-btn" type="button" aria-label="Close" title="Close" onclick={() => dialog?.close()}>
+			<button bind:this={closeButton} class="ap-viewer-btn" type="button" aria-label="Close" title="Close" onclick={() => (open = false)}>
 				<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
 			</button>
 		</header>

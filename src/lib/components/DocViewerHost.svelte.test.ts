@@ -72,6 +72,26 @@ describe('DocViewerHost', () => {
 		expect(document.querySelector('.ap-docviewer-status a')?.textContent).toBe('Download');
 	});
 
+	it('opened again in the moment it closes, before its `close` event has come, stays open on the new file', async () => {
+		// As a browser does: closed at once, the event a task later.
+		const close = vi.spyOn(HTMLDialogElement.prototype, 'close').mockImplementation(function (this: HTMLDialogElement) {
+			this.open = false;
+			setTimeout(() => this.dispatchEvent(new Event('close')));
+		});
+		render(DocViewerHost);
+		open();
+		await reads[0].answer({ text: '# First' });
+		document.querySelector('dialog')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+		flushSync();
+		expect([close.mock.calls.length, document.querySelector('dialog')!.open]).toEqual([1, false]);
+		open('https://files.example/other.md');
+		await new Promise((settle) => setTimeout(settle));
+		flushSync();
+		expect([docViewer.open, document.querySelector('dialog')?.open, docViewer.view?.url]).toEqual([true, true, 'https://files.example/other.md']);
+		await reads[1].answer({ text: '# Other' });
+		expect(text()?.querySelector('h1')?.textContent).toBe('Other');
+	});
+
 	it('scrolls to the heading a link names, and Back closes it', async () => {
 		render(DocViewerHost);
 		open();
