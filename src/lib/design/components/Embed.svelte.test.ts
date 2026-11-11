@@ -209,6 +209,13 @@ describe('EmbedTerminal', () => {
 		button('Show terminal').click();
 		expect(onshow).toHaveBeenCalledOnce();
 	});
+
+	it('is not closed without `onshow`, which would leave no way back', () => {
+		render(EmbedTerminal, { kind: 'terminal', url: '#', attach: vi.fn(), onclose: vi.fn(), closed: true });
+		expect(document.querySelector('.ap-embed-termscreen')).not.toBeNull();
+		expect(document.querySelector('.ap-embed-livebadge')?.textContent).toBe('Live');
+		expect(queryByRole('button', 'Close terminal')).not.toBeNull();
+	});
 });
 
 describe('Embed', () => {

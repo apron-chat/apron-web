@@ -193,7 +193,7 @@ describe('a terminal embed, closed', () => {
 		expect(box.querySelector('.ap-embed-detail')?.textContent).toBe('Closed');
 
 		// Saved for the next visit: after a reload, it is still closed, and reads nothing.
-		expect(JSON.parse(localStorage.getItem('apron.closedTerminals')!)).toEqual(['https://chat.example embed_7']);
+		expect(JSON.parse(localStorage.getItem('apron.closedTerminals')!)).toEqual(['wss://chat.example/ws\n~guest embed_7']);
 		unmount(box);
 		closedTerminals.load();
 		box = show(embed);
@@ -217,7 +217,7 @@ describe('a terminal embed, closed', () => {
 		const server = serve();
 		const box = show({ kind: 'terminal', embed_id: 'embed_8', url: 'https://chat.example/t/8' });
 		await vi.waitFor(() => expect(server.responses).toHaveLength(1));
-		localStorage.setItem('apron.closedTerminals', JSON.stringify(['https://chat.example embed_8']));
+		localStorage.setItem('apron.closedTerminals', JSON.stringify(['wss://chat.example/ws\n~guest embed_8']));
 		closedTerminals.storageChanged('apron.closedTerminals');
 		flushSync();
 		expect(server.signals[0]?.aborted).toBe(true);
@@ -226,6 +226,32 @@ describe('a terminal embed, closed', () => {
 		closedTerminals.storageChanged('apron.closedTerminals');
 		flushSync();
 		await vi.waitFor(() => expect(server.responses).toHaveLength(2));
+	});
+
+	it('is shown again when its account’s local history is deleted, and is closed per account', async () => {
+		serve();
+		const embed = { kind: 'terminal', embed_id: 'embed_9', output: 'ok\r\n' } satisfies EmbedRecord;
+		const ada = { ...blankSnapshot(), authenticated: true, you: { user_id: 'ada' } } as ReturnType<typeof blankSnapshot>;
+		directory.apply(ada, 'https://chat.example', 'wss://chat.example/ws');
+		const box = show(embed);
+		button('Close terminal', box).click();
+		flushSync();
+		expect(box.querySelector('.ap-embed-detail')?.textContent).toBe('Closed');
+		// Another account on the same server has its own.
+		directory.apply({ ...ada, you: { user_id: 'bob' } } as typeof ada, 'https://chat.example', 'wss://chat.example/ws');
+		flushSync();
+		expect(box.querySelector('.ap-embed-detail')?.textContent).toBe('Finished');
+		directory.apply(ada, 'https://chat.example', 'wss://chat.example/ws');
+		flushSync();
+		expect(box.querySelector('.ap-embed-detail')?.textContent).toBe('Closed');
+		// Another account's history going leaves it; its own going shows it again, and stores nothing.
+		closedTerminals.forget('wss://chat.example/ws', 'bob');
+		flushSync();
+		expect(box.querySelector('.ap-embed-detail')?.textContent).toBe('Closed');
+		closedTerminals.forget('wss://chat.example/ws', 'ada');
+		flushSync();
+		expect(box.querySelector('.ap-embed-detail')?.textContent).toBe('Finished');
+		expect(localStorage.getItem('apron.closedTerminals')).toBeNull();
 	});
 
 	it('closes its viewer too', async () => {

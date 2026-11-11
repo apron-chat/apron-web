@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { pushIdFor, loadLastSignIn, saveLastSignIn, loadRecentServers, refreshRecentServer, rememberServer, starServer, forgetServer, hideDescription, loadAppearance, loadClosedTerminals, saveTerminalClosed, loadShutMemberSections, saveShutMemberSections, loadSidebarFolds, saveSidebarFolds, loadHiddenDescriptions, loadAddedRooms, saveAddedRooms, loadThreadFolds, saveThreadFolds, loadRoomOrder, saveRoomOrder, showDescription, descriptionHidden, loadNotificationsEnabled, loadNotifyScopes, loadWebPushAccounts, notificationsChosen, loadWebPushOwner, saveAppearance, saveNotificationsEnabled, saveNotifyScopes, saveWebPushEnabled, saveWebPushOwner } from './storage';
+import { pushIdFor, loadLastSignIn, saveLastSignIn, loadRecentServers, refreshRecentServer, rememberServer, starServer, forgetServer, hideDescription, loadAppearance, loadClosedTerminals, saveTerminalClosed, forgetClosedTerminals, loadShutMemberSections, saveShutMemberSections, loadSidebarFolds, saveSidebarFolds, loadHiddenDescriptions, loadAddedRooms, saveAddedRooms, loadThreadFolds, saveThreadFolds, loadRoomOrder, saveRoomOrder, showDescription, descriptionHidden, loadNotificationsEnabled, loadNotifyScopes, loadWebPushAccounts, notificationsChosen, loadWebPushOwner, saveAppearance, saveNotificationsEnabled, saveNotifyScopes, saveWebPushEnabled, saveWebPushOwner } from './storage';
 import { notifyAccount } from './notify-scopes';
 import { memoryStorage } from '$lib/test/storage';
 
@@ -260,6 +260,12 @@ describe('preference storage', () => {
 		const kept = loadClosedTerminals();
 		expect(kept).toHaveLength(500);
 		expect(kept[0]).toBe('https://a 0');
+		saveTerminalClosed([], 'wss://b\nada embed_1', true);
+		saveTerminalClosed([], 'wss://b\nbob embed_1', true);
+		expect(forgetClosedTerminals([], 'wss://b\nada ')).toContain('wss://b\nbob embed_1');
+		expect(forgetClosedTerminals([], 'wss://b\n').filter((key) => key.startsWith('wss://b'))).toEqual([]);
+		expect(forgetClosedTerminals([], '')).toEqual([]);
+		expect(values.has('apron.closedTerminals')).toBe(false);
 		values.set('apron.closedTerminals', '{broken');
 		expect(loadClosedTerminals()).toEqual([]);
 		values.set('apron.closedTerminals', '["https://a embed_1", 5]');

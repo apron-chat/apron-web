@@ -9,6 +9,8 @@ import { HistoryKeeper, mergeOf, plannedRoom, PRUNE_MS, RESTORE_WINDOW, restored
 import type { RoomSync } from '$lib/protocol/client';
 import type { RestoredState } from '$lib/protocol/client-types';
 import { loadView, saveView } from '$lib/ui/session-cache';
+import { closedTerminals, terminalKey } from '$lib/ui/terminal-closed.svelte';
+import { memoryStorage } from '$lib/test/storage';
 
 const URL = 'wss://chat.example/';
 /** The memory server's account. */
@@ -599,6 +601,25 @@ describe('HistoryKeeper', () => {
 			expect(vi.getTimerCount()).toBe(0);
 		} finally {
 			vi.useRealTimers();
+		}
+	});
+
+	it('shows again the terminals an account closed with its history', async () => {
+		vi.stubGlobal('localStorage', memoryStorage());
+		try {
+			closedTerminals.load();
+			const keeper = new HistoryKeeper({ indexedDB: new IDBFactory(), locks: null });
+			const ada = terminalKey(URL, 'ada', { embed_id: 'embed_1' })!;
+			const zed = terminalKey(URL, 'zed', { embed_id: 'embed_1' })!;
+			closedTerminals.close(ada);
+			closedTerminals.close(zed);
+			await keeper.forget(URL, 'zed');
+			expect([closedTerminals.has(ada), closedTerminals.has(zed)]).toEqual([true, false]);
+			await keeper.forget();
+			expect(closedTerminals.has(ada)).toBe(false);
+		} finally {
+			vi.unstubAllGlobals();
+			closedTerminals.load();
 		}
 	});
 
