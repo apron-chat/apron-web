@@ -60,7 +60,7 @@ test.describe('an uploaded Markdown file', () => {
 		const viewer = page.getByRole('dialog', { name: 'rollout-plan.md' });
 		await expect(viewer).toBeVisible();
 		// The document has focus, to scroll it by keys.
-		await expect(viewer.getByRole('region', { name: 'rollout-plan.md' })).toBeFocused();
+		await expect(viewer.getByRole('region', { name: 'Document' })).toBeFocused();
 		await expect(viewer.locator('.ap-viewer-detail')).toContainText('Grace');
 		await expect(viewer.getByRole('link', { name: 'Download rollout-plan.md' })).toHaveAttribute('href', `${FILES}/rollout-plan.md`);
 
@@ -79,9 +79,15 @@ test.describe('an uploaded Markdown file', () => {
 			const stage = viewer.locator('.ap-docviewer-stage');
 			const scrolled = () => stage.evaluate((node) => node.scrollTop);
 			expect(await stage.evaluate((node) => node.scrollHeight > node.clientHeight)).toBe(true);
+			/** Where the page is once it has stopped moving (a key's scroll may be animated). */
+			const settled = async (): Promise<number> => {
+				let last = -1;
+				await expect.poll(async () => last === (last = await scrolled())).toBe(true);
+				return last;
+			};
 			await page.keyboard.press('Space');
 			await expect.poll(scrolled).toBeGreaterThan(0);
-			const afterSpace = await scrolled();
+			const afterSpace = await settled();
 			await page.keyboard.press('PageDown');
 			await expect.poll(scrolled).toBeGreaterThan(afterSpace);
 			await page.keyboard.press('End');

@@ -46,9 +46,10 @@
 	{#snippet actions()}
 		{#if href}<a class="ap-viewer-btn" {href} download={title} target="_blank" rel="noreferrer noopener" aria-label={`Download ${title}`} title="Download">{@render downloadIcon()}</a>{/if}
 	{/snippet}
-	<!-- The document, which has focus once it opens, so Space, the arrows and Page Up and Down scroll it. -->
+	<!-- The document, which has focus once it opens, so Space, the arrows and Page Up and Down scroll it. Named
+	     Document: the dialog it is in already says the file's name. -->
 	<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-	<div class="ap-docviewer-stage" role="region" aria-label={title} tabindex="0" data-viewer-focus>
+	<div class="ap-docviewer-stage" role="region" aria-label="Document" tabindex="0" data-viewer-focus>
 		<p class="ap-sr" role="status">{status ?? 'Loaded'}</p>
 		{#if status}
 			<div class="ap-docviewer-status">

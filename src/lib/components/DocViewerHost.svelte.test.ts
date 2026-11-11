@@ -24,8 +24,8 @@ beforeAll(stubDialog);
 beforeEach(() => {
 	reads.length = 0;
 	page.state = {};
-	// Back lands at once, as popstate says.
-	vi.spyOn(history, 'back').mockImplementation(() => window.dispatchEvent(new PopStateEvent('popstate')));
+	// Back lands at once: the page is on the entry before.
+	vi.spyOn(history, 'back').mockImplementation(() => void (page.state = {}));
 });
 
 afterEach(() => {

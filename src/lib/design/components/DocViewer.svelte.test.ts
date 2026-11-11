@@ -17,10 +17,10 @@ describe('DocViewer', () => {
 		expect(dialog.querySelector('h2')?.textContent).toBe('plan.md');
 		expect(dialog.getAttribute('aria-labelledby')).toBe(dialog.querySelector('h2')?.id);
 		expect(dialog.querySelector('.ap-viewer-detail')?.textContent).toBe('Ada · 4:00 PM');
-		// Focused, so the keys that scroll a page scroll it: a region named by the document's title.
+		// Focused, so the keys that scroll a page scroll it: a region, Document in a dialog the file's name names.
 		const stage = dialog.querySelector<HTMLElement>('.ap-docviewer-stage')!;
 		expect(document.activeElement).toBe(stage);
-		expect([stage.tabIndex, stage.getAttribute('role'), stage.getAttribute('aria-label')]).toEqual([0, 'region', 'plan.md']);
+		expect([stage.tabIndex, stage.getAttribute('role'), stage.getAttribute('aria-label')]).toEqual([0, 'region', 'Document']);
 		const download = dialog.querySelector<HTMLAnchorElement>('a[aria-label="Download plan.md"]')!;
 		expect([download.href, download.getAttribute('download'), download.target]).toEqual(['https://files.example/plan.md', 'plan.md', '_blank']);
 		const article = dialog.querySelector('article.ap-docviewer-page')!;

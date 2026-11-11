@@ -40,16 +40,11 @@ export class Viewer<V> {
 }
 
 /**
- * A Back a viewer went, on its way: set when closing one goes Back off its entry, until that Back lands (popstate).
- * One for all the viewers: an entry pushed meanwhile, by any of them, is the one that Back would leave, closing it.
+ * The entry a viewer went Back from, while that Back is on its way: set when closing one goes Back off its entry, and
+ * done with once the page is no longer on that entry (the Back landed, or anything else moved it on). One for all
+ * the viewers: an entry pushed meanwhile, by any of them, is the one that Back would leave, closing it.
  */
-let goingBack = $state(false);
-
-function goBack(): void {
-	goingBack = true;
-	window.addEventListener('popstate', () => (goingBack = false), { once: true });
-	history.back();
-}
+let goingBack = $state.raw<{ key: ViewerEntry; mark: number }>();
 
 /**
  * A full-screen viewer as a history entry of its own, so Back closes it, as a phone's Back is expected to. Call it
@@ -69,8 +64,10 @@ export function backCloses(key: ViewerEntry, isOpen: () => boolean, close: () =>
 	$effect(() => {
 		const here = page.state[key];
 		const open = isOpen();
-		const waiting = goingBack;
+		const pending = goingBack;
+		const waiting = pending !== undefined && page.state[pending.key] === pending.mark;
 		untrack(() => {
+			if (pending && !waiting) goingBack = undefined;
 			if (entry) {
 				if (here !== entry) {
 					entry = 0;
@@ -90,7 +87,10 @@ export function backCloses(key: ViewerEntry, isOpen: () => boolean, close: () =>
 	});
 
 	return () => {
-		if (entry && page.state[key] === entry) goBack();
+		if (entry && page.state[key] === entry) {
+			goingBack = { key, mark: entry };
+			history.back();
+		}
 		entry = 0;
 	};
 }

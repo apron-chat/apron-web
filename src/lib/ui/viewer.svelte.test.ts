@@ -30,15 +30,12 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-	// A Back a test left on its way lands, so the next test's viewers don't wait for it.
-	window.dispatchEvent(new PopStateEvent('popstate'));
 	vi.restoreAllMocks();
 });
 
-/** The Back `history.back()` asked for lands, a moment after: the page's state goes back, and popstate says so. */
+/** The Back `history.back()` asked for lands, a moment after: the page's state goes back to the entry before. */
 function land(): void {
 	page.state = before;
-	window.dispatchEvent(new PopStateEvent('popstate'));
 	flushSync();
 }
 
@@ -89,6 +86,28 @@ describe('backCloses', () => {
 		land();
 		expect(v.close).toHaveBeenCalledOnce();
 		v.stop();
+	});
+
+	it('waits while the page is still on the entry the Back left, and no longer once anything has moved it off', () => {
+		const doc = viewer('doc');
+		const media = viewer('media');
+		doc.state.open = true;
+		flushSync();
+		doc.state.open = false;
+		doc.leave();
+		media.state.open = true;
+		flushSync();
+		// Something else changed the page's state, but it is still on the doc's entry: the Back hasn't landed.
+		page.state = { ...page.state, thread: 'deploy' };
+		flushSync();
+		expect(pushes).toHaveLength(1);
+		// Moved off it some other way than that Back (a navigation that replaced it): the media viewer's entry goes in.
+		page.state = { room: 'ops' };
+		flushSync();
+		expect(pushes[1]).toEqual({ room: 'ops', media: expect.any(Number) });
+		expect(media.close).not.toHaveBeenCalled();
+		doc.stop();
+		media.stop();
 	});
 
 	it('another viewer opened before that Back lands waits for it too, so the Back doesn\'t close it', () => {
