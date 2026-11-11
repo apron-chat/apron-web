@@ -105,7 +105,10 @@ test('a message (never a command) mentioning people who aren’t here, by name o
 });
 
 test.describe('with a slow server', () => {
-	test.use({ knobs: { rttMs: 600 } });
+	// Adding others is held until the test lets it through (`releaseJoins`), rather than played as a round trip: the
+	// steps below must happen while it's under way, and on a busy machine they can take longer than a delay allows.
+	// Released, it's answered at once, so what follows comes after it, as the test means.
+	test.use({ knobs: { holdJoins: true } });
 
 	test('while Add and send adds them, Send waits in that room only, and a draft changed or left meanwhile isn’t sent', async ({ preview, page }) => {
 		await preview.open();
@@ -120,6 +123,7 @@ test.describe('with a slow server', () => {
 		await preview.composer().click();
 		await page.keyboard.press('Enter');
 		await page.keyboard.type(', never mind');
+		await preview.releaseJoins();
 		await expect(page.locator('li.ap-member[data-user="grace"]')).toBeVisible();
 		await expect(prompt).toHaveCount(0);
 		expect(await preview.sent('room_join')).toHaveLength(1);
@@ -139,6 +143,7 @@ test.describe('with a slow server', () => {
 		await page.keyboard.press('Enter');
 		await preview.waitForSent('message', (p) => p.body?.text === 'hello');
 		await expect.poll(async () => (await preview.sent('room_join')).length).toBe(2);
+		await preview.releaseJoins();
 		await preview.openRoom('engineering');
 		await expect(page.locator('li.ap-member[data-user="margaret"]')).toBeVisible();
 		await expect(preview.composer()).toContainText('hey');

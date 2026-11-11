@@ -106,6 +106,11 @@ export interface PreviewKnobs {
 	/** Answers each `history` request after this long, as a slow server does, so what shows while history loads can be seen. */
 
 	historyDelayMs?: number;
+	/**
+	 * Holds each request adding someone else to a room (`room_join` with a `user_id`) until `releaseJoins`, so a test
+	 * can act while one is under way however long its own steps take, rather than racing a delay.
+	 */
+	holdJoins?: boolean;
 	/** That many more messages at the end of a room's history, by `room_id`, e.g. enough for older pages to load reading back. */
 	filler?: Record<string, number>;
 	/** That many more joined rooms, `room-1`…, each with a message, as a busy account has, for perf at scale (`qa perf`). */
@@ -196,6 +201,8 @@ export class MemoryProtocolServer {
 	/** Live text (§4.8.3), by `embed_id`. */
 	private lives = new Map<string, LiveWrite>();
 	private liveSerial = 1;
+	/** Adding others held by `holdJoins`, each to answer once released. */
+	private heldJoins: Array<() => void> = [];
 
 	constructor(knobs: PreviewKnobs = {}) {
 		this.knobs = knobs;
@@ -398,6 +405,16 @@ export class MemoryProtocolServer {
 		room.messages.push(record);
 		this.broadcast({ method: 'message', params: record }, room);
 		return id;
+	}
+
+	/** How many requests adding others `holdJoins` holds now. */
+	get heldJoinCount(): number {
+		return this.heldJoins.length;
+	}
+
+	/** Answers the adding of others `holdJoins` has held, in the order they came. */
+	releaseJoins(): void {
+		for (const join of this.heldJoins.splice(0)) join();
 	}
 
 	/** Someone else sets their complete reaction set on a message (§4.7), as if they did it now: stored as sent, and broadcast. */
@@ -717,7 +734,10 @@ export class MemoryProtocolServer {
 				case 'message': this.message(socket, params, reply, fail); return;
 				case 'reactions': this.react(socket, params, reply, fail); return;
 				case 'room_set': this.setRoom(socket, params, reply, fail); return;
-				case 'room_join': this.joinRoom(socket, params, reply, fail); return;
+				case 'room_join':
+					if (this.knobs.holdJoins && typeof params.user_id === 'string') this.heldJoins.push(() => this.joinRoom(socket, params, reply, fail));
+					else this.joinRoom(socket, params, reply, fail);
+					return;
 				case 'room_leave': this.leaveRoom(socket, params, reply, fail); return;
 				case 'me': this.updateMe(socket, params, reply); return;
 				case 'activity': this.activity(socket, params); return;
