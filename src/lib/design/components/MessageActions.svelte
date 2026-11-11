@@ -60,6 +60,8 @@
 	}
 
 	let bar = $state<HTMLElement | undefined>();
+	/** The open menu goes upward from the toolbar's foot, this high (`place`); undefined, downward. */
+	let up = $state<number | undefined>();
 
 	/**
 	 * While the menu is open, a press anywhere else or Escape anywhere puts it away, as any menu's would, rather than
@@ -103,8 +105,34 @@
 	function showMore(event: MouseEvent): void {
 		if (onmore && !more) return onmore();
 		const focused = event.currentTarget === document.activeElement;
+		const closed = bar?.offsetHeight ?? 0;
+		up = undefined;
 		openFor = whose;
-		if (focused) void tick().then(() => bar?.querySelectorAll<HTMLElement>('.ap-actions-btn:not(.ap-actions-emoji)')[visible(items).length]?.focus());
+		void tick().then(() => {
+			place(closed);
+			if (focused) bar?.querySelectorAll<HTMLElement>('.ap-actions-btn:not(.ap-actions-emoji)')[visible(items).length]?.focus();
+		});
+	}
+
+	/**
+	 * The menu opens upward, its foot where the toolbar's was (`closed` high), where it would run past the bottom of
+	 * what scrolls it and fits above: as the last message's would, which would make the timeline grow and scroll to it.
+	 * Measured once, as the menu is drawn, before the frame is laid out and painted, so it is never seen the other way.
+	 */
+	function place(closed: number): void {
+		if (!bar || !open) return;
+		const box = bar.getBoundingClientRect();
+		const frame = scroller(bar)?.getBoundingClientRect() ?? { top: 0, bottom: window.innerHeight };
+		if (box.bottom > frame.bottom && box.top + closed - box.height >= frame.top) up = closed;
+	}
+
+	/** The nearest ancestor that scrolls up and down. */
+	function scroller(node: HTMLElement): HTMLElement | undefined {
+		for (let at = node.parentElement; at; at = at.parentElement) {
+			const { overflowY } = getComputedStyle(at);
+			if (overflowY === 'auto' || overflowY === 'scroll') return at;
+		}
+		return undefined;
 	}
 
 	const noAttach = () => {};
@@ -137,7 +165,7 @@
 </script>
 
 <!-- svelte-ignore a11y_interactive_supports_focus (its buttons are the stops; the mousedown only keeps focus where it is) -->
-<div bind:this={bar} class={['ap-actions', touch && 'ap-actions-touch', menu && 'ap-actions-menu']} role="toolbar" aria-label="Message actions" aria-orientation={menu ? 'vertical' : undefined} onmousedown={mousedown} onfocusout={focusout}>
+<div bind:this={bar} class={['ap-actions', touch && 'ap-actions-touch', menu && 'ap-actions-menu', menu && up !== undefined && 'ap-actions-up']} style:--ap-actions-foot={menu && up !== undefined ? `${up}px` : undefined} role="toolbar" aria-label="Message actions" aria-orientation={menu ? 'vertical' : undefined} onmousedown={mousedown} onfocusout={focusout}>
 	{#if quickShown.length}
 		<div class="ap-actions-quick" role="group" aria-label="Quick reactions">
 			{#each quickShown as it (it.id ?? it.label)}

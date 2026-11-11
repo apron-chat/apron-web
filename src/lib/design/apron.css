@@ -626,6 +626,8 @@ a.ap-embed-card:hover { background: var(--hover); }
 /* Touch's toolbar, opened by a long press: buttons a finger can hit. ⋯ opens every action as a menu, one row each, here and with a pointer. */
 .ap-actions-touch .ap-actions-btn { min-width: var(--control-xl); height: var(--control-xl); padding: 0 var(--space-3); font-size: var(--text-ui); line-height: var(--leading-ui); color: var(--ink); }
 .ap-actions-menu { flex-direction: column; align-items: stretch; min-width: 12rem; border-radius: var(--radius-lg); }
+/* Opened upward, near the bottom of the timeline: its foot where the toolbar's was (--ap-actions-foot, its height). */
+.ap-actions-up { position: absolute; inset-inline-end: 0; bottom: calc(-1 * var(--ap-actions-foot)); }
 .ap-actions-menu .ap-actions-btn { border-radius: var(--radius-sm); text-align: start; }
 .ap-actions-menu .ap-actions-danger { color: var(--danger); }
 .ap-actions-row { display: flex; align-items: center; gap: var(--space-3); }

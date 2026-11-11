@@ -123,6 +123,27 @@ for (const [device, wide] of [['desktop', true], ['tablet', false]] as const) {
 			await expect(other.getByRole('toolbar', { name: 'Message actions' })).toBeVisible();
 			await expect(other.getByRole('toolbar', { name: 'Message actions' })).not.toHaveAttribute('aria-orientation', 'vertical');
 		});
+
+		test('opens ⋯ upward on the last message, inside the timeline, which stays where it was', async ({ preview, page }) => {
+			await preview.open();
+			await preview.composer().click();
+			await page.keyboard.type('The last word');
+			await page.keyboard.press('Enter');
+			const row = preview.message('The last word');
+			await expect(row).toBeVisible();
+			const list = page.getByTestId('message-list');
+			await row.hover();
+			const before = await list.evaluate((el) => el.scrollTop);
+			await row.getByRole('button', { name: 'More actions', exact: true }).click();
+			const menu = row.getByRole('toolbar', { name: 'Message actions' });
+			await expect(menu).toHaveAttribute('aria-orientation', 'vertical');
+			const [box, frame] = await Promise.all([menu.boundingBox(), list.boundingBox()]);
+			expect(box!.y + box!.height).toBeLessThanOrEqual(frame!.y + frame!.height);
+			expect(box!.y).toBeGreaterThanOrEqual(frame!.y);
+			expect(await list.evaluate((el) => el.scrollTop)).toBe(before);
+			await page.keyboard.press('Escape');
+			await expect(menu).not.toHaveAttribute('aria-orientation', 'vertical');
+		});
 	});
 }
 
