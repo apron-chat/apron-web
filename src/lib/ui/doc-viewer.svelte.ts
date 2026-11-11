@@ -4,6 +4,13 @@
  * mounted by the page once it first opens) reads the file and draws it.
  */
 
+/*
+ * Back closing it (`backCloses`), for `DocViewerHost`, comes through here: the page loads this from the start, as the
+ * layout loads it for the terminal viewer, so it stays in the chunk the two share. Imported by the viewer's own chunk
+ * alone, it would be split out into one more file to load at startup.
+ */
+export { backCloses } from './back-closes.svelte';
+
 /** The file the viewer shows: where to read it, its name, and who sent it and when. */
 export interface DocView {
 	readonly url: string;

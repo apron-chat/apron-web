@@ -7,8 +7,9 @@
 	 * A document full screen, over everything, on the MediaViewer's dark ground: its title and what it is, Download and
 	 * Close, and the document as a page in a readable column, which scrolls inside the viewer, never the page. The
 	 * document is the consumer's (`children`), such as rendered Markdown; `status` shows in its place while it loads
-	 * or where it can't be shown, with Download under it when it `failed`. The scroll keys (the arrows, Page Up and
-	 * Down, Home and End) scroll the page wherever focus is in the viewer.
+	 * or where it can't be shown, with Download under it when it `failed`. A live region there from the start says
+	 * each change (why it can't be shown, or Loaded once it can), as one made with its words already in it isn't. The
+	 * scroll keys (the arrows, Page Up and Down, Home and End) scroll the page wherever focus is in the viewer.
 	 */
 	interface Props {
 		/** Shown full screen while true; bindable, and set false however it closes (Escape, Close). */
@@ -95,9 +96,10 @@
 			</button>
 		</header>
 		<div class="ap-docviewer-stage" bind:this={stage}>
+			<p class="ap-sr" role="status">{status ?? 'Loaded'}</p>
 			{#if status}
 				<div class="ap-docviewer-status">
-					<p role="status">{status}</p>
+					<p aria-hidden="true">{status}</p>
 					{#if failed && href}<a class="ap-btn ap-btn-quiet ap-docviewer-download" {href} download={title} target="_blank" rel="noreferrer noopener">{@render downloadIcon()}Download</a>{/if}
 				</div>
 			{:else}

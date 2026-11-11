@@ -10,6 +10,8 @@ const README = [
 	'',
 	'Canary first, then the fleet in **two waves**. Ask @grace or see #general.',
 	'',
+	'Jump to [the end](#the-end), or see [setup](./setup.md).',
+	'',
 	'## Steps',
 	'',
 	'1. Deploy to the canary pool',
@@ -24,6 +26,8 @@ const README = [
 	'| API  | Ada   |',
 	'',
 	...Array.from({ length: 80 }, (_, n) => `Paragraph ${n + 1} of the appendix, so the page is longer than the screen.\n`),
+	'## The end',
+	'',
 	'The end.'
 ].join('\n');
 
@@ -61,7 +65,7 @@ test.describe('an uploaded Markdown file', () => {
 
 		const text = viewer.getByTestId('doc-viewer-text');
 		await expect(text.getByRole('heading', { level: 1 })).toHaveText('Rollout plan');
-		await expect(text.getByRole('heading', { level: 2 })).toHaveText('Steps');
+		await expect(text.getByRole('heading', { level: 2 }).first()).toHaveText('Steps');
 		await expect(text.locator('ol > li')).toHaveCount(2);
 		await expect(text.locator('table td').first()).toHaveText('API');
 		// Its code highlighted, once its language loads.
@@ -80,6 +84,19 @@ test.describe('an uploaded Markdown file', () => {
 			await expect(text.getByText('The end.')).toBeInViewport();
 			await expect(viewer.getByRole('button', { name: 'Close' })).toBeFocused();
 			expect(await page.evaluate(() => document.scrollingElement!.scrollTop)).toBe(0);
+		});
+
+		await test.step('a link to a heading scrolls there, in the viewer; one relative to the file is its text', async () => {
+			const stage = viewer.locator('.ap-docviewer-stage');
+			await stage.evaluate((node) => node.scrollTo({ top: 0 }));
+			await expect(text.getByRole('link', { name: 'setup' })).toHaveCount(0);
+			await expect(text).toContainText('or see setup.');
+			const url = page.url();
+			await text.getByRole('link', { name: 'the end' }).click();
+			await expect(text.getByRole('heading', { name: 'The end' })).toBeInViewport();
+			// Neither a new tab nor the app's own address with that fragment.
+			expect([page.url(), page.context().pages().length]).toEqual([url, 1]);
+			await expect(viewer).toBeVisible();
 		});
 
 		await page.keyboard.press('Escape');
@@ -146,21 +163,32 @@ test.describe('the viewer\'s code', () => {
 	test.use({ ...DEVICES.desktop, serviceWorkers: 'block', knobs: { capabilities: ['embed:upload'] } });
 
 	test('isn\'t fetched with the page\'s other on-demand code, only once a Markdown file is first opened', async ({ preview, page }) => {
-		// Scripts as they arrive: the viewer's alone draws `ap-docviewer-stage`; the on-demand chunk alone holds `ap-room-carried`.
-		const fetched: string[] = [];
-		page.on('response', async (response) => {
-			if (/\/_app\/immutable\/.*\.js$/.test(response.url())) fetched.push(await response.text().catch(() => ''));
+		// Every script the page asks for, read before the page gets it: the viewer's alone draws `ap-docviewer-stage`,
+		// the on-demand chunk alone holds `ap-room-carried`. `pending` counts those still being read.
+		const bodies: string[] = [];
+		let pending = 0;
+		await page.route('**/_app/immutable/**/*.js', async (route) => {
+			pending += 1;
+			try {
+				const response = await route.fetch();
+				const body = await response.text();
+				bodies.push(body);
+				await route.fulfill({ response, body });
+			} finally {
+				pending -= 1;
+			}
 		});
-		const has = (pattern: RegExp) => () => fetched.some((body) => pattern.test(body));
+		const fetched = (pattern: RegExp) => bodies.some((body) => pattern.test(body));
 		await preview.open();
 		await serve(page, 'rollout-plan.md', README);
 		await preview.post('general', 'grace', { text: 'The plan', embeds: [{ kind: 'upload', embed_id: 'doc', url: `${FILES}/rollout-plan.md`, title: 'rollout-plan.md' }] });
-		// The background prefetch (`prefetchLazy`) has fetched the page's on-demand code, and not the viewer's.
-		await expect.poll(has(/ap-room-carried/), { timeout: 10_000 }).toBe(true);
-		expect(has(/ap-docviewer-stage/)()).toBe(false);
+		// The background prefetch (`prefetchLazy`) asks for everything it fetches at once: once the on-demand chunk has
+		// come and nothing is still on its way, whatever it fetched is here.
+		await expect.poll(() => fetched(/ap-room-carried/) && pending === 0, { timeout: 10_000 }).toBe(true);
+		expect(fetched(/ap-docviewer-stage/)).toBe(false);
 
 		await page.locator('a.ap-embed-file', { hasText: 'rollout-plan.md' }).click();
 		await expect(page.getByRole('dialog', { name: 'rollout-plan.md' }).getByRole('heading', { level: 1 })).toHaveText('Rollout plan');
-		expect(has(/ap-docviewer-stage/)()).toBe(true);
+		expect(fetched(/ap-docviewer-stage/)).toBe(true);
 	});
 });

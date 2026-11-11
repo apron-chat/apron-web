@@ -26,3 +26,19 @@ export async function readDoc(url: string, signal?: AbortSignal, fetcher: typeof
 		return { error: 'unreadable' };
 	}
 }
+
+/** A heading's fragment as GitHub and most Markdown tools write it: lower case, punctuation gone, spaces as hyphens. */
+export function headingSlug(text: string): string {
+	return text.trim().toLowerCase().replace(/[^\p{L}\p{M}\p{N}\s_-]/gu, '').replace(/\s/g, '-');
+}
+
+/** The heading in `page` a link's `fragment` (`install`, `getting-started`) names, by its slug; the first, as written. */
+export function headingFor(page: HTMLElement, fragment: string): HTMLElement | undefined {
+	let wanted: string;
+	try {
+		wanted = decodeURIComponent(fragment).toLowerCase();
+	} catch {
+		wanted = fragment.toLowerCase();
+	}
+	return [...page.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6')].find((heading) => headingSlug(heading.textContent ?? '') === wanted);
+}

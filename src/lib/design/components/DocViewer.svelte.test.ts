@@ -23,7 +23,8 @@ describe('DocViewer', () => {
 		const article = dialog.querySelector('article.ap-docviewer-page')!;
 		expect(article.querySelector('.doc h1')?.textContent).toBe('Plan');
 		expect(article.parentElement?.classList.contains('ap-docviewer-stage')).toBe(true);
-		expect(dialog.querySelector('[role="status"]')).toBeNull();
+		// Its live region says it loaded, from where it said Loading.
+		expect(dialog.querySelector('[role="status"]')?.textContent).toBe('Loaded');
 	});
 
 	it('says why in place of the document, with Download under it only once it failed, and no link but a safe one', () => {
