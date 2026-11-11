@@ -4,6 +4,7 @@
 	import { followLiveText, liveTextDecoder } from '$lib/protocol/live-text';
 	import type { Embed } from '$lib/protocol/types';
 	import { directory } from '$lib/ui/directory.svelte';
+	import { closedTerminals, terminalKey } from '$lib/ui/terminal-closed.svelte';
 	import { TerminalFeed } from '$lib/ui/terminal-feed';
 	import { terminalPageUrl } from '$lib/ui/terminal-page';
 	import { terminalViewer, type TerminalView } from '$lib/ui/terminal-viewer.svelte';
@@ -21,16 +22,22 @@
 	 * full screen (`terminalViewer`) on a second screen, live too, from this
 	 * one read of `url`. Copy in its header copies what its screen shows, as
 	 * plain text, and while it has a `url`, Open shows the stream on
-	 * terminal.apron.chat, in a new tab.
+	 * terminal.apron.chat, in a new tab. Close in its header hides its screen
+	 * and stops reading `url` (and closes its viewer), until Show, which reads
+	 * it afresh; it stays closed when drawn again, and after a reload (`closedTerminals`).
 	 */
 	let { embed }: { embed: Embed } = $props();
 	let url = $derived(sameOriginMedia(embed.url, directory.origin));
 	let page = $derived(terminalPageUrl(url, embed.title));
 	let output = $derived(typeof embed.output === 'string' ? embed.output : undefined);
 	const feed = new TerminalFeed();
+	let key = $derived(terminalKey(directory.origin, embed));
+	/** Closed without a key (`terminalKey`): kept here only. */
+	let closedHere = $state(false);
+	let closed = $derived(key ? closedTerminals.has(key) : closedHere);
 	/** `GET url` ended, or was refused for good: the output did, and the snapshot with it is on its way. */
 	let ended = $state(false);
-	let live = $derived(output === undefined && Boolean(url) && !ended);
+	let live = $derived(output === undefined && Boolean(url) && !ended && !closed);
 	/** Without `output` or `url`, its write has not started (§4.8.5); a `url` from elsewhere is not loaded. */
 	let status = $derived(output !== undefined ? 'Finished' : url ? 'Ended' : embed.url === undefined ? 'Waiting to stream…' : 'Unavailable');
 
@@ -63,6 +70,19 @@
 		}
 	}
 
+	/** Hides its screen and its viewer, and stops reading `url`. */
+	function close(): void {
+		terminalViewer.forget(view);
+		if (key) closedTerminals.close(key);
+		else closedHere = true;
+	}
+
+	/** Shows it again, reading `url` afresh while it is live. */
+	function reopen(): void {
+		if (key) closedTerminals.show(key);
+		closedHere = false;
+	}
+
 	function attach(node: HTMLElement): () => void {
 		let detach: (() => void) | undefined;
 		let gone = false;
@@ -84,6 +104,11 @@
 	}
 
 	$effect(() => {
+		if (closed) {
+			// Nothing shows it: keep none of its text, and read none.
+			feed.reset();
+			return;
+		}
 		if (output !== undefined) {
 			feed.show(output);
 			return;
@@ -112,4 +137,4 @@
 	$effect(() => () => terminalViewer.forget(view));
 </script>
 
-<DesignEmbedTerminal kind="terminal" {url} done={!live} title={embed.title} {status} {page} {attach} oncopy={copy} onexpand={(button) => terminalViewer.show(view, button)} testid="terminal-embed" />
+<DesignEmbedTerminal kind="terminal" {url} done={!live} title={embed.title} {status} {page} {attach} oncopy={copy} onexpand={(button) => terminalViewer.show(view, button)} {closed} onclose={close} onshow={reopen} testid="terminal-embed" />

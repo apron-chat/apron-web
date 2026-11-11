@@ -74,6 +74,7 @@
 	import { SessionView } from '$lib/ui/session.svelte';
 	import { MEMBER_LIST_WIDTHS, ROOMS_LIST_WIDTHS, SidebarLayout } from '$lib/ui/sidebar.svelte';
 	import { NARROW_MAX, WIDE_MIN } from '$lib/ui/breakpoints';
+	import { closedTerminals } from '$lib/ui/terminal-closed.svelte';
 	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, installOfferAnswered, answerInstallOffer, loadRecentReactions, saveRecentReactions, loadRecentServers, loadServerUrl, loadSidebarPrefs, refreshRecentServer, rememberServer, saveDisplayName, saveLastSignIn, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, HIDDEN_DESCRIPTIONS_KEY, INSTALL_OFFER_KEY, loadAddedRooms, saveAddedRooms, loadHiddenDescriptions, hideDescription, showDescription, descriptionHidden, type RecentServer } from '$lib/ui/storage';
 	import TimelineLoading from '$lib/design/components/TimelineLoading.svelte';
 	import RateLimitNotice from '$lib/design/components/RateLimitNotice.svelte';
@@ -1121,6 +1122,8 @@
 			historySettings.storageChanged(event.key);
 			mediaSettings.storageChanged(event.key);
 			receiptSettings.storageChanged(event.key);
+			// A terminal closed, or shown again, in another tab is here too.
+			closedTerminals.storageChanged(event.key);
 			if (event.key === NOTIFY_SCOPES_KEY) notifyScopesSaved += 1;
 			// A description put away or brought back in another tab is here too.
 			if (event.key === HIDDEN_DESCRIPTIONS_KEY) hiddenDescriptions = loadHiddenDescriptions();

@@ -8,6 +8,7 @@ import { button, byRole, press, queryByRole, render, stubDialog, unmount } from 
 import { fakeBuffer, fakeLine, FakeTerminal } from '$lib/test/fake-xterm';
 import { directory } from '$lib/ui/directory.svelte';
 import { blankSnapshot } from '$lib/ui/session.svelte';
+import { closedTerminals } from '$lib/ui/terminal-closed.svelte';
 import { VIEWER_FIT, VIEWER_SCROLLBACK } from '$lib/ui/terminal-screen';
 import { terminalViewer } from '$lib/ui/terminal-viewer.svelte';
 import { loadXterm } from '$lib/ui/xterm';
@@ -34,14 +35,16 @@ const text = (written: Array<string | Uint8Array>) => written.map((part) => (typ
 function serve() {
 	const responses: { push: (text: string) => void; end: () => void; fail: () => void }[] = [];
 	const urls: string[] = [];
-	setLiveFetch(async (url) => {
+	const signals: (AbortSignal | null | undefined)[] = [];
+	setLiveFetch(async (url, init) => {
 		urls.push(url);
+		signals.push(init.signal);
 		let controller!: ReadableStreamDefaultController<Uint8Array>;
 		const body = new ReadableStream<Uint8Array>({ start: (c) => (controller = c) });
 		responses.push({ push: (chunk) => controller.enqueue(new TextEncoder().encode(chunk)), end: () => controller.close(), fail: () => controller.error(new TypeError('dropped')) });
 		return new Response(body);
 	});
-	return { urls, responses };
+	return { urls, signals, responses };
 }
 
 function show(embed: EmbedRecord): HTMLElement {
@@ -62,6 +65,8 @@ afterEach(() => {
 	page.state = {};
 	pushes.length = 0;
 	setLiveFetch();
+	localStorage.clear();
+	closedTerminals.load();
 	directory.forget();
 	FakeTerminal.made = [];
 	vi.mocked(loadXterm).mockClear();
@@ -156,6 +161,88 @@ describe('a terminal embed (§4.8.6)', () => {
 			expect(queryByRole('link', 'Open terminal in a new tab', show(embed))).toBeNull();
 			unmount();
 		}
+	});
+});
+
+describe('a terminal embed, closed', () => {
+	it('stops reading its live text and drops its screen on Close, stays closed when drawn again and after a reload, and reads afresh on Show', async () => {
+		const server = serve();
+		const embed = { kind: 'terminal', embed_id: 'embed_7', title: 'make', url: 'https://chat.example/t/7' } satisfies EmbedRecord;
+		let box = show(embed);
+		await vi.waitFor(() => expect(server.responses).toHaveLength(1));
+		server.responses[0].push('$ make\r\n');
+		await vi.waitFor(() => expect(text(FakeTerminal.made[0].written)).toEqual([ESC_C, '$ make\r\n']));
+
+		const close = button('Close terminal', box);
+		close.click();
+		flushSync();
+		await tick();
+		expect(server.signals[0]?.aborted).toBe(true);
+		expect(FakeTerminal.made[0].disposed).toBe(true);
+		expect(box.querySelector('.ap-embed-termscreen')).toBeNull();
+		expect(box.querySelector('.ap-embed-livebadge')).toBeNull();
+		expect(box.querySelector('.ap-embed-detail')?.textContent).toBe('Closed');
+		expect(document.activeElement).toBe(button('Show terminal', box));
+
+		// Drawn again, such as on coming back to its room: still closed, reading nothing.
+		unmount(box);
+		box = show(embed);
+		await new Promise((resolve) => setTimeout(resolve, 10));
+		expect(server.urls).toHaveLength(1);
+		expect(FakeTerminal.made).toHaveLength(1);
+		expect(box.querySelector('.ap-embed-detail')?.textContent).toBe('Closed');
+
+		// Saved for the next visit: after a reload, it is still closed, and reads nothing.
+		expect(JSON.parse(localStorage.getItem('apron.closedTerminals')!)).toEqual(['https://chat.example embed_7']);
+		unmount(box);
+		closedTerminals.load();
+		box = show(embed);
+		await new Promise((resolve) => setTimeout(resolve, 10));
+		expect(server.urls).toHaveLength(1);
+		expect(box.querySelector('.ap-embed-detail')?.textContent).toBe('Closed');
+
+		// Show: read afresh, from the start of what the server kept.
+		button('Show terminal', box).click();
+		flushSync();
+		await vi.waitFor(() => expect(server.responses).toHaveLength(2));
+		server.responses[1].push('$ make\r\nok\r\n');
+		await vi.waitFor(() => expect(text(FakeTerminal.made.at(-1)!.written)).toEqual([ESC_C, '$ make\r\nok\r\n']));
+		expect(box.querySelector('.ap-embed-livebadge')?.textContent).toBe('Live');
+		expect(document.activeElement).toBe(button('Close terminal', box));
+		expect(JSON.parse(localStorage.getItem('apron.closedTerminals')!)).toEqual([]);
+		unmount(box);
+	});
+
+	it('follows another tab closing or showing it', async () => {
+		const server = serve();
+		const box = show({ kind: 'terminal', embed_id: 'embed_8', url: 'https://chat.example/t/8' });
+		await vi.waitFor(() => expect(server.responses).toHaveLength(1));
+		localStorage.setItem('apron.closedTerminals', JSON.stringify(['https://chat.example embed_8']));
+		closedTerminals.storageChanged('apron.closedTerminals');
+		flushSync();
+		expect(server.signals[0]?.aborted).toBe(true);
+		expect(box.querySelector('.ap-embed-detail')?.textContent).toBe('Closed');
+		localStorage.setItem('apron.closedTerminals', '[]');
+		closedTerminals.storageChanged('apron.closedTerminals');
+		flushSync();
+		await vi.waitFor(() => expect(server.responses).toHaveLength(2));
+	});
+
+	it('closes its viewer too', async () => {
+		serve();
+		render(TerminalViewerHost);
+		const box = show({ kind: 'terminal', title: 'make', output: 'ok\r\n' });
+		button('Expand terminal', box).click();
+		flushSync();
+		await vi.waitFor(() => expect(FakeTerminal.made).toHaveLength(2));
+		const back = vi.spyOn(history, 'back').mockImplementation(() => {});
+		// The dialog is modal, so a press can't reach Close while it shows; whatever closes it, its viewer goes.
+		button('Close terminal', box).click();
+		flushSync();
+		await tick();
+		expect(document.querySelector('[data-testid="terminal-viewer"]')).toBeNull();
+		expect(FakeTerminal.made.every((terminal) => terminal.disposed)).toBe(true);
+		back.mockRestore();
 	});
 });
 

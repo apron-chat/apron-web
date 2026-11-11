@@ -180,6 +180,35 @@ describe('EmbedTerminal', () => {
 		row.click();
 		expect(onexpand).toHaveBeenCalledExactlyOnceWith(button('Expand terminal'));
 	});
+
+	it('offers Close, only with `onclose`, last in its header', () => {
+		render(EmbedTerminal, { kind: 'terminal', url: '#' });
+		expect(queryByRole('button', 'Close terminal')).toBeNull();
+		unmount();
+		const onclose = vi.fn();
+		render(EmbedTerminal, { kind: 'terminal', url: '#', attach: vi.fn(), onexpand: vi.fn(), onclose });
+		const close = button('Close terminal');
+		expect(close.previousElementSibling).toBe(button('Expand terminal'));
+		expect(close.nextElementSibling).toBeNull();
+		close.click();
+		expect(onclose).toHaveBeenCalledOnce();
+	});
+
+	it('closed, shows only its header, saying Closed, with Show in place of Close, Copy and Expand', async () => {
+		const onshow = vi.fn();
+		const attach = vi.fn();
+		render(EmbedTerminal, { kind: 'terminal', title: 'make', url: '#', page: 'https://terminal.apron.chat/', attach, oncopy: vi.fn(), onexpand: vi.fn(), onclose: vi.fn(), closed: true, onshow });
+		expect(document.querySelector('.ap-embed-termscreen')).toBeNull();
+		expect(attach).not.toHaveBeenCalled();
+		expect(document.querySelector('.ap-embed-livebadge')).toBeNull();
+		expect(document.querySelector('.ap-embed-terminal-live')).toBeNull();
+		expect(document.querySelector('.ap-embed-terminal-closed')).not.toBeNull();
+		expect(detail()).toBe('Closed');
+		for (const name of ['Close terminal', 'Copy terminal text', 'Expand terminal']) expect(queryByRole('button', name)).toBeNull();
+		expect(queryByRole('link', 'Open terminal in a new tab')).not.toBeNull();
+		button('Show terminal').click();
+		expect(onshow).toHaveBeenCalledOnce();
+	});
 });
 
 describe('Embed', () => {

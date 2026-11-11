@@ -69,6 +69,12 @@ export interface EmbedProps {
 	onexpand?: (expand: HTMLButtonElement) => void;
 	/** terminal: shows Copy in the header, which calls this to copy the screen's text; resolves whether it did, which Copy then says for a moment. */
 	oncopy?: () => boolean | Promise<boolean>;
+	/** terminal: shows Close in the header, which calls this to close it: hide its screen, and stop reading its stream. */
+	onclose?: () => void;
+	/** terminal: closed, so only its header shows, saying Closed, with Show (which calls `onshow`) in place of Close. */
+	closed?: boolean;
+	/** terminal, while `closed`: shows Show in the header, which calls this to show it again. */
+	onshow?: () => void;
 	/** terminal: the stream on a page of its own (such as terminal.apron.chat's), linked from the header, opening in a new tab. */
 	page?: string;
 	/** iframe: `height` is a suggestion, clamped to iframe-max-h; `live` false shows the paused placeholder. */
