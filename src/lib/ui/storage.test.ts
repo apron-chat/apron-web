@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { pushIdFor, loadLastSignIn, saveLastSignIn, loadRecentServers, refreshRecentServer, rememberServer, starServer, forgetServer, hideDescription, loadAppearance, loadShutMemberSections, saveShutMemberSections, loadSidebarFolds, saveSidebarFolds, loadHiddenDescriptions, loadAddedRooms, saveAddedRooms, loadThreadFolds, saveThreadFolds, loadRoomOrder, saveRoomOrder, showDescription, descriptionHidden, loadNotificationsEnabled, loadNotifyScopes, loadWebPushAccounts, notificationsChosen, loadWebPushOwner, saveAppearance, saveNotificationsEnabled, saveNotifyScopes, saveWebPushEnabled, saveWebPushOwner } from './storage';
+import { pushIdFor, loadLastSignIn, saveLastSignIn, loadRecentServers, refreshRecentServer, rememberServer, starServer, forgetServer, hideDescription, loadAppearance, loadClosedTerminals, saveTerminalClosed, loadShutMemberSections, saveShutMemberSections, loadSidebarFolds, saveSidebarFolds, loadHiddenDescriptions, loadAddedRooms, saveAddedRooms, loadThreadFolds, saveThreadFolds, loadRoomOrder, saveRoomOrder, showDescription, descriptionHidden, loadNotificationsEnabled, loadNotifyScopes, loadWebPushAccounts, notificationsChosen, loadWebPushOwner, saveAppearance, saveNotificationsEnabled, saveNotifyScopes, saveWebPushEnabled, saveWebPushOwner } from './storage';
 import { notifyAccount } from './notify-scopes';
 import { memoryStorage } from '$lib/test/storage';
 
@@ -247,6 +247,23 @@ describe('preference storage', () => {
 		expect(descriptionHidden(loadHiddenDescriptions(), 'room199', 'Description')).toBe(true);
 		values.set('apron.hiddenSummaries', '{broken');
 		expect(loadHiddenDescriptions()).toEqual({});
+	});
+
+	it('keeps terminals closed until shown, as saved by any tab, and forgets the oldest past the limit', () => {
+		expect(loadClosedTerminals()).toEqual([]);
+		const here = loadClosedTerminals();
+		saveTerminalClosed(loadClosedTerminals(), 'https://a embed_1', true);
+		expect(saveTerminalClosed(here, 'https://a embed_2', true)).toEqual(['https://a embed_1', 'https://a embed_2']);
+		expect(saveTerminalClosed(loadClosedTerminals(), 'https://a embed_1', true)).toEqual(['https://a embed_2', 'https://a embed_1']);
+		expect(saveTerminalClosed(loadClosedTerminals(), 'https://a embed_2', false)).toEqual(['https://a embed_1']);
+		for (let i = 0; i < 500; i++) saveTerminalClosed([], `https://a ${i}`, true);
+		const kept = loadClosedTerminals();
+		expect(kept).toHaveLength(500);
+		expect(kept[0]).toBe('https://a 0');
+		values.set('apron.closedTerminals', '{broken');
+		expect(loadClosedTerminals()).toEqual([]);
+		values.set('apron.closedTerminals', '["https://a embed_1", 5]');
+		expect(loadClosedTerminals()).toEqual(['https://a embed_1']);
 	});
 
 	it('keeps the descriptions another tab put away, or brought back, since this one loaded them', () => {

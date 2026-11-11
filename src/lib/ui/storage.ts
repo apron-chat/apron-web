@@ -50,6 +50,8 @@ const KEY = {
 	 * `token`), by its address: chosen first on its connect screen next time. Kept through signing out.
 	 */
 	lastSignIn: 'apron.lastSignIn',
+	/** The terminal embeds closed on this device (`closedTerminals`), by `terminalKey`, closed longest ago first. */
+	closedTerminals: 'apron.closedTerminals',
 	/** The emoji you reacted with last, latest first (`rememberReaction`): the toolbar's quick reactions. */
 	recentReactions: 'apron.recentReactions',
 	/** app.html reads this one too, to apply the theme before the app loads. */
@@ -74,6 +76,8 @@ const THREAD_FOLDS_MAX = 200;
 const HIDDEN_DESCRIPTIONS_MAX = 200;
 /** The most read positions kept; the ones moved longest ago go first. */
 const READ_POSITIONS_MAX = 500;
+/** The most terminal embeds kept closed; the ones closed longest ago show again first. */
+const CLOSED_TERMINALS_MAX = 500;
 /** The most servers whose last sign-in is kept; the ones signed in to longest ago go first. */
 const LAST_SIGN_IN_MAX = 50;
 
@@ -354,6 +358,30 @@ export function hideDescription(hidden: Record<string, string>, key: string, des
 export function showDescription(hidden: Record<string, string>, key: string): Record<string, string> {
 	const next = Object.fromEntries(Object.entries(savedDescriptions(hidden)).filter(([entry]) => entry !== key));
 	write(KEY.hiddenDescriptions, JSON.stringify(next));
+	return next;
+}
+
+/** The storage key of the closed terminal embeds: other tabs follow its `storage` events. */
+export const CLOSED_TERMINALS_KEY = KEY.closedTerminals;
+
+/** The terminal embeds closed on this device, by `terminalKey`, closed longest ago first. */
+export function loadClosedTerminals(): string[] {
+	try {
+		const parsed: unknown = JSON.parse(read(KEY.closedTerminals) ?? '[]');
+		return Array.isArray(parsed) ? parsed.filter((key): key is string => typeof key === 'string') : [];
+	} catch {
+		return [];
+	}
+}
+
+/**
+ * Closes a terminal embed, or shows it again (`closed` false), in `keys`: as saved, which another tab may have changed
+ * since this one loaded them, unless nothing is saved for the next visit. Returns the ones closed now.
+ */
+export function saveTerminalClosed(keys: readonly string[], key: string, closed: boolean): string[] {
+	const others = (persisting ? loadClosedTerminals() : keys).filter((entry) => entry !== key);
+	const next = closed ? [...others, key].slice(-CLOSED_TERMINALS_MAX) : others;
+	write(KEY.closedTerminals, JSON.stringify(next));
 	return next;
 }
 

@@ -24,14 +24,14 @@
 	 * plain text, and while it has a `url`, Open shows the stream on
 	 * terminal.apron.chat, in a new tab. Close in its header hides its screen
 	 * and stops reading `url` (and closes its viewer), until Show, which reads
-	 * it afresh; it stays closed when drawn again (`closedTerminals`).
+	 * it afresh; it stays closed when drawn again, and after a reload (`closedTerminals`).
 	 */
 	let { embed }: { embed: Embed } = $props();
 	let url = $derived(sameOriginMedia(embed.url, directory.origin));
 	let page = $derived(terminalPageUrl(url, embed.title));
 	let output = $derived(typeof embed.output === 'string' ? embed.output : undefined);
 	const feed = new TerminalFeed();
-	let key = $derived(terminalKey(directory.origin ?? '', embed));
+	let key = $derived(terminalKey(directory.origin, embed));
 	/** Closed without a key (`terminalKey`): kept here only. */
 	let closedHere = $state(false);
 	let closed = $derived(key ? closedTerminals.has(key) : closedHere);

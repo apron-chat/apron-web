@@ -65,7 +65,8 @@ afterEach(() => {
 	page.state = {};
 	pushes.length = 0;
 	setLiveFetch();
-	closedTerminals.clear();
+	localStorage.clear();
+	closedTerminals.load();
 	directory.forget();
 	FakeTerminal.made = [];
 	vi.mocked(loadXterm).mockClear();
@@ -164,7 +165,7 @@ describe('a terminal embed (§4.8.6)', () => {
 });
 
 describe('a terminal embed, closed', () => {
-	it('stops reading its live text and drops its screen on Close, stays closed when drawn again, and reads afresh on Show', async () => {
+	it('stops reading its live text and drops its screen on Close, stays closed when drawn again and after a reload, and reads afresh on Show', async () => {
 		const server = serve();
 		const embed = { kind: 'terminal', embed_id: 'embed_7', title: 'make', url: 'https://chat.example/t/7' } satisfies EmbedRecord;
 		let box = show(embed);
@@ -191,6 +192,15 @@ describe('a terminal embed, closed', () => {
 		expect(FakeTerminal.made).toHaveLength(1);
 		expect(box.querySelector('.ap-embed-detail')?.textContent).toBe('Closed');
 
+		// Saved for the next visit: after a reload, it is still closed, and reads nothing.
+		expect(JSON.parse(localStorage.getItem('apron.closedTerminals')!)).toEqual(['https://chat.example embed_7']);
+		unmount(box);
+		closedTerminals.load();
+		box = show(embed);
+		await new Promise((resolve) => setTimeout(resolve, 10));
+		expect(server.urls).toHaveLength(1);
+		expect(box.querySelector('.ap-embed-detail')?.textContent).toBe('Closed');
+
 		// Show: read afresh, from the start of what the server kept.
 		button('Show terminal', box).click();
 		flushSync();
@@ -199,7 +209,23 @@ describe('a terminal embed, closed', () => {
 		await vi.waitFor(() => expect(text(FakeTerminal.made.at(-1)!.written)).toEqual([ESC_C, '$ make\r\nok\r\n']));
 		expect(box.querySelector('.ap-embed-livebadge')?.textContent).toBe('Live');
 		expect(document.activeElement).toBe(button('Close terminal', box));
+		expect(JSON.parse(localStorage.getItem('apron.closedTerminals')!)).toEqual([]);
 		unmount(box);
+	});
+
+	it('follows another tab closing or showing it', async () => {
+		const server = serve();
+		const box = show({ kind: 'terminal', embed_id: 'embed_8', url: 'https://chat.example/t/8' });
+		await vi.waitFor(() => expect(server.responses).toHaveLength(1));
+		localStorage.setItem('apron.closedTerminals', JSON.stringify(['https://chat.example embed_8']));
+		closedTerminals.storageChanged('apron.closedTerminals');
+		flushSync();
+		expect(server.signals[0]?.aborted).toBe(true);
+		expect(box.querySelector('.ap-embed-detail')?.textContent).toBe('Closed');
+		localStorage.setItem('apron.closedTerminals', '[]');
+		closedTerminals.storageChanged('apron.closedTerminals');
+		flushSync();
+		await vi.waitFor(() => expect(server.responses).toHaveLength(2));
 	});
 
 	it('closes its viewer too', async () => {
