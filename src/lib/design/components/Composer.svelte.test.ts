@@ -216,17 +216,20 @@ describe('Composer', () => {
 		expect(dom.byRole('textbox', 'Message')).toBe(field);
 	});
 
-	it('offers Attach as file instead beside Attach where it is given, named in full, saying what it does', () => {
-		const onattachpaste = vi.fn();
-		render({ canUpload: true, onfiles: vi.fn(), onattachpaste, attachPasteTitle: 'Send the pasted text as pasted.md (3 KB) rather than in the message' });
-		const offer = dom.button('Attach as file instead');
-		expect(offer.title).toBe('Send the pasted text as pasted.md (3 KB) rather than in the message');
-		expect(offer.closest('.ap-composer-tools-start')).not.toBeNull();
-		offer.click();
-		expect(onattachpaste).toHaveBeenCalledOnce();
-		dom.unmount();
-
-		render({ canUpload: true, onfiles: vi.fn() });
-		expect(document.querySelector('.ap-composer-asfile')).toBeNull();
+	it('offers Embed as attachment beside Attach in the full panel only, and not with an empty draft', () => {
+		const onattachdraft = vi.fn();
+		const props = $state({ value: '# Plan', canUpload: true, onfiles: vi.fn(), onattachdraft, expanded: false });
+		dom.render(Composer, props);
+		flushSync();
+		const embed = () => document.querySelector<HTMLButtonElement>('button[aria-label="Embed as attachment"]');
+		expect(embed()).toBeNull();
+		props.expanded = true;
+		flushSync();
+		expect([embed()?.title, embed()?.closest('.ap-composer-tools-start') !== null, embed()?.disabled]).toEqual(['Embed as attachment', true, false]);
+		embed()!.click();
+		expect(onattachdraft).toHaveBeenCalledOnce();
+		props.value = '  ';
+		flushSync();
+		expect(embed()?.disabled).toBe(true);
 	});
 });
