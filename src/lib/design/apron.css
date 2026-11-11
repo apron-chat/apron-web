@@ -626,8 +626,9 @@ a.ap-embed-card:hover { background: var(--hover); }
 /* Touch's toolbar, opened by a long press: buttons a finger can hit. ⋯ opens every action as a menu, one row each, here and with a pointer. */
 .ap-actions-touch .ap-actions-btn { min-width: var(--control-xl); height: var(--control-xl); padding: 0 var(--space-3); font-size: var(--text-ui); line-height: var(--leading-ui); color: var(--ink); }
 .ap-actions-menu { flex-direction: column; align-items: stretch; min-width: 12rem; border-radius: var(--radius-lg); }
-/* Opened upward, near the bottom of the timeline: its foot where the toolbar's was (--ap-actions-foot, its height). */
-.ap-actions-up { position: absolute; inset-inline-end: 0; bottom: calc(-1 * var(--ap-actions-foot)); }
+/* Opened upward, near the bottom of the timeline: its foot where the toolbar's was (--ap-actions-foot, its height). Out of
+   flow, its box (.ap-msg-actions) has no width left: max-content keeps it as wide as it is opened downward, its rows unwrapped. */
+.ap-actions-up { position: absolute; inset-inline-end: 0; bottom: calc(-1 * var(--ap-actions-foot)); width: max-content; }
 .ap-actions-menu .ap-actions-btn { border-radius: var(--radius-sm); text-align: start; }
 .ap-actions-menu .ap-actions-danger { color: var(--danger); }
 .ap-actions-row { display: flex; align-items: center; gap: var(--space-3); }
@@ -1895,7 +1896,7 @@ a.ap-embed-ogcard:hover { background: var(--hover); }
 .ap-embed-site { font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
 .ap-embed-desc { font-size: var(--text-ui); line-height: var(--leading-ui); color: var(--ink-muted); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 
-/* ReactionBar — chips under a message, and the palette */
+/* ReactionBar — chips under a message, and the + that opens the emoji picker */
 .ap-reactions { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-top: var(--space-1); max-width: 100%; }
 /* A long press on a chip lists who reacted: no text selection or callout on top of it. A disabled chip stays focusable for that, so it is aria-disabled. */
 .ap-rchip { font: inherit; display: inline-flex; align-items: center; gap: var(--space-1_5); height: var(--chip-h); padding: 0 calc(var(--space-2) + 1px); box-sizing: border-box; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--bg-200); color: var(--ink-muted); font-size: var(--text-ui); line-height: var(--leading-sm); font-variant-numeric: tabular-nums; cursor: pointer; transition: background-color var(--duration-fast) ease, border-color var(--duration-fast) ease, color var(--duration-fast) ease; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }

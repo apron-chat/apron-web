@@ -141,6 +141,18 @@ for (const [device, wide] of [['desktop', true], ['tablet', false]] as const) {
 			expect(box!.y + box!.height).toBeLessThanOrEqual(frame!.y + frame!.height);
 			expect(box!.y).toBeGreaterThanOrEqual(frame!.y);
 			expect(await list.evaluate((el) => el.scrollTop)).toBe(before);
+			// As wide as it is opened downward, its rows unwrapped: out of flow, it would take the narrowest width its rows
+			// allow. A longer label (a translation's, say) than these fits in its least width shows it.
+			const [up, down] = await menu.evaluate((el) => {
+				el.querySelector('.ap-actions-label')!.textContent = 'A label longer than the menu is wide at its least';
+				const width = () => el.getBoundingClientRect().width;
+				const upward = width();
+				el.classList.remove('ap-actions-up');
+				const downward = width();
+				el.classList.add('ap-actions-up');
+				return [upward, downward];
+			});
+			expect(up).toBe(down);
 			await page.keyboard.press('Escape');
 			await expect(menu).not.toHaveAttribute('aria-orientation', 'vertical');
 		});
