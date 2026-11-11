@@ -25,6 +25,8 @@
 	const PREVIEW_TYPING_PAUSE_MS = 800;
 	/** What a clip may be recorded as where the server states the types it takes, by preference. */
 	const VOICE_TYPES = ['audio/webm', 'audio/ogg', 'audio/mp4'];
+	/** What an embedded draft goes as where the server states the types it takes, by preference: its name says Markdown either way. */
+	const DRAFT_TYPES = ['text/markdown', 'text/plain', 'application/octet-stream'];
 
 	interface Props {
 		/** The draft as sent: mentions are `@user_id` (Appendix A.3); the field shows them as name chips. */
@@ -125,6 +127,8 @@
 		}
 		return undefined;
 	});
+	/** What Embed as attachment sends the draft as: Markdown without stated limits, else the first of `DRAFT_TYPES` the server takes. Undefined: not offered. */
+	let draftType = $derived(uploadLimits ? DRAFT_TYPES.find((type) => mediaLimit(uploadLimits, type)) : 'text/markdown');
 	/** Voice messages need uploads, a type the server takes, and a browser that can record. */
 	let canRecord = $derived(canUpload && voice !== undefined && Boolean(navigator.mediaDevices?.getUserMedia));
 	let command = $derived(canCommand && isCommand(value) && !live);
@@ -213,8 +217,8 @@
 	 * and the compact field for a caption.
 	 */
 	function attachDraft(): void {
-		if (!value.trim()) return;
-		onfiles([new File([value], 'message.md', { type: 'text/markdown' })]);
+		if (!value.trim() || !draftType) return;
+		onfiles([new File([value], 'message.md', { type: draftType })]);
 		value = '';
 		oninput();
 	}
@@ -313,7 +317,7 @@
 	emojiTestid="emoji-button"
 	sendTestid="send-button"
 	onexpand={canExpand ? expand : undefined}
-	onattachdraft={canUpload && !live && !command ? attachDraft : undefined}
+	onattachdraft={canUpload && draftType && !live && !command ? attachDraft : undefined}
 	{expanded}
 	oncollapse={() => setExpanded(false)}
 	toolbar={formatting}

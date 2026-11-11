@@ -144,8 +144,19 @@ describe('Composer', () => {
 		expect(props.oninput).toHaveBeenCalled();
 	});
 
-	it('doesn\'t offer it without uploads, or for a command', async () => {
-		for (const props of [{ value: 'one\ntwo', canUpload: false }, { value: '/me one\ntwo', canUpload: true, canCommand: true }]) {
+	it('embeds it as a text type the server takes, where it states them', async () => {
+		const onfiles = vi.fn();
+		render({ value: 'one\ntwo', canUpload: true, uploadLimits: { 'image/*': {}, 'text/plain': {} }, onfiles });
+		document.querySelector<HTMLButtonElement>('[data-testid="composer-expand"]')!.click();
+		flushSync();
+		await tick();
+		document.querySelector<HTMLButtonElement>('button[aria-label="Embed as attachment"]')!.click();
+		const [[files]] = onfiles.mock.calls as [[File[]]];
+		expect([files[0].name, files[0].type]).toEqual(['message.md', 'text/plain']);
+	});
+
+	it('doesn\'t offer it without uploads, where the server takes no text, or for a command', async () => {
+		for (const props of [{ value: 'one\ntwo', canUpload: false }, { value: 'one\ntwo', canUpload: true, uploadLimits: { 'image/*': {}, 'audio/*': {} } }, { value: '/me one\ntwo', canUpload: true, canCommand: true }]) {
 			render(props);
 			document.querySelector<HTMLButtonElement>('[data-testid="composer-expand"]')?.click();
 			flushSync();
