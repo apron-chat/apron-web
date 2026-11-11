@@ -2,11 +2,21 @@
 	import type { MessageAction } from './types';
 	import type { DockedBar } from './message-dock.svelte';
 
+	/**
+	 * How each of an action's fields counts when a button is kept for another row: its `look` must agree, its `press` is
+	 * taken from the new row. Typed over every field, so a field added to MessageAction is a type error until it's put
+	 * here: left out, a kept button could show another row's.
+	 */
+	const FIELDS: { [K in keyof Required<MessageAction>]: 'look' | 'press' } = {
+		id: 'look', label: 'look', glyph: 'look', icon: 'look', key: 'look', title: 'look', done: 'look', pressed: 'look',
+		popup: 'look', expanded: 'look', attach: 'look', testid: 'look', danger: 'look', hidden: 'look', onclick: 'press'
+	};
+	const LOOK = (Object.keys(FIELDS) as (keyof MessageAction)[]).filter((field) => FIELDS[field] === 'look' && field !== 'done');
+
 	/** What a button shows and how it's wired, all but its press: two rows whose actions agree here draw the same button. */
 	function sameLook(a: MessageAction, b: MessageAction): boolean {
-		return a.id === b.id && a.label === b.label && a.glyph === b.glyph && a.icon === b.icon && a.title === b.title && a.key === b.key
-			&& a.pressed === b.pressed && a.popup === b.popup && a.expanded === b.expanded && a.attach === b.attach && a.testid === b.testid
-			&& a.danger === b.danger && a.hidden === b.hidden && a.done?.label === b.done?.label && a.done?.glyph === b.done?.glyph;
+		for (const field of LOOK) if (a[field] !== b[field]) return false;
+		return a.done?.label === b.done?.label && a.done?.glyph === b.done?.glyph;
 	}
 
 	/**

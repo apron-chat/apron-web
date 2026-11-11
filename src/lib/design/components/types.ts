@@ -103,7 +103,7 @@ export interface ReactionChip {
 	label?: string;
 }
 
-/** One button of a MessageActions toolbar. */
+/** One button of a MessageActions toolbar. A new field goes in DockedActions' FIELDS too (a type error until it does). */
 export interface MessageAction {
 	id?: string;
 	/** What a screen reader hears. */
