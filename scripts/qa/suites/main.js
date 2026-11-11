@@ -363,8 +363,11 @@ export default {
 			action: async (p) => {
 				await timeline(p).evaluate((el) => (el.scrollTop = 0));
 				await p.waitForTimeout(200);
+				// Down the messages' gutter (avatars, hover times), whose sizes are fixed: not through their text or their
+				// toolbars, whose widths follow the system font, so a line there would cross different links and buttons on
+				// one machine than on another (a toolbar's words reach x 640 with DejaVu Sans, CI's, and not with Inter).
 				for (let y = 80; y < 720; y += 16) {
-					await p.mouse.move(640, y);
+					await p.mouse.move(300, y);
 					await p.waitForTimeout(16);
 				}
 			}

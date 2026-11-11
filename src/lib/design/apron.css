@@ -131,6 +131,8 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-msg-pinged { animation: ap-ping .9s ease-out 1; }
 @keyframes ap-ping { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); } 100% { box-shadow: 0 0 0 12px transparent; } }
 .ap-msg-highlighted, .ap-msg-highlighted:hover { background: var(--bg-300); }
+/* The dock's slot (Message.svelte), which the toolbar moves into: no box of its own, so the toolbar sits as it would in the row. */
+.ap-msg-dock { display: contents; }
 .ap-msg-actions { position: absolute; top: -14px; inset-inline-end: var(--space-2); z-index: var(--z-float); visibility: hidden; }
 /* On a touch screen a long press opens a message's menu (with Copy text), so its row takes no text selection or callout,
    which would fight it; a link, media and the editor keep the browser's own. */
@@ -151,9 +153,14 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
    the letter of its key (`data-key`: Reply's R, Edit's E, the first of each) boxed. Not on touch, whose bar stays icons. */
 :is(.ap-msg:focus-visible, .ap-msg-actions:has(.ap-actions-btn:focus-visible)) .ap-actions:not(.ap-actions-touch) .ap-actions-icon { gap: var(--space-1); padding: 0 var(--space-2); }
 :is(.ap-msg:focus-visible, .ap-msg-actions:has(.ap-actions-btn:focus-visible)) .ap-actions:not(.ap-actions-touch) .ap-actions-label { display: inline-block; }
+/* Where the main pane is wide, the pointer gets each icon's words beside it too: a toolbar of icons alone is cryptic. */
+@container (min-width: 720px) {
+	.ap-actions:not(.ap-actions-touch) .ap-actions-icon { gap: var(--space-1); padding: 0 var(--space-2); }
+	.ap-actions:not(.ap-actions-touch) .ap-actions-label { display: inline-block; }
+}
 :is(.ap-msg:focus-visible, .ap-msg-actions:has(.ap-actions-btn:focus-visible)) .ap-actions-icon[data-key] .ap-actions-label::first-letter { background: color-mix(in srgb, var(--ink) 12%, transparent); box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--ink) 12%, transparent); border-radius: var(--radius-sm); color: var(--ink); }
-/* The toolbar stays up while its React button's emoji picker is open. */
-.ap-msg-actions:has([aria-expanded='true']) { visibility: visible; }
+/* The toolbar stays up while its React button's emoji picker, or its ⋯ menu, is open. */
+.ap-msg-actions:has([aria-expanded='true'], .ap-actions-menu) { visibility: visible; }
 /* While a message's picker or menu is open it keeps its hover look, and the rest don't take it: new messages
    can scroll another one under a still pointer, which would look like the one being acted on. */
 .ap-msg:not(.ap-msg-mention, .ap-msg-highlighted, .ap-msg-selected):has(.ap-msg-actions [aria-expanded='true']) { background: var(--hover-soft); }
@@ -608,7 +615,7 @@ a.ap-embed-card:hover { background: var(--hover); }
 /* ActionIcons: lucide's stroke, sized where each sits. */
 .ap-icon { flex: none; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .ap-actions-touch .ap-icon { width: 20px; height: 20px; }
-/* An action shown as its icon alone, its name in the tooltip, and its words in the markup for the keyboard (above) and touch's menu. */
+/* An action shown as its icon, its name in the tooltip, and its words in the markup: shown in a wide pane, for the keyboard (above), and in the menu. */
 .ap-actions-icon { display: inline-flex; align-items: center; justify-content: center; padding: 0; }
 .ap-actions-label { display: none; }
 /* Quick reactions, ahead of the rest and set apart from them by a rule; one already yours is marked as a chip is. */
@@ -616,12 +623,15 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-actions-emoji { padding: 0; font-family: var(--font-emoji); font-size: 18px; line-height: 1; }
 .ap-actions-emoji[aria-pressed='true'] { background: var(--accent-soft); }
 .ap-actions-sep { flex: none; align-self: center; width: 1px; height: calc(var(--control-md) - var(--space-2)); margin: 0 var(--space-1); background: var(--line); }
-/* Touch's menu, opened by a long press: buttons a finger can hit, and ⋯ opening every action as a menu, one row each. */
+/* Touch's toolbar, opened by a long press: buttons a finger can hit. ⋯ opens every action as a menu, one row each, here and with a pointer. */
 .ap-actions-touch .ap-actions-btn { min-width: var(--control-xl); height: var(--control-xl); padding: 0 var(--space-3); font-size: var(--text-ui); line-height: var(--leading-ui); color: var(--ink); }
 .ap-actions-menu { flex-direction: column; align-items: stretch; min-width: 12rem; border-radius: var(--radius-lg); }
 .ap-actions-menu .ap-actions-btn { border-radius: var(--radius-sm); text-align: start; }
 .ap-actions-menu .ap-actions-danger { color: var(--danger); }
 .ap-actions-row { display: flex; align-items: center; gap: var(--space-3); }
+/* The pointer's menu: rows of the size of a context menu's. */
+.ap-actions-menu:not(.ap-actions-touch) .ap-actions-row { height: var(--control-lg); padding: 0 var(--space-2); gap: var(--space-2); font-size: var(--text-ui); line-height: var(--leading-ui); color: var(--ink); }
+.ap-actions-menu:not(.ap-actions-touch) .ap-actions-emoji { height: var(--control-lg); }
 .ap-actions-menu .ap-actions-label { display: inline; }
 .ap-actions-row > .ap-icon { color: var(--ink-muted); }
 .ap-actions-danger.ap-actions-row > .ap-icon { color: inherit; }
