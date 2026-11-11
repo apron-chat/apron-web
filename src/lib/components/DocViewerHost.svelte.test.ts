@@ -24,7 +24,8 @@ beforeAll(stubDialog);
 beforeEach(() => {
 	reads.length = 0;
 	page.state = {};
-	vi.spyOn(history, 'back').mockImplementation(() => undefined);
+	// Back lands at once: the page is on the entry before.
+	vi.spyOn(history, 'back').mockImplementation(() => void (page.state = {}));
 });
 
 afterEach(() => {

@@ -59,7 +59,8 @@ test.describe('an uploaded Markdown file', () => {
 		await card.click();
 		const viewer = page.getByRole('dialog', { name: 'rollout-plan.md' });
 		await expect(viewer).toBeVisible();
-		await expect(viewer.getByRole('button', { name: 'Close' })).toBeFocused();
+		// The document has focus, to scroll it by keys.
+		await expect(viewer.getByRole('region', { name: 'Document' })).toBeFocused();
 		await expect(viewer.locator('.ap-viewer-detail')).toContainText('Grace');
 		await expect(viewer.getByRole('link', { name: 'Download rollout-plan.md' })).toHaveAttribute('href', `${FILES}/rollout-plan.md`);
 
@@ -74,16 +75,30 @@ test.describe('an uploaded Markdown file', () => {
 		await expect(text).toContainText('Ask @grace or see #general.');
 		await expect(text.locator('.ap-mention, .ap-linkchip, [data-room-id]')).toHaveCount(0);
 
-		await test.step('the scroll keys scroll the page from Close, and only the page', async () => {
+		await test.step('the keys that scroll a page scroll the document, Space included, and only it; Tab reaches the bar', async () => {
 			const stage = viewer.locator('.ap-docviewer-stage');
 			const scrolled = () => stage.evaluate((node) => node.scrollTop);
 			expect(await stage.evaluate((node) => node.scrollHeight > node.clientHeight)).toBe(true);
-			await page.keyboard.press('PageDown');
+			/** Where the page is once it has stopped moving (a key's scroll may be animated). */
+			const settled = async (): Promise<number> => {
+				let last = -1;
+				await expect.poll(async () => last === (last = await scrolled())).toBe(true);
+				return last;
+			};
+			await page.keyboard.press('Space');
 			await expect.poll(scrolled).toBeGreaterThan(0);
+			const afterSpace = await settled();
+			await page.keyboard.press('PageDown');
+			await expect.poll(scrolled).toBeGreaterThan(afterSpace);
 			await page.keyboard.press('End');
 			await expect(text.getByText('The end.')).toBeInViewport();
-			await expect(viewer.getByRole('button', { name: 'Close' })).toBeFocused();
+			await expect(viewer).toBeVisible();
 			expect(await page.evaluate(() => document.scrollingElement!.scrollTop)).toBe(0);
+			// Shift+Tab goes back to the bar, and Tab returns to the document.
+			await page.keyboard.press('Shift+Tab');
+			await expect(viewer.getByRole('button', { name: 'Close' })).toBeFocused();
+			await page.keyboard.press('Tab');
+			await expect(stage).toBeFocused();
 		});
 
 		await test.step('a link to a heading scrolls there, in the viewer; one relative to the file is its text', async () => {
@@ -190,5 +205,33 @@ test.describe('the viewer\'s code', () => {
 		await page.locator('a.ap-embed-file', { hasText: 'rollout-plan.md' }).click();
 		await expect(page.getByRole('dialog', { name: 'rollout-plan.md' }).getByRole('heading', { level: 1 })).toHaveText('Rollout plan');
 		expect(fetched(/ap-docviewer-stage/)).toBe(true);
+	});
+});
+
+test.describe('the viewer\'s code, when it can\'t load', () => {
+	test.use({ ...DEVICES.desktop, serviceWorkers: 'block', knobs: { capabilities: ['embed:upload'] } });
+
+	test('says so, and the next click loads it and opens the file', async ({ preview, page }) => {
+		// The viewer's chunk fails (offline, say) until `failing` is false; every other script loads.
+		let failing = true;
+		await page.route('**/_app/immutable/**/*.js', async (route) => {
+			const response = await route.fetch();
+			const body = await response.text();
+			if (failing && /ap-docviewer-stage/.test(body)) await route.abort('internetdisconnected');
+			else await route.fulfill({ response, body });
+		});
+		await preview.open();
+		await serve(page, 'rollout-plan.md', README);
+		await preview.post('general', 'grace', { text: 'The plan', embeds: [{ kind: 'upload', embed_id: 'doc', url: `${FILES}/rollout-plan.md`, title: 'rollout-plan.md' }] });
+		const card = page.locator('a.ap-embed-file', { hasText: 'rollout-plan.md' });
+		await card.click();
+		await expect(page.getByText('Couldn’t load that part of Apron.', { exact: false })).toBeVisible();
+		await expect(page.getByRole('dialog', { name: 'rollout-plan.md' })).toHaveCount(0);
+
+		failing = false;
+		// The toast sits over the card at the foot of the timeline: from the keyboard, as it can't cover that.
+		await card.focus();
+		await page.keyboard.press('Enter');
+		await expect(page.getByRole('dialog', { name: 'rollout-plan.md' }).getByRole('heading', { level: 1 })).toHaveText('Rollout plan');
 	});
 });
