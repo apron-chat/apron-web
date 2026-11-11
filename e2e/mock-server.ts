@@ -18,6 +18,8 @@ export type MockOptions = {
 	you?: Record<string, unknown>;
 	token?: string;
 	sent?: Record<string, any>[];
+	/** The same, each with the address it went to: the page may be talking to more than one server at once. */
+	sentTo?: { url: string; frame: Record<string, any> }[];
 	/** General's history, oldest first, each message's `log_id` its `message_id` (§3.5); none by default. */
 	history?: Record<string, unknown>[];
 	/** Set by `mockServer` once the page connects: sends the page a frame, such as a live `message`. */
@@ -50,6 +52,7 @@ export async function mockServer(page: Page, options: MockOptions = {}): Promise
 		ws.onMessage((data) => {
 			const frame = JSON.parse(String(data));
 			options.sent?.push(frame);
+			options.sentTo?.push({ url: ws.url(), frame });
 			const reply = (result: unknown) => frame.id !== undefined && ws.send(JSON.stringify({ id: frame.id, result }));
 			switch (frame.method) {
 				case 'ping': return ws.send(JSON.stringify({ method: 'pong' }));

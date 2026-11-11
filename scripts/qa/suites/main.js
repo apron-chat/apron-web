@@ -371,6 +371,42 @@ export default {
 					await p.waitForTimeout(16);
 				}
 			}
+		},
+		{
+			// Across one message's toolbar, button by button and back, each found where it is: what hover-messages,
+			// down the gutter, leaves out.
+			name: 'hover-toolbar',
+			settle: 300,
+			setup: async (p) => {
+				await lastMessage(p).hover({ position: { x: 40, y: 12 } });
+				await lastMessage(p).getByRole('toolbar', { name: 'Message actions' }).waitFor();
+			},
+			action: async (p) => {
+				const buttons = await lastMessage(p).getByRole('toolbar', { name: 'Message actions' }).getByRole('button').all();
+				const centers = [];
+				for (const button of buttons) {
+					const box = await button.boundingBox();
+					if (box) centers.push({ x: box.x + box.width / 2, y: box.y + box.height / 2 });
+				}
+				for (const { x, y } of [...centers, ...centers.slice().reverse()]) {
+					await p.mouse.move(x, y);
+					await p.waitForTimeout(16);
+				}
+			}
+		},
+		{
+			// The ⋯ menu: every action as a row of icon and words, opened and put away with Escape.
+			name: 'message-menu',
+			settle: 300,
+			setup: async (p) => {
+				await lastMessage(p).hover({ position: { x: 40, y: 12 } });
+				await lastMessage(p).getByRole('button', { name: 'More actions' }).waitFor();
+			},
+			action: async (p) => {
+				await lastMessage(p).getByRole('button', { name: 'More actions' }).click();
+				await lastMessage(p).getByRole('toolbar', { name: 'Message actions', exact: true }).and(p.locator('[aria-orientation="vertical"]')).waitFor();
+				await p.keyboard.press('Escape');
+			}
 		}
 	]
 };

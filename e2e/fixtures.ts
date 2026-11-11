@@ -140,6 +140,15 @@ export class Preview {
 		return this.page.evaluate((embedId) => (window as any).__apronPreview.liveEnd(embedId), embedId);
 	}
 
+	/**
+	 * Answers the requests adding others that the `holdJoins` knob held (the memory server's `releaseJoins`), once one
+	 * is held: with a round trip played (`rttMs`), the request may still be on its way, and so would the answer be.
+	 */
+	async releaseJoins(): Promise<void> {
+		await expect.poll(() => this.page.evaluate(() => (window as any).__apronPreview.heldJoinCount as number), { message: 'no request adding others was held' }).toBeGreaterThan(0);
+		await this.page.evaluate(() => (window as any).__apronPreview.releaseJoins());
+	}
+
 	/** Someone else sets their complete reaction set on a message (§4.7), delivered live. */
 	reactAs(from: string, messageId: string, emojis: string[]): Promise<void> {
 		return this.page.evaluate(([from, messageId, emojis]) => (window as any).__apronPreview.reactAs(from, messageId, emojis), [from, messageId, emojis] as const);

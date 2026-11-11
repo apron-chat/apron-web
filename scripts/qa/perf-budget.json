@@ -89,6 +89,16 @@
 			"layouts": 7,
 			"styleRecalcs": 7,
 			"calls": 6656
+		},
+		"hover-toolbar": {
+			"layouts": 0,
+			"styleRecalcs": 13,
+			"calls": 267
+		},
+		"message-menu": {
+			"layouts": 4,
+			"styleRecalcs": 11,
+			"calls": 2679
 		}
 	},
 	"bundle": {

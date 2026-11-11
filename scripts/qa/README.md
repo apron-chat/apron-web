@@ -175,8 +175,8 @@ npx playwright show-report .qa/e2e/report                    # after a run: trac
 ```
 
 `E2E_BUILD=<dir>` serves another build (a snapshot, a mutant); `E2E_URL=<url>` uses one already served.
-`npm run e2e:short` (`E2E_TIER=short`) leaves out the interop contract, the files `FULL_ONLY` in
-`e2e/playwright.config.ts` names, and tests tagged `@full`. Tag a test or `describe` `{ tag: '@full' }` when it is
+`npm run e2e:short` (`E2E_TIER=short`) leaves out the interop contract's check (its scenes still run, for the flows
+they assert on), the files `FULL_ONLY` in `e2e/playwright.config.ts` names, and tests tagged `@full`. Tag a test or `describe` `{ tag: '@full' }` when it is
 slow for what it adds between iterations: many viewports, axe, or real timers.
 Results, traces and the report go to `.qa/e2e/`. There are no retries: a test that fails once is a finding.
 
