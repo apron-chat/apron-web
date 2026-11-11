@@ -309,6 +309,15 @@ function mediaTypes(value: unknown): MediaTypes | undefined {
 	return types;
 }
 
+/** The extensions a Markdown file goes by, as a file picker's `accept` lists them. */
+export const MARKDOWN_EXTENSIONS = ['.md', '.markdown', '.mdown', '.mkd'] as const;
+
+/** Whether a file named `name` is Markdown, as its name says: an upload embed carries no type (§4.8.4). */
+export function isMarkdownName(name: string | undefined): boolean {
+	const lower = name?.trim().toLowerCase();
+	return Boolean(lower && MARKDOWN_EXTENSIONS.some((extension) => lower.endsWith(extension)));
+}
+
 /**
  * What a category takes of a file of `type`, the type the client declares
  * for it (`File.type`, or `application/octet-stream` without one): the

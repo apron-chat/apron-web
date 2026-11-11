@@ -4,7 +4,7 @@ import { REQUEST_TIMEOUT_MS } from './client-internals';
 import { PROPOSAL_MS } from './signin-connection';
 import { findProposal } from './proposals';
 import { requestPasskey } from './webauthn';
-import { FakeSocket, settle, startClient } from '$lib/test/client';
+import { FakeSocket, nextSocket, settle, startClient } from '$lib/test/client';
 
 vi.mock('./webauthn', () => ({ requestPasskey: vi.fn(), signalPasskeyLabel: vi.fn() }));
 
@@ -696,9 +696,11 @@ describe('accounts and their ways back in', () => {
 
 	/** The next connection, greeted by a server with these schemes. */
 	async function reconnect(auth: string[], extra: Record<string, unknown> = {}): Promise<FakeSocket> {
-		latest().drop();
-		await vi.advanceTimersByTimeAsync(10_000);
-		const socket = latest();
+		const previous = latest();
+		previous.drop();
+		// The socket it opens after its backoff, not after a fixed wait: one opened at once (a backoff of 0) would run
+		// out its own opening time (OPENING_MS) within that wait and be replaced, unseen.
+		const socket = await nextSocket(previous);
 		socket.open();
 		socket.receive({ method: 'server', params: { apron: 10, auth, capabilities: ['rooms'], ...extra } });
 		await vi.advanceTimersByTimeAsync(0);

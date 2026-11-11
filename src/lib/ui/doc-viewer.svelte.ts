@@ -5,19 +5,13 @@
  */
 import { Viewer } from './viewer.svelte';
 
+export { isMarkdownName } from '$lib/protocol/client-views';
+
 /** The file the viewer shows: where to read it, its name, and who sent it and when. */
 export interface DocView {
 	readonly url: string;
 	readonly title: string;
 	readonly detail?: string;
-}
-
-/** The names a Markdown file goes by. */
-const MARKDOWN = /\.(?:md|markdown|mdown|mkd)$/i;
-
-/** Whether a file named `name` is Markdown, as its name says: an upload carries no type (§4.8.4). */
-export function isMarkdownName(name: string | undefined): boolean {
-	return Boolean(name && MARKDOWN.test(name.trim()));
 }
 
 export const docViewer = new Viewer<DocView>();
