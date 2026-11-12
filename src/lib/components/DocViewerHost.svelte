@@ -2,6 +2,7 @@
 	import DocViewer from '$lib/design/components/DocViewer.svelte';
 	import { renderDocument } from '$lib/protocol/markdown';
 	import { directory } from '$lib/ui/directory.svelte';
+	import { loadDocZoom, saveDocZoom } from '$lib/ui/storage';
 	import { headingFor, readDoc, type DocText } from '$lib/ui/doc-text';
 	import { docViewer, type DocView } from '$lib/ui/doc-viewer.svelte';
 	import { highlightCode } from '$lib/ui/highlight';
@@ -41,6 +42,9 @@
 		: undefined
 	);
 
+	/** How large the page is drawn, as last chosen on this device. */
+	let zoom = $state(loadDocZoom());
+
 	/** Back closes it; closing it otherwise goes Back off its entry. */
 	const leave = backCloses('doc', () => docViewer.open, () => (docViewer.open = false));
 
@@ -59,7 +63,7 @@
 </script>
 
 {#if view}
-	<DocViewer bind:open={docViewer.open} title={view.title} detail={view.detail} href={view.url} {status} failed={Boolean(doc && 'error' in doc)} onclose={closed} testid="doc-viewer">
+	<DocViewer bind:open={docViewer.open} title={view.title} detail={view.detail} href={view.url} {status} failed={Boolean(doc && 'error' in doc)} bind:zoom={() => zoom, (value) => { zoom = value; if (value !== undefined) saveDocZoom(value); }} onclose={closed} testid="doc-viewer">
 		<!-- Its links are links, which take Enter themselves. -->
 		<!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
 		<div class="ap-msg-text ap-msg-markdown" data-testid="doc-viewer-text" onclick={follow} use:highlightCode={html}>{@html html}</div>

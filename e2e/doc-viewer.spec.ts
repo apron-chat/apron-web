@@ -101,6 +101,24 @@ test.describe('an uploaded Markdown file', () => {
 			await expect(stage).toBeFocused();
 		});
 
+		await test.step('Larger and Smaller text size the page and its column, keeping the place being read in view', async () => {
+			const stage = viewer.locator('.ap-docviewer-stage');
+			const article = viewer.locator('article.ap-docviewer-page');
+			const width = async () => (await article.boundingBox())!.width;
+			const before = await width();
+			const paragraph = text.getByText('Paragraph 40 of the appendix');
+			await paragraph.evaluate((node) => node.scrollIntoView({ block: 'start' }));
+			await viewer.getByRole('button', { name: 'Larger text' }).click();
+			await expect(article).toHaveCSS('zoom', '1.5');
+			expect(await width()).toBeGreaterThan(before);
+			await expect(paragraph).toBeInViewport();
+			await viewer.getByRole('button', { name: 'Smaller text' }).click();
+			await expect(article).toHaveCSS('zoom', '1.25');
+			expect(await width()).toBe(before);
+			await expect(paragraph).toBeInViewport();
+			await stage.focus();
+		});
+
 		await test.step('a link to a heading scrolls there, in the viewer; one relative to the file is its text', async () => {
 			const stage = viewer.locator('.ap-docviewer-stage');
 			await stage.evaluate((node) => node.scrollTo({ top: 0 }));

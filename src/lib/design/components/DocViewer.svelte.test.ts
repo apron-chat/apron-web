@@ -49,6 +49,37 @@ describe('DocViewer', () => {
 		expect(document.querySelectorAll('dialog a')).toHaveLength(0);
 	});
 
+	it('sizes the page from 100% to 200% with Smaller and Larger text, or − and + but not with Ctrl, and not while it says why', async () => {
+		const props = $state<{ open: boolean; title: string; children: typeof page; zoom?: number; status?: string }>({ open: true, title: 'plan.md', children: page, zoom: undefined, status: undefined });
+		render(DocViewer, props);
+		const smaller = () => button('Smaller text') as HTMLButtonElement;
+		const larger = () => button('Larger text') as HTMLButtonElement;
+		const article = () => document.querySelector<HTMLElement>('article.ap-docviewer-page')!;
+		// Unset, the stylesheet's size: no inline zoom (and here, where nothing is wider than a phone, 100%).
+		expect([article().style.zoom, smaller().disabled, larger().disabled, larger().title]).toEqual(['', true, false, 'Larger text (+)']);
+		larger().click();
+		await tick();
+		expect([props.zoom, article().style.zoom]).toEqual([1.25, '1.25']);
+		const stage = document.querySelector('.ap-docviewer-stage')!;
+		const key = (key: string, init: KeyboardEventInit = {}) => {
+			stage.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init }));
+			flushSync();
+		};
+		key('+');
+		key('=');
+		key('+', { ctrlKey: true });
+		expect(props.zoom).toBe(1.75);
+		key('+');
+		key('+');
+		expect([props.zoom, larger().disabled]).toEqual([2, true]);
+		key('-');
+		expect(props.zoom).toBe(1.75);
+		props.status = 'Loading…';
+		flushSync();
+		key('-');
+		expect([props.zoom, document.querySelector('button[aria-label="Smaller text"]')]).toEqual([1.75, null]);
+	});
+
 	it('draws nothing while closed, and closes on Escape or Close, saying so', async () => {
 		const onclose = vi.fn();
 		const props = $state({ open: false, title: 'plan.md', children: page, onclose });

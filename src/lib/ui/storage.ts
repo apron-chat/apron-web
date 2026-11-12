@@ -41,6 +41,8 @@ const KEY = {
 	readPositions: 'apron.readPositions',
 	/** How long history is kept on this device (`$lib/history/retention`). */
 	historyRetention: 'apron.historyRetention',
+	/** How large the document viewer draws a page (`DocViewer`'s Smaller and Larger text), on this device. */
+	docZoom: 'apron.docZoom',
 	/** Where images and other media load from (`$lib/ui/media-settings`): `{policy, origins, blocked}`. */
 	media: 'apron.media',
 	/** Read Receipts (`ext.settings.read_receipts`) turned off on this device: `'off'`, else absent. */
@@ -102,6 +104,16 @@ function write(key: string, value: string): void {
 	} catch {
 		// Private mode or a full quota: the page still works for this visit.
 	}
+}
+
+/** How large the document viewer draws a page, as it was last set here (1 is 100%); unset, its own default. */
+export function loadDocZoom(): number | undefined {
+	const zoom = Number(read(KEY.docZoom) ?? NaN);
+	return zoom >= 0.5 && zoom <= 4 ? zoom : undefined;
+}
+
+export function saveDocZoom(zoom: number): void {
+	write(KEY.docZoom, String(zoom));
 }
 
 export function loadServerUrl(): string | undefined {
