@@ -16,8 +16,9 @@ test('? shows the keyboard shortcuts, but types a ? in a field; Ctrl+/ and the â
 		await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
 		await page.keyboard.press('Shift+?');
 		await expect(shortcuts).toBeVisible();
-		await expect(shortcuts.getByRole('heading', { level: 3 })).toHaveText(['General', 'Composer', 'Full panel', 'Messages', 'Rooms']);
-		await expect(shortcuts.locator('.ap-keys-row').filter({ hasText: 'Go to the messages' })).toContainText('In an empty composer');
+		await expect(shortcuts.getByRole('heading', { level: 3 })).toHaveText(['General', 'Rooms', 'Composer', 'Full panel', 'Messages']);
+		await expect(shortcuts.locator('.ap-keys-row').filter({ hasText: 'Go to messages' })).toContainText('When empty');
+		await expect(shortcuts.getByRole('region', { name: 'Messages' })).toContainText('On a message');
 		await page.keyboard.press('Escape');
 		await expect(shortcuts).toHaveCount(0);
 	});
