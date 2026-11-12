@@ -14,7 +14,7 @@
 	 * End) scroll it; Tab goes on to Download and Close, and Escape closes it, as does a click beside the page.
 	 */
 	interface Props {
-		/** Shown full screen while true; bindable, and set false however it closes (Escape, Close). */
+		/** Shown full screen while true; bindable, and set false however it closes (Escape, Close, a click beside the page). */
 		open?: boolean;
 		/** The document's name, such as its file name. */
 		title: string;
@@ -52,7 +52,7 @@
 	<div class="ap-docviewer-stage" role="region" aria-label="Document" tabindex="0" data-viewer-focus data-viewer-ground>
 		<p class="ap-sr" role="status">{status ?? 'Loaded'}</p>
 		{#if status}
-			<div class="ap-docviewer-status">
+			<div class="ap-docviewer-status" data-viewer-ground>
 				<p aria-hidden="true">{status}</p>
 				{#if failed && href}<a class="ap-btn ap-btn-quiet ap-docviewer-download" {href} download={title} target="_blank" rel="noreferrer noopener">{@render downloadIcon()}Download</a>{/if}
 			</div>

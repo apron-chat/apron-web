@@ -31,7 +31,8 @@ for (const [device, use] of [['desktop', DEVICES.desktop], ['phone', DEVICES.pho
 			await expect(page.getByTestId('composer-panel')).toHaveCount(0);
 			await expect(page.getByRole('button', { name: 'Rename message.md' })).toBeVisible();
 			await expect(preview.composer()).toHaveText('');
-			await preview.composer().click();
+			// The keyboard is still in the field, for a caption.
+			await expect(preview.composer()).toBeFocused();
 			await page.keyboard.type('The plan, as a file');
 			await preview.press(page.getByRole('button', { name: 'Send message', exact: true }));
 			const sent = await preview.waitForSent('message', (p) => p.body?.embeds?.length > 0);

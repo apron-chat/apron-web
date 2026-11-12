@@ -43,6 +43,7 @@ describe('MediaViewer', () => {
 		render(MediaViewer, props);
 		const pressOn = (target: Element) => {
 			target.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+			target.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
 			target.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 			flushSync();
 		};

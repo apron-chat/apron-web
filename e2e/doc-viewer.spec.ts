@@ -118,7 +118,7 @@ test.describe('an uploaded Markdown file', () => {
 		await expect(viewer).toBeHidden();
 		await expect(card).toBeFocused();
 
-		await test.step('opens again, read anew, and a click beside the page closes it, not one on it or a drag', async () => {
+		await test.step('opens again, read anew, and a click beside the page closes it, not one on it, a drag, or one that clears a selection', async () => {
 			await card.click();
 			const text = viewer.getByTestId('doc-viewer-text');
 			await expect(text.getByRole('heading', { level: 1 })).toHaveText('Rollout plan');
@@ -133,6 +133,11 @@ test.describe('an uploaded Markdown file', () => {
 			await page.mouse.move(pageBox.x + 80, beside.y, { steps: 5 });
 			await page.mouse.up();
 			await expect(viewer).toBeVisible();
+			expect(await page.evaluate(() => getSelection()!.isCollapsed)).toBe(false);
+			// A click beside it then clears what was selected, as anywhere; the next closes it.
+			await page.mouse.click(beside.x, beside.y);
+			await expect(viewer).toBeVisible();
+			expect(await page.evaluate(() => getSelection()!.isCollapsed)).toBe(true);
 			await page.mouse.click(beside.x, beside.y);
 			await expect(viewer).toBeHidden();
 			await expect(card).toBeFocused();

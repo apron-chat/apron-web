@@ -7,8 +7,9 @@
 	 * named by its title. A bar (the title, a line under it, the viewer's own `actions`, and Close) over what it shows
 	 * (`children`), drawn only while open. Once it opens, focus goes to what it shows where that names a part of
 	 * itself for it (`data-viewer-focus`, such as a document to read and scroll), else to Close. Escape or Close closes it,
-	 * and so does a click on the ground around what it shows (its bar, and what the viewer marks `data-viewer-ground`,
-	 * such as the stage an image or a page sits on), as a photo viewer's does. Both viewers
+	 * and so does a click on the ground around what it shows (what the viewer marks `data-viewer-ground`, such as the
+	 * stage an image or a page sits on; not the bar, where a near miss on a button shouldn't close it), as a photo
+	 * viewer's does. Both viewers
 	 * load on demand, so this does too; TerminalViewer, which the layout draws from the start, keeps a dialog of its
 	 * own, as sharing this with it would split it out into one more file to load at startup.
 	 */
@@ -57,23 +58,34 @@
 	}
 
 	/**
-	 * A click on the ground closes it: one that went down there too, and barely moved, so selecting text from beside a
-	 * page doesn't, nor a press on a stage's scrollbar (inside the element, outside its content box). A touch that
-	 * scrolls makes no click.
+	 * A click on the ground closes it: one that went down and came up there, barely moved. So selecting text from beside
+	 * a page doesn't, nor a press beside a button let go on it (Next pages), nor a press on a stage's scrollbar (inside
+	 * the element, outside its padding box, on either side), nor a click beside a selection, which clears it. A touch
+	 * that scrolls is cancelled, and makes no click.
 	 */
 	let pressed: { x: number; y: number } | undefined;
+	let released = false;
 	function onGround(event: MouseEvent): boolean {
 		const target = event.target;
 		if (!(target instanceof HTMLElement) || !target.hasAttribute('data-viewer-ground')) return false;
 		const box = target.getBoundingClientRect();
-		return event.clientX - box.left <= target.clientLeft + target.clientWidth && event.clientY - box.top <= target.clientTop + target.clientHeight;
+		const x = event.clientX - box.left - target.clientLeft;
+		const y = event.clientY - box.top - target.clientTop;
+		return x >= 0 && x <= target.clientWidth && y >= 0 && y <= target.clientHeight;
 	}
 	function pointerdown(event: PointerEvent): void {
-		pressed = event.button === 0 && onGround(event) ? { x: event.clientX, y: event.clientY } : undefined;
+		const selection = getSelection();
+		const selecting = Boolean(selection && !selection.isCollapsed && dialog?.contains(selection.anchorNode));
+		pressed = event.button === 0 && !selecting && onGround(event) ? { x: event.clientX, y: event.clientY } : undefined;
+		released = false;
 	}
-	function click(event: MouseEvent): void {
-		if (pressed && onGround(event) && Math.hypot(event.clientX - pressed.x, event.clientY - pressed.y) < 8) open = false;
+	function pointerup(event: PointerEvent): void {
+		released = Boolean(pressed) && onGround(event) && Math.hypot(event.clientX - pressed!.x, event.clientY - pressed!.y) < 8;
+	}
+	function click(): void {
+		if (released) open = false;
 		pressed = undefined;
+		released = false;
 	}
 
 	/** Escape closes it, here rather than by the browser's cancel, which may be skipped for a dialog opened without a press. */
@@ -86,9 +98,9 @@
 </script>
 
 <!-- Its title names it. -->
-<dialog bind:this={dialog} class={['ap-viewer', className]} aria-labelledby={`${uid}-title`} data-testid={testid} data-viewer-ground onclose={closed} onkeydown={keydown} onpointerdown={pointerdown} onclick={click}>
+<dialog bind:this={dialog} class={['ap-viewer', className]} aria-labelledby={`${uid}-title`} data-testid={testid} data-viewer-ground onclose={closed} onkeydown={keydown} onpointerdown={pointerdown} onpointerup={pointerup} onpointercancel={() => (pressed = undefined)} onclick={click}>
 	{#if open}
-		<header class="ap-viewer-bar" data-viewer-ground>
+		<header class="ap-viewer-bar">
 			<div class="ap-viewer-text">
 				<h2 class="ap-viewer-title" id={`${uid}-title`} dir="auto">{title}</h2>
 				{#if detail}<p class="ap-viewer-detail">{detail}</p>{/if}

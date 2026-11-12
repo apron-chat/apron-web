@@ -70,26 +70,31 @@ describe('DocViewer', () => {
 		expect([props.open, dialog.open, onclose.mock.calls.length]).toEqual([false, false, 2]);
 	});
 
-	it('closes on a click beside the page, not on it, nor on a drag that ends beside it, nor on its scrollbar', () => {
+	it('closes on a click beside the page; not on it, a drag, a right click, a press let go on it, its scrollbar, or with text selected', () => {
 		const props = $state({ open: true, title: 'plan.md', children: page });
 		render(DocViewer, props);
-		const press = (down: Element, up: Element, moved = 0) => {
-			down.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
-			up.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: moved }));
+		const stage = document.querySelector<HTMLElement>('.ap-docviewer-stage')!;
+		const text = document.querySelector('.doc p')!;
+		// The test DOM lays nothing out: the stage is 800×600 at the origin, its last 15 px a classic scrollbar (Windows, Linux).
+		Object.defineProperty(stage, 'clientWidth', { configurable: true, value: 785 });
+		Object.defineProperty(stage, 'clientHeight', { configurable: true, value: 600 });
+		const press = (down: Element, [x, y]: number[], up = down, [x2, y2] = [x, y], button = 0) => {
+			down.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: x, clientY: y, button }));
+			up.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: x2, clientY: y2, button }));
+			// A click goes to what both have in common.
+			(down === up ? down : stage).dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: x2, clientY: y2, button }));
 			flushSync();
 		};
-		const stage = document.querySelector('.ap-docviewer-stage')!;
-		press(document.querySelector('.doc p')!, document.querySelector('.doc p')!);
-		press(stage, stage, 40);
+		press(text, [300, 100]);
+		press(stage, [100, 100], stage, [140, 100]);
+		press(stage, [100, 100], stage, [100, 100], 2);
+		press(stage, [100, 100], text, [102, 100]);
+		press(stage, [790, 100]);
+		getSelection()!.selectAllChildren(text);
+		press(stage, [100, 100]);
 		expect(props.open).toBe(true);
-		// A classic scrollbar (Windows, Linux) is inside the stage but beside its content box: 785 of 800 is on it.
-		const at = (x: number) => new MouseEvent('click', { bubbles: true, clientX: x });
-		Object.defineProperty(stage, 'clientWidth', { configurable: true, value: 785 });
-		stage.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 790 }));
-		stage.dispatchEvent(at(790));
-		flushSync();
-		expect(props.open).toBe(true);
-		press(stage, stage);
+		getSelection()!.removeAllRanges();
+		press(stage, [100, 100]);
 		expect([props.open, document.querySelector('dialog')!.open]).toEqual([false, false]);
 	});
 });
