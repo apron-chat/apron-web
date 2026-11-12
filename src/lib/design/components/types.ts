@@ -714,5 +714,7 @@ export interface Shortcut {
 /** A titled group of KeyboardShortcuts' shortcuts, such as those of the composer. */
 export interface ShortcutGroup {
 	title: string;
+	/** Where all of its shortcuts work, when not everywhere, such as "On a message": said once, under the title. */
+	where?: string;
 	shortcuts: Shortcut[];
 }

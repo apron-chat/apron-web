@@ -1,4 +1,4 @@
-<!-- @dsCard group="Layout" height=640 subtitle="The keyboard shortcuts, opened with ?: titled groups in as many columns as fit, each shortcut what it does (and where) beside its keys" -->
+<!-- @dsCard group="Layout" height=640 subtitle="The keyboard shortcuts, opened with ?: titled groups in as many columns as fit, each shortcut what it does (and where, for one or the whole group) beside its keys" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>KeyboardShortcuts</title></head>
@@ -11,21 +11,22 @@
     subtitle: 'Press ? to show these again.',
     groups: [
       { title: 'General', shortcuts: [
-        { label: 'Show keyboard shortcuts', keys: [['?'], ['⌘', '/']] },
-        { label: 'Search local history', keys: [['⌘', 'F']] }
+        { label: 'Show shortcuts', keys: [['?'], ['⌘', '/']] },
+        { label: 'Search messages', keys: [['⌘', 'F']] }
+      ] },
+      { title: 'Rooms', shortcuts: [
+        { label: 'Previous or next', keys: [['⌥', '↑'], ['⌥', '↓']] },
+        { label: 'Move up or down', where: 'In the list', keys: [['⌥', '↑'], ['⌥', '↓']] }
       ] },
       { title: 'Composer', shortcuts: [
         { label: 'New line', keys: [['⇧', 'Enter']] },
-        { label: 'Cancel the reply', where: 'While replying', keys: [['Esc']] }
+        { label: 'Go to messages', where: 'When empty', keys: [['↑']] }
       ] },
-      { title: 'Messages', shortcuts: [
-        { label: 'Select it, to move it', where: 'On a message', keys: [['x']] },
-        { label: 'Go to the messages', where: 'In an empty composer, or with nothing focused', keys: [['↑']] },
-        { label: 'Previous or next message', where: 'On a message', keys: [['↑'], ['↓']] },
-        { label: 'Reply', where: 'On a message', keys: [['r']] }
-      ] },
-      { title: 'Rooms', shortcuts: [
-        { label: 'Move a room up or down', where: 'On a room in the list', keys: [['⌥', '↑'], ['⌥', '↓']] }
+      { title: 'Messages', where: 'On a message', shortcuts: [
+        { label: 'Previous or next', keys: [['↑'], ['↓']] },
+        { label: 'Reply', keys: [['r']] },
+        { label: 'Edit', where: 'Yours only', keys: [['e']] },
+        { label: 'Select to move', keys: [['x']] }
       ] }
     ]
   });

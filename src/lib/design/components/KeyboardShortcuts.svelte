@@ -4,7 +4,7 @@
 	import type { ShortcutGroup } from './types';
 
 	/**
-	 * The keyboard shortcuts, in a centered Dialog: each group titled, each shortcut what it does (and where, when not
+	 * The keyboard shortcuts, in a centered Dialog: each group titled (and where it works, when all of it works in one place), each shortcut what it does (and where, when not
 	 * everywhere) beside its keys, as many columns as fit. A combination's keys are written as they are on the keyboard
 	 * (`⌘` `F`) and named in words for a screen reader (Command F).
 	 */
@@ -35,6 +35,7 @@
 		{#each groups as group, index (group.title)}
 			<section class="ap-keys-group" aria-labelledby="{uid}-{index}">
 				<h3 class="ap-keys-title" id="{uid}-{index}">{group.title}</h3>
+				{#if group.where}<p class="ap-keys-where">{group.where}</p>{/if}
 				<dl class="ap-keys-list">
 					{#each group.shortcuts as shortcut (shortcut.label)}
 						<div class="ap-keys-row">

@@ -9,13 +9,13 @@ describe('shortcutGroups', () => {
 		expect(keysOf(false, 'Search messages')).toEqual([['Ctrl', 'F']]);
 		expect(keysOf(true, 'Search rooms and threads')).toEqual([['⌘', 'K']]);
 		expect(keysOf(false, 'Search rooms and threads')).toEqual([['Ctrl', 'K']]);
-		expect(keysOf(true, 'Move a room up or down')).toEqual([['⌥', '↑'], ['⌥', '↓']]);
+		expect(keysOf(true, 'Move up or down')).toEqual([['⌥', '↑'], ['⌥', '↓']]);
 		expect(keysOf(false, 'New line')).toEqual([['Shift', 'Enter']]);
 	});
 
 	it('names how to show itself first, and gives every shortcut keys, each label once in its group', () => {
 		const groups = shortcutGroups(false);
-		expect(groups[0].shortcuts[0]).toEqual({ label: 'Show keyboard shortcuts', keys: [['?'], ['Ctrl', '/']] });
+		expect(groups[0].shortcuts[0]).toEqual({ label: 'Show shortcuts', keys: [['?'], ['Ctrl', '/']] });
 		for (const group of groups) {
 			expect(group.shortcuts.length).toBeGreaterThan(0);
 			expect(new Set(group.shortcuts.map((shortcut) => shortcut.label)).size).toBe(group.shortcuts.length);

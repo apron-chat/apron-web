@@ -16,7 +16,7 @@ export function shortcutGroups(mac: boolean): ShortcutGroup[] {
 			title: 'General',
 			shortcuts: [
 				// +page.svelte's windowKeydown.
-				{ label: 'Show keyboard shortcuts', keys: [['?'], [mod, '/']] },
+				{ label: 'Show shortcuts', keys: [['?'], [mod, '/']] },
 				{ label: 'Search rooms and threads', keys: [[mod, 'K']] },
 				{ label: 'Search messages', keys: [[mod, 'F']] }
 			]
@@ -25,12 +25,12 @@ export function shortcutGroups(mac: boolean): ShortcutGroup[] {
 			title: 'Rooms',
 			shortcuts: [
 				// +page.svelte's windowKeydown (room-steps.ts).
-				{ label: 'Previous or next room or thread', keys: [[alt, '↑'], [alt, '↓']] },
-				{ label: 'Previous or next room, past threads', keys: [[alt, shift, '↑'], [alt, shift, '↓']] },
+				{ label: 'Previous or next', keys: [[alt, '↑'], [alt, '↓']] },
+				{ label: 'Previous or next, skipping threads', keys: [[alt, shift, '↑'], [alt, shift, '↓']] },
 				// Sidebar.svelte's reorderKey.
-				{ label: 'Move a room up or down', where: 'On a room in the list', keys: [[alt, '↑'], [alt, '↓']] },
+				{ label: 'Move up or down', where: 'In the list', keys: [[alt, '↑'], [alt, '↓']] },
 				// SearchDialog's fieldKey.
-				{ label: 'Search a room’s threads', where: 'On a room found in search', keys: [['→']] }
+				{ label: 'Search threads', where: 'In search results', keys: [['→']] }
 			]
 		},
 		{
@@ -38,7 +38,9 @@ export function shortcutGroups(mac: boolean): ShortcutGroup[] {
 			shortcuts: [
 				// DraftField's keydown (enterAction), and the composer's own keys (Composer.svelte's `key`).
 				{ label: 'New line', keys: [[shift, 'Enter']] },
-				{ label: 'Cancel the reply', where: 'While replying', keys: [['Esc']] }
+				{ label: 'Cancel reply', keys: [['Esc']] },
+				// Composer.svelte's `key`; windowKeydown takes ↑ too with nothing focused.
+				{ label: 'Go to messages', where: 'When empty', keys: [['↑']] }
 			]
 		},
 		{
@@ -46,23 +48,23 @@ export function shortcutGroups(mac: boolean): ShortcutGroup[] {
 			shortcuts: [
 				// DraftField's keydown (`newlineOnEnter`), and Composer.svelte's `key`.
 				{ label: 'Send', keys: [[mod, 'Enter']] },
-				{ label: 'Back to the compact composer', keys: [['Esc']] }
+				{ label: 'Close', keys: [['Esc']] }
 			]
 		},
 		{
 			title: 'Messages',
+			where: 'On a message',
 			shortcuts: [
-				// The composer's ↑ (Composer.svelte's `key`), or windowKeydown's with nothing focused; then timelineKey.
-				{ label: 'Go to the messages', where: 'In an empty composer, or with nothing focused', keys: [['↑']] },
-				{ label: 'Previous or next message', where: 'On a message', keys: [['↑'], ['↓']] },
-				{ label: 'Back to the composer', where: 'On a message', keys: [['Esc']] },
-				{ label: 'Its links and buttons', where: 'On a message', keys: [['←'], ['→']] },
-				{ label: 'Its actions', where: 'On a message', keys: [['Enter']] },
+				// timelineKey.
+				{ label: 'Previous or next', keys: [['↑'], ['↓']] },
+				{ label: 'Back to composer', keys: [['Esc']] },
+				{ label: 'Links and buttons', keys: [['←'], ['→']] },
+				{ label: 'Actions', keys: [['Enter']] },
 				// Message.svelte's keydown.
-				{ label: 'Reply', where: 'On a message', keys: [['r']] },
-				{ label: 'Edit your message', where: 'On a message', keys: [['e']] },
-				{ label: 'Select it, to move it', where: 'On a message', keys: [['x']] },
-				{ label: 'Select up or down from it', where: 'On a message', keys: [[shift, '↑'], [shift, '↓']] }
+				{ label: 'Reply', keys: [['r']] },
+				{ label: 'Edit', where: 'Yours only', keys: [['e']] },
+				{ label: 'Select to move', keys: [['x']] },
+				{ label: 'Select up or down', keys: [[shift, '↑'], [shift, '↓']] }
 			]
 		}
 	];
