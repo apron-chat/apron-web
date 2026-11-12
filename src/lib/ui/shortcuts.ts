@@ -22,6 +22,18 @@ export function shortcutGroups(mac: boolean): ShortcutGroup[] {
 			]
 		},
 		{
+			title: 'Rooms',
+			shortcuts: [
+				// +page.svelte's windowKeydown (room-steps.ts).
+				{ label: 'Previous or next room or thread', keys: [[alt, '↑'], [alt, '↓']] },
+				{ label: 'Previous or next room, past threads', keys: [[alt, shift, '↑'], [alt, shift, '↓']] },
+				// Sidebar.svelte's reorderKey.
+				{ label: 'Move a room up or down', where: 'On a room in the list', keys: [[alt, '↑'], [alt, '↓']] },
+				// SearchDialog's fieldKey.
+				{ label: 'Search a room’s threads', where: 'On a room found in search', keys: [['→']] }
+			]
+		},
+		{
 			title: 'Composer',
 			shortcuts: [
 				// DraftField's keydown (enterAction), and the composer's own keys (Composer.svelte's `key`).
@@ -51,18 +63,6 @@ export function shortcutGroups(mac: boolean): ShortcutGroup[] {
 				{ label: 'Edit your message', where: 'On a message', keys: [['e']] },
 				{ label: 'Select it, to move it', where: 'On a message', keys: [['x']] },
 				{ label: 'Select up or down from it', where: 'On a message', keys: [[shift, '↑'], [shift, '↓']] }
-			]
-		},
-		{
-			title: 'Rooms',
-			shortcuts: [
-				// +page.svelte's windowKeydown (room-steps.ts).
-				{ label: 'Previous or next room or thread', keys: [[alt, '↑'], [alt, '↓']] },
-				{ label: 'Previous or next room, past threads', keys: [[alt, shift, '↑'], [alt, shift, '↓']] },
-				// Sidebar.svelte's reorderKey.
-				{ label: 'Move a room up or down', where: 'On a room in the list', keys: [[alt, '↑'], [alt, '↓']] },
-				// SearchDialog's fieldKey.
-				{ label: 'Search a room’s threads', where: 'On a room found in search', keys: [['→']] }
 			]
 		}
 	];
