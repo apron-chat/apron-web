@@ -31,20 +31,9 @@
 		else return;
 		event.preventDefault();
 	}
-
-	/** Pressing beside the image, on the ground around it, closes, as a photo viewer does. */
-	let pressedGround = false;
-	function ground(target: EventTarget | null): boolean {
-		return target instanceof HTMLElement && (target.classList.contains('ap-viewer') || target.classList.contains('ap-viewer-stage'));
-	}
-	function click(event: MouseEvent): void {
-		if (pressedGround && ground(event.target)) open = false;
-		pressedGround = false;
-	}
 </script>
 
-<ViewerDialog bind:open={() => open && Boolean(item), (value) => (open = value)} title={item?.title ?? ''} detail={item?.detail} {onclose} onkeydown={keydown}
-	onpointerdown={(event) => (pressedGround = ground(event.target))} onclick={click} class={className}>
+<ViewerDialog bind:open={() => open && Boolean(item), (value) => (open = value)} title={item?.title ?? ''} detail={item?.detail} {onclose} onkeydown={keydown} class={className}>
 	{#snippet actions()}
 		{#if many}<span class="ap-viewer-count" aria-live="polite">{index + 1} of {items.length}</span>{/if}
 		{#if item?.href}
@@ -54,7 +43,8 @@
 		{/if}
 	{/snippet}
 	{#if item}
-		<div class="ap-viewer-stage">
+		<!-- The ground around the image: a click there closes it. -->
+		<div class="ap-viewer-stage" data-viewer-ground>
 			{#key item.src}<img class="ap-viewer-media" src={item.src} alt={item.alt ?? ''} width={item.width} height={item.height} />{/key}
 			{#if many}
 				<button class="ap-viewer-btn ap-viewer-nav ap-viewer-prev" type="button" aria-label="Previous image" title="Previous (←)" disabled={index === 0} onclick={() => step(-1)}>

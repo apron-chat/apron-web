@@ -6,7 +6,9 @@
 	 * What a full-screen viewer is (MediaViewer, DocViewer): a modal `<dialog>` over everything, on a dark ground,
 	 * named by its title. A bar (the title, a line under it, the viewer's own `actions`, and Close) over what it shows
 	 * (`children`), drawn only while open. Once it opens, focus goes to what it shows where that names a part of
-	 * itself for it (`data-viewer-focus`, such as a document to read and scroll), else to Close. Escape or Close closes it. Both viewers
+	 * itself for it (`data-viewer-focus`, such as a document to read and scroll), else to Close. Escape or Close closes it,
+	 * and so does a click on the ground around what it shows (its bar, and what the viewer marks `data-viewer-ground`,
+	 * such as the stage an image or a page sits on), as a photo viewer's does. Both viewers
 	 * load on demand, so this does too; TerminalViewer, which the layout draws from the start, keeps a dialog of its
 	 * own, as sharing this with it would split it out into one more file to load at startup.
 	 */
@@ -24,14 +26,12 @@
 		onclose?: () => void;
 		/** Keys besides Escape, which closes it. */
 		onkeydown?: (event: KeyboardEvent) => void;
-		onpointerdown?: (event: PointerEvent) => void;
-		onclick?: (event: MouseEvent) => void;
 		/** Classes for its `<dialog>`, added to its own. */
 		class?: ClassValue;
 		/** A `data-testid` for its `<dialog>`. */
 		testid?: string;
 	}
-	let { open = $bindable(false), title, detail, actions, children, onclose, onkeydown, onpointerdown, onclick, class: className, testid }: Props = $props();
+	let { open = $bindable(false), title, detail, actions, children, onclose, onkeydown, class: className, testid }: Props = $props();
 
 	let dialog = $state<HTMLDialogElement | undefined>();
 	let closeButton = $state<HTMLButtonElement | undefined>();
@@ -56,6 +56,26 @@
 		onclose?.();
 	}
 
+	/**
+	 * A click on the ground closes it: one that went down there too, and barely moved, so selecting text from beside a
+	 * page doesn't, nor a press on a stage's scrollbar (inside the element, outside its content box). A touch that
+	 * scrolls makes no click.
+	 */
+	let pressed: { x: number; y: number } | undefined;
+	function onGround(event: MouseEvent): boolean {
+		const target = event.target;
+		if (!(target instanceof HTMLElement) || !target.hasAttribute('data-viewer-ground')) return false;
+		const box = target.getBoundingClientRect();
+		return event.clientX - box.left <= target.clientLeft + target.clientWidth && event.clientY - box.top <= target.clientTop + target.clientHeight;
+	}
+	function pointerdown(event: PointerEvent): void {
+		pressed = event.button === 0 && onGround(event) ? { x: event.clientX, y: event.clientY } : undefined;
+	}
+	function click(event: MouseEvent): void {
+		if (pressed && onGround(event) && Math.hypot(event.clientX - pressed.x, event.clientY - pressed.y) < 8) open = false;
+		pressed = undefined;
+	}
+
 	/** Escape closes it, here rather than by the browser's cancel, which may be skipped for a dialog opened without a press. */
 	function keydown(event: KeyboardEvent): void {
 		if (event.key === 'Escape') {
@@ -66,9 +86,9 @@
 </script>
 
 <!-- Its title names it. -->
-<dialog bind:this={dialog} class={['ap-viewer', className]} aria-labelledby={`${uid}-title`} data-testid={testid} onclose={closed} onkeydown={keydown} {onpointerdown} {onclick}>
+<dialog bind:this={dialog} class={['ap-viewer', className]} aria-labelledby={`${uid}-title`} data-testid={testid} data-viewer-ground onclose={closed} onkeydown={keydown} onpointerdown={pointerdown} onclick={click}>
 	{#if open}
-		<header class="ap-viewer-bar">
+		<header class="ap-viewer-bar" data-viewer-ground>
 			<div class="ap-viewer-text">
 				<h2 class="ap-viewer-title" id={`${uid}-title`} dir="auto">{title}</h2>
 				{#if detail}<p class="ap-viewer-detail">{detail}</p>{/if}

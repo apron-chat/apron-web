@@ -11,7 +11,7 @@
 	 * or where it can't be shown, with Download under it when it `failed`. A live region there from the start says
 	 * each change (why it can't be shown, or Loaded once it can), as one made with its words already in it isn't. The
 	 * document has focus once it opens, so the keys that scroll a page (Space, the arrows, Page Up and Down, Home and
-	 * End) scroll it; Tab goes on to Download and Close, and Escape closes it.
+	 * End) scroll it; Tab goes on to Download and Close, and Escape closes it, as does a click beside the page.
 	 */
 	interface Props {
 		/** Shown full screen while true; bindable, and set false however it closes (Escape, Close). */
@@ -49,7 +49,7 @@
 	<!-- The document, which has focus once it opens, so Space, the arrows and Page Up and Down scroll it. Named
 	     Document: the dialog it is in already says the file's name. -->
 	<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-	<div class="ap-docviewer-stage" role="region" aria-label="Document" tabindex="0" data-viewer-focus>
+	<div class="ap-docviewer-stage" role="region" aria-label="Document" tabindex="0" data-viewer-focus data-viewer-ground>
 		<p class="ap-sr" role="status">{status ?? 'Loaded'}</p>
 		{#if status}
 			<div class="ap-docviewer-status">

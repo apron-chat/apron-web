@@ -69,4 +69,27 @@ describe('DocViewer', () => {
 		flushSync();
 		expect([props.open, dialog.open, onclose.mock.calls.length]).toEqual([false, false, 2]);
 	});
+
+	it('closes on a click beside the page, not on it, nor on a drag that ends beside it, nor on its scrollbar', () => {
+		const props = $state({ open: true, title: 'plan.md', children: page });
+		render(DocViewer, props);
+		const press = (down: Element, up: Element, moved = 0) => {
+			down.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+			up.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: moved }));
+			flushSync();
+		};
+		const stage = document.querySelector('.ap-docviewer-stage')!;
+		press(document.querySelector('.doc p')!, document.querySelector('.doc p')!);
+		press(stage, stage, 40);
+		expect(props.open).toBe(true);
+		// A classic scrollbar (Windows, Linux) is inside the stage but beside its content box: 785 of 800 is on it.
+		const at = (x: number) => new MouseEvent('click', { bubbles: true, clientX: x });
+		Object.defineProperty(stage, 'clientWidth', { configurable: true, value: 785 });
+		stage.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 790 }));
+		stage.dispatchEvent(at(790));
+		flushSync();
+		expect(props.open).toBe(true);
+		press(stage, stage);
+		expect([props.open, document.querySelector('dialog')!.open]).toEqual([false, false]);
+	});
 });
