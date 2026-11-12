@@ -44,7 +44,10 @@
 		onfiles?: (files: File[]) => void;
 		/** The types the file picker offers, as its `accept`, such as `image/*,audio/*`. Omit for any file. */
 		accept?: string;
-		/** The full panel's Embed as attachment, beside Attach: the draft goes to its files rather than into the message. */
+		/**
+		 * Embed as attachment, beside Attach: the draft goes to its files rather than into the message. Offered in the full
+		 * panel, and in the compact one wherever Expand is (a draft of more than one line).
+		 */
 		onattachdraft?: () => void;
 		disabled?: boolean;
 		/** Hide the microphone (no getUserMedia, or a policy choice). */
@@ -297,8 +300,9 @@
 							{:else}<Mic size={18} aria-hidden="true" />{/if}
 						</button>
 					{/if}
-					{#if expanded && onattachdraft}
-						<button type="button" class="ap-iconbtn" onclick={onattachdraft} disabled={disabled || recording || !value.trim()} aria-label="Embed as attachment" title="Embed as attachment">
+					{#if (expanded || expandable) && onattachdraft}
+						<!-- The keyboard stays in the field, for a caption. -->
+						<button type="button" class="ap-iconbtn" onmousedown={(e) => e.preventDefault()} onclick={onattachdraft} disabled={disabled || recording || !value.trim()} aria-label="Embed as attachment" title="Embed as attachment">
 							<FileDown size={18} aria-hidden="true" />
 						</button>
 					{/if}

@@ -122,14 +122,26 @@ describe('Composer', () => {
 		expect(panel()).toBeNull();
 	});
 
+	it('offers Embed as attachment in the compact composer once the draft has a second line, as Expand is', async () => {
+		const props = $state<Record<string, unknown>>({ value: 'one line', placeholder: 'Message General', disabled: false, canUpload: true, people: [], oninput: vi.fn(), onsend: vi.fn(), onfiles: vi.fn(), onunstage: vi.fn(), onrename: vi.fn(), oncancelreply: vi.fn() });
+		dom.render(Composer, props as never);
+		flushSync();
+		await tick();
+		const embed = () => document.querySelector('button[aria-label="Embed as attachment"]');
+		expect([embed(), document.querySelector('[data-testid="composer-expand"]')]).toEqual([null, null]);
+		props.value = 'one\ntwo';
+		flushSync();
+		await tick();
+		expect(document.querySelector('[data-testid="composer-expand"]')).not.toBeNull();
+		expect(embed()).not.toBeNull();
+	});
+
 	it('embeds the draft as an attachment from the full panel: message.md goes to its files, and the panel closes empty', async () => {
 		const onfiles = vi.fn();
 		const props = $state<Record<string, unknown>>({ value: '# Plan\n- canary @ada', placeholder: 'Message General', disabled: false, canUpload: true, people: [], oninput: vi.fn(), onsend: vi.fn(), onfiles, onunstage: vi.fn(), onrename: vi.fn(), oncancelreply: vi.fn() });
 		dom.render(Composer, props as never);
 		flushSync();
 		const embed = () => document.querySelector<HTMLButtonElement>('button[aria-label="Embed as attachment"]');
-		// Not in the compact composer.
-		expect(embed()).toBeNull();
 		document.querySelector<HTMLButtonElement>('[data-testid="composer-expand"]')!.click();
 		flushSync();
 		await tick();

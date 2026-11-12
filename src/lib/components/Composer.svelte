@@ -218,9 +218,9 @@
 	const expand = (): void => setExpanded(true);
 
 	/**
-	 * The full panel's Embed as attachment: the draft, Markdown as written, goes to its files as `message.md` (renamable
-	 * there) rather than into the message. Emptied from here, the field closes the panel (`cleared`), leaving the file
-	 * and the compact field for a caption. It goes as the first of `DRAFT_TYPES` the server takes it at, size included.
+	 * Embed as attachment (the full panel's, and the compact one's beside Expand): the draft, Markdown as written, goes to
+	 * its files as `message.md` (renamable there) rather than into the message. Emptied from here, the field closes the
+	 * full panel (`cleared`), leaving the file and the compact field for a caption. It goes as the first of `DRAFT_TYPES` the server takes it at, size included.
 	 * A draft too large for every one is still offered, as the type with the largest limit, so the files say why they
 	 * refused it and how large it may be; the draft stays.
 	 */
