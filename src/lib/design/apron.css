@@ -1536,6 +1536,9 @@ pre.ap-termviewer-text { width: 80ch; font-family: var(--font-mono); font-size: 
 /* DocViewer — a document full screen, on the MediaViewer's ground: the document as a page, in a column a line of text
    reads well at, on the app's own ground and ink, scrolling inside the stage. Its text is a message's (`.ap-msg-text`),
    larger, with room around headings, rules and pictures as a page has. On a phone the page takes the whole width. */
+/* Wider than a phone, the page is drawn at 125%, all of it alike (its text, code, tables and pictures, and the column,
+   so a line holds as many words): a document read full screen, where there is room. */
+@media (min-width: 561px) { .ap-docviewer-page { zoom: 1.25; } }
 .ap-docviewer-stage { padding-block: 0 calc(var(--space-6) + env(safe-area-inset-bottom, 0px)); }
 /* The document has focus once it opens (to scroll it by keys): from the keyboard, a ring just inside the stage. */
 .ap-docviewer-stage:focus { outline: none; }
