@@ -50,6 +50,8 @@
 		onroom: () => void;
 		onedit: () => void;
 		onleave: () => void;
+		/** Given where Disband is offered, for the pane's private room (`canDisband`): removes everyone else, then leaves. */
+		ondisband?: () => void;
 		/** Copies a link to the open room or thread that any Apron app opens (Appendix A.4); resolves with whether it did. */
 		oncopylink?: () => Promise<boolean>;
 		onjoin?: () => void;
@@ -69,7 +71,7 @@
 	}
 	let {
 		room, pane, showTopic = true, threadTitle, typing, replyCount, moreReplies = false, waiting = false, updating = false, canEdit, editDisabled, canLeave, canJoin = false,
-		memberListOpen, memberListToggle = true, unreadElsewhere = 0, mentionsElsewhere = 0, onback, onroom, onedit, onleave, oncopylink, onjoin, onmute, onmemberlist, ondescription, onsearch, searchHint, onshortcuts
+		memberListOpen, memberListToggle = true, unreadElsewhere = 0, mentionsElsewhere = 0, onback, onroom, onedit, onleave, ondisband, oncopylink, onjoin, onmute, onmemberlist, ondescription, onsearch, searchHint, onshortcuts
 	}: Props = $props();
 
 	/** Mutes the pane for the chosen while, from when it's chosen. */
@@ -128,6 +130,7 @@
 	{memberListOpen}
 	onedit={canEdit ? onedit : undefined}
 	onleave={canLeave ? onleave : undefined}
+	{ondisband}
 	oncopylink={oncopylink ? copyLink : undefined}
 	muteChoices={onmute ? roomMuteChoices : undefined}
 	onmute={onmute ? mute : undefined}
@@ -147,6 +150,7 @@
 	actionsTestid="room-actions"
 	editTestid="edit-room"
 	leaveTestid="leave-room"
+	disbandTestid="disband-room"
 	copyLinkTestid="copy-room-link"
 	searchTestid="search-history"
 	muteTestid="mute-room"

@@ -104,6 +104,30 @@ test.describe('signed in to an account', () => {
 		await expect(preview.heading()).toHaveText(/^Margaret Hamilton/);
 		await expect(page.getByTestId('added-banner')).toHaveCount(0);
 	});
+
+	test('Disband in a private room\'s ⋯ menu removes everyone else, then leaves, which ends the room', async ({ preview, page }) => {
+		await preview.open('#room=private_1710000000060');
+		await expect(preview.heading()).toHaveText(/^Launch plans/);
+		let asked = '';
+		page.once('dialog', (dialog) => {
+			asked = dialog.message();
+			void dialog.accept();
+		});
+		await page.getByTestId('room-actions').click();
+		await page.getByTestId('disband-room').click();
+
+		await expect(page.getByTestId('private-list').getByText('Launch plans')).toHaveCount(0);
+		expect(asked).toContain('Disband Launch plans? This removes all 2 other people in it and then you');
+		const leaves = (await preview.sent('room_leave')).filter((p) => p.room_id === 'private_1710000000060').map((p) => p.user_id);
+		expect(leaves.slice(0, -1).sort()).toEqual(['ada', 'margaret']);
+		expect(leaves.at(-1)).toBeUndefined();
+
+		// A public room has no Disband: emptying it wouldn't end it.
+		await preview.openRoom('general');
+		await page.getByTestId('room-actions').click();
+		await expect(page.getByTestId('leave-room')).toBeVisible();
+		await expect(page.getByTestId('disband-room')).toHaveCount(0);
+	});
 });
 
 test.describe('as a guest', () => {

@@ -179,6 +179,36 @@ export function addRoomMembers(
 }
 
 /**
+ * Whether Disband is offered for `room`: a joined top-level private room with someone else in it, all of its members
+ * listed (a listing cut short, `memberCount` §4.2.1, would leave some in it). With no one else, Leave already ends it.
+ * Who may remove others is the server's to say (§4.2.2): the room's record doesn't name who started it.
+ */
+export function canDisband(room: Pick<RoomSnapshot, 'joined' | 'private' | 'parentRoomId' | 'members' | 'memberCount'> | undefined, you: string | undefined): boolean {
+	if (!room || !isPrivateRoom(room) || !room.members || (room.memberCount ?? 0) > room.members.length) return false;
+	return othersIn(room, you).length > 0;
+}
+
+/**
+ * Disbands a private room, as doing it by hand would: removes each other member in turn (`room_leave` with their
+ * `user_id`, §4.2.2), then leaves it, which ends it (the server removes a private room once it is empty). The first
+ * refusal stops it there, with the room kept and you still in it: the error says who couldn't be removed, by `name`,
+ * and the server's words why, such as that only whoever started the room may.
+ */
+export async function disbandRoom(
+	client: Pick<ChatClient, 'leaveRoom'>, room: Pick<RoomSnapshot, 'id' | 'members'>, you: string | undefined, name: (userId: string) => string
+): Promise<void> {
+	for (const { user_id: userId } of othersIn(room, you)) {
+		try {
+			await client.leaveRoom(room.id, userId).promise;
+		} catch (cause) {
+			const why = cause instanceof Error ? cause.message.replace(/[.\s]+$/, '') : '';
+			throw new Error(`Couldn’t remove ${name(userId)}${why ? `: ${why}` : ''}. The room is kept.`);
+		}
+	}
+	await client.leaveRoom(room.id).promise;
+}
+
+/**
  * Watches the joined rooms for ones someone else added you to: a room that arrives once your rooms are listed, which
  * this page didn't ask for (no room creation, nor a request about it, in flight, and not one it started). `next` says
  * the top-level private ones, `added` all of them. Rooms listed when you sign in are known already; one you left and

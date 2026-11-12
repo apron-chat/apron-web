@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ClientSnapshot, OperationHandle, RoomSnapshot } from '$lib/protocol/client';
 import { roomSnapshot as room } from '$lib/test/builders';
-import { addRoomMembers, ArrivalWatch, directRoomWith, messageUser, NO_PRIVATE_ROOMS, othersIn, privateRoomLine, privateRooms, quietestFirst, reachesStart, startPrivateRoom } from './private-rooms';
+import { addRoomMembers, ArrivalWatch, canDisband, directRoomWith, disbandRoom, messageUser, NO_PRIVATE_ROOMS, othersIn, privateRoomLine, privateRooms, quietestFirst, reachesStart, startPrivateRoom } from './private-rooms';
 
 const members = (...ids: string[]) => ids.map((user_id) => ({ user_id }));
 const dm = (id: string, ...ids: string[]) => room(id, [], { private: true, namedForMembers: true, members: members('ada', ...ids) });
@@ -151,5 +151,33 @@ describe('addRoomMembers', () => {
 		expect(client.joinRoom.mock.calls).toEqual([['t1', 'bob'], ['t1', 'carol']]);
 		expect(failed).toEqual([{ userId: 'carol', message: 'Carol is in too many private rooms' }]);
 		expect(await addRoomMembers(client, 't2', undefined, 'ada')).toEqual([]);
+	});
+});
+
+describe('disbanding a private room', () => {
+	const leaver = (refuse: Record<string, Error> = {}) => ({
+		leaveRoom: vi.fn((_room: string, userId?: string) => ({ id: 'c1', promise: refuse[userId ?? ''] ? Promise.reject(refuse[userId!]) : Promise.resolve({}) }) as OperationHandle)
+	});
+
+	it('is offered for a joined top-level private room with someone else in it and every member listed', () => {
+		expect(canDisband(dm('p1', 'bob'), 'ada')).toBe(true);
+		expect(canDisband(dm('p1'), 'ada')).toBe(false);
+		expect(canDisband({ ...dm('p1', 'bob'), memberCount: 40 }, 'ada')).toBe(false);
+		expect(canDisband({ ...dm('t1', 'bob'), parentRoomId: 'p1' }, 'ada')).toBe(false);
+		expect(canDisband(room('general', [], { members: members('ada', 'bob') }), 'ada')).toBe(false);
+		expect(canDisband(room('p2', [], { private: true, joined: false, members: members('ada', 'bob') }), 'ada')).toBe(false);
+		expect(canDisband(undefined, 'ada')).toBe(false);
+	});
+
+	it('removes everyone else in turn, then leaves', async () => {
+		const client = leaver();
+		await disbandRoom(client, dm('p1', 'bob', 'carol'), 'ada', (id) => id);
+		expect(client.leaveRoom.mock.calls).toEqual([['p1', 'bob'], ['p1', 'carol'], ['p1']]);
+	});
+
+	it('stops at the first refusal, keeping the room and you in it, and says who and why', async () => {
+		const client = leaver({ bob: new Error('Only an admin, the room\'s creator, or a bot\'s owner, can remove someone else.') });
+		await expect(disbandRoom(client, dm('p1', 'bob', 'carol'), 'ada', () => 'Bob')).rejects.toThrow('Couldn’t remove Bob: Only an admin, the room\'s creator, or a bot\'s owner, can remove someone else. The room is kept.');
+		expect(client.leaveRoom.mock.calls).toEqual([['p1', 'bob']]);
 	});
 });

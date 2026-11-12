@@ -50,7 +50,7 @@
 	import MembershipLine from '$lib/components/MembershipLine.svelte';
 	import PrivateIntro from '$lib/design/components/PrivateIntro.svelte';
 	import AddedBanner from '$lib/design/components/AddedBanner.svelte';
-	import { ArrivalWatch, addRoomMembers, othersIn, reachesStart } from '$lib/ui/private-rooms';
+	import { ArrivalWatch, addRoomMembers, canDisband, disbandRoom, othersIn, reachesStart } from '$lib/ui/private-rooms';
 	import { absentMentions, addMembers, couldNotAdd, isGuest, unheldRoleHolders } from '$lib/ui/members';
 	import { faceOf, roomFaces } from '$lib/ui/faces';
 	import { receiptsByMessage, steadyReceipts } from '$lib/ui/receipts';
@@ -684,6 +684,8 @@
 	let pinnedDescription = $derived(editTarget?.description && !descriptionPutAway ? { id: editTarget.id, description: editTarget.description } : undefined);
 	/** Adding and removing other members of the open pane's room (§4.2.2), until the server says it can't. */
 	let canChangeMembers = $derived(session.canManageRooms && !session.readOnly && paneSteady);
+	/** Disband is offered for the open pane's room: a private room with others in it (`canDisband`). A boolean, so the header's menu isn't made again as messages arrive. */
+	let canDisbandPane = $derived(paneRoom?.private === true && canChangeMembers && canDisband(paneRoom, session.you?.user_id));
 	/**
 	 * Adding others to the open pane's room: anywhere with `add_members` (`ext:permissions`), or on a server without
 	 * that extension, where the server answers `denied` if it won't; else only to a private room you are a member of
@@ -2495,6 +2497,18 @@
 	}
 
 	/**
+	 * Disbands the open private room: removes everyone else, then leaves, which ends it (`disbandRoom`). A server that
+	 * lets only whoever started the room remove people refuses anyone else, and the room is kept.
+	 */
+	function disbandPane(): void {
+		if (!client || !paneRoom || !canDisbandPane) return;
+		const room = paneRoom;
+		const others = othersIn(room, session.you?.user_id).length;
+		if (!confirm(`Disband ${room.title}? This removes ${others === 1 ? 'the other person' : `all ${others} other people`} in it and then you, which ends the room for everyone. Only whoever started the room can do this.`)) return;
+		feedback.track({ id: 'disband', promise: disbandRoom(client, room, session.you?.user_id, (userId) => directory.name({ user_id: userId })).then(() => ({})) }, 'Disbanding…');
+	}
+
+	/**
 	 * Leaves a thread from its row in the sidebar, without asking: it only moves down to Other Threads, where
 	 * Join brings it back. Its card stays in the room.
 	 */
@@ -3443,7 +3457,7 @@
 				{unreadElsewhere}
 				{mentionsElsewhere}
 				onsearch={canSearch ? () => (searchMode = 'messages') : undefined} {searchHint} onshortcuts={searchHint ? () => (shortcutsOpen = true) : undefined}
-				onback={openRooms} onroom={backToRoom} onedit={() => (roomEditorOpen = true)} onleave={leavePane} oncopylink={copyPaneLink} onjoin={joinPane} onmemberlist={toggleMemberList}
+				onback={openRooms} onroom={backToRoom} onedit={() => (roomEditorOpen = true)} onleave={leavePane} ondisband={canDisbandPane ? disbandPane : undefined} oncopylink={copyPaneLink} onjoin={joinPane} onmemberlist={toggleMemberList}
 				onmute={canMuteRoom ? mutePane : undefined}
 			/>
 			{#if roomEditorOpen && editTarget && roomEditor.component}

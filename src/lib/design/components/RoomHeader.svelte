@@ -55,6 +55,8 @@
 		onedit?: () => void;
 		/** Cap `rooms`: Leave room (or thread) in the ⋯ actions menu (`room_leave`, §4.2.2). */
 		onleave?: () => void;
+		/** Disband room, after Leave in the ⋯ menu: for a private room, removing everyone else and then leaving, which ends it. */
+		ondisband?: () => void;
 		/** Copy link to room (or thread) in the ⋯ actions menu: a link that any Apron app opens (Appendix A.4). */
 		oncopylink?: () => void;
 		/**
@@ -84,7 +86,7 @@
 		onshortcuts?: () => void;
 		/** The room's or thread's pinned <ThreadDescription> was put away with its ×: a Description button brings it back. */
 		ondescription?: () => void;
-		/** `data-testid`s for its parts: the ‹'s tag of what's new elsewhere, the topic, Join, Description, the bell-off Unmute button, the ⋯ menu and its Search, Edit, Leave, Copy link, Mute and Unmute. */
+		/** `data-testid`s for its parts: the ‹'s tag of what's new elsewhere, the topic, Join, Description, the bell-off Unmute button, the ⋯ menu and its Search, Edit, Leave, Disband, Copy link, Mute and Unmute. */
 		tagTestid?: string;
 		topicTestid?: string;
 		joinTestid?: string;
@@ -92,6 +94,7 @@
 		actionsTestid?: string;
 		editTestid?: string;
 		leaveTestid?: string;
+		disbandTestid?: string;
 		copyLinkTestid?: string;
 		searchTestid?: string;
 		muteTestid?: string;
@@ -102,8 +105,8 @@
 	}
 	let {
 		room, name, topic, topicTitle, private: isPrivate, faces, typing = [], replies, note, onback, unreadElsewhere = 0, mentionsElsewhere = 0,
-		thread, threadName, onroom, canJoin = false, onjoin, onmemberlist, memberListOpen = false, onedit, onleave, oncopylink, muteChoices, onmute, muted, onunmute, mutedWithRoom = false, busy = false, updating = false, onsearch, searchHint, onshortcuts,
-		ondescription, tagTestid, topicTestid, joinTestid, descriptionTestid, actionsTestid, editTestid, leaveTestid, copyLinkTestid, searchTestid, muteTestid, unmuteTestid,
+		thread, threadName, onroom, canJoin = false, onjoin, onmemberlist, memberListOpen = false, onedit, onleave, ondisband, oncopylink, muteChoices, onmute, muted, onunmute, mutedWithRoom = false, busy = false, updating = false, onsearch, searchHint, onshortcuts,
+		ondescription, tagTestid, topicTestid, joinTestid, descriptionTestid, actionsTestid, editTestid, leaveTestid, disbandTestid, copyLinkTestid, searchTestid, muteTestid, unmuteTestid,
 		unmuteButtonTestid, class: className
 	}: Props = $props();
 	const noun = $derived(thread ? 'thread' : 'room');
@@ -128,7 +131,8 @@
 		...(muted !== undefined && onunmute ? [{ value: 'unmute', label: `Unmute ${unmuteNoun}`, hint: muted, testid: unmuteTestid }] : []),
 		...(muted === undefined && muteMenu && onmute ? [{ value: 'mute', label: `Mute ${noun}`, testid: muteTestid, choices: muteMenu }] : []),
 		...(onedit ? [{ value: 'edit', label: `Edit ${noun}`, testid: editTestid }] : []),
-		...(onleave ? [{ value: 'leave', label: `Leave ${noun}`, testid: leaveTestid }] : [])
+		...(onleave ? [{ value: 'leave', label: `Leave ${noun}`, testid: leaveTestid }] : []),
+		...(ondisband ? [{ value: 'disband', label: `Disband ${noun}`, testid: disbandTestid }] : [])
 	]);
 	const memberLabel = $derived(memberListOpen ? 'Hide member list' : 'Show member list');
 
@@ -138,6 +142,7 @@
 		else if (value === 'link') oncopylink?.();
 		else if (value === 'edit') onedit?.();
 		else if (value === 'leave') onleave?.();
+		else if (value === 'disband') ondisband?.();
 		else if (value === 'unmute') onunmute?.();
 		else if (value.startsWith('mute:')) onmute?.(value.slice('mute:'.length));
 	}

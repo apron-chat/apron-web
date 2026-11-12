@@ -55,6 +55,18 @@ describe('RoomHeader', () => {
 		expect([...document.querySelectorAll('button')]).toEqual([]);
 	});
 
+	it('offers Disband after Leave in the ⋯ menu, only where it is given', () => {
+		const ondisband = vi.fn();
+		render({ onleave: () => {}, ondisband, disbandTestid: 'disband' });
+		dom.button('Room actions').click();
+		flushSync();
+		const items = [...document.querySelectorAll<HTMLButtonElement>('.ap-menu-item')];
+		expect(items.map((item) => item.textContent?.trim())).toEqual(['Leave room', 'Disband room']);
+		expect(items[1].dataset.testid).toBe('disband');
+		items[1].click();
+		expect(ondisband).toHaveBeenCalledOnce();
+	});
+
 	it('offers Copy link first in the ⋯ menu, named for the room or thread', () => {
 		const oncopylink = vi.fn();
 		render({ oncopylink, onleave: () => {} });
