@@ -216,13 +216,18 @@ describe('Composer', () => {
 		expect(dom.byRole('textbox', 'Message')).toBe(field);
 	});
 
-	it('offers Embed as attachment beside Attach in the full panel only, and not with an empty draft', () => {
+	it('offers Embed as attachment beside Attach in the full panel, and in the compact one with Expand, not with an empty draft', () => {
 		const onattachdraft = vi.fn();
-		const props = $state({ value: '# Plan', canUpload: true, onfiles: vi.fn(), onattachdraft, expanded: false });
+		const props = $state<{ value: string; canUpload: boolean; onfiles: () => void; onattachdraft: () => void; expanded: boolean; onexpand?: () => void }>({ value: '# Plan', canUpload: true, onfiles: vi.fn(), onattachdraft, expanded: false });
 		dom.render(Composer, props);
 		flushSync();
 		const embed = () => document.querySelector<HTMLButtonElement>('button[aria-label="Embed as attachment"]');
+		// Compact, without Expand (one line): not offered.
 		expect(embed()).toBeNull();
+		props.onexpand = vi.fn();
+		flushSync();
+		expect(embed()).not.toBeNull();
+		props.onexpand = undefined;
 		props.expanded = true;
 		flushSync();
 		expect([embed()?.title, embed()?.closest('.ap-composer-tools-start') !== null, embed()?.disabled]).toEqual(['Embed as attachment', true, false]);

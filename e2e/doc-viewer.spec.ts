@@ -118,11 +118,29 @@ test.describe('an uploaded Markdown file', () => {
 		await expect(viewer).toBeHidden();
 		await expect(card).toBeFocused();
 
-		await test.step('opens again, read anew', async () => {
+		await test.step('opens again, read anew, and a click beside the page closes it, not one on it, a drag, or one that clears a selection', async () => {
 			await card.click();
-			await expect(viewer.getByTestId('doc-viewer-text').getByRole('heading', { level: 1 })).toHaveText('Rollout plan');
-			await viewer.getByRole('button', { name: 'Close' }).click();
+			const text = viewer.getByTestId('doc-viewer-text');
+			await expect(text.getByRole('heading', { level: 1 })).toHaveText('Rollout plan');
+			const stage = viewer.getByRole('region', { name: 'Document' });
+			const box = (await stage.boundingBox())!;
+			const pageBox = (await viewer.locator('article.ap-docviewer-page').boundingBox())!;
+			const beside = { x: (box.x + pageBox.x) / 2, y: box.y + box.height / 2 };
+			await text.getByRole('heading', { level: 1 }).click();
+			// Selecting text from beside the page.
+			await page.mouse.move(beside.x, beside.y);
+			await page.mouse.down();
+			await page.mouse.move(pageBox.x + 80, beside.y, { steps: 5 });
+			await page.mouse.up();
+			await expect(viewer).toBeVisible();
+			expect(await page.evaluate(() => getSelection()!.isCollapsed)).toBe(false);
+			// A click beside it then clears what was selected, as anywhere; the next closes it.
+			await page.mouse.click(beside.x, beside.y);
+			await expect(viewer).toBeVisible();
+			expect(await page.evaluate(() => getSelection()!.isCollapsed)).toBe(true);
+			await page.mouse.click(beside.x, beside.y);
 			await expect(viewer).toBeHidden();
+			await expect(card).toBeFocused();
 		});
 
 		await test.step('Back closes it, back to its card, and closing it otherwise leaves no entry for Back to find', async () => {
