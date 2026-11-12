@@ -44,6 +44,23 @@ function open(url = URL): void {
 }
 
 describe('DocViewerHost', () => {
+	it('draws the page at the size last chosen on this device, and keeps the next one chosen', async () => {
+		localStorage.setItem('apron.docZoom', '1.5');
+		try {
+			render(DocViewerHost);
+			open();
+			await reads[0].answer({ text: '# Plan' });
+			const article = () => document.querySelector<HTMLElement>('article.ap-docviewer-page')!;
+			expect(article().style.zoom).toBe('1.5');
+			document.querySelector<HTMLButtonElement>('button[aria-label="Larger text"]')!.click();
+			flushSync();
+			await tick();
+			expect([article().style.zoom, localStorage.getItem('apron.docZoom')]).toEqual(['1.75', '1.75']);
+		} finally {
+			localStorage.removeItem('apron.docZoom');
+		}
+	});
+
 	it('reads the file for each open: reopened, it shows Loading, never the last read, until the new one comes', async () => {
 		render(DocViewerHost);
 		open();
