@@ -10,6 +10,7 @@
 	import Users from '@lucide/svelte/icons/users';
 	import Avatar from './Avatar.svelte';
 	import type { PickerEmoji, PickerRole, PickerRoom, Sender } from './types';
+	type PickerPerson = Sender & { outside?: string };
 	import { uid } from './util';
 
 	/** Between the list and its field, and a margin to spare from the edge that clips it. */
@@ -21,8 +22,11 @@
 	interface Props {
 		/** What has been typed after the `@`, `#` or `:`; in a person's name and ID it reads in accent. */
 		query?: string;
-		/** `@`: who can be named, people and roles, in the order shown. The list shows `rooms` instead when given, else `emoji`. */
-		people?: (Sender | PickerRole)[];
+		/**
+		 * `@`: who can be named, people and roles, in the order shown. The list shows `rooms` instead when given, else
+		 * `emoji`. A person with `outside` isn't here: faded, with it beside their name ("Not in room").
+		 */
+		people?: (PickerPerson | PickerRole)[];
 		/** `#`: rooms and threads, each its title and `#room_id`. */
 		rooms?: PickerRoom[];
 		/** `:`: emoji, each its glyph, `:shortcode:` and name. */
@@ -30,7 +34,7 @@
 		/** The highlighted option, which Tab (and Enter) takes. */
 		active?: number;
 		/** A pick (a click keeps the focus in the field): the item and its index in the list shown. */
-		onpick?: (item: Sender | PickerRole | PickerRoom | PickerEmoji, index: number) => void;
+		onpick?: (item: PickerPerson | PickerRole | PickerRoom | PickerEmoji, index: number) => void;
 		onhover?: (index: number) => void;
 		/** The list's ID, which the field names in `aria-controls`; option `i` is `${id}-${i}`, its `aria-activedescendant`. */
 		id?: string;
@@ -44,14 +48,14 @@
 	let { query = '', people = [], rooms, emoji, active = 0, onpick, onhover, id, avatar, class: className, testid }: Props = $props();
 
 	const kind = $derived(rooms ? 'rooms' : emoji ? 'emoji' : 'people');
-	const items: (Sender | PickerRole | PickerRoom | PickerEmoji)[] = $derived(rooms ?? emoji ?? people);
+	const items: (PickerPerson | PickerRole | PickerRoom | PickerEmoji)[] = $derived(rooms ?? emoji ?? people);
 	const listLabel = $derived(kind === 'rooms' ? 'Room suggestions' : kind === 'emoji' ? 'Emoji suggestions' : 'Mention someone');
 	/** `@&`: only roles were asked for. */
 	const rolesOnly = $derived(kind === 'people' && query.startsWith('&'));
 	const emptyText = $derived(kind === 'rooms' ? `No room matches “${query}”` : kind === 'emoji' ? `No emoji match “${query}”` : rolesOnly ? (query.length > 1 ? `No role here matches “${query.slice(1)}”` : 'No one else here has a role') : query ? `No one here matches “${query}”` : 'People in this room');
 	// What reads in accent: the typed text, without the `&` that asks for roles.
 	const q = $derived((rolesOnly ? query.slice(1) : query).toLowerCase());
-	const key = (item: Sender | PickerRole | PickerRoom | PickerEmoji, index: number): string => ('user_id' in item ? uid(item) : 'role' in item ? `&${item.role}` : item.id) ?? String(index);
+	const key = (item: PickerPerson | PickerRole | PickerRoom | PickerEmoji, index: number): string => ('user_id' in item ? uid(item) : 'role' in item ? `&${item.role}` : item.id) ?? String(index);
 	let list = $state<HTMLUListElement>();
 	let none = $state<HTMLDivElement>();
 	/** Opens below the field, for want of room above. */
@@ -109,17 +113,19 @@
 {:else}
 	<ul {id} aria-label={listLabel} data-testid={testid} class={['ap-mpick', below && 'ap-mpick-below', className]} style:max-height={cap === undefined ? undefined : `${cap}px`} role="listbox" bind:this={list}>
 		{#each items as item, i (key(item, i))}
-			<li id={id && `${id}-${i}`} role="option" aria-selected={i === active} class={['ap-mpick-item', i === active && 'ap-mpick-active']} onmousedown={(e) => { e.preventDefault(); onpick?.(item, i); }} onmouseenter={() => onhover?.(i)}>
+			<li id={id && `${id}-${i}`} role="option" aria-selected={i === active} class={['ap-mpick-item', i === active && 'ap-mpick-active', ('user_id' in item || 'role' in item) && 'outside' in item && item.outside && 'ap-mpick-out']} onmousedown={(e) => { e.preventDefault(); onpick?.(item, i); }} onmouseenter={() => onhover?.(i)}>
 				{#if 'user_id' in item}
 					{@const pid = uid(item) || ''}
 					{@const name = item.name?.trim() || pid}
 					{#if avatar}{@render avatar(item)}{:else}<Avatar {name} src={item.avatar} size="sm" />{/if}
 					<span class="ap-mpick-name">{@render mark(name)}</span>
 					{#if pid !== name}<span class="ap-mpick-id">{@render mark(pid, '@')}</span>{/if}
+					{#if item.outside}<span class="ap-mpick-tag">{item.outside}</span>{/if}
 				{:else if 'role' in item}
 					<span class="ap-mpick-role-glyph" aria-hidden="true"><Users size={13} strokeWidth={2.25} /></span>
 					<span class="ap-mpick-name">{@render mark(item.role, '@')}</span>
 					<span class="ap-mpick-id">{item.count === 1 ? '1 person' : `${item.count} people`}</span>
+					{#if item.outside}<span class="ap-mpick-tag">{item.outside}</span>{/if}
 				{:else if 'native' in item}
 					<span class="ap-mpick-emoji-glyph" aria-hidden="true">{#if item.image}<img class="ap-cemoji" src={item.image} alt="" />{:else}{item.native}{/if}</span>
 					<span class="ap-mpick-name">:{item.id}:</span>

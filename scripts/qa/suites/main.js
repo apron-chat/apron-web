@@ -356,6 +356,18 @@ export default {
 				}
 			}
 		},
+		{
+			// Typing in a long draft that names a role no one in the room holds (the line over the composer names its
+			// holders): what checks the roles mustn't render the draft on each key.
+			name: 'type-composer-role',
+			settle: 400,
+			setup: async (p) => {
+				await roomList(p).getByText('engineering', { exact: true }).first().click();
+				await composer(p).click();
+				await p.keyboard.insertText(`@&moderator ${'Here is the plan, with **bold** and `code` and a [link](https://example.com). '.repeat(40)}`);
+			},
+			action: (p) => p.keyboard.type('can you review the migration plan today please', { delay: 20 })
+		},
 		{ name: 'type-composer', settle: 400, setup: (p) => composer(p).click(), action: (p) => p.keyboard.type('The quick brown fox jumps over @a', { delay: 20 }) },
 		{
 			name: 'hover-messages',

@@ -89,6 +89,34 @@ test.describe('signed in to an account', () => {
 		await expect(page.getByTestId('private-list').locator('button[aria-current="page"]')).toHaveAccessibleName('Release crew');
 	});
 
+	test('mentioning someone who isn’t in a private room leaves its box unticked: it sends without adding them, unless ticked', async ({ preview, page }) => {
+		await preview.open();
+		await page.getByTestId('message-list').getByRole('button', { name: 'Linus', exact: true }).first().click();
+		await page.getByTestId('profile-card').getByRole('button', { name: 'Message', exact: true }).click();
+		await expect(preview.heading()).toHaveText(/^Linus/);
+		await preview.waitForSent('room_join', (p) => p.user_id === 'linus');
+		const hint = page.getByTestId('mention-outside-hint');
+		const tick = hint.getByTestId('mention-outside-add');
+		await preview.composer().click();
+		await page.keyboard.type('@gr');
+		await page.keyboard.press('Tab');
+		await page.keyboard.type('fyi');
+		await expect(hint).toContainText('Grace Hopper');
+		await expect(tick).not.toBeChecked();
+		await page.keyboard.press('Enter');
+		await preview.waitForSent('message', (p) => p.body?.mentions?.includes('grace'));
+		expect((await preview.sent('room_join')).map((p) => p.user_id)).toEqual(['linus']);
+
+		await page.keyboard.type('@gr');
+		await page.keyboard.press('Tab');
+		await page.keyboard.type('join us');
+		await tick.check();
+		await preview.composer().click();
+		await page.keyboard.press('Enter');
+		await preview.waitForSent('room_join', (p) => p.user_id === 'grace');
+		await preview.waitForSent('message', (p) => p.body?.text?.includes('join us'));
+	});
+
 	test('a private room someone else added you to says so under its header, until put away', async ({ preview, page }) => {
 		await preview.open();
 		const roomId = await page.evaluate(() => (window as any).__apronPreview.addYouToPrivate('margaret') as string);

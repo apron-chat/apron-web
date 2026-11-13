@@ -9,6 +9,8 @@ import { isMentionableRole, type MentionPerson } from '$lib/protocol/markdown';
 export interface RoleSuggestion {
 	role: string;
 	members: string[];
+	/** Held only by people who aren't in the room (`outsideRoles`): the picker fades it, and its chip mentions them. */
+	outside?: boolean;
 }
 
 /**
@@ -19,7 +21,7 @@ export interface RoleSuggestion {
 export function roomRoles(people: MentionPerson[]): RoleSuggestion[] {
 	const byRole = new Map<string, string[]>();
 	for (const person of people) {
-		if (person.me) continue;
+		if (person.me || person.outside) continue;
 		for (const role of new Set(person.roles ?? [])) {
 			if (typeof role !== 'string' || !isMentionableRole(role)) continue;
 			const members = byRole.get(role);
@@ -28,6 +30,17 @@ export function roomRoles(people: MentionPerson[]): RoleSuggestion[] {
 		}
 	}
 	return [...byRole].map(([role, members]) => ({ role, members })).sort((a, b) => b.members.length - a.members.length || a.role.localeCompare(b.role));
+}
+
+/**
+ * The roles held only by people who aren't here (`outsiders`, each `outside`), not by anyone in `held`'s roles: each
+ * with who holds it, marked `outside`, most held first, then by name. Mentioning one reaches no one unless they're added.
+ */
+export function outsideRoles(outsiders: MentionPerson[], held: readonly string[]): RoleSuggestion[] {
+	const here = new Set(held);
+	return roomRoles(outsiders.map((person) => ({ ...person, outside: false })))
+		.filter((suggestion) => !here.has(suggestion.role))
+		.map((suggestion) => ({ ...suggestion, outside: true }));
 }
 
 /**

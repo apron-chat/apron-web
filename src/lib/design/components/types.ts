@@ -265,6 +265,8 @@ export interface PickerRole {
 	role: string;
 	/** How many people it mentions. */
 	count: number;
+	/** Held only by people who aren't here: faded, with this beside it ("Not in room"). */
+	outside?: string;
 }
 
 /** An emoji a `:shortcode` can put in, in the MentionPicker. */

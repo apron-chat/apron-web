@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import type { MediaCheck } from './sanitize';
 import { toggleTask } from './task-list';
-import { markdownRoles, markdownText, renderBio, renderMarkdown, renderPlain, type EmojiResolver, type LinkResolver, type MentionResolver, mentionSegments, hasTaskItems } from './markdown';
+import { markdownRoles, markdownText, writtenRoles, renderBio, renderMarkdown, renderPlain, type EmojiResolver, type LinkResolver, type MentionResolver, mentionSegments, hasTaskItems } from './markdown';
 
 const resolve: MentionResolver = (id) => {
 	if (id === 'alice') return { kind: 'user', id, name: 'Alice Chen' };
@@ -107,6 +107,9 @@ describe('the roles a message mentions', () => {
 	it('finds them where they render: outside code and links, once each, in order', () => {
 		expect(markdownRoles('@&mod and @&admin, again @&mod, not a@&ops nor @ada')).toEqual(['mod', 'admin']);
 		expect(markdownRoles('Type `@&admin` to reach them, or [@&ops](https://example.com)\n\n```\n@&mod\n```\n\n**@&oncall**')).toEqual(['oncall']);
+		// The quick scan finds them as written, code and links too, which markdownRoles then leaves out.
+		expect(writtenRoles('Type `@&admin` to reach them, or [@&ops](https://example.com) and @&admin again, not a@&b')).toEqual(['admin', 'ops']);
+		expect(writtenRoles('no roles here, @ada')).toEqual([]);
 		expect(markdownRoles('no roles here')).toEqual([]);
 	});
 });

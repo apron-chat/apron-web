@@ -1,4 +1,5 @@
-import { DEVICES, expect, test } from './fixtures';
+import type { Page } from '@playwright/test';
+import { DEVICES, expect, test, type Preview } from './fixtures';
 
 /** Adding people to a room from the member list's + (§4.2.2), with the people picker New private conversation uses. */
 
@@ -28,18 +29,20 @@ test('Add member adds everyone picked, and keeps who the server refused picked, 
 	await expect(page.getByTestId('room-member-list').getByRole('status')).toHaveCount(0);
 });
 
-test('a message (never a command) mentioning people who aren’t here, by name or by a role no one here holds, asks to add them first', async ({ preview, page }) => {
+test('a message (never a command) mentioning people who aren’t here, by name or by a role no one here holds, adds them first as the line over the composer says', async ({ preview, page }) => {
 	await preview.open();
 	await preview.openRoom('engineering');
-	const prompt = page.getByTestId('mention-add-prompt');
+	const hint = page.getByTestId('mention-outside-hint');
+	const tick = page.getByTestId('mention-outside-add');
 	const member = (id: string) => page.getByRole('complementary', { name: 'Room member list' }).locator(`li.ap-member[data-user="${id}"]`);
 	await preview.composer().click();
 
 	await test.step('a command, and a mention of someone here, go without asking', async () => {
-		await page.keyboard.type('/shrug @grace ');
+		await page.keyboard.type('/shrug @grace hi');
+		// A command says itself what it does with whom it names: no line offers to add them.
+		await expect(page.getByTestId('mention-outside-hint')).toHaveCount(0);
 		await page.keyboard.press('Enter');
 		await preview.waitForSent('command', (p) => p.body?.text?.startsWith('/shrug @grace'));
-		await expect(prompt).toHaveCount(0);
 		// The preview's server doesn't know /shrug, so the draft comes back with its notice.
 		await expect(preview.composer()).toContainText('/shrug');
 		await page.keyboard.press('ControlOrMeta+a');
@@ -47,61 +50,134 @@ test('a message (never a command) mentioning people who aren’t here, by name o
 		await page.keyboard.type('@linus hi');
 		await page.keyboard.press('Enter');
 		await preview.waitForSent('message', (p) => p.body?.text === '@linus hi');
-		await expect(prompt).toHaveCount(0);
 	});
 
-	await test.step('held back, with the focus left in the composer, so no key typed on adds anyone', async () => {
-		await page.keyboard.type('@grace hi');
-		await page.keyboard.press('Enter');
-		await expect(prompt).toContainText('Add Grace Hopper to engineering?');
+	await test.step('a line over the composer names who isn’t here as they’re mentioned, ticked to add them: Send adds them, then sends', async () => {
+		await page.keyboard.type('@grace can you look?');
+		await expect(hint).toContainText('Not in this room, add them so they’ll see the mention? Grace Hopper');
+		await expect(tick).toBeChecked();
 		await expect(preview.composer()).toBeFocused();
 		await page.keyboard.press('Enter');
-		await expect(prompt).toBeVisible();
-		expect(await preview.sent('room_join')).toEqual([]);
-	});
-
-	await test.step('Escape, or typing on, puts it away with the draft; Send without adding sends it as it is', async () => {
-		await page.keyboard.press('Escape');
-		await expect(prompt).toHaveCount(0);
-		await expect(preview.composer()).toContainText('hi');
-		await page.keyboard.press('Enter');
-		await expect(prompt).toBeVisible();
-		await page.keyboard.type(' there');
-		await expect(prompt).toHaveCount(0);
-		await page.keyboard.press('Enter');
-		await prompt.getByRole('button', { name: 'Send without adding' }).click();
-		await preview.waitForSent('message', (p) => p.body?.text === '@grace hi there');
-		await expect(prompt).toHaveCount(0);
-		await expect(member('grace')).toHaveCount(0);
-		expect(await preview.sent('room_join')).toEqual([]);
-	});
-
-	await test.step('Add and send adds them, then sends', async () => {
-		await page.keyboard.type('@grace can you look?');
-		await page.keyboard.press('Enter');
-		await prompt.getByRole('button', { name: 'Add and send' }).click();
+		await preview.waitForSent('room_join', (p) => p.user_id === 'grace');
 		const sent = await preview.waitForSent('message', (p) => p.body?.text === '@grace can you look?');
 		expect(sent).toMatchObject({ room_id: 'engineering', body: { mentions: ['grace'] } });
 		await expect(member('grace')).toBeVisible();
-		await expect(prompt).toHaveCount(0);
+		await expect(hint).toHaveCount(0);
 		await expect(preview.composer()).toBeFocused();
 	});
 
-	await test.step('a role someone here holds mentions them; one no one here holds asks about its holders, mentioned once added', async () => {
+	await test.step('unticked, it goes as it is, and the next draft starts ticked again', async () => {
+		await page.keyboard.type('@margaret hi');
+		await tick.uncheck();
+		await preview.composer().click();
+		// Typing on keeps the choice.
+		await page.keyboard.type(' there');
+		await expect(tick).not.toBeChecked();
+		await page.keyboard.press('Enter');
+		await preview.waitForSent('message', (p) => p.body?.text?.startsWith('@margaret hi'));
+		expect((await preview.sent('room_join')).map((p) => p.user_id)).toEqual(['grace']);
+		await page.keyboard.type('@margaret again');
+		await expect(tick).toBeChecked();
+		await page.keyboard.press('ControlOrMeta+a');
+		await page.keyboard.press('Backspace');
+	});
+
+	await test.step('a role someone here holds mentions them; the line names the holders of one no one here holds, and Send adds them', async () => {
 		await page.keyboard.type('@&admin hi ');
+		await expect(hint).toHaveCount(0);
 		await page.keyboard.press('Enter');
 		const toAdmins = await preview.waitForSent('message', (p) => p.body?.text?.startsWith('@&admin hi'));
 		expect(toAdmins.body.mentions).toEqual(['ada']);
-		await expect(prompt).toHaveCount(0);
 		await page.keyboard.type('@&moderator please review ');
+		await expect(hint).toContainText('Margaret Hamilton (moderator)');
+		await expect(tick).toBeChecked();
 		await page.keyboard.press('Enter');
-		await expect(prompt).toContainText('Add Margaret Hamilton to engineering?');
-		await prompt.getByRole('button', { name: 'Add and send' }).click();
 		const toModerators = await preview.waitForSent('message', (p) => p.body?.text?.startsWith('@&moderator please review'));
 		expect(toModerators.body.mentions).toEqual(['margaret']);
 		await expect(member('margaret')).toBeVisible();
+		await expect(hint).toHaveCount(0);
 	});
 
+});
+
+test.describe('a draft naming someone who isn’t here, and a role no one here holds', () => {
+	const setUp = async (preview: Preview, page: Page) => {
+		await preview.open();
+		await preview.openRoom('engineering');
+		await preview.composer().click();
+		await page.keyboard.type('@gr');
+		await page.keyboard.press('Tab');
+		await page.keyboard.type('and @&moderator please review ');
+		const hint = page.getByTestId('mention-outside-hint');
+		await expect(hint).toContainText('Grace Hopper and Margaret Hamilton (moderator)');
+		return { hint, tick: hint.getByTestId('mention-outside-add') };
+	};
+
+	test('ticked, Send adds them all, then sends, mentioning the role’s holders', async ({ preview, page }) => {
+		const { tick } = await setUp(preview, page);
+		await expect(tick).toBeChecked();
+		await page.keyboard.press('Enter');
+		const sent = await preview.waitForSent('message', (p) => p.body?.text?.includes('please review'));
+		expect((await preview.sent('room_join')).map((p) => p.user_id)).toEqual(['grace', 'margaret']);
+		expect([...sent.body.mentions].sort()).toEqual(['grace', 'margaret']);
+	});
+
+	test('a role held only outside is a chip, offered faded; chips that won’t reach anyone grey while unticked', async ({ preview, page }) => {
+		await preview.open();
+		await preview.openRoom('engineering');
+		await preview.composer().click();
+		await page.keyboard.type('@&mo');
+		const option = page.getByTestId('mention-picker').getByRole('option', { name: /moderator/ });
+		await expect(option).toHaveClass(/ap-mpick-out/);
+		await expect(option).toContainText('Not in room');
+		await page.keyboard.press('Tab');
+		const role = preview.composer().locator('.ap-mention[data-role="moderator"]');
+		await expect(role).toBeVisible();
+		await page.keyboard.type('and ');
+		await page.keyboard.type('@gr');
+		await page.keyboard.press('Tab');
+		const grace = preview.composer().locator('.ap-mention[data-user-id="grace"]');
+		const hint = page.getByTestId('mention-outside-hint');
+		await expect(hint).toContainText('Margaret Hamilton (moderator) and Grace Hopper');
+		// Ticked, they'll be added, so the mentions reach them.
+		await expect(role).not.toHaveClass(/ap-mention-quiet/);
+		await expect(grace).not.toHaveClass(/ap-mention-quiet/);
+		await hint.getByTestId('mention-outside-add').uncheck();
+		await expect(role).toHaveClass(/ap-mention-quiet/);
+		await expect(grace).toHaveClass(/ap-mention-quiet/);
+		await hint.getByTestId('mention-outside-add').check();
+		await expect(role).not.toHaveClass(/ap-mention-quiet/);
+		await preview.composer().click();
+		await page.keyboard.press('End');
+		await page.keyboard.type(' hi');
+		await page.keyboard.press('Enter');
+		const sent = await preview.waitForSent('message', (p) => p.body?.text?.includes('hi'));
+		expect(sent.body.text).toContain('@&moderator');
+		expect([...sent.body.mentions].sort()).toEqual(['grace', 'margaret']);
+		expect((await preview.sent('room_join')).map((p) => p.user_id).sort()).toEqual(['grace', 'margaret']);
+	});
+
+	test('a role written in code names no one: the line drops it as it is typed, and Send adds no one for it', async ({ preview, page }) => {
+		await preview.open();
+		await preview.openRoom('engineering');
+		await preview.composer().click();
+		const hint = page.getByTestId('mention-outside-hint');
+		await page.keyboard.type('type `@&moderator` to reach them');
+		await expect(page.getByTestId('message-list')).toBeVisible();
+		await expect(hint).toHaveCount(0);
+		await page.keyboard.press('Enter');
+		await preview.waitForSent('message', (p) => p.body?.text?.startsWith('type `@&moderator`'));
+		expect(await preview.sent('room_join')).toEqual([]);
+	});
+
+	test('unticked, it goes as it is, adding no one', async ({ preview, page }) => {
+		const { tick } = await setUp(preview, page);
+		await tick.uncheck();
+		await preview.composer().click();
+		await page.keyboard.press('Enter');
+		await preview.waitForSent('message', (p) => p.body?.text?.includes('please review'));
+		expect(await preview.sent('room_join')).toEqual([]);
+	});
 });
 
 test.describe('with a slow server', () => {
@@ -110,22 +186,21 @@ test.describe('with a slow server', () => {
 	// Released, it's answered at once, so what follows comes after it, as the test means.
 	test.use({ knobs: { holdJoins: true } });
 
-	test('while Add and send adds them, Send waits in that room only, and a draft changed or left meanwhile isn’t sent', async ({ preview, page }) => {
+	test('while Send adds who it mentions, Send waits in that room only, and a draft changed or left meanwhile isn’t sent', async ({ preview, page }) => {
 		await preview.open();
 		await preview.openRoom('engineering');
-		const prompt = page.getByTestId('mention-add-prompt');
+		const hint = page.getByTestId('mention-outside-hint');
 		await preview.composer().click();
 		await page.keyboard.type('@grace hi');
 		await page.keyboard.press('Enter');
-		await prompt.getByRole('button', { name: 'Add and send' }).click();
-		await expect(prompt.getByRole('button', { name: 'Adding…' })).toBeDisabled();
+		await expect(hint).toContainText('Adding…');
+		await expect(hint.getByTestId('mention-outside-add')).toBeDisabled();
 		// Send again while adding: nothing more goes, and no second ask.
 		await preview.composer().click();
 		await page.keyboard.press('Enter');
 		await page.keyboard.type(', never mind');
 		await preview.releaseJoins();
 		await expect(page.locator('li.ap-member[data-user="grace"]')).toBeVisible();
-		await expect(prompt).toHaveCount(0);
 		expect(await preview.sent('room_join')).toHaveLength(1);
 		// The draft changed while adding: it stays, unsent, for Send.
 		await expect(preview.composer()).toContainText('hi, never mind');
@@ -136,7 +211,7 @@ test.describe('with a slow server', () => {
 		await page.keyboard.press('Backspace');
 		await page.keyboard.type('@margaret hey');
 		await page.keyboard.press('Enter');
-		await prompt.getByRole('button', { name: 'Add and send' }).click();
+		await expect(hint).toContainText('Adding…');
 		await preview.openRoom('general');
 		await preview.composer().click();
 		await page.keyboard.type('hello');
@@ -147,7 +222,6 @@ test.describe('with a slow server', () => {
 		await preview.openRoom('engineering');
 		await expect(page.locator('li.ap-member[data-user="margaret"]')).toBeVisible();
 		await expect(preview.composer()).toContainText('hey');
-		await expect(prompt).toHaveCount(0);
 		expect((await preview.sent('message')).map((p) => p.body?.text)).toEqual(['hello']);
 	});
 });

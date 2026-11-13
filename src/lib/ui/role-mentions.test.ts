@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { roomRoles, searchRoles } from './role-mentions';
+import { outsideRoles, roomRoles, searchRoles } from './role-mentions';
 
 const people = [
 	{ id: 'ada', name: 'Ada', roles: ['mod', 'admin'] },
@@ -28,5 +28,14 @@ describe('searchRoles', () => {
 		expect(searchRoles(roles, 'mo ')).toEqual([]);
 		expect(searchRoles(roles, '&mo ')).toEqual([]);
 		expect(searchRoles(roles, 'mod ').map((role) => role.role)).toEqual(['mod']);
+	});
+
+	it('lists the roles held only by people who aren’t here, marked outside, but those someone here holds', () => {
+		const outsiders = [
+			{ id: 'margaret', roles: ['moderator', 'admin'], outside: true },
+			{ id: 'wil', roles: ['moderator'], outside: true }
+		];
+		expect(outsideRoles(outsiders, ['admin'])).toEqual([{ role: 'moderator', members: ['margaret', 'wil'], outside: true }]);
+		expect(outsideRoles([], ['admin'])).toEqual([]);
 	});
 });

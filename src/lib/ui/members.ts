@@ -1,5 +1,5 @@
 import type { ChatClient } from '$lib/protocol/client';
-import { isMentionableRole } from '$lib/protocol/markdown';
+import { isMentionableRole, type MentionPerson } from '$lib/protocol/markdown';
 import type { Identity } from '$lib/protocol/types';
 
 /**
@@ -35,6 +35,25 @@ export function absentMentions(mentions: readonly string[], room: { members?: re
 	if (!members || (room.memberCount !== undefined && room.memberCount > members.length)) return [];
 	const memberIds = new Set(members.map((member) => member.user_id));
 	return [...new Set(mentions)].filter((userId) => !memberIds.has(userId) && !skip(userId));
+}
+
+const NO_ONE: MentionPerson[] = [];
+
+/**
+ * Those of `known` (everyone the session knows) a composer may mention though they aren't among `members`, marked
+ * `outside`, to follow who is: none while the members aren't all known (`memberCount`), as `absentMentions`, and never
+ * those `skip` names (you, the system identities, guests).
+ */
+export function outsidersOf(known: readonly Identity[], members: readonly Identity[] | undefined, memberCount: number | undefined, skip: (user: Identity) => boolean): MentionPerson[] {
+	if (!members || (memberCount !== undefined && memberCount > members.length)) return NO_ONE;
+	const here = new Set(members.map((member) => member.user_id));
+	const outside: MentionPerson[] = [];
+	for (const user of known) {
+		if (here.has(user.user_id) || skip(user)) continue;
+		const roles = Array.isArray(user.roles) ? user.roles.filter((role) => typeof role === 'string') : [];
+		outside.push({ id: user.user_id, ...(user.name ? { name: user.name } : {}), ...(user.avatar ? { avatar: user.avatar } : {}), ...(roles.length ? { roles } : {}), outside: true });
+	}
+	return outside.length ? outside : NO_ONE;
 }
 
 /**

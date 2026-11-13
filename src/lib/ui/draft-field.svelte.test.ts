@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import { flushSync } from 'svelte';
 import { describe, expect, it, vi } from 'vitest';
+import type { MentionPerson } from '$lib/protocol/markdown';
 import { DraftField } from './draft-field.svelte';
 
 /** A field for `@` mentions of Alan, whose picker shows only while `shown` says so (its code loads on demand). */
-function field(shown: { value: boolean }, options: { newlineOnEnter?: boolean } = {}) {
+function field(shown: { value: boolean }, options: { newlineOnEnter?: boolean; outsiders?: MentionPerson[] } = {}) {
 	let value = $state('');
 	let mentions = $state<string[]>([]);
 	const submit = vi.fn();
@@ -18,6 +19,7 @@ function field(shown: { value: boolean }, options: { newlineOnEnter?: boolean } 
 			get mentions() { return mentions; },
 			set mentions(ids) { mentions = ids; },
 			people: [{ id: 'alan', name: 'Alan Turing' }],
+			outsiders: options.outsiders,
 			rooms: [],
 			disabled: false,
 			submit,
@@ -269,5 +271,15 @@ describe('DraftField', () => {
 		expect(f.value()).toBe('**bold** me');
 		expect(f.selected()).toEqual([2, 6]);
 		f.done();
+	});
+
+	it('offers people who aren’t here after those who are, and only once something is typed', () => {
+		const outsiders: MentionPerson[] = [{ id: 'ada', name: 'Ada Outside', outside: true }, { id: 'grace', name: 'Grace', outside: true }];
+		const { draft, type, done } = field({ value: true }, { outsiders });
+		type('@');
+		expect(draft.matches.map((match) => ('id' in match ? match.id : match.role))).toEqual(['alan']);
+		type('a');
+		expect(draft.matches.map((match) => ('id' in match ? match.id : match.role))).toEqual(['alan', 'ada']);
+		done();
 	});
 });

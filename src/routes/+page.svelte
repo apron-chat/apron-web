@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { docViewerHost, editorsNudge, installNudge, mentionAddNudge, messageEditor, newPrivateDialog, newThreadDialog, profileCardHost, reactorsPopover, roomEditor, searchDialog, selectionBar, serverPaneHost, shortcutsDialog, signInLinkDialog } from '$lib/components/lazy';
+	import { docViewerHost, editorsNudge, installNudge, mentionAddLine, messageEditor, newPrivateDialog, newThreadDialog, profileCardHost, reactorsPopover, roomEditor, searchDialog, selectionBar, serverPaneHost, shortcutsDialog, signInLinkDialog } from '$lib/components/lazy';
 	import { onMount, tick, untrack } from 'svelte';
 	import { fromAction } from 'svelte/attachments';
 	import { pushState, replaceState } from '$app/navigation';
@@ -12,7 +12,7 @@
 	import { destinationUrl, elsewhereUrl, readDestination, type Destination } from '$lib/ui/address';
 	import { readApronLink, writeApronLink, type ApronLink } from '$lib/ui/apron-link';
 	import type { Embed, MessageRecord } from '$lib/protocol/types';
-	import { isJsonObject, isSystemId } from '$lib/protocol/types';
+	import { isJsonObject, isSystemId, type Identity } from '$lib/protocol/types';
 	import { hasTaskItems, markdownRoles } from '$lib/protocol/markdown';
 	import Composer from '$lib/components/Composer.svelte';
 	import ReadOnlyBar from '$lib/components/ReadOnlyBar.svelte';
@@ -51,7 +51,7 @@
 	import PrivateIntro from '$lib/design/components/PrivateIntro.svelte';
 	import AddedBanner from '$lib/design/components/AddedBanner.svelte';
 	import { ArrivalWatch, addRoomMembers, aloneIn, othersIn, reachesStart } from '$lib/ui/private-rooms';
-	import { absentMentions, addMembers, couldNotAdd, isGuest, unheldRoleHolders } from '$lib/ui/members';
+	import { absentMentions, addMembers, couldNotAdd, isGuest, unheldRoleHolders, outsidersOf } from '$lib/ui/members';
 	import { faceOf, roomFaces } from '$lib/ui/faces';
 	import { receiptsByMessage, steadyReceipts } from '$lib/ui/receipts';
 	import { attachmentLimits, composerAction } from '$lib/ui/commands';
@@ -316,15 +316,15 @@
 	/** The `user_id`s the composer's chips mention (§3.5), sent as `body.mentions`. */
 	let composerMentions = $state<string[]>([]);
 	/**
-	 * A message held back at Send because it mentions people who aren't in the room or thread it goes to: the ask to
-	 * add them first (MentionAddPrompt), until it's answered, put away, the draft changes, or the pane does. `text` and
-	 * `files` (the staged files' ids): the draft it asked about, which Add and send sends only if it is still that draft.
+	 * A message Send holds back while it adds whom it mentions who isn't in the room or thread (the line over the
+	 * composer, ticked): it goes once they're in. `text` and `files` (the staged files' ids): the draft as it was sent,
+	 * which goes only if it is still that draft.
 	 */
-	let mentionAsk = $state<{ roomId: string; userIds: string[]; busy: boolean; text: string; files: string } | undefined>();
+	let mentionAdding = $state<{ roomId: string; userIds: string[]; text: string; files: string } | undefined>();
 	/**
 	 * A message held back at Send because it mentions people and holds a checklist: the ask whether they may edit its
 	 * text (`ext:editors`, EditorsPrompt), until it's answered, put away, the draft changes, or the pane does. `added`:
-	 * whom the ask to add who it mentions added, which it goes on to mention; `text` and `files` as `mentionAsk`'s.
+	 * whom Send added first, which it goes on to mention; `text` and `files` as `mentionAdding`'s.
 	 */
 	let editorsAsk = $state<{ roomId: string; userIds: string[]; added: string[]; text: string; files: string } | undefined>();
 	let connectOpen = $state(false);
@@ -636,6 +636,77 @@
 	/** Files dropped on the conversation pane's `<main>`. */
 	const dropFiles = fromAction(fileDrop, () => ({ enabled: canAttach, onfiles: stageFiles, onactive: (active: boolean) => (dropping = active) }));
 	let people = $derived(peopleIn([...(activeThread ? timelineMessages(activeRoom) : []), ...messages], session.you, paneRoom?.members));
+	/** Who isn't someone to mention or add: you, the system identities, guests. */
+	const notMentionable = (user: Identity): boolean => directory.isMe(user.user_id) || isSystemId(user.user_id) || isGuest(user);
+	/** No one, the same each time, so what follows from it doesn't rerun. */
+	const NO_ONE_OUTSIDE: { id: string; role?: string }[] = [];
+	const NO_NAMES: string[] = [];
+	const NO_ROLES: readonly string[] = [];
+	const NO_QUIET: ReadonlySet<string> = new Set();
+	/** Everyone else the session knows, whom the composer's picker offers after those in the pane, faded: read only once something is typed after an `@`. */
+	let outsiders = $derived(outsidersOf(directory.known(), paneRoom?.members, paneRoom?.memberCount, notMentionable));
+	/**
+	 * The hint's checkbox, as changed for the pane's draft (its room's ID): whether Send adds those it names first. Until
+	 * changed, ticked, but in a private room, where adding someone may show them what was said before.
+	 */
+	let addMentionedChoice = $state<{ roomId: string; add: boolean } | undefined>();
+	let addMentioned = $derived(addMentionedChoice && addMentionedChoice.roomId === paneRoom?.id ? addMentionedChoice.add : !(paneRoom?.private || activeRoom?.private));
+	/** You may add whom a draft mentions: you may add members here, and the server takes member changes. */
+	const mayAddMentioned = (): boolean => canAddMembers && !session.snapshot.memberChangesUnsupported;
+	/**
+	 * The roles the draft names outside code and links (`markdownRoles`), which renders it: only as the roles it names as
+	 * written change (`drafts.roles`, a quick scan as it is typed), not on each key. Wrapping a role already written in
+	 * code shows on the line once the roles named next change; Send checks again (`addMentionedFirst`).
+	 */
+	let draftRoles = $derived.by((): readonly string[] => {
+		const written = drafts.roles;
+		if (!written.length) return NO_ROLES;
+		const rendered = untrack(() => {
+			const action = composerAction(drafts.text, { command: session.capabilities.command, rooms: false });
+			return markdownRoles('text' in action ? action.text : drafts.text);
+		});
+		const roles = written.filter((role) => rendered.includes(role));
+		return roles.length ? roles : NO_ROLES;
+	});
+	/**
+	 * Those the draft mentions who aren't in the pane, each with the role that names them if a role does: its chips'
+	 * people, and the holders of a role (`@&role`) no one here holds, which would mention no one unless they're added.
+	 * Only for a draft that goes as a message (a command says itself what it does with whom it names). Read only while
+	 * the draft mentions someone or might name a role.
+	 */
+	let outsideMentioned = $derived.by((): { id: string; role?: string }[] => {
+		if (!composerMentions.length && !draftRoles.length) return NO_ONE_OUTSIDE;
+		const room = paneRoom;
+		if (!room) return NO_ONE_OUTSIDE;
+		// Only a draft that starts with `/` may be a command: only then is its text read here, on each key.
+		if (drafts.slashed && composerAction(drafts.text, { command: session.capabilities.command, rooms: false }).kind !== 'message') return NO_ONE_OUTSIDE;
+		const skip = (userId: string) => notMentionable(directory.person({ user_id: userId }) ?? { user_id: userId });
+		const roleOf = new Map<string, string>();
+		if (draftRoles.length) {
+			const memberIds = new Set((room.members ?? []).map((member) => member.user_id));
+			const known = directory.known();
+			for (const role of draftRoles) {
+				for (const userId of unheldRoleHolders([role], known, memberIds, (id) => directory.isMe(id))) if (!roleOf.has(userId)) roleOf.set(userId, role);
+			}
+		}
+		const ids = absentMentions([...composerMentions, ...roleOf.keys()], room, skip);
+		if (!ids.length) return NO_ONE_OUTSIDE;
+		return ids.map((id) => (roleOf.has(id) ? { id, role: roleOf.get(id) } : { id }));
+	});
+	/** Those of them the line names, to add: while you may. */
+	let mentionedOutside = $derived(outsideMentioned !== NO_ONE_OUTSIDE && mayAddMentioned() ? outsideMentioned : NO_ONE_OUTSIDE);
+	/**
+	 * The mentions that won't reach anyone as the draft would go, whose chips are greyed: those of whom isn't here, by
+	 * `user_id` and by `&role`, unless Send is to add them.
+	 */
+	let quietMentions = $derived.by((): ReadonlySet<string> => {
+		if (outsideMentioned === NO_ONE_OUTSIDE || (mentionedOutside !== NO_ONE_OUTSIDE && addMentioned)) return NO_QUIET;
+		return new Set(outsideMentioned.flatMap(({ id, role }) => (role ? [id, `&${role}`] : [id])));
+	});
+	/** Send adding whom the line names, in the open pane. */
+	let paneMentionAdding = $derived(mentionAdding && mentionAdding.roomId === paneRoom?.id ? mentionAdding : undefined);
+	/** The line's names: "Margaret Hamilton (moderator)" for one a role names. */
+	let lineNames = $derived(paneMentionAdding ? paneMentionAdding.userIds.map((id) => directory.name({ user_id: id })) : mentionedOutside === NO_ONE_OUTSIDE ? NO_NAMES : mentionedOutside.map(({ id, role }) => (role ? `${directory.name({ user_id: id })} (${role})` : directory.name({ user_id: id }))));
 	let roomSuggestions = $derived.by(() => {
 		const rooms = new Map<string, { id: string; title: string }>();
 		for (const room of [...(session.directory ?? []), ...Object.values(session.threadDirectory).flat(), ...session.rooms]) {
@@ -1931,7 +2002,6 @@
 		selection.leave();
 		if (typingIn && typingIn.room !== (thread ?? roomId)) stopTyping();
 		composer?.reset();
-		if (!mentionAsk?.busy) mentionAsk = undefined;
 		editorsAsk = undefined;
 		mentions.clearUnseen();
 		mentions.clearRoom(roomId);
@@ -2046,8 +2116,9 @@
 
 	function composerInput(): void {
 		// The draft changed under the ask: Send asks again about what it mentions then.
-		if (mentionAsk && !mentionAsk.busy) mentionAsk = undefined;
 		editorsAsk = undefined;
+		// A draft that mentions no one starts the hint's checkbox afresh.
+		if (!composerMentions.length && addMentionedChoice) addMentionedChoice = undefined;
 		if (!client || !paneRoom) return;
 		drafts.saveText();
 		// A live message shows itself as it is typed: no typing indicator besides.
@@ -2073,58 +2144,57 @@
 	}
 
 	/**
-	 * Holds the draft back when it mentions people who aren't in the open room or thread, and you may add them: asks
-	 * whether to first (`mentionAsk`). Those it mentions are the people its chips name; a role (`@&role`) mentions
-	 * those here who hold it, so it asks about no one, unless no one else here holds it: then about everyone the
-	 * session knows with it. Never for a command, which says itself what it does with whom it names: only a draft that
-	 * goes as a message. True when it asked, and the draft waits.
+	 * Adds whom the draft mentions who isn't in the open room or thread before it goes, as the line over the composer
+	 * says (its checkbox): its chips' people, and a role's holders when no one here holds it. Never for a command, which
+	 * says itself what it does with whom it names. True when it is adding, and the draft waits.
 	 */
-	function askToAddMentioned(room: RoomSnapshot, text: string): boolean {
-		if (!canAddMembers || session.snapshot.memberChangesUnsupported) return false;
+	function addMentionedFirst(room: RoomSnapshot, text: string): boolean {
+		if (!addMentioned) return false;
+		// Whom the line names, but a role's holders only if the draft still names the role outside code now: the line
+		// checks that only as the roles named change.
 		const action = composerAction(text, { command: session.capabilities.command, rooms: false });
 		if (action.kind !== 'message') return false;
-		const skip = (userId: string) => directory.isMe(userId) || isSystemId(userId) || isGuest(directory.person({ user_id: userId }) ?? { user_id: userId });
-		const memberIds = new Set((room.members ?? []).map((member) => member.user_id));
-		const withRoles = unheldRoleHolders(markdownRoles(action.text), Object.values(session.snapshot.users), memberIds, (userId) => directory.isMe(userId));
-		const userIds = absentMentions([...composerMentions, ...withRoles], room, skip);
+		const roles = mentionedOutside.some(({ role }) => role) ? new Set(markdownRoles(action.text)) : undefined;
+		const userIds = mentionedOutside.filter(({ id, role }) => !role || roles?.has(role) || composerMentions.includes(id)).map(({ id }) => id);
 		if (!userIds.length) return false;
-		mentionAsk = { roomId: room.id, userIds, busy: false, text, files: stagedIds() };
+		// Adding elsewhere: one at a time, so this draft waits for it rather than take its place.
+		if (mentionAdding && mentionAdding.roomId !== room.id) {
+			feedback.error('Still adding people elsewhere: send again in a moment');
+			return true;
+		}
+		mentionAdding = { roomId: room.id, userIds, text, files: stagedIds() };
+		void addMentionedAndSend();
 		return true;
 	}
 
-	/** The draft's staged files, as `mentionAsk.files` keeps them. */
+	/** The draft's staged files, as `mentionAdding.files` keeps them. */
 	function stagedIds(): string {
 		return drafts.files.map((file) => file.id).join(' ');
 	}
 
 	/**
-	 * The ask's Add and send: adds them (`room_join`, §4.2.2), then sends the draft, saying who the server wouldn't add.
-	 * Send waits meanwhile in that pane (`holdSend`). The draft goes only if, once they're in, its pane is open and it
-	 * is still the draft asked about; else it waits there to be sent, and asked about, again.
+	 * Adds them (`room_join`, §4.2.2), then sends the draft, saying who the server wouldn't add. Send waits meanwhile in
+	 * that pane (`holdSend`). The draft goes only if, once they're in, its pane is open and it is still the draft that
+	 * was sent; else it waits there to be sent again.
 	 */
 	async function addMentionedAndSend(): Promise<void> {
-		const ask = mentionAsk;
-		if (!client || !ask || ask.busy) return;
-		mentionAsk = { ...ask, busy: true };
-		const refused = await addMembers(client, ask.roomId, ask.userIds);
-		if (mentionAsk?.roomId === ask.roomId) mentionAsk = undefined;
+		const adding = mentionAdding;
+		if (!client || !adding) return;
+		const refused = await addMembers(client, adding.roomId, adding.userIds);
+		if (mentionAdding === adding) mentionAdding = undefined;
 		if (refused.length) feedback.error(couldNotAdd(refused, (userId) => directory.name({ user_id: userId })));
-		if (paneRoom?.id !== ask.roomId) return;
+		if (paneRoom?.id !== adding.roomId) return;
 		composer?.focus();
-		if (drafts.text !== ask.text || stagedIds() !== ask.files) return;
+		if (drafts.text !== adding.text || stagedIds() !== adding.files) return;
 		// It goes, whoever was added, and mentions them, so a role no one here held mentions its holders now that
 		// they're here.
-		sendMessage(true, ask.userIds.filter((userId) => !refused.some((refusal) => refusal.userId === userId)));
+		sendMessage(true, adding.userIds.filter((userId) => !refused.some((refusal) => refusal.userId === userId)));
 	}
 
-	/** Escape: an ask that isn't adding yet goes away, the draft unsent. True when there was one. */
+	/** Escape: an ask whether they may edit the message goes away, the draft unsent. True when there was one. */
 	function dismissMentionAsk(): boolean {
-		if (editorsAsk) {
-			editorsAsk = undefined;
-			return true;
-		}
-		if (!mentionAsk || mentionAsk.busy) return false;
-		mentionAsk = undefined;
+		if (!editorsAsk) return false;
+		editorsAsk = undefined;
 		return true;
 	}
 
@@ -2160,16 +2230,15 @@
 	 * command's failure shows as a local notice in the pane, where its replies
 	 * land too.
 	 *
-	 * `asked`: the ask to add who it mentions was answered (MentionAddPrompt), so it goes as it is; `added`, whom that
-	 * added, which it mentions besides its chips, such as the holders of a role no one here held when it was written.
+	 * `asked`: whom it mentions who wasn't here was added first (`addMentionedFirst`), or needn't be, so it goes as it
+	 * is; `added`, whom that added, which it mentions besides its chips, such as the holders of a role no one here held
+	 * when it was written.
 	 * `editors`: the ask whether they may edit it was answered (EditorsPrompt), and how.
 	 */
 	function sendMessage(asked = false, added: readonly string[] = [], editors?: boolean): void {
 		if (!client || !paneRoom || !canCompose) return;
 		// Adding who it mentions: it goes once they're in (`addMentionedAndSend`).
-		if (mentionAsk?.busy && mentionAsk.roomId === paneRoom.id) return;
-		// An ask adding elsewhere carries on there.
-		if (!mentionAsk?.busy) mentionAsk = undefined;
+		if (mentionAdding && mentionAdding.roomId === paneRoom.id) return;
 		editorsAsk = undefined;
 		if (composingLive) {
 			liveComposer?.send();
@@ -2192,14 +2261,17 @@
 			return;
 		}
 		if (drafts.files.length) {
-			if (!asked && askToAddMentioned(paneRoom, drafts.text)) return;
+			if (!asked && addMentionedFirst(paneRoom, drafts.text)) return;
 			if (editors === undefined && askEditors(paneRoom, drafts.text, added)) return;
+			addMentionedChoice = undefined;
 			void sendFiles(added, editors);
 			return;
 		}
 		if (!drafts.text.trim()) return;
-		if (!asked && askToAddMentioned(paneRoom, drafts.text)) return;
+		if (!asked && addMentionedFirst(paneRoom, drafts.text)) return;
 		if (editors === undefined && askEditors(paneRoom, drafts.text, added)) return;
+		// It goes: the next draft's line starts from the default.
+		addMentionedChoice = undefined;
 		const chat = client;
 		const draft = drafts.text;
 		const roomId = paneRoom.id;
@@ -2332,7 +2404,6 @@
 		}
 		drafts.stage(staged);
 		// The draft changed under the ask: Send asks again about what it mentions then.
-		if (!mentionAsk?.busy) mentionAsk = undefined;
 		editorsAsk = undefined;
 		composer?.focus();
 	}
@@ -3187,7 +3258,6 @@
 		if (!paneRoom || !canSelect(event)) return;
 		editingId = undefined;
 		composer?.reset();
-		if (!mentionAsk?.busy) mentionAsk = undefined;
 		editorsAsk = undefined;
 		selection.begin(paneRoom.id, event.message_id);
 	}
@@ -3606,18 +3676,20 @@
 				<ReadOnlyBar guest={!session.passkeySession} {passkeyUnavailable} archive={archiveNote} onsignin={() => openConnect({ signIn: true })} />
 			{:else}
 				<!--
-					The draft Send held back, for mentioning people who aren't here: add them first, or send it as it is. Here,
-					not beside the timeline's floating notices, which a scroll redraws (perf budget: scroll-timeline). A live
-					region that stays, so the ask is read out as it arrives while the focus stays in the composer.
+					The line saying whom the draft mentions who isn't here, and whether Send adds them first; and the ask whether
+					those a message mentions may edit its checklist. No whitespace between the blocks, so that with neither it
+					stays :empty, without padding. Here, not beside the timeline's floating notices, which a scroll redraws
+					(perf budget: scroll-timeline). A live region that stays, so each is read out as it arrives while the focus
+					stays in the composer.
 				-->
 				<div class="ap-shell-ask" aria-live="polite">
-					{#if mentionAsk && mentionAsk.roomId === paneRoom?.id && mentionAddNudge.component}
-						{@const MentionAddPrompt = mentionAddNudge.component}
-						<MentionAddPrompt
-							names={mentionAsk.userIds.map((userId) => directory.name({ user_id: userId }))} place={activeThread ? threadTitle(activeThread) : activeRoom.title} thread={Boolean(activeThread)}
-							busy={mentionAsk.busy} onadd={() => void addMentionedAndSend()} onsend={() => { sendMessage(true); composer?.focus(); }} oncancel={() => { dismissMentionAsk(); composer?.focus(); }}
+					{#if lineNames.length && !(editorsAsk && editorsAsk.roomId === paneRoom?.id) && mentionAddLine.component}
+						{@const MentionAddLine = mentionAddLine.component}
+						<MentionAddLine
+							names={lineNames} thread={Boolean(activeThread)}
+							busy={Boolean(paneMentionAdding)} add={addMentioned} onchange={(add) => { if (paneRoom) addMentionedChoice = { roomId: paneRoom.id, add }; }}
 						/>
-					{:else if editorsAsk && editorsAsk.roomId === paneRoom?.id && editorsNudge.component}
+					{/if}{#if editorsAsk && editorsAsk.roomId === paneRoom?.id && editorsNudge.component}
 						{@const EditorsPrompt = editorsNudge.component}
 						<EditorsPrompt
 							names={editorsAsk.userIds.map((userId) => directory.name({ user_id: userId }))}
@@ -3632,15 +3704,18 @@
 					bind:dismissed={drafts.dismissed}
 					placeholder={activeThread ? `Reply in ${threadTitle(activeThread)}` : `Message ${activeRoom.title}`}
 					disabled={!paneSteady || session.readOnly}
-					holdSend={!canCompose || (mentionAsk?.busy === true && mentionAsk.roomId === paneRoom?.id)}
+					holdSend={!canCompose || Boolean(paneMentionAdding)}
 					canUpload={session.capabilities['embed:upload'] && !composingLive}
 					live={composingLive}
 					uploadLimits={serverMedia(session.server).upload}
 					canCommand={session.capabilities.command}
 					{people}
+					{outsiders}
+					quiet={quietMentions}
+					outsideLabel={activeThread ? 'Not in thread' : 'Not in room'}
 					rooms={roomSuggestions}
 					reply={drafts.reply ? replyPreview(drafts.reply) : undefined}
-					oninput={composerInput} onsend={() => sendMessage()} files={drafts.files} onfiles={stageFiles} onunstage={(id) => { drafts.unstage(id); if (!mentionAsk?.busy) mentionAsk = undefined; editorsAsk = undefined; }} onrename={(id, title) => drafts.rename(id, title)} oncancelreply={cancelReply} onescape={dismissMentionAsk} onup={focusNewestMessage}
+					oninput={composerInput} onsend={() => sendMessage()} files={drafts.files} onfiles={stageFiles} onunstage={(id) => { drafts.unstage(id); editorsAsk = undefined; }} onrename={(id, title) => drafts.rename(id, title)} oncancelreply={cancelReply} onescape={dismissMentionAsk} onup={focusNewestMessage}
 					onmention={refreshMembers}
 					waitUntil={composerWait}
 				/>
