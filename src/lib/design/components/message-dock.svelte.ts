@@ -43,6 +43,7 @@ class MessageDock {
 		// Mounted now, empty, not when a row first asks: Svelte makes even a root a child of the effect running as it's
 		// mounted, so one mounted from a row (its slot, or a focus an effect moved) would go with that row, frozen.
 		mount(DockedActions, { target: this.host, props: { dock: this } });
+		if (typeof IntersectionObserver !== 'undefined') new IntersectionObserver(this.#clipped, { threshold: 1 }).observe(this.host);
 	}
 
 	/**
@@ -70,6 +71,35 @@ class MessageDock {
 		held?.lost();
 		return true;
 	}
+
+	/**
+	 * Where its toolbar goes over the row that now holds it: just above the row, clear of its words, so a link on its
+	 * first line can still be clicked; over the row's top edge for touch's menu, whose long press is on the row already.
+	 * Nothing is measured here, as the pointer arrives with the page's styles not yet worked out: the observer moves it
+	 * below the row where what scrolls it cuts it off above (`#clipped`).
+	 */
+	place(touch: boolean): void {
+		this.host.classList.toggle('ap-msg-actions-above', !touch);
+		this.host.classList.remove('ap-msg-actions-below');
+	}
+
+	/**
+	 * The toolbar cut off by what scrolls its row: at the top, it goes below the row; cut off below the row too (a row
+	 * as tall as the view), over the row's top edge, where it was before. Its rects come with the entry, laid out
+	 * already, so this forces no layout; it runs only as the toolbar comes into or out of full view.
+	 */
+	#clipped = (entries: IntersectionObserverEntry[]): void => {
+		const entry = entries[entries.length - 1];
+		if (!entry || entry.intersectionRatio >= 1 || !this.host.isConnected) return;
+		const cut = entry.intersectionRect.top > entry.boundingClientRect.top;
+		const classes = this.host.classList;
+		if (classes.contains('ap-msg-actions-above') && cut) {
+			classes.remove('ap-msg-actions-above');
+			classes.add('ap-msg-actions-below');
+		} else if (classes.contains('ap-msg-actions-below') && !cut && entry.intersectionRect.height > 0) {
+			classes.remove('ap-msg-actions-below');
+		}
+	};
 
 	/** A row that holds it goes, or its slot does: the toolbar draws nothing, so a picker its React opened closes. */
 	release(claim: DockClaim): void {

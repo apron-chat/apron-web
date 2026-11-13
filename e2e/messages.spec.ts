@@ -156,6 +156,39 @@ for (const [device, wide] of [['desktop', true], ['tablet', false]] as const) {
 			await page.keyboard.press('Escape');
 			await expect(menu).not.toHaveAttribute('aria-orientation', 'vertical');
 		});
+
+		test('sits above the hovered message, clear of its words, or below it at the top of the timeline', async ({ preview, page }) => {
+			await preview.open();
+			await preview.composer().click();
+			await page.keyboard.type('A line long enough to run under the toolbar, were it over the row, with more words to be sure of it');
+			await page.keyboard.press('Enter');
+			const row = preview.message('A line long enough');
+			await row.hover({ position: { x: 60, y: 8 } });
+			const toolbar = row.getByRole('toolbar', { name: 'Message actions' });
+			await expect(toolbar).toBeVisible();
+			const words = row.locator('.ap-msg-text');
+			const [bar, body] = await Promise.all([toolbar.boundingBox(), words.boundingBox()]);
+			expect(bar!.y + bar!.height).toBeLessThanOrEqual(body!.y);
+			// Its words under the toolbar's end are the row's own, so a link there takes the click.
+			const hit = await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.closest('.ap-actions') === null, [bar!.x + bar!.width - 4, body!.y + 4]);
+			expect(hit).toBe(true);
+
+			// Scrolled to just under the top of the timeline, where one above would be cut off, it goes below the row.
+			const list = page.getByTestId('message-list');
+			const first = list.locator('article.ap-msg[data-message-id]:not(.ap-msg-system)').nth(1);
+			await first.evaluate((el) => {
+				const frame = el.closest('[data-testid="message-list"]')!;
+				frame.scrollTop += el.getBoundingClientRect().top - frame.getBoundingClientRect().top - 2;
+			});
+			await page.mouse.move(0, 0);
+			await first.hover({ position: { x: 60, y: 8 } });
+			const top = first.getByRole('toolbar', { name: 'Message actions' });
+			await expect(top).toBeVisible();
+			const [at, frame] = await Promise.all([first.boundingBox(), list.boundingBox()]);
+			expect(at!.y - frame!.y, 'the row at the top of the timeline').toBeLessThan(8);
+			// Moved once it's seen cut off (an IntersectionObserver, which measures nothing as the pointer arrives).
+			await expect.poll(async () => (await top.boundingBox())!.y).toBeGreaterThanOrEqual(at!.y + at!.height - 4);
+		});
 	});
 }
 

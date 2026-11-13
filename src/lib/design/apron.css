@@ -134,6 +134,11 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 /* The dock's slot (Message.svelte), which the toolbar moves into: no box of its own, so the toolbar sits as it would in the row. */
 .ap-msg-dock { display: contents; }
 .ap-msg-actions { position: absolute; top: -14px; inset-inline-end: var(--space-2); z-index: var(--z-float); visibility: hidden; }
+/* The pointer's and the keyboard's toolbar sits just above the row, clear of its words (a link on its first line stays
+   clickable), or just below it at the top of the view; the dock picks (`place`). Top-anchored either way, so ⋯'s menu
+   still opens downward. */
+.ap-msg-actions-above { top: calc(var(--space-1) - var(--control-md) - 8px); }
+.ap-msg-actions-below { top: calc(100% - var(--space-1)); }
 /* On a touch screen a long press opens a message's menu (with Copy text), so its row takes no text selection or callout,
    which would fight it; a link, media and the editor keep the browser's own. */
 @media (hover: none) and (pointer: coarse) {
@@ -148,7 +153,7 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-msg:focus-visible { outline: none; }
 .ap-msg:not(.ap-msg-mention, .ap-msg-highlighted, .ap-msg-selected):focus-visible { background: var(--hover-soft); }
 .ap-msg:focus-visible::before { content: ''; position: absolute; inset-inline-start: var(--bar-at, 0); top: var(--bar-inset, var(--space-1)); bottom: var(--bar-inset, var(--space-1)); width: 3px; border-radius: var(--radius-full); background: var(--ink-muted); pointer-events: none; }
-.ap-msg:focus { scroll-margin-top: var(--space-8); }
+.ap-msg:focus { scroll-margin-top: calc(var(--space-8) + var(--space-2)); }
 /* While the keyboard is on a message or in its toolbar, which no tooltip reaches, each icon shows its words beside it,
    the letter of its key (`data-key`: Reply's R, Edit's E, the first of each) boxed. Not on touch, whose bar stays icons. */
 :is(.ap-msg:focus-visible, .ap-msg-actions:has(.ap-actions-btn:focus-visible)) .ap-actions:not(.ap-actions-touch) .ap-actions-icon { gap: var(--space-1); padding: 0 var(--space-2); }
