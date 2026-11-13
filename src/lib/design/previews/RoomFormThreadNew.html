@@ -1,0 +1,12 @@
+<!-- @dsCard group="Input" height=360 subtitle="Starting a thread from its room: only a title, with the description behind Add description (here the subtle icon at the end of the title; descriptionReveal also takes button, link or none), so it isn't taken for the first message." -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>RoomForm — new thread</title></head>
+<body>
+<div id="root"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  A.render(A.RoomForm, root, { open: true, kind: 'thread', mode: 'create', subtitle: 'In #ops', descriptionReveal: 'icon' });
+</script>
+</body>
+</html>

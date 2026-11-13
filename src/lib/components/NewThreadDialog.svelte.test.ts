@@ -11,7 +11,7 @@ function field<T extends HTMLElement>(selector: string): T {
 }
 
 describe('NewThreadDialog', () => {
-	type Props = { room?: { id: string; title: string; private?: boolean }; title?: string; description?: string; moving?: number; people?: { id: string; name?: string }[] };
+	type Props = { room?: { id: string; title: string; private?: boolean }; title?: string; description?: string; moving?: number; people?: { id: string; name?: string }[]; descriptionReveal?: 'button' | 'link' | 'icon' | 'none' };
 	function render(props: Props = {}, oncreate = vi.fn((_thread: { title: string; description?: string }) => Promise.resolve())) {
 		const onclose = vi.fn();
 		dom.render(NewThreadDialog, { room: { id: 'ops', title: 'ops' }, enabled: true, oncreate, onclose, ...props });
@@ -66,4 +66,26 @@ describe('NewThreadDialog', () => {
 		expect(text()).toContain('Private, like its room');
 		expect(submitLabel()).toBe('Move 3 messages');
 	});
+
+	it('keeps an empty description behind "Add description", which shows the field and focuses it', async () => {
+		for (const descriptionReveal of ['button', 'link', 'icon'] as const) {
+			const { oncreate } = render({ title: 'Office move', descriptionReveal });
+			await tick(); // the title takes focus first
+			expect(document.querySelector('[data-testid="description-input"]')).toBeNull();
+			const add = [...document.querySelectorAll<HTMLButtonElement>('dialog button')].find((b) => b.textContent?.trim() === 'Add description' || b.getAttribute('aria-label') === 'Add description')!;
+			add.click();
+			await tick();
+			await tick();
+			const description = field('[data-testid="description-input"]');
+			expect(description).not.toBeNull();
+			expect(document.activeElement).toBe(description);
+			await dom.submit();
+			expect(oncreate).toHaveBeenCalledWith({ title: 'Office move' });
+			dom.unmount();
+		}
+		// `none` shows it from the start, as before.
+		render({ descriptionReveal: 'none' });
+		expect(document.querySelector('[data-testid="description-input"]')).not.toBeNull();
+	});
 });
+
