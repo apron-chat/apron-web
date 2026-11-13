@@ -34,6 +34,8 @@ class MessageDock {
 	 * reads `owner` as it was when the flush began, and would release the dock from the row that just took it.
 	 */
 	#holder: DockClaim | undefined;
+	/** Watches its toolbar for being cut off (`#clipped`); held, as one nothing holds may be collected with the work it does. */
+	readonly #observer: IntersectionObserver | undefined;
 	/** Its element, `.ap-msg-actions`, out of the document until a row takes it. */
 	readonly host: HTMLElement;
 
@@ -43,7 +45,8 @@ class MessageDock {
 		// Mounted now, empty, not when a row first asks: Svelte makes even a root a child of the effect running as it's
 		// mounted, so one mounted from a row (its slot, or a focus an effect moved) would go with that row, frozen.
 		mount(DockedActions, { target: this.host, props: { dock: this } });
-		if (typeof IntersectionObserver !== 'undefined') new IntersectionObserver(this.#clipped, { threshold: 1 }).observe(this.host);
+		this.#observer = typeof IntersectionObserver === 'undefined' ? undefined : new IntersectionObserver(this.#clipped, { threshold: [0, 1] });
+		this.#observer?.observe(this.host);
 	}
 
 	/**
