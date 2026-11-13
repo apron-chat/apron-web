@@ -640,6 +640,13 @@ export class HistoryKeeper {
 
 	/** Each snapshot: a session saved here starts a writer for its account. */
 	private consider(snapshot: ClientSnapshot): void {
+		// Stopped (another window of this browser took the server, or Disconnect): the writer lets go of the
+		// server's lock, so the window connected to it writes. What waited here is not written: that window writes
+		// whole once it has the lock, from what it holds. Connecting again starts a writer anew.
+		if (snapshot.status === 'offline') {
+			this.endWriter();
+			return;
+		}
 		const client = this.client;
 		const you = snapshot.you?.user_id;
 		if (!client || !this.keeping || !snapshot.authenticated || !snapshot.passkeySession || you === undefined) return;

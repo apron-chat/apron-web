@@ -330,6 +330,56 @@ describe('HistoryKeeper', () => {
 		await keeper.stop();
 	});
 
+	it('lets go of writing when its client stops, so the window that took the server writes', async () => {
+		// Exclusive Web Locks, shared by the two windows: `ifAvailable`, and waiting for one held.
+		const held = new Set<string>();
+		const waiting = new Map<string, (() => void)[]>();
+		const locks = {
+			request(name: string, options: LockOptions | LockGrantedCallback<unknown>, callback?: LockGrantedCallback<unknown>) {
+				const granted = (callback ?? options) as LockGrantedCallback<unknown>;
+				const run = async () => {
+					held.add(name);
+					try { return await granted({ name, mode: 'exclusive' } as Lock); } finally {
+						held.delete(name);
+						waiting.get(name)?.shift()?.();
+					}
+				};
+				if (!held.has(name)) return run();
+				if (callback && (options as LockOptions).ifAvailable) return Promise.resolve(granted(null));
+				return new Promise<void>((resolve) => { if (!waiting.has(name)) waiting.set(name, []); waiting.get(name)!.push(resolve); }).then(run);
+			}
+		} as unknown as LockManager;
+		const server = new MemoryProtocolServer({ account: true });
+		const indexedDB = new IDBFactory();
+		const older = new ChatClient(URL, 'Ada', server.factory);
+		const newer = new ChatClient(URL, 'Ada', server.factory);
+		clients.push(older, newer);
+		const olderKeeper = new HistoryKeeper({ indexedDB, locks });
+		const newerKeeper = new HistoryKeeper({ indexedDB, locks });
+		olderKeeper.watch(saved(older));
+		older.start();
+		await waitFor(() => Boolean(room(older.snapshot(), 'general')?.loaded));
+		await olderKeeper.flush();
+		expect(held.has(`apron-history ${URL}`)).toBe(true);
+
+		newerKeeper.watch(saved(newer));
+		newer.start();
+		await waitFor(() => Boolean(room(newer.snapshot(), 'general')?.loaded));
+		// The older window writes for the server while it runs: the newer waits.
+		expect(waiting.get(`apron-history ${URL}`)?.length).toBe(1);
+
+		// Another window took the server: the older stops, and the newer writes what comes from then on.
+		older.stop();
+		const posted = server.post('general', 'grace', 'While the older window stepped aside');
+		await waitFor(() => ids(newer.snapshot(), 'general').includes(posted));
+		await waitFor(() => !waiting.get(`apron-history ${URL}`)?.length);
+		await newerKeeper.flush();
+		const kept = await readKept(await accountDb(indexedDB));
+		expect(kept?.messages.some((message) => message.message_id === posted)).toBe(true);
+		await newerKeeper.stop();
+		await olderKeeper.stop();
+	});
+
 	it('writes nothing back once another tab has forgotten what is kept', async () => {
 		const server = new MemoryProtocolServer({ account: true });
 		const indexedDB = new IDBFactory();

@@ -124,7 +124,7 @@ running holds a Web Lock named for the server, taken from any other window with
 the app, "Apron is open in another window" ("Only one window at a time
 connects to <server> in this browser. Do you want to use Apron in this
 window?") with **Use here**, which takes the server back and connects again;
-the other window then steps aside in its turn. A window frozen in the
+the other window then steps aside in its turn. A window that steps aside (or is disconnected from the server pane) also lets go of writing the server's kept history, so the window connected writes it. A window frozen in the
 background learns of it once it runs again. A hidden window takes nothing
 until it is shown, so tabs the browser restores in the background don't take
 the server from the one in front; one already connected keeps it while
