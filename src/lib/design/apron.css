@@ -121,6 +121,8 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 
 /* Message */
 .ap-msg { position: relative; display: grid; grid-template-columns: var(--avatar-md) minmax(0, 1fr); column-gap: var(--space-3); padding: var(--space-1) var(--space-2); margin: var(--space-3) var(--space-2) 0; border-radius: var(--radius-md); }
+/* The toolbar's height (.ap-actions: a --control-md button in 3px of padding and a 1px border), for what clears it. */
+.ap-msg { --ap-actions-h: calc(var(--control-md) + 2 * (3px + 1px)); }
 .ap-msg-grouped { margin-top: 0; }
 .ap-msg:hover { background: var(--hover-soft); }
 .ap-msg-mention { background: var(--accent-soft); }
@@ -133,7 +135,14 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-msg-highlighted, .ap-msg-highlighted:hover { background: var(--bg-300); }
 /* The dock's slot (Message.svelte), which the toolbar moves into: no box of its own, so the toolbar sits as it would in the row. */
 .ap-msg-dock { display: contents; }
-.ap-msg-actions { position: absolute; top: -14px; inset-inline-end: var(--space-2); z-index: var(--z-float); visibility: hidden; }
+.ap-msg-actions { position: absolute; top: calc(var(--space-1) - var(--ap-actions-h)); inset-inline-end: var(--space-2); z-index: var(--z-float); visibility: hidden; }
+/* The toolbar sits just above the row, its foot on the row's top padding (--space-1), clear of its words: a link on
+   their first line stays clickable, though it covers the end of the row above's last line while there. Just below the
+   row, its head on the bottom padding, where what scrolls the row cuts it off above (the dock's observer sets it).
+   Top-anchored either way, so ⋯'s menu still opens downward. */
+.ap-msg-actions-below { top: calc(100% - var(--space-1)); }
+/* Touch's menu, its long press on the row already: over the row's top edge, wherever the observer would have it. */
+.ap-msg-held .ap-msg-actions { top: -14px; }
 /* On a touch screen a long press opens a message's menu (with Copy text), so its row takes no text selection or callout,
    which would fight it; a link, media and the editor keep the browser's own. */
 @media (hover: none) and (pointer: coarse) {
@@ -144,11 +153,11 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-msg:hover .ap-msg-actions, .ap-msg:focus-within .ap-msg-actions, .ap-msg-actions:focus-within { visibility: visible; }
 /* A message the keyboard is on (↑ ↓ from the composer): a soft fill and an ink bar at its start, the open room's and a
    mention's shape but neutral, so it never reads as a mention (a mention keeps its tint, the bar taking ink while the
-   keyboard is there); and room above it when it's scrolled to, for its toolbar, which sits over the row's top edge. */
+   keyboard is there); and room above it when it's scrolled to, for its toolbar, which sits above it. */
 .ap-msg:focus-visible { outline: none; }
 .ap-msg:not(.ap-msg-mention, .ap-msg-highlighted, .ap-msg-selected):focus-visible { background: var(--hover-soft); }
 .ap-msg:focus-visible::before { content: ''; position: absolute; inset-inline-start: var(--bar-at, 0); top: var(--bar-inset, var(--space-1)); bottom: var(--bar-inset, var(--space-1)); width: 3px; border-radius: var(--radius-full); background: var(--ink-muted); pointer-events: none; }
-.ap-msg:focus { scroll-margin-top: var(--space-8); }
+.ap-msg:focus { scroll-margin-top: calc(var(--ap-actions-h) + var(--space-1)); }
 /* While the keyboard is on a message or in its toolbar, which no tooltip reaches, each icon shows its words beside it,
    the letter of its key (`data-key`: Reply's R, Edit's E, the first of each) boxed. Not on touch, whose bar stays icons. */
 :is(.ap-msg:focus-visible, .ap-msg-actions:has(.ap-actions-btn:focus-visible)) .ap-actions:not(.ap-actions-touch) .ap-actions-icon { gap: var(--space-1); padding: 0 var(--space-2); }

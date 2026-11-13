@@ -34,6 +34,8 @@ class MessageDock {
 	 * reads `owner` as it was when the flush began, and would release the dock from the row that just took it.
 	 */
 	#holder: DockClaim | undefined;
+	/** Watches its toolbar for being cut off (`#clipped`); held, as one nothing holds may be collected with the work it does. */
+	readonly #observer: IntersectionObserver | undefined;
 	/** Its element, `.ap-msg-actions`, out of the document until a row takes it. */
 	readonly host: HTMLElement;
 
@@ -43,6 +45,8 @@ class MessageDock {
 		// Mounted now, empty, not when a row first asks: Svelte makes even a root a child of the effect running as it's
 		// mounted, so one mounted from a row (its slot, or a focus an effect moved) would go with that row, frozen.
 		mount(DockedActions, { target: this.host, props: { dock: this } });
+		this.#observer = typeof IntersectionObserver === 'undefined' ? undefined : new IntersectionObserver(this.#clipped, { threshold: [0, 1] });
+		this.#observer?.observe(this.host);
 	}
 
 	/**
@@ -70,6 +74,36 @@ class MessageDock {
 		held?.lost();
 		return true;
 	}
+
+	/**
+	 * A row took it: its toolbar goes above the row (apron.css) until the observer sees it cut off there. Nothing is
+	 * measured here, as the pointer arrives with the page's styles not yet worked out. The observer calls back only as
+	 * the toolbar crosses into or out of view or full view, so where it was last seen cut off, or out of the document,
+	 * it's watched afresh, for the next frame to say how it fares over this row.
+	 */
+	place(): void {
+		this.host.classList.remove('ap-msg-actions-below');
+		if (!this.#partial || !this.#observer) return;
+		this.#observer.unobserve(this.host);
+		this.#observer.observe(this.host);
+	}
+
+	/** Its toolbar was last seen less than whole: cut off, or out of the document. */
+	#partial = true;
+
+	/**
+	 * The toolbar cut off at the top by what scrolls its row, or out of view altogether (above the row, it can only have
+	 * gone off the top): it goes below the row. Its rects come with the entry, laid out already, so this forces no
+	 * layout. Not while the row is using it (its picker or ⋯'s menu open), which would move it from under the pointer.
+	 */
+	#clipped = (entries: IntersectionObserverEntry[]): void => {
+		const entry = entries[entries.length - 1];
+		if (!entry) return;
+		this.#partial = entry.intersectionRatio < 1;
+		if (!this.#partial || !this.host.isConnected || this.#pinned()) return;
+		const cut = !entry.isIntersecting || entry.intersectionRect.top > entry.boundingClientRect.top;
+		if (cut) this.host.classList.add('ap-msg-actions-below');
+	};
 
 	/** A row that holds it goes, or its slot does: the toolbar draws nothing, so a picker its React opened closes. */
 	release(claim: DockClaim): void {
