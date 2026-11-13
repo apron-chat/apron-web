@@ -16,8 +16,9 @@
 	 * finds messages, newest first, each with its room, sender, time and a line of it with the words searched for
 	 * marked; or (`kind: 'rooms'`) rooms and threads, each with a # (a thread's arrow, a private room's faces), its
 	 * title marked, a thread's room or what a room is about, and what's new in it. `modes`, tabs under the title,
-	 * switch between such searches. What it searches, and how far back, is the caller's: `note` says so, and `foot`,
-	 * after the results, can say more or look further.
+	 * switch between such searches, each tab showing the shortcut to it while it isn't the one shown. What it searches,
+	 * and how far back, is the caller's: `note` says so, and `foot` can say more or look further, together in one quiet
+	 * line after the results, so the field and what matched hold the eye.
 	 */
 	interface Props {
 		/** Shown as a centered modal while true; bindable, and set false however it closes. */
@@ -37,7 +38,7 @@
 		searching?: boolean;
 		/** More matched than are listed: a line at the end says to narrow the search. */
 		more?: boolean;
-		/** Under the field: what is searched, such as "Messages kept on this device for the last 30 days." */
+		/** What is searched, such as "Messages kept on this device for the last 30 days.": quietly, at the foot, before `foot`'s line. */
 		note?: string;
 		/** In the empty field, such as how to narrow a search. */
 		placeholder?: string;
@@ -156,7 +157,7 @@
 		<div class="ap-search-tabs" role="group" aria-label="Search for">
 			{#each modes as candidate (candidate.id)}
 				<button class="ap-search-tab" type="button" aria-pressed={mode === candidate.id} aria-keyshortcuts={candidate.shortcut} onclick={() => { mode = candidate.id; input?.focus(); }}>
-					{candidate.label}{#if candidate.keys}<kbd class="ap-keys-key ap-search-modekeys" aria-hidden="true">{candidate.keys}</kbd>{/if}
+					{candidate.label}{#if candidate.keys && mode !== candidate.id}<kbd class="ap-search-modekeys" aria-hidden="true">{candidate.keys}</kbd>{/if}
 				</button>
 			{/each}
 		</div>
@@ -172,7 +173,6 @@
 			/>
 			{#if suggestions}{@render suggestions()}{/if}
 		</div>
-		{#if note}<p class="ap-form-hint">{note}</p>{/if}
 		<p class="ap-sr" role="status" aria-live="polite" aria-atomic="true">{status}</p>
 	</div>
 	<ul class="ap-search-list" id={listId} role="listbox" aria-label={words.found} aria-busy={searching} data-testid={listTestid} bind:this={list}>
@@ -201,7 +201,7 @@
 					id="{listId}-{i}" role="option" aria-selected={i === active} class={['ap-search-row', i === active && 'ap-search-row-active']}
 					onmousedown={(event) => event.preventDefault()} onclick={() => pick(result.id)} onmouseenter={() => (active = i)}
 				>
-					<span class="ap-search-meta"><bdi class="ap-search-room">{result.room}</bdi><bdi class="ap-search-who">{result.who}</bdi>{#if result.when}<time class="ap-search-when" title={result.exact}>{result.when}</time>{/if}</span>
+					<span class="ap-search-meta"><bdi class="ap-search-who">{result.who}</bdi><bdi class="ap-search-room">{result.room}</bdi>{#if result.when}<time class="ap-search-when" title={result.exact}>{result.when}</time>{/if}</span>
 					<span class="ap-search-text" dir="auto">{#each result.parts as part, p (p)}{#if part.match}<mark>{part.text}</mark>{:else}{part.text}{/if}{/each}</span>
 				</li>
 			{/if}
@@ -210,10 +210,10 @@
 		{/each}
 		{#if more}<li class="ap-search-empty" role="presentation">{words.more}</li>{/if}
 	</ul>
-	{#if foot && (foot.note || foot.label)}
+	{#if note || foot?.note || (foot?.label && foot.onclick)}
 		<div class="ap-search-foot">
-			{#if foot.note}<p class="ap-search-footnote">{foot.note}</p>{/if}
-			{#if foot.label && foot.onclick}<button type="button" class="ap-btn ap-btn-sm" disabled={foot.busy} aria-busy={foot.busy} onclick={() => { foot.onclick?.(); input?.focus(); }}>{foot.busy ? 'Loading…' : foot.label}</button>{/if}
+			{#if note || foot?.note}<p class="ap-search-footnote">{[note, foot?.note].filter(Boolean).join(' ')}</p>{/if}
+			{#if foot?.label && foot.onclick}<button type="button" class="ap-btn ap-btn-sm" disabled={foot.busy} aria-busy={foot.busy} onclick={() => { foot.onclick?.(); input?.focus(); }}>{foot.busy ? 'Loading…' : foot.label}</button>{/if}
 		</div>
 	{/if}
 </Dialog>

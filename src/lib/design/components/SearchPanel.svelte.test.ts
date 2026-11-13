@@ -123,9 +123,14 @@ describe('SearchPanel', () => {
 		expect(toggle(/Rooms/).getAttribute('aria-pressed')).toBe('false');
 		expect(toggle(/Rooms/).getAttribute('aria-keyshortcuts')).toBe('Control+K');
 		expect(toggle(/Rooms/).querySelector('kbd')!.getAttribute('aria-hidden')).toBe('true');
+		// Only the mode to switch to shows its shortcut; the one shown keeps it in `aria-keyshortcuts`.
+		expect(toggle(/Messages/).querySelector('kbd')).toBeNull();
+		expect(toggle(/Messages/).getAttribute('aria-keyshortcuts')).toBe('Control+F');
 		toggle(/Rooms/).click();
 		flushSync();
 		expect(state.mode).toBe('rooms');
+		expect(toggle(/Rooms/).querySelector('kbd')).toBeNull();
+		expect(toggle(/Messages/).querySelector('kbd')).not.toBeNull();
 		expect(document.activeElement).toBe(field);
 		expect(queryByText('Older messages are on the server.')).not.toBeNull();
 		dom.button('Load More from Server').click();

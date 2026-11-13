@@ -1452,8 +1452,9 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 /* A title with a control beside it (titleEnd), on its line. */
 .ap-dialog-titlerow { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 var(--space-1); min-width: 0; }
 /* That control as a word of the title: its size and weight, in the link's blue on its soft ground (as a mention chip), deeper under the pointer. */
-.ap-dialog-titlebtn { margin: 0; padding: 0 var(--space-1_5); border: 0; border-radius: var(--radius-sm); background: var(--denim-soft); color: var(--denim); font: inherit; font-size: var(--text-title); line-height: var(--leading-title); font-weight: 600; white-space: nowrap; cursor: pointer; }
-.ap-dialog-titlebtn:hover { background: color-mix(in srgb, var(--denim) 22%, var(--denim-soft)); }
+/* Beside a title, such as how far back history is kept: a quiet link to where it's set, not a second title. */
+.ap-dialog-titlebtn { margin: 0; padding: var(--space-0_5) var(--space-1_5); border: 0; border-radius: var(--radius-sm); background: none; color: var(--ink-muted); font: inherit; font-size: var(--text-sm); line-height: var(--leading-sm); white-space: nowrap; cursor: pointer; }
+.ap-dialog-titlebtn:hover { background: var(--hover); color: var(--ink); }
 .ap-dialog-title { margin: 0; font-size: var(--text-title); line-height: var(--leading-title); font-weight: 600; overflow-wrap: anywhere; }
 .ap-dialog-sub { margin: 0; font-size: var(--text-ui); line-height: var(--leading-ui); color: var(--ink-muted); }
 .ap-dialog-close { flex: none; }
@@ -2047,11 +2048,12 @@ a.ap-linkchip-elsewhere:hover { background: var(--hover); }
 .ap-search-row { display: flex; flex-direction: column; gap: var(--space-0_5); padding: var(--space-1_5) var(--space-3); border-radius: var(--radius-md); color: var(--ink); cursor: pointer; }
 .ap-search-row-active { background: var(--hover); }
 .ap-search-meta { display: flex; align-items: baseline; gap: var(--space-2); min-width: 0; color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); }
-.ap-search-room { flex: none; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); font-weight: 600; }
-.ap-search-who { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ap-search-who { flex: none; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); font-weight: 600; }
+.ap-search-room { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ap-search-room::before { content: "in "; }
 .ap-search-when { flex: none; margin-inline-start: auto; }
 .ap-search-text { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; font-size: var(--text-ui); line-height: var(--leading-ui); overflow-wrap: anywhere; }
-.ap-search-text mark { border-radius: var(--radius-sm); background: var(--accent-soft); color: inherit; }
+.ap-search-text mark, .ap-search-title mark { border-radius: var(--radius-sm); background: var(--accent-soft); color: var(--ink); font-weight: 600; }
 .ap-search-empty { padding: var(--space-2) var(--space-3); color: var(--ink-muted); font-size: var(--text-ui); line-height: var(--leading-ui); }
 /* Its modes (rooms, messages) as tabs under the title, each with its shortcut; a heading over a group of results, with how many; a room's or thread's result; and after them a line, and a button. */
 .ap-search:has(.ap-search-tabs) .ap-dialog-head { border-bottom: 0; padding-bottom: var(--space-2); }
@@ -2059,20 +2061,20 @@ a.ap-linkchip-elsewhere:hover { background: var(--hover); }
 .ap-search-tab { display: inline-flex; align-items: center; gap: var(--space-2); margin-bottom: -1px; padding: var(--space-2) 0; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--ink-muted); font: inherit; font-size: var(--text-ui); line-height: var(--leading-ui); font-weight: 600; cursor: pointer; }
 .ap-search-tab:hover, .ap-search-tab[aria-pressed="true"] { color: var(--ink); }
 .ap-search-tab[aria-pressed="true"] { border-bottom-color: var(--ink); }
-.ap-search-modekeys { color: var(--ink-muted); font-weight: 400; }
+.ap-search-modekeys { color: var(--ink-muted); font: inherit; font-size: var(--text-sm); font-weight: 400; }
 .ap-search-glass { position: absolute; inset-inline-start: var(--space-2); top: 50%; translate: 0 -50%; color: var(--ink-muted); pointer-events: none; }
 .ap-search-field .ap-search-input { padding-inline-start: calc(var(--space-2) + 24px); }
+.ap-search-field .ap-search-input:focus-visible { outline: none; }
 .ap-search-group { display: flex; justify-content: space-between; padding: var(--space-2) var(--space-3) var(--space-0_5); color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 600; }
 .ap-search-groupsize { font-weight: 400; }
 .ap-search-roomrow { flex-direction: row; align-items: center; gap: var(--space-3); }
 .ap-search-kind { flex: none; display: grid; place-items: center; width: 24px; color: var(--ink-muted); }
 .ap-search-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .ap-search-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-ui); line-height: var(--leading-ui); font-weight: 600; }
-.ap-search-title mark { border-radius: var(--radius-sm); background: var(--accent-soft); color: inherit; }
 .ap-search-detail { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); }
 .ap-search-unjoined .ap-search-title { font-weight: 400; color: var(--ink-muted); }
-.ap-search-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-top: var(--space-2); }
-.ap-search-footnote { margin: 0; color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); }
+.ap-search-foot { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin: var(--space-2) calc(-1 * var(--space-6)) calc(-1 * var(--space-6)); padding: var(--space-3) var(--space-6); border-top: 1px solid var(--line); }
+.ap-search-footnote { flex: 1 1 18em; margin: 0; color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); }
 .ap-search-foot .ap-btn { flex: none; margin-inline-start: auto; }
 /* KeyboardShortcuts: titled groups in as many columns as fit, each row what a shortcut does and, at its end, its keys. */
 .ap-keys { --dialog-w: 760px; }
