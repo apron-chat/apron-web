@@ -82,4 +82,3 @@ describe('NewThreadDialog', () => {
 		expect(oncreate).toHaveBeenCalledWith({ title: 'Office move' });
 	});
 });
-
