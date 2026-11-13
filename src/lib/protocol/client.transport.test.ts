@@ -590,7 +590,8 @@ describe('a connection that doesn’t come up', () => {
 		vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch'); }));
 	});
 
-	function page() {
+	/** `type`: the kind of network the browser says it is on at first (`navigator.connection.type`); `null`, none said. */
+	function page(type: string | null = 'wifi') {
 		const listeners = new Map<string, Set<() => void>>();
 		const doc = {
 			visibilityState: 'visible',
@@ -602,7 +603,7 @@ describe('a connection that doesn’t come up', () => {
 		vi.stubGlobal('removeEventListener', doc.removeEventListener);
 		const fire = (type: string) => { for (const fn of [...(listeners.get(type) ?? [])]) fn(); };
 		// The browser's word on its network (Chrome on Android's `navigator.connection`), its kind changed by `network`.
-		const connection = Object.assign(new EventTarget(), { type: 'wifi', downlink: 10 });
+		const connection = Object.assign(new EventTarget(), { type: type ?? undefined, downlink: 10 });
 		vi.stubGlobal('navigator', { onLine: true, connection });
 		return {
 			show(state: 'visible' | 'hidden') { doc.visibilityState = state; fire('visibilitychange'); },
@@ -620,8 +621,11 @@ describe('a connection that doesn’t come up', () => {
 				fire('visibilitychange');
 			},
 			online: () => fire('online'),
+			connection,
 			/** The browser says it moved to another kind of network, or only that its estimates changed (`downlink`). */
-			network(change: { type?: string; downlink?: number }) {
+			network(change: { type?: string; downlink?: number; onLine?: boolean }) {
+				if (change.onLine !== undefined) (globalThis.navigator as { onLine: boolean }).onLine = change.onLine;
+				delete change.onLine;
 				Object.assign(connection, change);
 				connection.dispatchEvent(new Event('change'));
 			}
@@ -1003,14 +1007,14 @@ describe('a connection that doesn’t come up', () => {
 			network({ downlink: 1.5 });
 			expect(pings(socket)).toBe(0);
 			expect(FakeSocket.instances).toHaveLength(1);
-			// Cellular to wifi, the cellular network kept a while: the socket answers within the 2 s, and nothing opens.
+			// Wifi to cellular, the wifi still up a while: the socket answers within the 2 s, and nothing opens.
 			network({ type: 'cellular' });
 			expect(pings(socket)).toBe(1);
 			vi.advanceTimersByTime(1_000);
 			socket.receive({ method: 'pong' });
 			vi.advanceTimersByTime(5_000);
 			expect(FakeSocket.instances).toHaveLength(1);
-			// Wifi to cellular, no `online` fired, the page shown all along: no answer, and a standby after 2 s.
+			// Cellular to wifi, no `online` fired, the page shown all along: no answer, and a standby after 2 s.
 			network({ type: 'wifi' });
 			expect(pings(socket)).toBe(2);
 			vi.advanceTimersByTime(1_999);
@@ -1023,12 +1027,80 @@ describe('a connection that doesn’t come up', () => {
 			// The same kind again: nothing more.
 			network({ type: 'wifi', downlink: 3 });
 			expect(FakeSocket.instances).toHaveLength(2);
-			// One still opening when the network changes is replaced at once, as when it comes back.
-			standby.drop();
-			const opening = await nextSocket(standby);
-			network({ type: 'cellular' });
+		});
+
+		it('leaves a socket still opening to its own wait when the kind of network changes, however often it does', async () => {
+			const { network } = page();
+			startClient();
+			// The handshake goes nowhere, and the network flips between kinds meanwhile: nothing is replaced, and the
+			// socket has its 10 s, as without the flips.
+			const opening = latest();
+			for (let flip = 0; flip < 3; flip++) {
+				network({ type: flip % 2 ? 'wifi' : 'cellular' });
+				vi.advanceTimersByTime(3_000);
+			}
+			expect(opening.readyState).toBe(FakeSocket.CONNECTING);
+			expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+			vi.advanceTimersByTime(1_000);
 			expect(opening.readyState).toBe(FakeSocket.CLOSED);
-			expect(latest()).not.toBe(opening);
+		});
+
+		it('leaves going offline and coming back to `online`, which the browser fires with a change to and from no network', async () => {
+			const { network, online } = page();
+			const { socket } = startClient();
+			await socket.greet([], { ping: 30 });
+			// No network said, ahead of the browser going offline: nothing is checked; going offline is `online`'s to tell.
+			network({ type: 'none' });
+			expect(pings(socket)).toBe(0);
+			network({ type: 'wifi' });
+			/** Offline, as Chrome says it (no network, and offline): the socket goes, and nothing opens meanwhile. */
+			const offline = (connected: FakeSocket) => {
+				network({ type: 'none', onLine: false });
+				connected.drop();
+				vi.advanceTimersByTime(60_000);
+			};
+			// Back, the change first: one connection, and no question to the server about one left before it opened.
+			offline(socket);
+			expect(FakeSocket.instances).toHaveLength(1);
+			network({ type: 'cellular', onLine: true });
+			online();
+			expect(FakeSocket.instances).toHaveLength(2);
+			const first = latest();
+			expect(first.readyState).toBe(FakeSocket.CONNECTING);
+			await first.greet([], { ping: 30 });
+			// Back, `online` first: the same.
+			offline(first);
+			expect(FakeSocket.instances).toHaveLength(2);
+			network({ onLine: true });
+			online();
+			network({ type: 'wifi' });
+			expect(FakeSocket.instances).toHaveLength(3);
+			expect(latest().readyState).toBe(FakeSocket.CONNECTING);
+			expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+		});
+
+		it('takes the first kind of network the browser names as where it is, not as a move, ignores one it doesn’t know, and stops listening when stopped', async () => {
+			const { network, connection } = page(null);
+			const { client, socket } = startClient();
+			await socket.greet([], { ping: 30 });
+			// Said only now, and `unknown`: neither is a move.
+			network({ type: 'unknown' });
+			network({ type: 'wifi' });
+			expect(pings(socket)).toBe(0);
+			network({ type: 'unknown' });
+			expect(pings(socket)).toBe(0);
+			// A real move is checked.
+			network({ type: 'cellular' });
+			expect(pings(socket)).toBe(1);
+			socket.receive({ method: 'pong' });
+			// Stopped: no longer listened to.
+			const removed = vi.spyOn(connection, 'removeEventListener');
+			client.stop();
+			expect(removed).toHaveBeenCalledWith('change', expect.any(Function));
+			const opened = FakeSocket.instances.length;
+			network({ type: 'wifi' });
+			vi.advanceTimersByTime(60_000);
+			expect(FakeSocket.instances).toHaveLength(opened);
 		});
 
 		it('opens its standby later for a while after a socket outlasted its wait: a flaky network gets one more socket a blink, not one after another', async () => {

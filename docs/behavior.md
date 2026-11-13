@@ -89,11 +89,13 @@ server closes a connection that stopped (server.apron.chat after 150 seconds,
 with pings every 45), so it is gone. Sooner than that it may well be alive, and
 gets the usual 2 seconds, as does a tab whose timers ran while it was hidden,
 which heard its pongs meanwhile. The browser moving to another kind of network
-counts as the network coming back (Chrome on Android says when wifi gives way
-to cellular, which fires no `online`): a page shown all along checks its
-socket, with the usual 2 seconds, since one on a network that is still up (as
-cellular is kept a while when wifi takes over) answers within them and is
-kept, and a connection still opening is replaced.
+(Chrome on Android says when wifi gives way to cellular, which fires no
+`online`) checks the socket, with the usual 2 seconds, even on a page shown
+all along: one on a network that is still up (as cellular is kept a while
+when wifi takes over) answers within them and is kept. A connection still
+opening is left to its own wait, so a network flapping between kinds doesn't
+start one after another, and going offline and back (to and from no network)
+is left to `online`, which the browser fires with it.
 When the browser tells of the first connection's close only once the page runs
 again, with the second already opening, the second carries on as the next,
 rather than a third opening after the backoff.

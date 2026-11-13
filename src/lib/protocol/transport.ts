@@ -138,17 +138,22 @@ export class Transport {
 	/**
 	 * The kind of network changed (`navigator.connection`, where the browser says: Chrome on Android): wifi to
 	 * cellular and back fires no `online`, the browser having been online all along, yet a socket on the network
-	 * left is gone, with nothing to say so until a ping goes unanswered, up to two intervals later. As the network
-	 * back: checked, with the usual 2 s before a standby, since a socket on a network still up (cellular kept a
-	 * while as wifi takes over) answers within it, and is kept. Only the kind counts: the estimates of speed beside
-	 * it change all the time.
+	 * left is gone, with nothing to say so until a ping goes unanswered, up to two intervals later. A greeted socket
+	 * is checked as when the network comes back, with the usual 2 s before a standby, since one on a network still
+	 * up (cellular kept a while as wifi takes over) answers within it, and is kept. Nothing else: a socket still
+	 * opening has its own wait, which a change replacing it would start over (a network flapping between kinds would
+	 * open one after another), and going offline or back (to or from `none`) is `online`'s, which fires with it.
+	 * Only the kind counts: the estimates of speed beside it change all the time.
 	 */
 	readonly #networkChanged = (): void => {
 		const type = networkType();
 		if (type === undefined || type === this.#networkType) return;
-		const known = this.#networkType !== undefined;
+		const previous = this.#networkType;
 		this.#networkType = type;
-		if (known) this.#networkReturned();
+		if (previous === undefined || previous === 'none' || type === 'none') return;
+		if (!this.#current || this.#waiting?.opening) return;
+		this.#backAt = this.#now();
+		this.#probe();
 	};
 
 	readonly #hooks: TransportHooks;
