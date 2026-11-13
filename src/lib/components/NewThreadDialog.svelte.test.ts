@@ -66,4 +66,19 @@ describe('NewThreadDialog', () => {
 		expect(text()).toContain('Private, like its room');
 		expect(submitLabel()).toBe('Move 3 messages');
 	});
+
+	it('keeps an empty description behind "Add description", which shows the field and focuses it', async () => {
+		const { oncreate } = render({ title: 'Office move' });
+		await tick(); // the title takes focus first
+		expect(document.querySelector('[data-testid="description-input"]')).toBeNull();
+		const add = [...document.querySelectorAll<HTMLButtonElement>('dialog .ap-dialog-foot button')].find((b) => b.textContent?.trim() === 'Add description')!;
+		add.click();
+		await tick();
+		await tick();
+		const description = field('[data-testid="description-input"]');
+		expect(document.activeElement).toBe(description);
+		expect([...document.querySelectorAll('dialog button')].some((b) => b.textContent?.trim() === 'Add description')).toBe(false);
+		await dom.submit();
+		expect(oncreate).toHaveBeenCalledWith({ title: 'Office move' });
+	});
 });
