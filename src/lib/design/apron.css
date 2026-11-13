@@ -356,9 +356,9 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-task-box::after { content: '\2060'; }
 .ap-msg-tomb { font-style: italic; color: var(--ink-muted); }
 .ap-msg-embeds { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); margin-top: var(--space-2); }
-/* An absent format is plain (§3.5): its line breaks kept. A Markdown body's quotes set apart on a muted ground. */
+/* An absent format is plain (§3.5): its line breaks kept. A Markdown body's quotes set apart by a thin rule, as a reply's spine is. */
 .ap-msg-plain { white-space: pre-wrap; }
-.ap-msg-text.ap-msg-markdown blockquote { margin: var(--space-2) 0; padding: var(--space-1) var(--space-3); border-inline-start: 3px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--bg-200); color: var(--ink-muted); }
+.ap-msg-text.ap-msg-markdown blockquote { margin: var(--space-2) 0; padding: 0 0 0 var(--space-3); border-inline-start: 2px solid color-mix(in srgb, var(--line-strong) 60%, transparent); color: var(--ink-muted); }
 .ap-msg-text.ap-msg-markdown blockquote > :first-child { margin-top: 0; }
 .ap-msg-text.ap-msg-markdown blockquote > :last-child { margin-bottom: 0; }
 /* The sender's name and avatar as buttons that open their profile card, looking as they do as text. */
@@ -1415,7 +1415,7 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-checklist-note { font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
 
 /* Callout — something to know or do before a setting works (Add to Home Screen), with an optional action */
-.ap-callout { display: grid; gap: var(--space-1); padding: var(--space-3); border: 1px solid var(--line); border-inline-start: 3px solid var(--denim); border-radius: var(--radius-md); background: var(--denim-soft); color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); }
+.ap-callout { display: grid; gap: var(--space-1); padding: var(--space-3); border: 1px solid color-mix(in srgb, var(--denim) 35%, transparent); border-radius: var(--radius-md); background: var(--denim-soft); color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); }
 .ap-callout-title { margin: 0; font-weight: 600; }
 .ap-callout-body { color: var(--ink); }
 .ap-callout-body :is(p, ol, ul) { margin: 0; }
@@ -2102,5 +2102,4 @@ a.ap-linkchip-elsewhere:hover { background: var(--hover); }
 .ap-quota-bar i { width: 10px; height: 6px; border-radius: var(--radius-sm); background: var(--bg-300); }
 .ap-quota-bar .ap-quota-on { background: var(--private); }
 /* A Callout for what stands in the way, such as a limit reached. */
-.ap-callout-warn { border-inline-start-color: var(--warn);
- background: var(--bg-200); }
+.ap-callout-warn { border-color: color-mix(in srgb, var(--warn) 70%, transparent); background: var(--bg-200); }
