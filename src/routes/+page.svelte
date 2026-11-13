@@ -82,6 +82,8 @@
 	import AppShell from '$lib/design/components/AppShell.svelte';
 	import DropZone from '$lib/design/components/DropZone.svelte';
 	import EmptyState from '$lib/design/components/EmptyState.svelte';
+	import Button from '$lib/design/components/Button.svelte';
+	import { ServerClaim } from '$lib/ui/server-claim';
 	import FloatingDayPill from '$lib/design/components/FloatingDay.svelte';
 	import PanelToggle from '$lib/design/components/PanelToggle.svelte';
 	import { ViewKeeper } from '$lib/ui/view-keeper';
@@ -328,6 +330,11 @@
 	let connectOpen = $state(false);
 	/** Disconnected from the server pane: the connect screen can't be cancelled back to it. */
 	let disconnected = $state(false);
+	/**
+	 * Another window of this browser took this server (`ServerClaim`): the client has stopped, and the page says so
+	 * until Use here takes it back. The server whose connection that window took.
+	 */
+	let elsewhere = $state<string | undefined>();
 	/** The sign-in scheme the connect screen opens with, when something asked for one. */
 	let connectScheme = $state<Scheme | undefined>();
 	/** The connect screen opens at choosing a server (a new one, or a link's), rather than at signing in to the one in it. */
@@ -1193,8 +1200,18 @@
 			session.prime(view);
 			showDirectory(chat);
 		});
+		// One window of this browser at a time connects to a server: this one while its client runs, until another
+		// window takes it, which stops it here.
+		const claim = previewMode ? undefined : new ServerClaim({
+			lost: (url) => {
+				if (client !== chat || chat.url !== url || elsewhere) return;
+				elsewhere = url;
+				chat.stop();
+			}
+		});
 		const unsubscribe = chat.subscribe((next) => {
 			serverUrl = chat.url;
+			claim?.want(!elsewhere && next.status !== 'offline' && next.status !== 'idle' ? chat.url : undefined);
 			session.apply(next, chat);
 			showDirectory(chat);
 			noteArrivals(next);
@@ -1232,6 +1249,7 @@
 			mentions.dispose();
 			session.dispose();
 			unsubscribe();
+			claim?.dispose();
 			void keeper?.stop();
 			chat.stop();
 		};
@@ -1282,6 +1300,13 @@
 		const room = paneRoom;
 		if (!client || !room || !session.ready || !session.canManageRooms) return;
 		client.listMembers(room.id, maxAge).catch(() => undefined);
+	}
+
+	/** Use here: this window takes its server back from the one that took it, and connects again. */
+	function useHere(): void {
+		if (!client || !elsewhere) return;
+		elsewhere = undefined;
+		client.start();
 	}
 
 	/**
@@ -3372,6 +3397,12 @@
 {/if}
 {#if !client}
 	<AppShell viewport />
+{:else if elsewhere}
+	<main class="ap-elsewhere" data-testid="open-elsewhere">
+		<EmptyState title="Apron is open in another window" detail={`Only one window at a time connects to ${serverLabel(elsewhere)} in this browser. Do you want to use Apron in this window?`}>
+			{#snippet actions()}<Button variant="primary" data-testid="use-here" onclick={useHere}>Use here</Button>{/snippet}
+		</EmptyState>
+	</main>
 {:else if connectOpen}
 	<ConnectScreen
 		{client} {session} bind:serverInput bind:displayName {passkeyUnavailable} bind:recentServers

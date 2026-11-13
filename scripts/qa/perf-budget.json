@@ -15,7 +15,7 @@
 		},
 		"load-busy": {
 			"requests": 20,
-			"startupJsKB": 910.9,
+			"startupJsKB": 920.2,
 			"domNodes": 1149,
 			"layouts": 13,
 			"styleRecalcs": 16,
@@ -33,7 +33,7 @@
 		},
 		"load-phone-busy": {
 			"requests": 20,
-			"startupJsKB": 910.9,
+			"startupJsKB": 920.2,
 			"domNodes": 1150,
 			"layouts": 9,
 			"styleRecalcs": 15,
@@ -107,7 +107,7 @@
 	},
 	"production": {
 		"startupFiles": 13,
-		"startupJsKB": 847.9,
-		"startupJsBrotliKB": 239.6
+		"startupJsKB": 856.9,
+		"startupJsBrotliKB": 241.5
 	}
 }

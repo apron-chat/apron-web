@@ -1,4 +1,4 @@
-import { DEVICES, expect, test, type Preview } from './fixtures';
+import { DEVICES, Preview, expect, test } from './fixtures';
 import type { MockOptions } from './mock-server';
 
 /**
@@ -406,5 +406,35 @@ test.describe('a guest who signs in with a passkey', () => {
 		// The pill shows only once a check has run a while (400 ms), and stays a moment: none after either.
 		await page.clock.fastForward(2_000);
 		await expect(page.getByText('Checking for new messages…')).toHaveCount(0);
+	});
+});
+
+test.describe('another window of this browser', () => {
+	test.use(DEVICES.desktop);
+
+	test('takes the server from this one, which offers Use here to take it back', async ({ preview, knobs }) => {
+		const older = preview.page;
+		const olderSockets: string[] = [];
+		await preview.openRoot({ opened: olderSockets });
+		const newerPage = await older.context().newPage();
+		const newer = new Preview(newerPage, knobs);
+		await newer.openRoot();
+
+		// The newer window took it: the older stopped, and says why.
+		const elsewhere = older.getByTestId('open-elsewhere');
+		await expect(elsewhere).toBeVisible();
+		await expect(elsewhere.getByRole('heading', { name: 'Apron is open in another window' })).toBeVisible();
+		await expect(elsewhere).toContainText('Only one window at a time connects to server.apron.chat in this browser. Do you want to use Apron in this window?');
+		await expect(older.getByTestId('connection-status')).toHaveCount(0);
+		await expect(newerPage.getByTestId('connection-status')).toHaveText('Connected');
+		await expect(newerPage.getByTestId('open-elsewhere')).toHaveCount(0);
+
+		// Use here: the older connects again, and the newer steps aside in its turn.
+		const before = olderSockets.length;
+		await elsewhere.getByRole('button', { name: 'Use here' }).click();
+		await expect(older.getByTestId('connection-status')).toHaveText('Connected');
+		expect(olderSockets.length).toBe(before + 1);
+		await expect(newerPage.getByTestId('open-elsewhere')).toBeVisible();
+		await newerPage.close();
 	});
 });
