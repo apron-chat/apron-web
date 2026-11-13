@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatClient, ClientSnapshot } from './client';
-import { FakeSocket, nextSocket, settle, startClient, type ClientHarness } from '$lib/test/client';
+import { FakeSocket, nextSocket, settle, startClient, type ClientHarness, afterBackoff } from '$lib/test/client';
 
 /**
  * Push registration (§4.9): one `push_id` per account, registered after each
@@ -109,8 +109,7 @@ describe('push registration', () => {
 		socket.drop();
 		const renewed = { ...webpush, url: 'https://push.example/b' };
 		client.setPushRegistration(renewed, 'ada');
-		vi.advanceTimersByTime(5_000);
-		socket = FakeSocket.latest();
+		socket = afterBackoff(socket);
 		await greet({ webpush: { key: 'BNcR' } });
 		expect(socket.sent.filter((frame) => frame.method === 'push_unregister' || frame.method === 'push_register').map((frame) => [frame.method, frame.params]))
 			.toEqual([['push_unregister', { url: webpush.url }], ['push_register', renewed]]);
@@ -147,8 +146,7 @@ describe('push registration', () => {
 		socket.drop();
 		// Turned off while offline: ada's registration is to go after the next auth as ada.
 		client.setPushRegistration(undefined);
-		vi.advanceTimersByTime(5_000);
-		socket = FakeSocket.latest();
+		socket = afterBackoff(socket);
 		// Bob signs in instead: unregistering would remove Bob's registration of that url, if any.
 		await greet({ webpush: { key: 'BNcR' } }, 'bob');
 		expect(sent('push_unregister')).toEqual([]);

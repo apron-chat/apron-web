@@ -265,6 +265,13 @@ export const OPENING_MS = 10_000;
  */
 export const STANDBY_AFTER_MS = 2_000;
 /**
+ * How long after the page came back (its start, being shown again, the network's return) a socket that starts
+ * opening gets a standby: the attempts of a return, the first of which often goes out before the network is ready.
+ * A probe, which only follows a return, always does. Past it, a slow handshake is the server's doing (a restart
+ * brings every client back at once), and gets none.
+ */
+export const STANDBY_OPENING_FOR_MS = 30_000;
+/**
  * How often one room's read cursor goes to the server at most (`markRead`):
  * reading down a busy room sends a frame every ten seconds, not one a message.
  */

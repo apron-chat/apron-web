@@ -110,10 +110,16 @@ describe('Transport', () => {
 		transport.run();
 		transport.connect();
 		latest().open();
+		const first = latest();
 		vi.advanceTimersByTime(OPENING_MS - 1);
 		expect(calls).not.toContain('closed');
 		vi.advanceTimersByTime(1);
 		expect(calls).toContain('closed');
+		// The page just started: a standby opened beside it meanwhile, and carries on as the next connection.
+		expect(FakeSocket.instances).toHaveLength(2);
+		expect(first.readyState).toBe(FakeSocket.CLOSED);
+		expect(transport.socket).toBe(latest());
+		expect(calls.at(-1)).toBe('reconnecting');
 		transport.stop();
 	});
 
@@ -190,6 +196,21 @@ describe('Transport', () => {
 		const before = FakeSocket.instances.length;
 		vi.advanceTimersByTime(250);
 		expect(FakeSocket.instances).toHaveLength(before + 1);
+		transport.stop();
+	});
+
+	it('keeps counting a reconnect its client asked for before closing the socket, however long that had stayed up', () => {
+		const { transport } = harness();
+		transport.run();
+		transport.connect();
+		latest().open();
+		transport.greeted(false);
+		transport.stayUp(() => true);
+		vi.setSystemTime(Date.now() + STABLE_CONNECTION_MS);
+		// As the client does where history outruns it: the next connection is due, then this one closes.
+		transport.scheduleReconnect();
+		latest().drop();
+		expect(transport.retrying).toBe(true);
 		transport.stop();
 	});
 

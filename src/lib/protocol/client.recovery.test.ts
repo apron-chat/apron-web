@@ -374,7 +374,7 @@ describe('after a reconnect', () => {
 		latest().drop();
 		// Nor while it's away: recovery will fill the gap, so there's none to mark meanwhile.
 		expect(snapshot.showReconnectDivider).toBe(false);
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		await latest().greet(['history', 'rooms'], { room: general });
 		// The kept room resumed right behind auth, from its checkpoint; one empty page settles it.
 		expect(latest().sent.filter((frame) => frame.method === 'history').map((frame) => bounds(frame.params))).toEqual([{ room_id: 'general', after: '13' }]);
@@ -399,7 +399,7 @@ describe('after a reconnect', () => {
 			client.selectRoom('eng');
 			latest().drop();
 			client.awaitRoom('eng');
-			vi.advanceTimersByTime(5_000);
+			afterBackoff();
 			const again = latest();
 			again.open();
 			again.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['history', 'rooms'] } });
@@ -617,7 +617,7 @@ describe('after a reconnect', () => {
 		// Kept, and said to be: a link to a room missing from them waits for a fresh listing.
 		expect(snapshot.keptListings?.sort()).toEqual(['', 'general']);
 		// Back as the same user: still there until fresh ones replace them.
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		await latest().greet(['history', 'rooms'], { room: general });
 		expect(snapshot.directory?.map((listing) => listing.id)).toEqual(['ops']);
 		const fresh = client.listRooms();
@@ -644,7 +644,7 @@ describe('after a reconnect', () => {
 		latest().receive({ method: 'room_update', params: { joined: [{ room_id: '40', log_id: '41', parent_room_id: 'general', title: 'Offsite' }] } });
 		latest().drop();
 		expect(snapshot.threadDirectory.general?.map((listing) => [listing.id, listing.joined])).toEqual([['40', true]]);
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		const next = latest();
 		next.open();
 		next.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['history', 'rooms'] } });

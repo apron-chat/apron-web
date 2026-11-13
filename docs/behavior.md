@@ -60,14 +60,26 @@ waited on the same way: it gets 10 seconds to open and bring the server's
 `server` frame, or it is dropped as if it had failed (browsers put no limit on
 a handshake, and one sent into a network that went away waits out the system's
 connect timeout, a minute or more).
-Either wait races the socket after 2 seconds: with nothing heard by then, a
-second connection opens beside the first, which sends nothing. If the first is
+A wait that follows the page coming back races the socket after 2 seconds:
+with nothing heard by then, a second connection opens beside the first, which
+sends nothing. A check always follows a return; a new connection is raced when
+it starts opening within 30 seconds of the page's start, of its being shown
+again, or of the network's return, which is when a handshake goes out before
+a phone's network is ready. One that opens at any other time (the server
+restarted, and every client is back at once) is slow because the server is,
+and gets no second connection to add to that. If the first is
 heard from, the second closes unused; if the second's greeting arrives first
 (a whole handshake before one ping's answer, or before the greeting of a
 handshake begun 2 seconds sooner), the first is gone or going nowhere, and the
-second takes over at once with its handshake already done. It takes over too
-when the wait runs out (the client then running, shown and online, with no
-wait or hold from the server, which also keep any from opening). So a socket
+second takes over at once with its handshake already done. From a connection
+still opening it takes over as that same connection, since nothing was said on
+the first: what was asked meanwhile (a message sent on the way back) goes out
+on it, and nothing shows a drop. The second also carries on when the wait runs
+out. It takes over only with the client running, shown and online, and no wait
+or hold from the server, which also keep any from opening: greeted where it may
+not, it closes unused and the first is waited on as before. A connection still
+opening that fails closes the second with it, and the usual question to the
+server and backoff follow. So a socket
 that died while a phone's app was away, or a handshake sent before its network
 was back, costs about 2 seconds and a handshake, not the whole wait.
 For 3 minutes after a socket outlasted its wait, the network may only be slow:

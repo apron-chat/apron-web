@@ -129,7 +129,7 @@ describe('one explicit ceremony per tap', () => {
 		expect(snap().signedInWith).toBe('webauthn');
 		await socket.reply('room_list', { joined: [] });
 		await client.signOut();
-		await vi.advanceTimersByTimeAsync(5_000);
+		await vi.advanceTimersByTimeAsync(1_000);
 		await latest().greet([], { auth: ['webauthn', 'guest', 'token'], token: 'st_guest' });
 		// Only the guest token gets back in: worth adding another way, not a passkey's session.
 		expect(snap().signedInWith).toBe('token');

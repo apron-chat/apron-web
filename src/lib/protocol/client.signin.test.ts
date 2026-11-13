@@ -217,7 +217,7 @@ describe('sign-in', () => {
 		expect(snapshot.you?.user_id).toBe('ada');
 		// Running again: a dropped connection reconnects.
 		side.drop();
-		await vi.advanceTimersByTimeAsync(5_000);
+		await vi.advanceTimersByTimeAsync(1_000);
 		expect(latest()).not.toBe(side);
 	});
 
