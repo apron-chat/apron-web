@@ -82,6 +82,23 @@ server, which also keep any from opening: greeted where it may not, it closes
 unused and the first is waited on as before. So a socket
 that died while a phone's app was away, or a handshake sent before its network
 was back, costs about 2 seconds and a handshake, not the whole wait.
+A check races at once, its second connection opening with the ping, where
+the socket has gone four ping intervals with nothing heard on it (its pongs
+stopped, as a page frozen in the background stops pinging): past where a
+server closes a connection that stopped (server.apron.chat after 150 seconds,
+with pings every 45), so it is gone. Sooner than that it may well be alive, and
+gets the usual 2 seconds, as does a tab whose timers ran while it was hidden,
+which heard its pongs meanwhile. The browser moving to another kind of network
+(Chrome on Android says when wifi gives way to cellular, which fires no
+`online`) checks the socket, with the usual 2 seconds, even on a page shown
+all along: one on a network that is still up (as cellular is kept a while
+when wifi takes over) answers within them and is kept. A connection still
+opening is left to its own wait, so a network flapping between kinds doesn't
+start one after another, and going offline and back (to and from no network)
+is left to `online`, which the browser fires with it.
+When the browser tells of the first connection's close only once the page runs
+again, with the second already opening, the second carries on as the next,
+rather than a third opening after the backoff.
 When the wait runs out, a check's second connection, still opening or open,
 carries on as the next where one may take over (the socket died; no handshake
 failed). A new connection that

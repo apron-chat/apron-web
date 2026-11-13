@@ -355,7 +355,20 @@ test.describe('the page shown again', () => {
 		// A long message last, read: its top on screen, its end a way below, so the pane no longer follows the latest.
 		await preview.post('general', 'ada', Array.from({ length: 60 }, (_, n) => `Line ${n + 1}`).join('\n\n'));
 		await expect(preview.message('Line 60')).toBeVisible();
+		const frames = () => page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+		const measure = () => list.evaluate((el) => ({ height: el.scrollHeight, fromEnd: el.scrollHeight - el.scrollTop - el.clientHeight }));
+		// Until the long message has laid out, and the pane is held at its new end: before then, a scroll up that lands
+		// no higher than the end the pane was last held at reads as the list growing under it, and it pins back to
+		// the latest (`trackScroll`), so nothing would be left below to come back to.
+		await expect.poll(async () => {
+			const before = await measure();
+			await frames();
+			const after = await measure();
+			return after.height === before.height && after.fromEnd < 2;
+		}).toBe(true);
 		await list.evaluate((el) => el.scrollTo({ top: el.scrollHeight - el.clientHeight - 400 }));
+		await frames();
+		expect((await measure()).fromEnd).toBeGreaterThan(300);
 		await expect(preview.message('Line 60')).toBeInViewport();
 		await expect(page.getByTestId('jump-button')).toHaveCount(0);
 		await setHidden(true);
