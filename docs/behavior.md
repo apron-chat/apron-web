@@ -117,6 +117,23 @@ connects at once, and starts the backoff over. An explicit server retry window t
 `retry_after` error about the connection as a whole (`data.retry_after`
 seconds); after such a `denied` error the client stops reconnecting, shows
 **Signed out** with the server's message, and waits for **Sign in**.
+One window or tab of a browser connects to a server at a time
+(`src/lib/ui/server-claim.ts`): the one most recently shown with its client
+running holds a Web Lock named for the server, taken from any other window with
+`steal`. The window it was taken from stops its client and shows, in place of
+the app, "Apron is open in another window" ("Only one window at a time
+connects to <server> in this browser. Do you want to use Apron in this
+window?") with **Use here**, which takes the server back and connects again;
+the other window then steps aside in its turn. A window frozen in the
+background learns of it once it runs again. A hidden window takes nothing
+until it is shown, so tabs the browser restores in the background don't take
+the server from the one in front; one already connected keeps it while
+hidden. The browser lets go of a closed, crashed or discarded window's lock by
+itself. Windows on different servers don't affect each other, a window
+disconnected from the server pane holds nothing, and without Web Locks (an
+insecure origin) every window connects as before. This keeps a browser to one
+of the account's connections, which servers limit (server.apron.chat: 5, past
+which a sign-in closes the account's oldest).
 When a newer version of the client is deployed (SvelteKit's version poll every
 5 minutes, at once on coming back after 5 minutes or more away, or a lazily
 loaded file that failed to load, when the check then finds a newer deploy), a
