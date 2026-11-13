@@ -67,6 +67,8 @@ export class Transport {
 	#pingTimer?: ReturnType<typeof setInterval>;
 	/** Resets the reconnect backoff once the current connection has stayed up. */
 	#stableTimer?: ReturnType<typeof setTimeout>;
+	/** The current connection signed in (`stayUp`): when, and whether it still is. */
+	#signedIn?: { socket: WebSocket; at: number; still: () => boolean };
 	/** Resumes connecting when the page is shown or the network returns; set while waiting for either. */
 	#presenceWaiter?: () => void;
 	/** Pings sent on the current socket since its last `pong`. */
@@ -239,14 +241,32 @@ export class Transport {
 		this.#probeTimer = undefined;
 	}
 
-	/** The current connection signed in: the backoff starts over only once it has stayed up, still `signedIn`. */
+	/**
+	 * The current connection signed in: the backoff starts over only once it has stayed up, still `signedIn`, for
+	 * `STABLE_CONNECTION_MS`. That is by the clock, checked again as the connection closes (`stayedUp`): a page
+	 * frozen in the background (a phone's, within seconds of being put away) runs no timer, and its socket is
+	 * usually gone by its return. Counted by the timer alone, each short visit would be a failure for the next to
+	 * back off from, until coming back waited a minute to connect.
+	 */
 	stayUp(signedIn: () => boolean): void {
 		this.#clearStableTimer();
 		const stableSocket = this.#current;
+		if (!stableSocket) return;
+		this.#signedIn = { socket: stableSocket, at: this.#now(), still: signedIn };
 		this.#stableTimer = setTimeout(() => {
 			this.#stableTimer = undefined;
-			if (this.#current === stableSocket && signedIn()) this.#reconnectAttempt = 0;
+			this.#stayedUp(stableSocket, true);
 		}, STABLE_CONNECTION_MS);
+	}
+
+	/**
+	 * Starts the backoff over if `socket`, the current one, has been signed in for `STABLE_CONNECTION_MS` and still
+	 * is: its timer ran (`timed`), or the clock says so.
+	 */
+	#stayedUp(socket: WebSocket, timed = false): void {
+		const signedIn = this.#signedIn;
+		if (!signedIn || signedIn.socket !== socket || this.#current !== socket) return;
+		if ((timed || this.#now() - signedIn.at >= STABLE_CONNECTION_MS) && signedIn.still()) this.#reconnectAttempt = 0;
 	}
 
 	/** Opens the next connection, or goes on with `handover`, one opened already (a probe's standby). */
@@ -301,6 +321,8 @@ export class Transport {
 		};
 		const closed = (): void => {
 			if (!this.#isCurrentSocket(id, socket)) return;
+			// Before the client ends the connection (`drop`), while it can still say it was signed in.
+			this.#stayedUp(socket);
 			this.#hooks.closed();
 			if (this.#isRunning) {
 				if (opened) this.scheduleReconnect();
@@ -591,6 +613,7 @@ export class Transport {
 	#clearStableTimer(): void {
 		if (this.#stableTimer) clearTimeout(this.#stableTimer);
 		this.#stableTimer = undefined;
+		this.#signedIn = undefined;
 	}
 
 	#isCurrentSocket(id: number, socket: WebSocket): boolean {

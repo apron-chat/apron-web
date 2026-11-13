@@ -47,6 +47,10 @@ this optional endpoint retain ordinary reconnect behavior.
 The first reconnect after a connection that stayed up goes within a quarter
 second, spread at random so a server's clients don't all come back at once;
 repeated failures back off from 1 s to about one attempt per minute with jitter.
+A connection stayed up once it was signed in for 30 seconds, by the clock: one
+that closes after that starts the backoff over though the page ran no timer
+meanwhile (a phone's, frozen once the app is put away), so short visits don't
+add up to a wait on coming back.
 Where the server pings (§1), a tab shown again after 10 seconds or more away,
 or a network that comes back, checks at once that its socket still answers:
 one ping, and a socket that hears nothing back (a `pong`, or any other frame)

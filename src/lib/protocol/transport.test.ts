@@ -164,6 +164,34 @@ describe('Transport', () => {
 		transport.stop();
 	});
 
+	it('starts it over as a connection closes that stayed up by the clock, its timers frozen meanwhile; not one that closed sooner, or signed out', () => {
+		const { transport } = harness();
+		transport.run();
+		transport.connect();
+		/** The latest socket opens and signs in (or not), and closes `upFor` later, on a page frozen meanwhile. */
+		const visit = (signedIn: boolean, upFor: number) => {
+			latest().open();
+			transport.greeted(false);
+			transport.stayUp(() => signedIn);
+			// A frozen page's clock jumps without its timers firing in between.
+			vi.setSystemTime(Date.now() + upFor);
+			latest().drop();
+		};
+		// Up for less than it takes, then for long enough but signed in as no one: each next connection is one more try.
+		visit(true, STABLE_CONNECTION_MS - 1);
+		vi.advanceTimersByTime(5_000);
+		expect(transport.retrying).toBe(true);
+		visit(false, STABLE_CONNECTION_MS);
+		vi.advanceTimersByTime(5_000);
+		expect(transport.retrying).toBe(true);
+		// Signed in, and up for long enough: the next is the first again, within a quarter second, not after seconds.
+		visit(true, STABLE_CONNECTION_MS);
+		const before = FakeSocket.instances.length;
+		vi.advanceTimersByTime(250);
+		expect(FakeSocket.instances).toHaveLength(before + 1);
+		transport.stop();
+	});
+
 	it('adopts a socket signed in elsewhere as the next connection, with no reconnect due', () => {
 		const { transport, calls } = harness();
 		transport.run();

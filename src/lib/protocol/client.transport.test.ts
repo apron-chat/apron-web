@@ -853,6 +853,25 @@ describe('reconnect damping', () => {
 		vi.restoreAllMocks();
 	});
 
+	it('starts the backoff over for a connection that stayed up by the clock, though its timers never ran', async () => {
+		vi.spyOn(Math, 'random').mockReturnValue(0.5);
+		startClient();
+		await latest().greet();
+		// A phone's short visits: signed in, a glance, and the page frozen in the background before its half minute is
+		// up. Its socket is gone by the time it is back, each time: no visit is a failure for the next to back off from.
+		for (let visit = 0; visit < 4; visit++) {
+			vi.advanceTimersByTime(10_000);
+			// A frozen page's clock jumps without its timers firing in between.
+			vi.setSystemTime(Date.now() + 10 * 60_000);
+			latest().drop();
+			const before = FakeSocket.instances.length;
+			vi.advanceTimersByTime(125);
+			expect(FakeSocket.instances).toHaveLength(before + 1);
+			await latest().greet();
+		}
+		vi.restoreAllMocks();
+	});
+
 	it('waits for the page to be shown before connecting again', async () => {
 		const listeners = new Map<string, () => void>();
 		const page = { visibilityState: 'visible', addEventListener: (type: string, fn: () => void) => listeners.set(type, fn), removeEventListener: (type: string) => listeners.delete(type) };
