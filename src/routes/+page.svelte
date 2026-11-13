@@ -50,7 +50,7 @@
 	import MembershipLine from '$lib/components/MembershipLine.svelte';
 	import PrivateIntro from '$lib/design/components/PrivateIntro.svelte';
 	import AddedBanner from '$lib/design/components/AddedBanner.svelte';
-	import { ArrivalWatch, addRoomMembers, othersIn, reachesStart } from '$lib/ui/private-rooms';
+	import { ArrivalWatch, addRoomMembers, aloneIn, othersIn, reachesStart } from '$lib/ui/private-rooms';
 	import { absentMentions, addMembers, couldNotAdd, isGuest, unheldRoleHolders } from '$lib/ui/members';
 	import { faceOf, roomFaces } from '$lib/ui/faces';
 	import { receiptsByMessage, steadyReceipts } from '$lib/ui/receipts';
@@ -2488,21 +2488,29 @@
 		if (!client || !paneRoom) return;
 		const leaving = paneRoom;
 		// A private room isn't listed to join again: only a member can add you back, and the last to leave ends it.
-		const again = leaving.parentRoomId !== undefined ? 'You can join it again from Other Threads under its room.'
+		// A thread you're the last one in may not be there to join again: some servers drop empty ones.
+		const again = leaving.parentRoomId !== undefined ? (aloneIn(leaving, session.you?.user_id) ? '' : 'You can join it again from Other Threads under its room.')
 			: !leaving.private ? 'You can join it again from Other Rooms.'
 			: othersIn(leaving, session.you?.user_id).length ? 'It’s private: only someone in it can add you back.'
 			: 'No one else is in it, so it ends when you leave.';
-		if (!confirm(`Leave ${leaving.title}? ${again}`)) return;
+		if (!confirm(again ? `Leave ${leaving.title}? ${again}` : `Leave ${leaving.title}?`)) return;
 		if (activeThread && activeRoom) backToRoom();
 		feedback.track(client.leaveRoom(leaving.id), 'Leaving…');
 	}
 
+	/** Asks before leaving a thread you're the last one in (some servers drop empty threads); true to go ahead. */
+	function confirmLeavingLast(roomId: string): boolean {
+		const room = session.room(roomId);
+		if (room?.parentRoomId === undefined || !aloneIn(room, session.you?.user_id)) return true;
+		return confirm(`Leave ${room.title}?`);
+	}
+
 	/**
-	 * Leaves a thread from its row in the sidebar, without asking: it only moves down to Other Threads, where
-	 * Join brings it back. Its card stays in the room.
+	 * Leaves a thread from its row in the sidebar, without asking unless you're the last one in it: it only moves
+	 * down to Other Threads, where Join brings it back. Its card stays in the room.
 	 */
 	function leaveThread(thread: string): void {
-		if (!client) return;
+		if (!client || !confirmLeavingLast(thread)) return;
 		if (activeThread === thread && activeRoom) backToRoom();
 		feedback.track(client.leaveRoom(thread), 'Leaving…');
 	}
