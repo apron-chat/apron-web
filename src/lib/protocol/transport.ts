@@ -14,6 +14,7 @@
 import {
 	MAX_UNANSWERED_PINGS,
 	OPENING_MS,
+	OVERDUE_PINGS,
 	PING_FRAME,
 	PROBE_AFTER_HIDDEN_MS,
 	PROBE_MS,
@@ -93,6 +94,10 @@ export class Transport {
 	#hiddenAt?: number;
 	/** When the page last came back: its start, being shown again, the network back (`raced`). */
 	#backAt?: number;
+	/** When the current socket was last heard from (any frame), or attached: how overdue a check finds it (`overdue`). */
+	#heardAt?: number;
+	/** The kind of network the browser last said it was on (`navigator.connection.type`), where it says. */
+	#networkType?: string;
 	/**
 	 * Drops the current socket as if it had closed: for one that stopped answering, `reason` its close's. With
 	 * `handover`, no reconnect follows: its standby carries on.
@@ -126,10 +131,28 @@ export class Transport {
 	 * goes now, its backoff from the start.
 	 */
 	readonly #networkReturned = (): void => {
-		this.#backAt = this.#now();
-		if (this.#current && !this.#waiting?.opening) this.#probe();
-		else this.#replaceOpening('network changed', true);
+		this.#networkBack(false);
 	};
+	/**
+	 * The kind of network changed (`navigator.connection`, where the browser says: Chrome on Android): wifi to
+	 * cellular and back fires no `online`, the browser having been online all along, yet a socket on the network
+	 * left is gone, with nothing to say so until a ping goes unanswered, up to two intervals later. As the network
+	 * back, and racing the socket at once. Only the kind counts: the estimates of speed beside it change all the time.
+	 */
+	readonly #networkChanged = (): void => {
+		const type = networkType();
+		if (type === undefined || type === this.#networkType) return;
+		const known = this.#networkType !== undefined;
+		this.#networkType = type;
+		if (known) this.#networkBack(true);
+	};
+
+	/** The network back, or another one: what was on it is checked (`now`: racing it at once), or opening, replaced. */
+	#networkBack(now: boolean): void {
+		this.#backAt = this.#now();
+		if (this.#current && !this.#waiting?.opening) this.#probe(now);
+		else this.#replaceOpening('network changed', true);
+	}
 
 	readonly #hooks: TransportHooks;
 	readonly #webSocketFactory: WebSocketFactory;
@@ -167,6 +190,8 @@ export class Transport {
 		this.#isRunning = true;
 		globalThis.document?.addEventListener('visibilitychange', this.#visibilityChanged);
 		globalThis.addEventListener?.('online', this.#networkReturned);
+		connection()?.addEventListener?.('change', this.#networkChanged);
+		this.#networkType = networkType();
 		this.#hiddenAt = pageHidden() ? this.#now() : undefined;
 		this.#backAt = pageHidden() ? undefined : this.#now();
 	}
@@ -179,6 +204,7 @@ export class Transport {
 		this.#stopWaitingForPresence();
 		globalThis.document?.removeEventListener('visibilitychange', this.#visibilityChanged);
 		globalThis.removeEventListener?.('online', this.#networkReturned);
+		connection()?.removeEventListener?.('change', this.#networkChanged);
 	}
 
 	/** Connects, now or once the page is shown and the browser online (`waitForPresence`). */
@@ -312,6 +338,7 @@ export class Transport {
 	/** Makes `socket` this client's connection number `id`; `opened`: it is open already. */
 	#attachSocket(socket: WebSocket, id: number, opened: boolean): void {
 		this.#current = socket;
+		this.#heardAt = this.#now();
 		socket.onopen = () => {
 			if (!this.#isCurrentSocket(id, socket)) return;
 			opened = true;
@@ -319,6 +346,7 @@ export class Transport {
 		};
 		socket.onmessage = (event) => {
 			if (!this.#isCurrentSocket(id, socket)) return;
+			this.#heardAt = this.#now();
 			// Anything heard answers a probe: the socket is alive, and needs no standby. One still opening is waited
 			// on for its greeting, which the client tells of (`greeted`).
 			if (this.#waiting && !this.#waiting.opening) this.#heard();
@@ -340,7 +368,12 @@ export class Transport {
 			}
 			this.#hooks.emit();
 		};
-		socket.onclose = () => closed();
+		socket.onclose = () => {
+			// Closed while a check of it waits with a standby opening beside it (the close the browser held while the
+			// page was frozen, delivered once it runs again): the standby carries on, as when the check runs out.
+			if (this.#isCurrentSocket(id, socket) && this.#standby && this.#waiting?.socket === socket && !this.#waiting.opening) this.#replaceQuiet(true);
+			else closed();
+		};
 		// A socket whose peer vanished can stay OPEN here indefinitely, and one
 		// whose handshake went into a vanished network CONNECTING; close it and
 		// carry on as if the close had arrived, without waiting for it.
@@ -365,12 +398,12 @@ export class Transport {
 	 * follows is what follows any that does, the server asked why and the backoff, which a standby carrying on would
 	 * get around, one hung socket after another.
 	 */
-	#waitFor(socket: WebSocket, opening: boolean): void {
+	#waitFor(socket: WebSocket, opening: boolean, now = false): void {
 		this.#stopWaiting();
 		const usual = opening ? OPENING_MS : PROBE_MS;
 		const patient = this.#patient();
 		const wait = patient ? PROBE_PATIENT_MS : usual;
-		const raceAfter = !this.#raced(opening) ? undefined : patient ? usual : STANDBY_AFTER_MS;
+		const raceAfter = !this.#raced(opening) ? undefined : now ? 0 : patient ? usual : STANDBY_AFTER_MS;
 		const waiting = {
 			socket, opening, until: this.#now() + wait,
 			timer: setTimeout(() => {
@@ -378,11 +411,22 @@ export class Transport {
 				this.#quietDroppedAt = this.#now();
 				this.#replaceQuiet(!opening);
 			}, wait),
-			race: raceAfter === undefined ? undefined : setTimeout(() => {
+			race: raceAfter === undefined || raceAfter === 0 ? undefined : setTimeout(() => {
 				if (this.#waiting === waiting && socket === this.#current && this.#mayReplace()) this.#openStandby(socket);
 			}, raceAfter)
 		};
 		this.#waiting = waiting;
+		// At once: before a close the browser held while the page was frozen can come, which the standby then follows.
+		if (raceAfter === 0 && this.#mayReplace()) this.#openStandby(socket);
+	}
+
+	/**
+	 * Whether the current socket has gone `OVERDUE_PINGS` ping intervals without a frame: its pongs stopped, as they
+	 * do on a page frozen in the background, whose socket a server may have closed meanwhile (§1).
+	 */
+	#overdue(): boolean {
+		const seconds = this.#hooks.ping();
+		return seconds !== undefined && this.#heardAt !== undefined && this.#now() - this.#heardAt >= OVERDUE_PINGS * Math.max(1, seconds) * 1_000;
 	}
 
 	/**
@@ -521,13 +565,14 @@ export class Transport {
 	/**
 	 * Checks at once that an open socket still answers, on a page someone can see: one ping, and the socket is
 	 * waited on for anything back (`waitFor`). Only where the server pings (§1); the regular pings carry on as
-	 * they were.
+	 * they were. Its standby opens at once (`now`, or the socket `overdue`), else after `STANDBY_AFTER_MS`.
 	 */
-	#probe(): void {
+	#probe(now = false): void {
 		const socket = this.#current;
 		if (!this.#isRunning || !socket || socket.readyState !== WebSocket.OPEN || this.#hooks.ping() === undefined || this.#waiting || absent()) return;
+		const overdue = this.#overdue();
 		socket.send(PING_FRAME);
-		this.#waitFor(socket, false);
+		this.#waitFor(socket, false, now || overdue);
 	}
 
 	/**
@@ -689,6 +734,17 @@ export class Transport {
 	#isCurrentSocket(id: number, socket: WebSocket): boolean {
 		return id === this.#connectionId && this.#current === socket;
 	}
+}
+
+/** What the browser says of its network connection (the Network Information API), where it does. */
+function connection(): (EventTarget & { type?: string }) | undefined {
+	return (globalThis.navigator as { connection?: EventTarget & { type?: string } } | undefined)?.connection;
+}
+
+/** The kind of network the browser says it is on (`wifi`, `cellular`…), where it says: Chrome on Android. */
+function networkType(): string | undefined {
+	const type = connection()?.type;
+	return typeof type === 'string' && type !== 'unknown' ? type : undefined;
 }
 
 /** Closes a socket nobody took (a standby), its handlers first, so nothing it does after reaches the client. */

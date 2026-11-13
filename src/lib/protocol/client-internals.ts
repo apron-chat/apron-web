@@ -265,6 +265,13 @@ export const OPENING_MS = 10_000;
  */
 export const STANDBY_AFTER_MS = 2_000;
 /**
+ * How many ping intervals (`server.ping`) a socket may go without a frame before a check finds it overdue: its pongs
+ * stopped coming, so the client wasn't pinging (a page frozen in the background) or nothing got through. A server may
+ * close a connection that stopped pinging (§1), and an overdue socket is likely gone: a check of one races it at once,
+ * not after `STANDBY_AFTER_MS`.
+ */
+export const OVERDUE_PINGS = 2;
+/**
  * How long after the page came back (its start, being shown again, the network's return) a socket that starts
  * opening gets a standby: the attempts of a return, the first of which often goes out before the network is ready.
  * A probe, which only follows a return, always does. Past it, a slow handshake is the server's doing (a restart
