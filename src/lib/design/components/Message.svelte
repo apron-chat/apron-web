@@ -89,7 +89,7 @@
 		docked = messageDock.claim(claim, taking);
 		wanting = !docked;
 		if (!docked) return;
-		messageDock.place(held);
+		messageDock.place();
 		// Into its slot now, from the event that reached it; the first time, the slot takes it as it's drawn.
 		if (slot) slot.append(messageDock.host);
 		else reached = true;

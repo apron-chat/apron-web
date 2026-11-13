@@ -159,30 +159,34 @@ for (const [device, wide] of [['desktop', true], ['tablet', false]] as const) {
 
 		test('sits above the hovered message, clear of its words, or below it at the top of the timeline', async ({ preview, page }) => {
 			await preview.open();
-			// First, before any row has had it: a row just under the top of the timeline, where one above would be cut
-			// off, has it below. Moved once it's seen cut off (an IntersectionObserver, measuring nothing as the pointer arrives).
+			// First, before any row has had it: rows at the top of the timeline, where one above would be cut off, partly or
+			// wholly, have it below. Moved once it's seen cut off (an IntersectionObserver, measuring nothing as the pointer arrives).
 			const list = page.getByTestId('message-list');
-			// Its images in first, whose sizes arriving would move it.
+			// Its images in first, whose sizes arriving would move the rows.
 			await expect.poll(() => page.evaluate(() => [...document.images].every((image) => image.complete))).toBe(true);
-			// A row from the middle of the history, so that scrolling it to the top doesn't bring older ones in above it.
-			const id = await list.evaluate((frame) => {
+			// Rows from the middle of the history, so that scrolling one to the top doesn't bring older ones in above it.
+			const ids = await list.evaluate((frame) => {
 				const top = frame.getBoundingClientRect().top - frame.scrollTop;
 				const rows = [...frame.querySelectorAll<HTMLElement>('article.ap-msg[data-message-id]:not(.ap-msg-system)')];
-				const row = rows.find((el) => el.getBoundingClientRect().top - top > frame.clientHeight && frame.scrollHeight - (el.getBoundingClientRect().top - top) > frame.clientHeight);
-				return row?.dataset.messageId;
+				const at = (el: HTMLElement) => el.getBoundingClientRect().top - top;
+				return rows.filter((el) => at(el) > frame.clientHeight && frame.scrollHeight - at(el) > frame.clientHeight && el.offsetHeight > 40).map((el) => el.dataset.messageId!);
 			});
-			expect(id, 'a row with a screenful above and below it').toBeDefined();
-			const first = list.locator(`article[data-message-id="${id}"]`);
-			await first.evaluate((el) => {
-				const frame = el.closest('[data-testid="message-list"]')!;
-				frame.scrollTop += el.getBoundingClientRect().top - frame.getBoundingClientRect().top - 2;
-			});
-			await first.hover({ position: { x: 60, y: 8 } });
-			const top = first.getByRole('toolbar', { name: 'Message actions' });
-			await expect(top).toBeVisible();
-			const [at, frame] = await Promise.all([first.boundingBox(), list.boundingBox()]);
-			expect(at!.y - frame!.y, 'still at the top of the timeline').toBeLessThan(8);
-			await expect.poll(async () => (await top.boundingBox())!.y).toBeGreaterThanOrEqual(at!.y + at!.height - 4);
+			expect(ids.length, 'rows with a screenful above and below them').toBeGreaterThanOrEqual(2);
+			// 2px under the top: the toolbar above, partly cut off. 14px over it: wholly cut off.
+			for (const [id, offset] of [[ids[0], 2], [ids[1], -14]] as const) {
+				const row = list.locator(`article[data-message-id="${id}"]`);
+				await row.evaluate((el, offset) => {
+					const frame = el.closest('[data-testid="message-list"]')!;
+					frame.scrollTop += el.getBoundingClientRect().top - frame.getBoundingClientRect().top - offset;
+				}, offset);
+				await page.mouse.move(0, 0);
+				await row.hover({ position: { x: 60, y: 24 } });
+				const toolbar = row.getByRole('toolbar', { name: 'Message actions' });
+				await expect(toolbar).toBeVisible();
+				const [at, frame] = await Promise.all([row.boundingBox(), list.boundingBox()]);
+				expect(at!.y - frame!.y, `still ${offset}px from the top of the timeline`).toBeCloseTo(offset, 0);
+				await expect.poll(async () => (await toolbar.boundingBox())!.y).toBeGreaterThanOrEqual(at!.y + at!.height - 4);
+			}
 
 			// Elsewhere it sits above the row, over none of its words.
 			await preview.composer().click();
@@ -201,6 +205,22 @@ for (const [device, wide] of [['desktop', true], ['tablet', false]] as const) {
 		});
 	});
 }
+
+test.describe('the message toolbar, phone', () => {
+	test.use(DEVICES.phone);
+
+	test('a long press opens the menu over the row\'s top edge, where the finger is, not above it as the pointer\'s', async ({ preview }) => {
+		await preview.open();
+		const row = preview.message('Try markdown');
+		await row.scrollIntoViewIfNeeded();
+		await preview.hold(row);
+		const menu = row.getByRole('toolbar', { name: 'Message actions' });
+		await expect(menu).toBeVisible();
+		const [bar, at] = await Promise.all([menu.boundingBox(), row.boundingBox()]);
+		// 14px over the row's top edge, as it always was: neither above the row nor below it.
+		expect(bar!.y - at!.y).toBeCloseTo(-14, 0);
+	});
+});
 
 test.describe('a task list', () => {
 	test.use(DEVICES.desktop);
