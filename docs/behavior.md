@@ -72,21 +72,26 @@ heard from, the second closes unused; if the second's greeting arrives first
 (a whole handshake before one ping's answer, or before the greeting of a
 handshake begun 2 seconds sooner), the first is gone or going nowhere, and the
 second takes over at once with its handshake already done. From a connection
-still opening it takes over as that same connection, since nothing was said on
-the first: what was asked meanwhile (a message sent on the way back) goes out
-on it, and nothing shows a drop. The second also carries on when the wait runs
-out. It takes over only with the client running, shown and online, and no wait
-or hold from the server, which also keep any from opening: greeted where it may
-not, it closes unused and the first is waited on as before. A connection still
-opening that fails closes the second with it, and the usual question to the
-server and backoff follow. So a socket
+whose handshake is still under way it takes over as that same connection,
+since nothing can have been said on the first: what was asked meanwhile (a
+message sent on the way back) goes out on it, and nothing shows a drop. From
+any other (one checked, or one that opened and was never greeted), the first
+ends as if it had closed, and the second is the next connection. It takes over
+only with the client running, shown and online, and no wait or hold from the
+server, which also keep any from opening: greeted where it may not, it closes
+unused and the first is waited on as before. So a socket
 that died while a phone's app was away, or a handshake sent before its network
 was back, costs about 2 seconds and a handshake, not the whole wait.
+When the wait runs out, a check's second connection, if still opening, carries
+on as the next (the socket died; no handshake failed). A new connection that
+runs out its wait, or fails, takes its second with it: the handshake failed,
+and the usual question to the server and backoff follow, so handshakes going
+nowhere one after another still back off to about one a minute.
 For 3 minutes after a socket outlasted its wait, the network may only be slow:
-the next check, and the next connection opening, get 30 seconds, and the
-second connection opens only once the usual wait (5 seconds, 10 seconds) is
-over, so a slow network is met with one more connection, not one after
-another. One still opening when
+the next check, and the next connection opening, get 30 seconds, and where
+they are raced the second connection opens only once the usual wait (5
+seconds, 10 seconds) is over, so a slow network is met with one more
+connection, not one after another. One still opening when
 the network comes back, or when the page is shown again after its wait
 ran out while hidden, is replaced at once, the next connection opening then
 rather than after the backoff; the network back between attempts also

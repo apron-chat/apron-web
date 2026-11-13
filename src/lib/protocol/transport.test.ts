@@ -115,11 +115,13 @@ describe('Transport', () => {
 		expect(calls).not.toContain('closed');
 		vi.advanceTimersByTime(1);
 		expect(calls).toContain('closed');
-		// The page just started: a standby opened beside it meanwhile, and carries on as the next connection.
+		// The page just started, so a standby opened beside it meanwhile: it goes too. The handshake failed, and the
+		// next connection comes the usual way, after the backoff.
 		expect(FakeSocket.instances).toHaveLength(2);
 		expect(first.readyState).toBe(FakeSocket.CLOSED);
-		expect(transport.socket).toBe(latest());
-		expect(calls.at(-1)).toBe('reconnecting');
+		expect(latest().readyState).toBe(FakeSocket.CLOSED);
+		expect(transport.socket).toBeUndefined();
+		expect(transport.retrying).toBe(true);
 		transport.stop();
 	});
 

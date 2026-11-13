@@ -6,10 +6,10 @@
  * A socket opens until its `server` frame greets the client (`greeted`), which signs it in; signed in and up for
  * `STABLE_CONNECTION_MS` (`stayUp`), the backoff starts over. From the greeting on, pings watch it, and a page shown
  * again or the network back probes it (`probe`). Both times the client waits to hear from the socket, the greeting or
- * the probe's answer, the wait is one thing (`waitFor`): the socket has so long, a standby opens beside it meanwhile
- * and takes over at once should it greet first, and a socket that outlasts its wait goes as if it had closed, its
- * standby carrying on (`replaceQuiet`). Between sockets a reconnect waits out its backoff (`scheduleReconnect`), the
- * server's hold or wait (`held`, `retryAfter`), or the page's absence (`waitForPresence`).
+ * the probe's answer, the wait is one thing (`waitFor`): the socket has so long, and one that outlasts it goes as if
+ * it had closed (`replaceQuiet`). Where the page has just come back (`raced`), a standby opens beside it meanwhile,
+ * and takes over at once should it greet first (`standbyGreeted`). Between sockets a reconnect waits out its backoff
+ * (`scheduleReconnect`), the server's hold or wait (`held`, `retryAfter`), or the page's absence (`waitForPresence`).
  */
 import {
 	MAX_UNANSWERED_PINGS,
@@ -86,8 +86,7 @@ export class Transport {
 	 * A socket opened beside the one waited on (`beside`), sending nothing, as the app's early connection does:
 	 * `beside` heard from first closes it, and its own `server` frame coming first, a whole handshake before the
 	 * other's greeting or one ping's answer, means `beside` is gone or going nowhere: it takes over at once, the
-	 * handshake done. It touches nothing of the client's but this until it takes over, through `connectNow` as a
-	 * new connection.
+	 * handshake done (`standbyGreeted`). It touches nothing of the client's but this until it takes over.
 	 */
 	#standby?: { socket: WebSocket; beside: WebSocket; frames: unknown[] };
 	/** When the page was last hidden, while it still is. */
@@ -358,21 +357,26 @@ export class Transport {
 	 * just sent. It has `OPENING_MS` or `PROBE_MS`, and where the page has just come back (`raced`) a standby opens
 	 * beside it after `STANDBY_AFTER_MS`, so one that is gone, or whose handshake went nowhere, is replaced by a
 	 * connection already made rather than waited out. For `PROBE_PATIENT_FOR_MS` after a socket outlasted its wait
-	 * (`patient`), the network may only be slow: the socket then has `PROBE_PATIENT_MS`, and the standby opens once
-	 * its usual wait is over, so a slow network is met with one more socket, not one after another.
+	 * (`patient`), the network may only be slow: the socket then has `PROBE_PATIENT_MS`, and its standby, where it is
+	 * raced, opens once its usual wait is over, so a slow network is met with one more socket, not one after another.
+	 *
+	 * A probed socket that outlasts its wait leaves its standby, if still opening, to carry on: the socket died, and
+	 * no handshake failed. A socket opening that does takes its standby with it: the handshake failed, and what
+	 * follows is what follows any that does, the server asked why and the backoff, which a standby carrying on would
+	 * get around, one hung socket after another.
 	 */
 	#waitFor(socket: WebSocket, opening: boolean): void {
 		this.#stopWaiting();
 		const usual = opening ? OPENING_MS : PROBE_MS;
 		const patient = this.#patient();
 		const wait = patient ? PROBE_PATIENT_MS : usual;
-		const raceAfter = patient ? usual : this.#raced(opening) ? STANDBY_AFTER_MS : undefined;
+		const raceAfter = !this.#raced(opening) ? undefined : patient ? usual : STANDBY_AFTER_MS;
 		const waiting = {
 			socket, opening, until: this.#now() + wait,
 			timer: setTimeout(() => {
 				if (this.#waiting !== waiting || socket !== this.#current) return;
 				this.#quietDroppedAt = this.#now();
-				this.#replaceQuiet();
+				this.#replaceQuiet(!opening);
 			}, wait),
 			race: raceAfter === undefined ? undefined : setTimeout(() => {
 				if (this.#waiting === waiting && socket === this.#current && this.#mayReplace()) this.#openStandby(socket);
@@ -382,7 +386,8 @@ export class Transport {
 	}
 
 	/**
-	 * Whether a socket waited on gets its standby after `STANDBY_AFTER_MS`: where the page has just come back, which
+	 * Whether a socket waited on gets a standby (after `STANDBY_AFTER_MS`, or its usual wait while `patient`): where
+	 * the page has just come back, which
 	 * is when sockets die unnoticed and handshakes go nowhere (a phone's app away, its network not back yet). A
 	 * probe always follows that. A socket opening does within `STANDBY_OPENING_FOR_MS` of the page's start, of its
 	 * being shown again, or of the network's return; one opening at any other time (the server restarted, and every
@@ -554,8 +559,10 @@ export class Transport {
 	/**
 	 * The standby's greeting came before anything from the socket waited on. Where a connection may not be taken now
 	 * (`mayReplace`: the page hidden since, a hold or wait from the server), it proves nothing worth acting on: it
-	 * closes unused, and the wait goes on. Otherwise it takes over: from a probed socket as from one that closed
-	 * (`replaceQuiet`), and from one still opening without the client hearing of a close (`takeOverOpening`).
+	 * closes unused, and the wait goes on. Otherwise it takes over. From a socket that has yet to open, as the same
+	 * connection, the client hearing of no close (`takeOverOpening`). From any other (a probed one, or one that
+	 * opened and was never greeted, on which the client may have spoken: a sign-in started before the greeting), as
+	 * from one that closed, so that what was said on it is failed rather than left waiting (`replaceQuiet`).
 	 */
 	#standbyGreeted(): void {
 		const standby = this.#standby;
@@ -563,18 +570,18 @@ export class Transport {
 		if (!this.#mayReplace()) {
 			this.#standby = undefined;
 			closeUnused(standby.socket);
-		} else if (this.#waiting?.opening) {
+		} else if (this.#waiting?.opening && this.#current?.readyState === WebSocket.CONNECTING) {
 			this.#takeOverOpening();
 		} else {
-			this.#replaceQuiet();
+			this.#replaceQuiet(true);
 		}
 	}
 
 	/**
-	 * Goes on with the standby, greeted, in place of the socket still opening, as the same connection. The client
-	 * says nothing on a socket before its greeting, so nothing of the connection is lost with the one left, and the
-	 * client hears of no close: what it has waiting to send goes out on this one once it has signed in, where a
-	 * close would have failed it as not sent, and a first connection stays one, not a reconnect.
+	 * Goes on with the standby, greeted, in place of the socket whose handshake is still under way, as the same
+	 * connection. Nothing can be said on a socket before it opens, so nothing of the connection is lost with the one
+	 * left, and the client hears of no close: what it has waiting to send goes out on this one once it has signed
+	 * in, where a close would have failed it as not sent, and a first connection stays one, not a reconnect.
 	 */
 	#takeOverOpening(): void {
 		const standby = this.#standby;
@@ -589,23 +596,25 @@ export class Transport {
 	}
 
 	/**
-	 * Drops the socket waited on, gone quiet or nowhere, as if it had closed. With a standby still open or opening,
-	 * and connecting allowed now (`mayReplace`), goes on with it at once, taking it as the app's early connection is
-	 * taken; otherwise through what follows any close (the backoff, or the server asked why its handshake failed).
+	 * Drops the socket waited on, gone quiet or nowhere, as if it had closed. With `carryOn`, a standby still open
+	 * or opening, and connecting allowed now (`mayReplace`), goes on with it at once, taking it as the app's early
+	 * connection is taken. Otherwise the standby closes with it, and what follows any close follows: the backoff,
+	 * or the server asked why its handshake failed.
 	 */
-	#replaceQuiet(): void {
+	#replaceQuiet(carryOn: boolean): void {
 		const waiting = this.#waiting;
 		if (!waiting) return;
 		const standby = this.#standby;
 		// Ending the quiet connection (`drop`) closes a standby still there: this one is taken first.
 		this.#standby = undefined;
-		const usable = standby !== undefined && (standby.socket.readyState === WebSocket.CONNECTING || standby.socket.readyState === WebSocket.OPEN) && this.#mayReplace();
+		const usable = carryOn && standby !== undefined && (standby.socket.readyState === WebSocket.CONNECTING || standby.socket.readyState === WebSocket.OPEN) && this.#mayReplace();
 		if (standby && !usable) closeUnused(standby.socket);
 		this.#abandonSocket?.(waiting.opening ? 'opening timed out' : 'ping unanswered', usable);
 		if (!standby || !usable) return;
 		const { socket, frames } = standby;
-		// The connection ended there (`drop`), as the client's does: with one still current, the standby is nobody's.
-		if (this.#current) {
+		// The connection ended there (`drop`), as the client's does. With one still current, or the client stopped
+		// as it heard of the close, the standby is nobody's.
+		if (this.#current || !this.#isRunning) {
 			closeUnused(socket);
 			return;
 		}
