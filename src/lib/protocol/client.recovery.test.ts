@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { UNSUPPORTED, type ChatClient, type ClientSnapshot } from './client';
-import { FakeSocket, settle, startClient } from '$lib/test/client';
+import { FakeSocket, settle, startClient, afterBackoff } from '$lib/test/client';
 import { bounds } from '$lib/test/client-history';
 
 /**
@@ -374,7 +374,7 @@ describe('after a reconnect', () => {
 		latest().drop();
 		// Nor while it's away: recovery will fill the gap, so there's none to mark meanwhile.
 		expect(snapshot.showReconnectDivider).toBe(false);
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		await latest().greet(['history', 'rooms'], { room: general });
 		// The kept room resumed right behind auth, from its checkpoint; one empty page settles it.
 		expect(latest().sent.filter((frame) => frame.method === 'history').map((frame) => bounds(frame.params))).toEqual([{ room_id: 'general', after: '13' }]);
@@ -399,7 +399,7 @@ describe('after a reconnect', () => {
 			client.selectRoom('eng');
 			latest().drop();
 			client.awaitRoom('eng');
-			vi.advanceTimersByTime(5_000);
+			afterBackoff();
 			const again = latest();
 			again.open();
 			again.receive({ method: 'server', params: { apron: 9, auth: ['guest'], capabilities: ['history', 'rooms'] } });
@@ -456,7 +456,7 @@ describe('after a reconnect', () => {
 		expect(room('20').resumed).toBeUndefined();
 
 		latest().drop();
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		const next = latest();
 		next.open();
 		next.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['history', 'rooms'] } });
@@ -489,7 +489,7 @@ describe('after a reconnect', () => {
 
 		// Away while someone replies in Side; Quiet stays quiet.
 		latest().drop();
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		const next = latest();
 		next.open();
 		next.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['history', 'rooms'] } });
@@ -522,7 +522,7 @@ describe('after a reconnect', () => {
 		await load;
 
 		latest().drop();
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		const next = latest();
 		next.open();
 		next.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['history', 'rooms'] } });
@@ -549,7 +549,7 @@ describe('after a reconnect', () => {
 		await load;
 
 		latest().drop();
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		const next = latest();
 		next.open();
 		next.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['history', 'rooms'] } });
@@ -617,7 +617,7 @@ describe('after a reconnect', () => {
 		// Kept, and said to be: a link to a room missing from them waits for a fresh listing.
 		expect(snapshot.keptListings?.sort()).toEqual(['', 'general']);
 		// Back as the same user: still there until fresh ones replace them.
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		await latest().greet(['history', 'rooms'], { room: general });
 		expect(snapshot.directory?.map((listing) => listing.id)).toEqual(['ops']);
 		const fresh = client.listRooms();
@@ -628,7 +628,7 @@ describe('after a reconnect', () => {
 
 		// Back as someone else: what they could join is their own.
 		latest().drop();
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		await latest().greet(['history', 'rooms'], { room: general, you: { user_id: 'guest_2', name: 'Guest' } });
 		expect(snapshot.directory).toBeUndefined();
 		expect(snapshot.threadDirectory).toEqual({});
@@ -644,7 +644,7 @@ describe('after a reconnect', () => {
 		latest().receive({ method: 'room_update', params: { joined: [{ room_id: '40', log_id: '41', parent_room_id: 'general', title: 'Offsite' }] } });
 		latest().drop();
 		expect(snapshot.threadDirectory.general?.map((listing) => [listing.id, listing.joined])).toEqual([['40', true]]);
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		const next = latest();
 		next.open();
 		next.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['history', 'rooms'] } });
@@ -657,7 +657,7 @@ describe('after a reconnect', () => {
 		await latest().greet(['history', 'rooms'], { room: general });
 		await latest().reply('history', { messages: [entry('11'), entry('12')], more: false, latest_log_id: '12', history_log_id: '10' });
 		latest().drop();
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		await latest().greet(['history', 'rooms'], { room: { ...general, latest_log_id: '14' } });
 		// Sent before the listing named a head: it pages to the end of the log, whose head the page reports.
 		expect(bounds(latest().request('history').params)).toEqual({ room_id: 'general', after: '13' });
@@ -681,7 +681,7 @@ describe('after a reconnect', () => {
 		expect(history().slice(1)).toEqual([{ room_id: 'ops', before: '21' }, { room_id: 'quiet', before: '31' }]);
 		await latest().reply('history', { more: false, latest_log_id: '31', history_log_id: '30' });
 		latest().drop();
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		const again = latest();
 		again.open();
 		again.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['history', 'rooms'] } });
@@ -699,7 +699,7 @@ describe('after a reconnect', () => {
 		await latest().greet(['history', 'rooms'], { room: general });
 		await latest().reply('history', { messages: [entry('11'), entry('12')], more: false, latest_log_id: '12', history_log_id: '10' });
 		latest().drop();
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		await latest().greet(['history', 'rooms'], { room: { ...general, latest_log_id: '30', history_log_id: '20' } });
 		// The resume sent behind auth is for nothing now, but out: the rebuild goes once it is answered.
 		expect(bounds(latest().request('history').params)).toEqual({ room_id: 'general', after: '13' });
@@ -719,7 +719,7 @@ describe('after a reconnect', () => {
 		await latest().reply('history', { messages: [{ ...entry('21'), room_id: '20' }], more: false, latest_log_id: '21', history_log_id: '20' });
 		await load;
 		latest().drop();
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		await latest().greet(['history', 'rooms'], { room: general });
 		latest().receive({ method: 'room_update', params: { joined: [{ ...thread, latest_log_id: '23' }] } });
 		// Kept, but the gap since its checkpoint is not loaded yet.
@@ -743,7 +743,7 @@ describe('after a reconnect', () => {
 		await latest().reply('room_list', { joined: [general], users: [] });
 		await latest().reply('history', { messages: [entry('11'), entry('12')], more: false, latest_log_id: '12', history_log_id: '10' });
 		latest().drop();
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		socket = latest();
 		socket.open();
 		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
@@ -765,7 +765,7 @@ describe('after a reconnect', () => {
 		latest().receive({ method: 'message', params: { ...entry('11'), room_id: 'lobby' } });
 		expect(snapshot.showReconnectDivider).toBe(false);
 		latest().drop();
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		await latest().greet();
 		expect(snapshot.authenticated).toBe(true);
 		expect(snapshot.showReconnectDivider).toBe(true);
@@ -851,7 +851,7 @@ describe('catching up every joined room together (`history` without `room_id`)',
 		await first.reply('history', { messages: [entry(21, side.room_id), entry(22, side.room_id)], more: false, latest_log_id: at(22), history_log_id: at(20) });
 		await load;
 		first.drop();
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		const next = latest();
 		next.open();
 		next.receive({ method: 'server', params: { apron: 10, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
@@ -913,7 +913,7 @@ describe('catching up every joined room together (`history` without `room_id`)',
 
 		// Away again: this server resumes each room by itself straight away.
 		next.drop();
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		const again = latest();
 		again.open();
 		again.receive({ method: 'server', params: { apron: 10, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
@@ -941,7 +941,7 @@ describe('catching up every joined room together (`history` without `room_id`)',
 		// Away for a day and more: where they were all complete (the head that catch-up reached) is too old.
 		next.drop();
 		vi.setSystemTime(NOW + 25 * 60 * 60 * 1000);
-		vi.advanceTimersByTime(5_000);
+		afterBackoff(next);
 		const later = latest();
 		later.open();
 		later.receive({ method: 'server', params: { apron: 10, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
@@ -981,7 +981,7 @@ describe('catching up every joined room together (`history` without `room_id`)',
 		expect(room(side.room_id).resumed).toBeUndefined();
 		next.receive({ method: 'message', params: entry(23, side.room_id) });
 		next.drop();
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		const again = latest();
 		again.open();
 		again.receive({ method: 'server', params: { apron: 10, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
@@ -997,7 +997,7 @@ describe('catching up every joined room together (`history` without `room_id`)',
 		// The same for a top-level room left out: its checkpoint moves with what comes live.
 		again.receive({ method: 'message', params: entry(25) });
 		again.drop();
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		const third = latest();
 		third.open();
 		third.receive({ method: 'server', params: { apron: 10, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
@@ -1022,7 +1022,7 @@ describe('catching up every joined room together (`history` without `room_id`)',
 		expect(histories(next)).toHaveLength(1);
 
 		next.drop();
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		const again = latest();
 		again.open();
 		again.receive({ method: 'server', params: { apron: 10, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
@@ -1055,7 +1055,7 @@ describe('catching up every joined room together (`history` without `room_id`)',
 		await first.reply('room_list', { joined: [general, busy], users: [] });
 		await first.reply('history', { messages: [entry(11), entry(12)], more: false, latest_log_id: at(12), history_log_id: at(10) });
 		first.drop();
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		const next = latest();
 		next.open();
 		next.receive({ method: 'server', params: { apron: 10, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
@@ -1079,7 +1079,7 @@ describe('catching up every joined room together (`history` without `room_id`)',
 		await first.reply('room_list', { joined: [general, other], users: [] });
 		await first.reply('history', { messages: [entry(11), entry(12)], more: false, latest_log_id: at(12), history_log_id: at(10) });
 		first.drop();
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		const next = latest();
 		next.open();
 		next.receive({ method: 'server', params: { apron: 10, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });

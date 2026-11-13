@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { findMessage, type ChatClient, type ClientSnapshot } from './client';
-import { FakeSocket, quiet, settle, startClient } from '$lib/test/client';
+import { FakeSocket, afterBackoff, quiet, settle, startClient } from '$lib/test/client';
 
 /**
  * Operations (§4.1, §4.4, §4.7, §4.8, §4.12): posts, commands, saves and
@@ -117,7 +117,7 @@ describe('a request the connection ends under', () => {
 		socket.drop();
 		// Asked while away: it waits for the next connection, which goes before it is signed in.
 		const unsent = client.send('general', 'waiting');
-		vi.advanceTimersByTime(5_000);
+		afterBackoff(socket);
 		FakeSocket.latest().drop();
 		await expect(sent.promise).rejects.toThrow('Connection closed; delivery is uncertain. Please retry');
 		await expect(unsent.promise).rejects.toThrow('Connection closed; not sent. Please retry');

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatClient, ClientSnapshot } from './client';
 import type { JsonObject } from './types';
-import { connect, FakeSocket, settle, startClient } from '$lib/test/client';
+import { connect, FakeSocket, settle, startClient, afterBackoff } from '$lib/test/client';
 import { bounds } from '$lib/test/client-history';
 import { requestPasskey } from './webauthn';
 
@@ -69,8 +69,7 @@ describe('a recovery runs only while its pages can go', () => {
 	it('stops where it got to when the sign-in it ran behind fails, and the passkey sign-in goes on from there', async () => {
 		const { client, snap } = await signedIn();
 		FakeSocket.latest().drop();
-		await vi.advanceTimersByTimeAsync(5_000);
-		const next = FakeSocket.latest();
+		const next = afterBackoff();
 		next.open();
 		next.receive({ method: 'server', params: { apron: 10, auth: ['webauthn', 'token', 'guest'], capabilities: ['history', 'rooms'] } });
 		// The resume, its listing, and the room's recovery from its checkpoint go together (§3.2).

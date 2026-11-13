@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { childRooms, DEFAULT_ROOM_ID, topLevelRooms, type ChatClient, type ClientSnapshot } from './client';
-import { FakeSocket, quiet, settle, startClient, type ClientHarness } from '$lib/test/client';
+import { FakeSocket, quiet, settle, startClient, type ClientHarness, afterBackoff } from '$lib/test/client';
 import { bounds } from '$lib/test/client-history';
 
 /**
@@ -83,7 +83,7 @@ describe('the joined set (cap rooms)', () => {
 		await authenticate(['rooms']);
 		await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General' }, { room_id: 'ops', title: 'Ops' }] });
 		socket.drop();
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		socket = FakeSocket.latest();
 		await authenticate(['rooms']);
 		expect(snapshot.rooms).toEqual([]);
@@ -232,7 +232,7 @@ describe('transient notices', () => {
 		expect(snapshot.users['~private']).toBeUndefined();
 		// Kept through a reconnect, for the session.
 		socket.drop();
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		socket = FakeSocket.latest();
 		await authenticate(['rooms']);
 		await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General' }] });
@@ -252,7 +252,7 @@ describe('transient notices', () => {
 		expect(texts()).toEqual(['Guests can read along.', 'A command reply']);
 		// The server sends its welcome on every connection: the new one replaces the old.
 		socket.drop();
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		socket = FakeSocket.latest();
 		socket.open();
 		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['rooms'] } });

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OPENING_MS, STABLE_CONNECTION_MS } from './client-internals';
 import { Transport, type TransportHooks } from './transport';
+import { afterBackoff } from '$lib/test/client';
 import { FakeSocket } from '$lib/test/fake-socket';
 
 /**
@@ -81,7 +82,7 @@ describe('Transport', () => {
 		expect(calls.slice(-2)).toEqual(['closed', 'emit']);
 		expect(transport.socket).toBeUndefined();
 		expect(transport.retrying).toBe(true);
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		expect(FakeSocket.instances).toHaveLength(2);
 		expect(transport.id).toBe(first + 1);
 		expect(calls.at(-1)).toBe('reconnecting');
@@ -109,10 +110,18 @@ describe('Transport', () => {
 		transport.run();
 		transport.connect();
 		latest().open();
+		const first = latest();
 		vi.advanceTimersByTime(OPENING_MS - 1);
 		expect(calls).not.toContain('closed');
 		vi.advanceTimersByTime(1);
 		expect(calls).toContain('closed');
+		// The page just started, so a standby opened beside it meanwhile: it goes too. The handshake failed, and the
+		// next connection comes the usual way, after the backoff.
+		expect(FakeSocket.instances).toHaveLength(2);
+		expect(first.readyState).toBe(FakeSocket.CLOSED);
+		expect(latest().readyState).toBe(FakeSocket.CLOSED);
+		expect(transport.socket).toBeUndefined();
+		expect(transport.retrying).toBe(true);
 		transport.stop();
 	});
 
@@ -154,13 +163,56 @@ describe('Transport', () => {
 		transport.connect();
 		latest().open();
 		latest().drop();
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		expect(transport.retrying).toBe(true);
 		latest().open();
 		transport.greeted(false);
 		transport.stayUp(() => true);
 		vi.advanceTimersByTime(STABLE_CONNECTION_MS);
 		expect(transport.retrying).toBe(false);
+		transport.stop();
+	});
+
+	it('starts it over as a connection closes that stayed up by the clock, its timers frozen meanwhile; not one that closed sooner, or signed out', () => {
+		const { transport } = harness();
+		transport.run();
+		transport.connect();
+		/** The latest socket opens and signs in (or not), and closes `upFor` later, on a page frozen meanwhile. */
+		const visit = (signedIn: boolean, upFor: number) => {
+			latest().open();
+			transport.greeted(false);
+			transport.stayUp(() => signedIn);
+			// A frozen page's clock jumps without its timers firing in between.
+			vi.setSystemTime(Date.now() + upFor);
+			latest().drop();
+		};
+		// Up for less than it takes, then for long enough but signed in as no one: each next connection is one more try.
+		visit(true, STABLE_CONNECTION_MS - 1);
+		afterBackoff();
+		expect(transport.retrying).toBe(true);
+		visit(false, STABLE_CONNECTION_MS);
+		afterBackoff();
+		expect(transport.retrying).toBe(true);
+		// Signed in, and up for long enough: the next is the first again, within a quarter second, not after seconds.
+		visit(true, STABLE_CONNECTION_MS);
+		const before = FakeSocket.instances.length;
+		vi.advanceTimersByTime(250);
+		expect(FakeSocket.instances).toHaveLength(before + 1);
+		transport.stop();
+	});
+
+	it('keeps counting a reconnect its client asked for before closing the socket, however long that had stayed up', () => {
+		const { transport } = harness();
+		transport.run();
+		transport.connect();
+		latest().open();
+		transport.greeted(false);
+		transport.stayUp(() => true);
+		vi.setSystemTime(Date.now() + STABLE_CONNECTION_MS);
+		// As the client does where history outruns it: the next connection is due, then this one closes.
+		transport.scheduleReconnect();
+		latest().drop();
+		expect(transport.retrying).toBe(true);
 		transport.stop();
 	});
 

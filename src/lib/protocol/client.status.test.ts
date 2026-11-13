@@ -116,6 +116,7 @@ describe('idle reports', () => {
 		await greet();
 		client.setIdle(true);
 		await answer();
+		vi.advanceTimersByTime(5_000);
 		reconnect();
 		await greet();
 		// Idle since the page said so, before the reconnect.

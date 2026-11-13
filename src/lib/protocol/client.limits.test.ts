@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RateLimitError, type ChatClient, type ClientSnapshot } from './client';
 import { limitScope, userFacingRpcError } from './client-internals';
 import { punctuated } from '../words';
-import { FakeSocket, quiet, settle, startClient } from '$lib/test/client';
+import { FakeSocket, quiet, settle, startClient, afterBackoff } from '$lib/test/client';
 
 /**
  * Waits the server asks for (`retry_after`, §1.1): a refusal is a
@@ -110,7 +110,7 @@ describe('a refusal with retry_after', () => {
 		const posts = () => FakeSocket.latest().sent.filter((frame) => frame.method === 'message').length;
 		const reconnect = () => {
 			FakeSocket.latest().drop();
-			vi.advanceTimersByTime(5_000);
+			afterBackoff();
 			return FakeSocket.latest();
 		};
 		quiet(client.send('general', 'one'));

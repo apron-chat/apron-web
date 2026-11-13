@@ -485,7 +485,10 @@
 	});
 	$effect.pre(() => {
 		const roomId = session.ready && session.canManageRooms ? session.activeRoomId : undefined;
-		if (!roomId || !client || untrack(() => threadsListed.includes(roomId))) return;
+		// Read as state: the rooms forgotten above (another account signing in on this connection, a guest's passkey)
+		// are asked for again, though the session stayed ready and the room open. Nothing else would ask, and the room
+		// would wait for its threads for good, on the copy held from before.
+		if (!roomId || !client || threadsListed.includes(roomId)) return;
 		let current = true;
 		const settle = () => { if (current && !threadsListed.includes(roomId)) threadsListed = [...threadsListed, roomId]; };
 		// The Sidebar asks for the same listing; the client shares one request.

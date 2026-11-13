@@ -329,7 +329,8 @@ snapshot and option types, `client-views.ts` the pure helpers over snapshots,
 capabilities and server URLs, and `client-internals.ts` the per-room state,
 tuning constants and helpers only `ChatClient` uses, `transport.ts` the
 sockets under the session (`Transport`: opening each, pinging and probing it,
-a probe's standby, reconnecting with backoff, waiting for the page to be
+the one wait to hear from a socket opening or probed and the standby that
+races it, reconnecting with backoff, waiting for the page to be
 shown and online), which reaches the session only through its hooks,
 `signin-connection.ts`
 the connection an email or external sign-in proposes and approves on, and

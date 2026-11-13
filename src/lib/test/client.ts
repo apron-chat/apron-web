@@ -74,8 +74,7 @@ export function startClient(options: ClientOptions = {}): ClientHarness {
 		drop: () => FakeSocket.latest().drop(),
 		reconnect() {
 			FakeSocket.latest().drop();
-			vi.advanceTimersByTime(5_000);
-			return FakeSocket.latest();
+			return afterBackoff();
 		}
 	};
 }
@@ -88,6 +87,20 @@ export async function connect(caps: string[] = [], options: ClientOptions & Gree
 	const harness = startClient(options);
 	await harness.socket.greet(caps, options);
 	return harness;
+}
+
+/**
+ * Runs the fake timers, one at a time, until the client opens a socket after `previous` (by default the latest,
+ * just dropped), its backoff run out, and returns it, not yet greeted. For a connection that had opened, whose close
+ * starts the backoff at once (`nextSocket` also waits out the question a failed handshake asks first). Rather than
+ * a fixed wait: a socket left opening for seconds gets a standby beside it (`STANDBY_AFTER_MS`).
+ */
+export function afterBackoff(previous: FakeSocket = FakeSocket.latest()): FakeSocket {
+	for (let timers = 0; FakeSocket.latest() === previous; timers++) {
+		if (timers >= 1_000 || vi.getTimerCount() === 0) throw new Error('the client opened no new socket');
+		vi.advanceTimersToNextTimer();
+	}
+	return FakeSocket.latest();
 }
 
 /**

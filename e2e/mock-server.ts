@@ -17,6 +17,8 @@ export type MockOptions = {
 	opened?: string[];
 	you?: Record<string, unknown>;
 	token?: string;
+	/** The account a passkey signs in to (`auth` with `scheme: "webauthn"`, §4.10): its `you`. Without it, the mock has no passkeys. */
+	passkey?: Record<string, unknown>;
 	sent?: Record<string, any>[];
 	/** The same, each with the address it went to: the page may be talking to more than one server at once. */
 	sentTo?: { url: string; frame: Record<string, any> }[];
@@ -57,6 +59,12 @@ export async function mockServer(page: Page, options: MockOptions = {}): Promise
 			switch (frame.method) {
 				case 'ping': return ws.send(JSON.stringify({ method: 'pong' }));
 				case 'auth': {
+					if (options.passkey && frame.params?.scheme === 'webauthn') {
+						// Nothing is verified: `begin` gives a challenge for this server's host, and `finish` signs in as the account.
+						if (frame.params.step === 'begin') return reply({ challenge_id: 'challenge_1', public_key: { challenge: 'AAAA', rpId: new URL(ws.url()).hostname } });
+						you = { status: 'online', ...options.passkey };
+						return reply({ you });
+					}
 					if (options.token && frame.params?.scheme === 'guest' && auths++ > 0) {
 						you = { user_id: 'guest_2', name: 'Guest 2', status: 'online' };
 						return reply({ you });

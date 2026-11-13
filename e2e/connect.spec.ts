@@ -1,4 +1,5 @@
 import { DEVICES, expect, test, type Preview } from './fixtures';
+import type { MockOptions } from './mock-server';
 
 /**
  * The rooms list's head, which shows the server you're on and opens the server pane: what is known of it, New
@@ -367,5 +368,43 @@ test.describe('on a phone', () => {
 		recent = await openRecent();
 		await expect(names()).toHaveText(['Work']);
 		await expect(recent.getByRole('button', { name: 'Star Work', exact: true })).toHaveAttribute('aria-pressed', 'true');
+	});
+});
+
+test.describe('a guest who signs in with a passkey', () => {
+	test.use(DEVICES.desktop);
+
+	test('keeps the open room live as the account, with nothing left checking for new messages', async ({ preview, page }) => {
+		// The browser's passkey sheet, answered: the scripted server verifies nothing.
+		await page.addInitScript(() => {
+			const bytes = () => new Uint8Array([1, 2, 3]).buffer;
+			navigator.credentials.get = async () => ({
+				id: 'AQID', rawId: bytes(), type: 'public-key',
+				response: { clientDataJSON: bytes(), authenticatorData: bytes(), signature: bytes(), userHandle: bytes() },
+				getClientExtensionResults: () => ({})
+			}) as unknown as Credential;
+		});
+		const from = { user_id: 'bob', name: 'Bob' };
+		const options: MockOptions = {
+			passkey: { user_id: 'grace', name: 'Grace' },
+			history: [{ message_id: '5', log_id: '5', room_id: 'general', from, body: { text: 'Before signing in' } }]
+		};
+		await page.clock.install();
+		await preview.openRoot(options);
+		await expect(preview.message('Before signing in')).toBeVisible();
+		// Past the longest the room waits for its threads to be listed (3 s): as someone who reads first does.
+		await page.clock.fastForward(3_500);
+		await preview.openConnect({ signIn: true });
+		const form = page.getByRole('form', { name: 'Sign in' });
+		await form.getByRole('radiogroup', { name: 'Sign in with' }).getByRole('radio', { name: 'Passkey' }).click();
+		await page.getByTestId('passkey-login').click();
+		await expect(form).toHaveCount(0);
+		await expect(page.getByTestId('connection-status')).toHaveText('Connected');
+		// The same connection, now the account's: the room shows what arrives, not a copy held from before.
+		options.deliver!({ method: 'message', params: { message_id: '9', log_id: '9', room_id: 'general', from, body: { text: 'After signing in' } } });
+		await expect(preview.message('After signing in')).toBeVisible();
+		// The pill shows only once a check has run a while (400 ms), and stays a moment: none after either.
+		await page.clock.fastForward(2_000);
+		await expect(page.getByText('Checking for new messages…')).toHaveCount(0);
 	});
 });

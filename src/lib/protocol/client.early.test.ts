@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { ChatClient, type ClientSnapshot } from './client';
 import { EARLY_CONNECTION_MS, openEarlyConnection, resetEarlyConnection, takeEarlyConnection } from './early-connection';
-import { FakeSocket, settle } from '$lib/test/client';
+import { FakeSocket, settle, afterBackoff } from '$lib/test/client';
 
 /**
  * The connection opened as the app starts (`early-connection.ts`, `hooks.client.ts`), before the client exists: the
@@ -108,7 +108,7 @@ describe('the connection opened as the app starts', () => {
 		openEarlyConnection(URL, factory);
 		expect(FakeSocket.instances).toEqual([early]);
 		early.drop();
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		expect(FakeSocket.instances).toHaveLength(2);
 		const next = FakeSocket.latest();
 		next.open();
