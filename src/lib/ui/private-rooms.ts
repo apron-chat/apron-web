@@ -33,6 +33,12 @@ export function othersIn(room: Pick<RoomSnapshot, 'members'> | undefined, you: s
 	return (room?.members ?? []).filter((member) => member.user_id !== you);
 }
 
+/** You are the last one in a room: its members are known, and none but you (a truncated listing counts the rest). */
+export function aloneIn(room: Pick<RoomSnapshot, 'members' | 'memberCount'> | undefined, you: string | undefined): boolean {
+	if (!room?.members || you === undefined) return false;
+	return othersIn(room, you).length === 0 && (room.memberCount ?? 0) <= 1;
+}
+
 /**
  * The room you already talk to someone in: joined, private, top-level and untitled (`namedForMembers`), with
  * exactly the two of you as members, from a complete listing (a truncated one says nothing for sure).

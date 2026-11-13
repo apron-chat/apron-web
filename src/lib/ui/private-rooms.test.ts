@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ClientSnapshot, OperationHandle, RoomSnapshot } from '$lib/protocol/client';
 import { roomSnapshot as room } from '$lib/test/builders';
-import { addRoomMembers, ArrivalWatch, directRoomWith, messageUser, NO_PRIVATE_ROOMS, othersIn, privateRoomLine, privateRooms, quietestFirst, reachesStart, startPrivateRoom } from './private-rooms';
+import { addRoomMembers, aloneIn, ArrivalWatch, directRoomWith, messageUser, NO_PRIVATE_ROOMS, othersIn, privateRoomLine, privateRooms, quietestFirst, reachesStart, startPrivateRoom } from './private-rooms';
 
 const members = (...ids: string[]) => ids.map((user_id) => ({ user_id }));
 const dm = (id: string, ...ids: string[]) => room(id, [], { private: true, namedForMembers: true, members: members('ada', ...ids) });
@@ -12,6 +12,15 @@ describe('private rooms', () => {
 		expect(privateRooms(rooms).map((entry) => entry.id)).toEqual(['p1', 'p2']);
 		expect(othersIn(rooms[0], 'ada')).toEqual([{ user_id: 'bob' }]);
 		expect(othersIn(undefined, 'ada')).toEqual([]);
+	});
+
+	it('knows you are the last one in a room only when its members say so', () => {
+		expect(aloneIn(room('t1', [], { members: members('ada') }), 'ada')).toBe(true);
+		expect(aloneIn(room('t1', [], { members: members('ada', 'bob') }), 'ada')).toBe(false);
+		// Unknown members, or a truncated listing with others beyond it, aren't alone.
+		expect(aloneIn(room('t1'), 'ada')).toBe(false);
+		expect(aloneIn(room('t1', [], { members: members('ada'), memberCount: 3 }), 'ada')).toBe(false);
+		expect(aloneIn(room('t1', [], { members: members('ada') }), undefined)).toBe(false);
 	});
 
 	it('finds the conversation you already have with someone: untitled, private, just the two of you', () => {

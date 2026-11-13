@@ -150,6 +150,36 @@ test.describe('Back and Forward', () => {
 	});
 });
 
+test.describe('leaving a thread you are the last one in', () => {
+	test.use(DEVICES.desktop);
+
+	test('asks first, from its row and from its header', async ({ preview, page }) => {
+		await preview.open();
+		await page.getByRole('button', { name: 'New thread in general', exact: true }).click();
+		const dialog = page.getByRole('dialog');
+		await dialog.getByRole('textbox', { name: 'Thread title', exact: true }).fill('Just me');
+		await dialog.getByRole('button', { name: 'Start thread', exact: true }).click();
+		await preview.waitForSent('room_set', (p) => p.title === 'Just me');
+		await expect(preview.heading()).toHaveText('general › Just me');
+
+		// From its row: dismissing keeps you in it.
+		const row = page.locator('[data-testid="thread-list"] button[data-thread^="thread_preview_"]');
+		let asked = '';
+		page.once('dialog', (shown) => { asked = shown.message(); void shown.dismiss(); });
+		await row.hover();
+		await page.getByRole('button', { name: 'Leave Just me', exact: true }).click();
+		await expect.poll(() => asked).toBe('Leave Just me?');
+		expect(await preview.sent('room_leave')).toEqual([]);
+
+		// From its header: just the question, with no promise of joining again.
+		await page.getByTestId('room-actions').click();
+		page.once('dialog', (shown) => { asked = shown.message(); void shown.accept(); });
+		await page.getByTestId('leave-room').click();
+		await expect.poll(() => asked).toBe('Leave Just me?');
+		await preview.waitForSent('room_leave', (p) => typeof p.room_id === 'string' && p.room_id.startsWith('thread_preview_'));
+	});
+});
+
 test.describe('the rooms list on a phone', () => {
 	test.use(DEVICES.phone);
 
