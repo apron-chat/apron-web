@@ -2221,7 +2221,6 @@
 				joinByName(action.room, failed);
 			} else if (action.kind === 'leave') {
 				const leaving = action.room ?? roomId;
-				if (!confirmLeavingLast(leaving)) return;
 				if (leaving === roomId && activeThread && activeRoom) backToRoom();
 				chat.leaveRoom(leaving).promise.catch(failed);
 			} else if (action.kind === 'topic') {
