@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { tick, untrack, type Snippet } from 'svelte';
 	import Plus from '@lucide/svelte/icons/plus';
-	import TextAlignStart from '@lucide/svelte/icons/text-align-start';
 	import type { ClassValue } from 'svelte/elements';
 	import Button from './Button.svelte';
 	import Dialog from './Dialog.svelte';
@@ -37,13 +36,10 @@
 		 */
 		field?: Snippet<[RoomFormField]>;
 		/**
-		 * Starting a thread with no description yet: the field waits behind a control, so the description isn't taken for
-		 * the thread's first message. `button` a ghost "Add description" under the title, `link` a quiet one beside the
-		 * Title label, `icon` a description glyph at the end of the title field. `none` shows the field from the start.
-		 * A thread that starts with a description (from a message) shows it whatever this is.
+		 * Whether the description field shows; `bind:showDescription`. Starting a thread with no description, it waits
+		 * behind "Add description" at the start of the footer, so it isn't taken for the thread's first message; a thread
+		 * that starts with one (from a message), a room, and editing show it from the start.
 		 */
-		descriptionReveal?: 'button' | 'link' | 'icon' | 'none';
-		/** Whether the description field shows; `bind:showDescription`. Starts from `descriptionReveal`. */
 		showDescription?: boolean;
 		status?: 'idle' | 'saving';
 		/** What went wrong: a missing title, or the server declining. */
@@ -56,7 +52,7 @@
 		/** Classes for its Dialog's `<dialog>`, added to its own. */
 		class?: ClassValue;
 	}
-	let { open = $bindable(false), kind = 'thread', mode = 'edit', subtitle, private: isPrivate = $bindable(false), moving = 0, name = $bindable(''), description = $bindable(''), field, descriptionReveal = 'icon', showDescription = $bindable(), status = 'idle', error, disabled = false, onsubmit, onclose, class: className }: Props = $props();
+	let { open = $bindable(false), kind = 'thread', mode = 'edit', subtitle, private: isPrivate = $bindable(false), moving = 0, name = $bindable(''), description = $bindable(''), field, showDescription = $bindable(), status = 'idle', error, disabled = false, onsubmit, onclose, class: className }: Props = $props();
 	const uid = $props.id();
 	const saving = $derived(status === 'saving');
 	const creating = $derived(mode === 'create');
@@ -75,8 +71,7 @@
 	let nameInput = $state<HTMLInputElement | undefined>();
 	let descriptionBox = $state<HTMLElement | undefined>();
 	// Hidden only when starting a thread with nothing in it; once shown it stays.
-	if (showDescription === undefined) showDescription = untrack(() => !(creating && thread && descriptionReveal !== 'none' && !description.trim()));
-	const reveal = $derived(showDescription ? undefined : descriptionReveal);
+	if (showDescription === undefined) showDescription = untrack(() => !(creating && thread && !description.trim()));
 	async function addDescription(): Promise<void> {
 		showDescription = true;
 		await tick();
@@ -101,19 +96,12 @@
 </script>
 
 <!-- Escape, the close button and Cancel do nothing while it saves. -->
-<Dialog class={className} bind:open size="md" title={heading} {subtitle} locked={saving} {error} {onclose}
+<Dialog class={['ap-roomform', className]} bind:open size="md" title={heading} {subtitle} locked={saving} {error} {onclose}
 	onsubmit={(event) => { event.preventDefault(); if (!saving && !disabled) onsubmit?.(); }}>
-	<div class="ap-fieldlabel">
-		<span class="ap-fieldlabel-row"><label for="{uid}-name">Title</label>
-			{#if reveal === 'link'}<button type="button" class="ap-roomform-adddesc" onclick={addDescription} disabled={saving}>Add description</button>{/if}
-		</span>
-		<span class={['ap-roomform-name', reveal === 'icon' && 'ap-roomform-name-icon']}>
-			<input id="{uid}-name" class="ap-field" aria-label="{thread ? 'Thread' : 'Room'} title" aria-required={creating} bind:this={nameInput} bind:value={name} disabled={saving} maxlength="120" autocomplete="off" spellcheck="true" dir="auto"
-				placeholder={creating ? (thread ? 'What it’s about' : 'What to call it') : ''} />
-			{#if reveal === 'icon'}<button type="button" class="ap-iconbtn ap-roomform-descicon" aria-label="Add description" title="Add description" onclick={addDescription} disabled={saving}><TextAlignStart size={16} aria-hidden="true" /></button>{/if}
-		</span>
-		{#if reveal === 'button'}<Button variant="ghost" size="sm" class="ap-roomform-addbtn" onclick={addDescription} disabled={saving}><Plus size={14} aria-hidden="true" />Add description</Button>{/if}
-	</div>
+	<label class="ap-fieldlabel" for="{uid}-name">Title
+		<input id="{uid}-name" class="ap-field" aria-label="{thread ? 'Thread' : 'Room'} title" aria-required={creating} bind:this={nameInput} bind:value={name} disabled={saving} maxlength="120" autocomplete="off" spellcheck="true" dir="auto"
+			placeholder={creating ? (thread ? 'What it’s about' : 'What to call it') : ''} />
+	</label>
 	<!-- The field is named by its `label`; this heads it. -->
 	{#if showDescription}
 	<div class="ap-fieldlabel" bind:this={descriptionBox}><span class="ap-fieldlabel-row"><span>Description</span><span class="ap-fieldlabel-hint">Markdown{creating ? ', optional' : ''}</span></span>
@@ -128,7 +116,11 @@
 	{/if}
 	{#if note}<p class="ap-roomform-note">{note}</p>{/if}
 	{#snippet footer()}
-		<Button variant="ghost" size="sm" onclick={() => (open = false)} disabled={saving} label="Cancel" />
-		<Button type="submit" variant="primary" size="sm" disabled={saving || disabled} label={action} />
+		{#if !showDescription}<Button variant="ghost" size="sm" class="ap-roomform-addbtn" onclick={addDescription} disabled={saving}><Plus size={14} aria-hidden="true" />Add description</Button>{/if}
+		<!-- Together, so a footer too narrow for all three puts these on a line of their own. -->
+		<span class="ap-roomform-actions">
+			<Button variant="ghost" size="sm" onclick={() => (open = false)} disabled={saving} label="Cancel" />
+			<Button type="submit" variant="primary" size="sm" disabled={saving || disabled} label={action} />
+		</span>
 	{/snippet}
 </Dialog>

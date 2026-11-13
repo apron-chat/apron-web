@@ -20,12 +20,10 @@
 		 * rejection is shown in the form, which stays open to try again; once it resolves, the form closes.
 		 */
 		oncreate: (thread: { title: string; description?: string }) => Promise<void>;
-		/** How the empty description field is offered (RoomForm's `descriptionReveal`). */
-		descriptionReveal?: 'button' | 'link' | 'icon' | 'none';
 		/** It closed: started, or put away. */
 		onclose: () => void;
 	}
-	let { room, title: suggestedTitle = '', description: suggestedDescription = '', moving = 0, enabled, descriptionReveal, people = [], rooms = [], onmention, oncreate, onclose }: Props = $props();
+	let { room, title: suggestedTitle = '', description: suggestedDescription = '', moving = 0, enabled, people = [], rooms = [], onmention, oncreate, onclose }: Props = $props();
 
 	// The form starts from what it was opened with; the caller remounts it for each new thread.
 	let open = $state(true);
@@ -48,7 +46,7 @@
 	}
 </script>
 
-<RoomForm bind:open kind="thread" mode="create" subtitle="In {room.title}" private={room.private === true} {moving} {descriptionReveal} bind:showDescription bind:name={title} field={descriptionField} status={task.busy ? 'saving' : 'idle'} error={task.note} disabled={!enabled} onsubmit={start} {onclose} />
+<RoomForm bind:open kind="thread" mode="create" subtitle="In {room.title}" private={room.private === true} {moving} bind:showDescription bind:name={title} field={descriptionField} status={task.busy ? 'saving' : 'idle'} error={task.note} disabled={!enabled} onsubmit={start} {onclose} />
 
 {#snippet descriptionField(form: RoomFormField)}
 	<DescriptionField bind:value={description} {form} {people} {rooms} {onmention} />

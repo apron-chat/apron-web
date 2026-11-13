@@ -7,7 +7,7 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
    one that fills its row, list or track (--focus-offset-inset), where an outer ring would be clipped or cross its
    neighbours. A field rings its own border, which takes the color too (.ap-field); the composer and a message being
    edited light their frame instead, and a panel's handle its border. */
-:where(.ap-btn, .ap-embed-remove, .ap-link, .ap-dialog-titlebtn, .ap-thread, .ap-composer-field, .ap-embed-card, .ap-embed-url, .ap-actions-btn, .ap-jumpbar-btn, .ap-jumpfab, .ap-sect-toggle, .ap-roomhead-back, .ap-roomhead-crumb, .ap-profile-me, .ap-shell-sidehead-return, .ap-shell-sidehead-open, .ap-field, .ap-reply, .ap-choice-item, .ap-msg-check, .ap-msg-who, .ap-member-who, .ap-iconbtn, .ap-foldpill, .ap-rchip, .ap-switch, .ap-description-toggle, .ap-roomform-adddesc, .ap-attachment-rename, .ap-viewer-btn, .ap-embed-ogcard, .ap-embed-imagelink, button.ap-mention, a.ap-linkchip, .ap-pick-chip-remove, .ap-audio-play, .ap-audio-rate, .ap-audio-seek, .ap-embed-audiotitle, .ap-task):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
+:where(.ap-btn, .ap-embed-remove, .ap-link, .ap-dialog-titlebtn, .ap-thread, .ap-composer-field, .ap-embed-card, .ap-embed-url, .ap-actions-btn, .ap-jumpbar-btn, .ap-jumpfab, .ap-sect-toggle, .ap-roomhead-back, .ap-roomhead-crumb, .ap-profile-me, .ap-shell-sidehead-return, .ap-shell-sidehead-open, .ap-field, .ap-reply, .ap-choice-item, .ap-msg-check, .ap-msg-who, .ap-member-who, .ap-iconbtn, .ap-foldpill, .ap-rchip, .ap-switch, .ap-description-toggle, .ap-attachment-rename, .ap-viewer-btn, .ap-embed-ogcard, .ap-embed-imagelink, button.ap-mention, a.ap-linkchip, .ap-pick-chip-remove, .ap-audio-play, .ap-audio-rate, .ap-audio-seek, .ap-embed-audiotitle, .ap-task):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
 :where(.ap-room, .ap-room-exit, .ap-room-join, .ap-menu-item, .ap-seg-item, .ap-connect-recent-item, .ap-font-option, .ap-font-load, .ap-preferences-nav button, .ap-profedit-upload):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset-inset); }
 /* The people picker's field rings itself while its input has the keyboard, as a field does. */
 .ap-pick-field:has(.ap-pick-input:focus-visible) { outline: var(--focus-ring); outline-offset: var(--focus-offset); border-color: var(--focus); }
@@ -1362,13 +1362,10 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-mdedit-rendered { font-size: var(--text-field); line-height: var(--leading-field); }
 .ap-fieldlabel-hint { font-weight: 400; color: var(--ap-tone, var(--ink-muted)); }
 /* RoomForm: what starting a thread will do, under its fields */
-.ap-roomform-name { position: relative; display: flex; flex-direction: column; }
-.ap-roomform-name-icon .ap-field { padding-right: calc(var(--control-md) + var(--space-2)); }
-.ap-roomform-descicon { position: absolute; top: 50%; right: var(--space-1); transform: translateY(-50%); }
-.ap-roomform-adddesc { font: inherit; font-weight: 400; padding: 0; border: 0; background: none; color: var(--ink-muted); cursor: pointer; }
-.ap-roomform-adddesc:hover:not(:disabled) { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; }
-.ap-roomform-addbtn { align-self: flex-start; margin: var(--space-1) 0 0 calc(-1 * var(--space-2)); padding: 0 var(--space-2); font-weight: 400; }
+.ap-roomform-addbtn { margin-right: auto; margin-left: calc(-1 * var(--space-2)); padding: 0 var(--space-2); font-weight: 400; }
 .ap-roomform-addbtn:hover:not(:disabled) { background: var(--hover); color: var(--ink); }
+.ap-roomform .ap-dialog-foot { flex-wrap: wrap; }
+.ap-roomform-actions { display: flex; gap: var(--space-2); margin-left: auto; }
 .ap-roomform-note { margin: 0; font-size: var(--text-ui); line-height: var(--leading-ui); color: var(--ap-tone, var(--ink-muted)); }
 
 /* ConnectScreen — first run, or a new backend from the rail's + */
