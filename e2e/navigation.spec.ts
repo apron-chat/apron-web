@@ -136,10 +136,13 @@ test.describe('Back and Forward', () => {
 		await preview.open();
 		await preview.openThread('thread_deploy');
 		await preview.openRoom('general');
-		// The row's Leave shows on hover.
+		// The row's Leave shows on hover. Others are in the thread, so it leaves without asking.
+		let asked = false;
+		page.on('dialog', () => (asked = true));
 		await page.locator('[data-testid="thread-list"] button[data-thread="thread_deploy"]').hover();
 		await page.getByRole('button', { name: 'Leave Deploy checklist', exact: true }).click();
 		await preview.waitForSent('room_leave', (p) => p.room_id === 'thread_deploy');
+		expect(asked).toBe(false);
 		await expect(page.locator('[data-testid="thread-list"] button[data-thread="thread_deploy"]')).toHaveCount(0);
 
 		await page.goBack();
