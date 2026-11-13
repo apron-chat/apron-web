@@ -1415,7 +1415,7 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-checklist-note { font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
 
 /* Callout — something to know or do before a setting works (Add to Home Screen), with an optional action */
-.ap-callout { display: grid; gap: var(--space-1); padding: var(--space-3); border: 1px solid var(--line); border-inline-start: 3px solid var(--denim); border-radius: var(--radius-md); background: var(--denim-soft); color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); }
+.ap-callout { display: grid; gap: var(--space-1); padding: var(--space-3); border: 1px solid color-mix(in srgb, var(--denim) 35%, transparent); border-radius: var(--radius-md); background: var(--denim-soft); color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); }
 .ap-callout-title { margin: 0; font-weight: 600; }
 .ap-callout-body { color: var(--ink); }
 .ap-callout-body :is(p, ol, ul) { margin: 0; }
@@ -2102,5 +2102,4 @@ a.ap-linkchip-elsewhere:hover { background: var(--hover); }
 .ap-quota-bar i { width: 10px; height: 6px; border-radius: var(--radius-sm); background: var(--bg-300); }
 .ap-quota-bar .ap-quota-on { background: var(--private); }
 /* A Callout for what stands in the way, such as a limit reached. */
-.ap-callout-warn { border-inline-start-color: var(--warn);
- background: var(--bg-200); }
+.ap-callout-warn { border-color: color-mix(in srgb, var(--warn) 70%, transparent); background: var(--bg-200); }
