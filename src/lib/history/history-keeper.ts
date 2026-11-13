@@ -21,6 +21,8 @@ import { decrement, loadKeptSessionUser } from '$lib/protocol/client-internals';
 import { deleteHistory, HistoryGone, historyName, listHistories, openHistory, pageHistory, pruneHistory, readHistory, readMeta, readRoomRows, scanMessages, timeLike, timeLikeLog, writeHistory, type Databases, type HistoryWrite, type KeptHistory, type MetaRow, type RoomRow } from './history-db';
 import { clearView, clearViewOf } from '$lib/ui/session-cache';
 import { closedTerminals } from '$lib/ui/terminal-closed.svelte';
+import { notifyAccount } from '$lib/ui/notify-scopes';
+import { forgetDrafts } from '$lib/ui/draft-keeper.svelte';
 import { historyResult } from './log';
 
 /** What the keeper needs of the chat client. */
@@ -519,10 +521,12 @@ export class HistoryKeeper {
 	 * the signed-in account starts again from the next change, writing what the page has: clearing is for the
 	 * space older history takes, not to stop keeping (that's Retention's Don't keep). The view kept to paint the
 	 * next visit (`session-cache.ts`) is history too: the one of each server cleared goes, if it is of an account
-	 * whose history goes, and so are the terminal embeds it closed (`closedTerminals`).
+	 * whose history goes, and so are the terminal embeds it closed (`closedTerminals`) and its unsent drafts
+	 * (`DraftKeeper`).
 	 */
 	async forget(server?: string, userId?: string): Promise<void> {
 		closedTerminals.forget(server, userId);
+		forgetDrafts(server, server !== undefined && userId !== undefined ? notifyAccount(server, userId) : undefined);
 		const goes = (entry: { server: string; userId: string }) => (server === undefined || entry.server === server) && (userId === undefined || entry.userId === userId);
 		if (this.writer && goes(this.writer)) {
 			this.endWriter();

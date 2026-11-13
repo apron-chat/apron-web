@@ -54,6 +54,13 @@ const KEY = {
 	lastSignIn: 'apron.lastSignIn',
 	/** The terminal embeds closed on this device (`closedTerminals`), by `terminalKey`, closed longest ago first. Deleted with the history of the accounts they were closed by. */
 	closedTerminals: 'apron.closedTerminals',
+	/**
+	 * Unsent drafts (`DraftKeeper`), one item each, this prefix and then the page's key for its room or thread: its
+	 * text, the message it replies to, the link previews removed from it, whose it is (`notifyAccount`) and when it
+	 * was written. One item each, so that writing one costs that one, however many are kept. Deleted with their
+	 * account's history.
+	 */
+	draftPrefix: 'apron.draft:',
 	/** The emoji you reacted with last, latest first (`rememberReaction`): the toolbar's quick reactions. */
 	recentReactions: 'apron.recentReactions',
 	/** app.html reads this one too, to apply the theme before the app loads. */
@@ -80,6 +87,8 @@ const HIDDEN_DESCRIPTIONS_MAX = 200;
 const READ_ITEMS_MAX = 500;
 /** The most servers whose last sign-in is kept; the ones signed in to longest ago go first. */
 const LAST_SIGN_IN_MAX = 50;
+/** The most drafts kept; the ones written longest ago go first. */
+const DRAFTS_MAX = 200;
 
 function read(key: string): string | null {
 	try {
@@ -668,4 +677,73 @@ export function loadReadReceipts(): boolean {
 
 export function saveReadReceipts(on: boolean): void {
 	write(KEY.readReceipts, on ? 'on' : 'off');
+}
+
+/** An unsent draft kept for the next visit: its text, the message it replies to, and the link previews removed from it. */
+export type SavedDraft = { text: string; reply?: string; dismissed?: string[] };
+
+/** The draft kept under `key` (the page's key for its room or thread), if any, and whose it is (`notifyAccount`). */
+export function loadDraft(key: string): { draft: SavedDraft; owner?: string } | undefined {
+	try {
+		const value: unknown = JSON.parse(read(KEY.draftPrefix + key) ?? 'null');
+		if (!isJsonObject(value) || typeof value.text !== 'string') return undefined;
+		const reply = typeof value.reply === 'string' ? value.reply : undefined;
+		const dismissed = Array.isArray(value.dismissed) ? value.dismissed.filter((url): url is string => typeof url === 'string') : [];
+		const draft = { text: value.text, ...(reply ? { reply } : {}), ...(dismissed.length ? { dismissed } : {}) };
+		return { draft, ...(typeof value.owner === 'string' ? { owner: value.owner } : {}) };
+	} catch {
+		return undefined;
+	}
+}
+
+/**
+ * Keeps `key`'s draft as `owner`'s, with when it was written: false when storage refused it (a full quota), else the
+ * keys of those it put out to make room. The first of a new key makes room for itself: past DRAFTS_MAX, the ones
+ * written longest ago go.
+ */
+export function saveDraft(key: string, draft: SavedDraft, owner: string): string[] | false {
+	const item = KEY.draftPrefix + key;
+	const added = read(item) === null;
+	if (persisting) {
+		try {
+			if (!globalThis.localStorage) return false;
+			globalThis.localStorage.setItem(item, JSON.stringify({ ...draft, owner, at: Date.now() }));
+		} catch {
+			return false;
+		}
+	}
+	if (!added) return [];
+	const keys = draftKeys();
+	if (keys.length <= DRAFTS_MAX) return [];
+	const at = (each: string) => {
+		try {
+			const kept: unknown = JSON.parse(read(KEY.draftPrefix + each) ?? 'null');
+			return isJsonObject(kept) && typeof kept.at === 'number' ? kept.at : 0;
+		} catch {
+			return 0;
+		}
+	};
+	const evicted = keys.map((each) => [each, at(each)] as const).sort((a, b) => a[1] - b[1]).slice(0, keys.length - DRAFTS_MAX).map(([each]) => each);
+	for (const each of evicted) remove(KEY.draftPrefix + each);
+	return evicted;
+}
+
+/** Forgets the draft kept under `key`. */
+export function removeDraft(key: string): void {
+	remove(KEY.draftPrefix + key);
+}
+
+/** The keys of every draft kept on this device. */
+export function draftKeys(): string[] {
+	const keys: string[] = [];
+	try {
+		const storage = globalThis.localStorage;
+		for (let i = 0; i < (storage?.length ?? 0); i++) {
+			const item = storage.key(i);
+			if (item?.startsWith(KEY.draftPrefix)) keys.push(item.slice(KEY.draftPrefix.length));
+		}
+	} catch {
+		// No storage: nothing is kept.
+	}
+	return keys;
 }

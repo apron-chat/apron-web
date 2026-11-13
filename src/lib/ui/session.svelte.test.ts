@@ -275,6 +275,33 @@ describe('SessionView after a reconnect', () => {
 		session.dispose();
 	});
 
+	it('keeps a guest who only reads reading through a reconnect that errs or stalls, not once signed out', () => {
+		vi.useFakeTimers();
+		onTestFinished(() => { vi.useRealTimers(); });
+		const writer = new SessionView();
+		const reader = new SessionView();
+		writer.apply(live(), client());
+		reader.apply(live({ readOnly: true }), client());
+		// An error the way back met: it needs someone at once, with no quiet moment.
+		writer.apply(dropped(Date.now(), { error: 'auth request timed out' }), client());
+		reader.apply(dropped(Date.now(), { error: 'auth request timed out' }), client());
+		flushSync();
+		expect(reader.reconnectNeedsAttention).toBe(true);
+		expect(reader.readOnly).toBe(true);
+		expect(writer.readOnly).toBe(false);
+		reader.apply(dropped(Date.now()), client());
+		vi.advanceTimersByTime(10_000);
+		flushSync();
+		expect(reader.stalled).toBe(true);
+		expect(reader.readOnly).toBe(true);
+		// Signed out: nothing is kept.
+		reader.apply(dropped(Date.now(), { held: true }), client());
+		flushSync();
+		expect(reader.readOnly).toBe(false);
+		writer.dispose();
+		reader.dispose();
+	});
+
 	it('keeps nothing of the last account through a restart, such as signing out', () => {
 		const session = new SessionView();
 		session.apply(live({ passkeySession: true }), client());

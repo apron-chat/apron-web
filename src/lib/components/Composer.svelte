@@ -44,10 +44,14 @@
 		 */
 		dismissed?: string[];
 		placeholder: string;
-		disabled: boolean;
 		/**
-		 * The field takes typing, but nothing sends yet: Send stays off and Enter keeps the draft, as while a short
-		 * drop of the connection comes back.
+		 * Nothing can be written. The page never sets it: a draft is local, so the field takes typing whatever the
+		 * connection, and only Send waits for it (`holdSend`).
+		 */
+		disabled?: boolean;
+		/**
+		 * The field takes typing, but nothing sends yet: Send stays off and Enter keeps the draft, as while the
+		 * connection is down or still coming up.
 		 */
 		holdSend?: boolean;
 		/** Attachments and voice clips (capability `embed:upload`, §4.8.4): each file goes out as an `upload` embed. */
@@ -101,7 +105,7 @@
 		/** Sending waits until then, as the server asked (`retry_after`, epoch milliseconds): Send counts down, and the draft stays. */
 		waitUntil?: number;
 	}
-	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled, holdSend = false, canUpload, files = [], uploadLimits, canCommand = false, live, people, outsiders, quiet, rooms = [], reply, oninput, onsend, onfiles, onunstage, onrename, oncancelreply, onescape, onup, onmention, outsideLabel, waitUntil }: Props = $props();
+	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled = false, holdSend = false, canUpload, files = [], uploadLimits, canCommand = false, live, people, outsiders, quiet, rooms = [], reply, oninput, onsend, onfiles, onunstage, onrename, oncancelreply, onescape, onup, onmention, outsideLabel, waitUntil }: Props = $props();
 
 	/** The field: chips and autocomplete, as in the message editor. */
 	let field = $state<MessageField | undefined>();

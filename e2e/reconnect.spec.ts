@@ -10,6 +10,8 @@ import { DEVICES, expect, test, type Preview } from './fixtures';
 
 /** How long a way back says nothing (`RECONNECT_QUIET_MS`, `$lib/ui/session.svelte`). */
 const QUIET_MS = 1_500;
+/** How long a way back goes before it has stalled (`RECONNECT_STALL_MS`, `$lib/ui/session.svelte`). */
+const STALL_MS = 10_000;
 /** How long the timeline's pill waits before it shows, once there is something to show (`SHOW_AFTER_MS`, `$lib/ui/settle-flag`). */
 const PILL_AFTER_MS = 400;
 
@@ -169,4 +171,29 @@ test('a way back that takes longer says so after its first moments, then goes qu
 	await release(preview);
 	await expect(page.locator('.ap-tlstatus')).toHaveCount(0);
 	await expect(ownDot(preview, 'online')).toBeVisible();
+});
+
+test('a way back that stalls keeps the composer, the keyboard in it, and what is typed meanwhile', async ({ preview, page }) => {
+	await openWithStatus(preview);
+	await preview.composer().click();
+	await page.keyboard.type('Writing at');
+	await stopClock(preview);
+	await hold(preview);
+	await drop(preview);
+	// Well past the quiet moments and the stall, which each try meanwhile counts afresh: the way back says so.
+	await page.clock.runFor(STALL_MS * 1.5);
+	await expect(page.getByTestId('connection-status')).toHaveText('Still trying to reconnect…');
+	// The field takes typing all the while, the keyboard never leaving it; sending waits for the connection.
+	await expect(preview.composer()).not.toHaveAttribute('contenteditable', 'false');
+	await expect(preview.composer()).toBeFocused();
+	await page.keyboard.type(' length');
+	await expect(preview.composer()).toHaveText('Writing at length');
+	await expect(page.getByTestId('send-button')).toBeDisabled();
+	await page.clock.resume();
+	await release(preview);
+	await expect(page.getByTestId('connection-status')).toHaveText('Connected');
+	await expect(page.getByTestId('send-button')).toBeEnabled();
+	await expect(preview.composer()).toBeFocused();
+	await page.keyboard.type('.');
+	await expect(preview.composer()).toHaveText('Writing at length.');
 });
