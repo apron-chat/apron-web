@@ -253,6 +253,11 @@ class Directory {
 		return false;
 	}
 
+	/** Everyone the session knows (`snapshot.users`), from a record replaced only when they change. */
+	known(): Identity[] {
+		return Object.values(this.users.users);
+	}
+
 	isMe(userId: string): boolean {
 		return this.you !== undefined && userIn(this.users, { user_id: userId }).user_id === this.you.user_id;
 	}

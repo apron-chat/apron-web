@@ -502,22 +502,47 @@ test.describe('the full panel', () => {
 		expect(Math.round(pane.height - header.height - box.height)).toBeGreaterThanOrEqual(96);
 	});
 
-	test('shows the ask to add who a draft mentions above it, and closes once the draft is sent from the ask', async ({ preview, page }) => {
+	test('shows the line offering to add who a draft mentions above it, and closes once the draft is sent', async ({ preview, page }) => {
 		await preview.open();
 		await preview.openRoom('engineering');
 		await preview.composer().click();
-		await page.keyboard.type('@grace hi');
+		// A role no one here holds: the line names its holders.
+		await page.keyboard.type('@&moderator hi ');
 		await page.keyboard.press('Shift+Enter');
 		await page.keyboard.type('the plan is below');
 		await page.getByTestId('composer-expand').click();
 		await expect(panel(preview)).toBeVisible();
+		const line = page.getByTestId('mention-outside-hint');
+		await expect(line).toBeInViewport();
+		await expect(line).toContainText('Margaret Hamilton (moderator)');
+		await line.getByTestId('mention-outside-add').uncheck();
+		await preview.composer().click();
 		await page.keyboard.press('ControlOrMeta+Enter');
-		const prompt = page.getByTestId('mention-add-prompt');
-		await expect(prompt).toBeInViewport();
-		await prompt.getByRole('button', { name: 'Send without adding' }).click();
-		await preview.waitForSent('message', (p) => p.body?.text === '@grace hi\nthe plan is below');
+		await preview.waitForSent('message', (p) => p.body?.text?.startsWith('@&moderator hi'));
 		await expect(panel(preview)).toBeHidden();
 		await expect(preview.composer()).toHaveText('');
+		expect(await preview.sent('room_join')).toEqual([]);
+	});
+
+	test('offers people who aren’t in the room last, faded, and Send adds them first, as the line over the composer says', async ({ preview, page }) => {
+		await preview.open();
+		await preview.openRoom('engineering');
+		await preview.composer().click();
+		await page.keyboard.type('@gr');
+		const grace = picker(preview).getByRole('option', { name: /Grace/ });
+		await expect(grace).toHaveClass(/ap-mpick-out/);
+		await expect(grace).toContainText('Not in room');
+		await page.keyboard.press('Tab');
+		await expect(chip(preview)).toHaveAttribute('data-user-id', 'grace');
+		const hint = page.getByTestId('mention-outside-hint');
+		await expect(hint).toContainText('Not in this room, add them so they’ll see the mention? Grace Hopper');
+		await expect(hint.getByTestId('mention-outside-add')).toBeChecked();
+		await page.keyboard.type('hi');
+		await page.keyboard.press('Enter');
+		await preview.waitForSent('room_join', (p) => p.user_id === 'grace');
+		await preview.waitForSent('message', (p) => p.body?.mentions?.includes('grace'));
+		await expect(hint).toBeHidden();
+		await expect(preview.composer()).toBeFocused();
 	});
 
 	test('Esc closes it with the draft kept', async ({ preview, page }) => {

@@ -2,7 +2,7 @@ import { untrack } from 'svelte';
 import { mentionClass, mentionLabel, type Mention, type MentionPerson } from '$lib/protocol/markdown';
 import { chipTasks, chipText, collapseMentions, deleteAtTask, draftLength, draftMentions, draftText, insertMention, insertText, mentionQuery, normalizeDraft, partLength, unchip, type DraftChip, type DraftPart } from './draft';
 import { continueList, expandTask } from './list-continue';
-import { roomRoles, searchRoles, type RoleSuggestion } from './role-mentions';
+import { outsideRoles, roomRoles, searchRoles, type RoleSuggestion } from './role-mentions';
 import { isAutocompleteDismissed, type DismissedAutocomplete } from './autocomplete-dismiss';
 import { emojiQuery as findEmojiQuery, searchEmoji, withCustomEmoji, type EmojiQuery, type EmojiSuggestion } from './emoji-autocomplete';
 import { customEmoji } from './custom-emoji.svelte';
@@ -58,6 +58,13 @@ export interface DraftHost {
 	mentions: string[];
 	/** Who an `@` can name. */
 	readonly people: MentionPerson[];
+	/** Who else an `@` can name though they aren't here (`outside`): read only once something is typed after it. */
+	readonly outsiders?: MentionPerson[];
+	/**
+	 * The mentions that won't reach anyone as the draft would go: a `user_id`, or `&role` for a role's chip. Their chips
+	 * are greyed (`ap-mention-quiet`); `markQuiet` redraws them as it changes.
+	 */
+	readonly quiet?: ReadonlySet<string>;
 	/** Rooms and threads a `#` can name. */
 	readonly rooms: RoomSuggestion[];
 	/** More `user_id`s that are people, beyond `people` and the directory: an `@` of one is a mention. */
@@ -123,6 +130,12 @@ export class DraftField {
 	/** The roles someone else here holds, which an `@` can name. */
 	roles: RoleSuggestion[];
 	private roleIds: string[];
+	/**
+	 * The roles only people who aren't here hold (`outsideRoles`): a chip and a picker's suggestion like any, its chip
+	 * mentioning them. Read only for a draft that might name one (`@&`), or a picker with something typed.
+	 */
+	private outsideRoles: RoleSuggestion[];
+	private allRoleIds: string[];
 	/** The server's custom emoji first (`ext:emoji`, once their catalog has arrived), then the standard ones. */
 	emojiMatches: EmojiSuggestion[];
 	/** The IDs a typed `#room_id` collapses into a chip for. */
@@ -148,6 +161,8 @@ export class DraftField {
 		this.pickerId = pickerId;
 		this.roles = $derived(roomRoles(host.people));
 		this.roleIds = $derived(this.roles.map((suggestion) => suggestion.role));
+		this.outsideRoles = $derived(host.outsiders?.length ? outsideRoles(host.outsiders, this.roleIds) : []);
+		this.allRoleIds = $derived(this.outsideRoles.length ? [...this.roleIds, ...this.outsideRoles.map((suggestion) => suggestion.role)] : this.roleIds);
 		this.matches = $derived(this.query === undefined ? [] : this.matching(this.query));
 		this.emojiMatches = $derived(this.emojiFound && this.emojiData ? withCustomEmoji(customEmoji.catalog, this.emojiFound.query, searchEmoji(this.emojiData, this.emojiFound.query), (emoji) => directory.mediaGate.src(customEmoji.image(emoji).src)) : []);
 		this.roomIds = $derived(host.rooms.map((room) => room.id));
@@ -188,7 +203,7 @@ export class DraftField {
 				const cleared = !text && Boolean(this.shown?.text);
 				this.lastSelection = undefined;
 				// Nobody typed it: its `@user_id`s become chips, the last one too, and a name in plain text stays text.
-				const collapsed = collapseMentions([text], this.host.people, { caret: text.length, final: true, names: false, isUser: this.isUser, rooms: this.roomIds, roles: this.roleIds });
+				const collapsed = collapseMentions([text], this.host.people, { caret: text.length, final: true, names: false, isUser: this.isUser, rooms: this.roomIds, roles: this.chipRoles(text) });
 				const parts = chipTasks(collapsed.parts);
 				this.draw(current, parts, document.activeElement === current ? collapsed.caret : undefined);
 				this.commit(current, parts, false);
@@ -256,7 +271,7 @@ export class DraftField {
 		if (!changed) return false;
 		this.closeCompletions();
 		this.lastSelection = undefined;
-		const next = chipTasks(collapseMentions([changed.text], this.host.people, { caret: changed.end, final: true, names: false, isUser: this.isUser, rooms: this.roomIds, roles: this.roleIds }).parts);
+		const next = chipTasks(collapseMentions([changed.text], this.host.people, { caret: changed.end, final: true, names: false, isUser: this.isUser, rooms: this.roomIds, roles: this.chipRoles(changed.text) }).parts);
 		field.focus();
 		this.draw(field, next, undefined);
 		placeSelection(field, changed.start, changed.end);
@@ -552,13 +567,16 @@ export class DraftField {
 	 * does: whoever or whatever it names exactly first, then people, then
 	 * roles, which keep up to `ROLE_MATCHES_MAX` places when the people fill
 	 * the list and take whatever room is left otherwise. `@&` asks for roles alone.
+	 * People who aren't here (`outside`) come after those who are at each step, and
+	 * only once something is typed: a bare `@` offers who's here.
 	 */
 	private matching(text: string): MentionMatch[] {
-		const roles = searchRoles(this.roles, text);
+		const roles = searchRoles(text.replace(/^&/, '') && this.outsideRoles.length ? [...this.roles, ...this.outsideRoles] : this.roles, text);
 		if (text.startsWith('&')) return roles.slice(0, MENTION_MATCHES_MAX);
 		const lower = text.toLowerCase();
 		const exact = lower.trimEnd();
-		const scored = this.host.people
+		const pool = lower && this.host.outsiders?.length ? [...this.host.people, ...this.host.outsiders] : this.host.people;
+		const scored = pool
 			.map((person) => {
 				const name = (person.name ?? '').trim().toLowerCase();
 				const id = person.id.toLowerCase();
@@ -567,14 +585,17 @@ export class DraftField {
 				return undefined;
 			})
 			.filter((entry) => entry !== undefined);
-		const people = scored.sort((a, b) => a.rank - b.rank).map((entry) => entry.person);
+		const people = scored.sort((a, b) => a.rank - b.rank || Number(a.person.outside ?? false) - Number(b.person.outside ?? false)).map((entry) => entry.person);
 		const exactRoles = roles.filter((suggestion) => exact && suggestion.role.toLowerCase() === exact);
-		const otherRoles = roles.filter((suggestion) => !exactRoles.includes(suggestion));
+		// Roles held only outside take only what room is left: never a place a person or role here would have.
+		const otherRoles = roles.filter((suggestion) => !exactRoles.includes(suggestion) && !suggestion.outside);
+		const outsideOnly = roles.filter((suggestion) => !exactRoles.includes(suggestion) && suggestion.outside);
 		const named = people.filter((_, index) => scored[index].rank === 0);
 		const rest = people.slice(named.length);
 		const free = MENTION_MATCHES_MAX - named.length - exactRoles.length - rest.length;
 		const roleCount = Math.min(otherRoles.length, Math.max(ROLE_MATCHES_MAX, free));
-		return [...named, ...exactRoles, ...rest.slice(0, Math.max(0, MENTION_MATCHES_MAX - named.length - exactRoles.length - roleCount)), ...otherRoles.slice(0, roleCount)].slice(0, MENTION_MATCHES_MAX);
+		const listed = [...named, ...exactRoles, ...rest.slice(0, Math.max(0, MENTION_MATCHES_MAX - named.length - exactRoles.length - roleCount)), ...otherRoles.slice(0, roleCount)];
+		return [...listed, ...outsideOnly].slice(0, MENTION_MATCHES_MAX);
 	}
 
 	/** Closes whichever picker is open. */
@@ -614,7 +635,7 @@ export class DraftField {
 		const field = this.element;
 		if (!field) return undefined;
 		const { parts, caret } = readDraft(field);
-		const collapsed = collapseMentions(parts, this.host.people, { caret: caret ?? draftLength(parts), final, isUser: this.isUser, rooms: this.roomIds, roles: this.roleIds });
+		const collapsed = collapseMentions(parts, this.host.people, { caret: caret ?? draftLength(parts), final, isUser: this.isUser, rooms: this.roomIds, roles: this.chipRoles(draftText(parts)) });
 		// A checklist item's `- [ ] ` is drawn as its checkbox; its length is its Markdown's, so the caret stays put.
 		const tasked = chipTasks(collapsed.parts);
 		const changed = collapsed.changed || tasked !== collapsed.parts;
@@ -647,8 +668,21 @@ export class DraftField {
 		if (caret !== undefined) placeCaret(root, caret);
 	}
 
-	/** Who a role's chip mentions: everyone else here who holds it, as the room lists them. */
-	private roleMembers = (role: string): string[] => this.roles.find((suggestion) => suggestion.role === role)?.members ?? [];
+	/** The roles an `@&role` in `text` becomes a chip for: those held here, and, only if it might name one, those held only outside. */
+	private chipRoles(text: string): string[] {
+		return text.includes('@&') ? this.allRoleIds : this.roleIds;
+	}
+
+	/** Who a role's chip mentions: everyone else here who holds it, as the room lists them; for one held only outside, they. */
+	private roleMembers = (role: string): string[] => (this.roles.find((suggestion) => suggestion.role === role) ?? this.outsideRoles.find((suggestion) => suggestion.role === role))?.members ?? [];
+
+	/** Greys the chips of mentions that won't reach anyone (`quiet`), and ungreys the rest. */
+	markQuiet(quiet: ReadonlySet<string>): void {
+		for (const element of this.element?.querySelectorAll<HTMLElement>('.ap-mention[data-user-id], .ap-mention[data-role]') ?? []) {
+			const key = element.dataset.role !== undefined ? `&${element.dataset.role}` : element.dataset.userId ?? '';
+			element.classList.toggle('ap-mention-quiet', quiet.has(key));
+		}
+	}
 
 	/** What a chip names, as the Mention component every rendered mention uses. */
 	private chipMention(part: DraftChip): Mention {
@@ -681,11 +715,12 @@ export class DraftField {
 		const label = mentionLabel(mention);
 		const element = document.createElement('span');
 		element.className = mentionClass(mention);
+		if (untrack(() => this.host.quiet)?.has(part.role ? `&${part.id}` : part.id)) element.classList.add('ap-mention-quiet');
 		element.contentEditable = 'false';
 		if (part.room) element.dataset.roomId = part.id;
 		else if (part.role) element.dataset.role = part.id;
 		else element.dataset.userId = part.id;
-		if (part.role) element.title = roleChipTip(this.roleMembers(part.id).length, part.id);
+		if (part.role) element.title = roleChipTip(this.roleMembers(part.id).length, part.id, this.outsideRoles.some((suggestion) => suggestion.role === part.id));
 		else if (label !== draftText([part])) element.title = draftText([part]);
 		element.textContent = label;
 		return element;
@@ -703,8 +738,9 @@ function chipOf(element: HTMLElement): DraftChip | undefined {
 }
 
 /** A role chip's tooltip in the field: who sending it mentions. */
-function roleChipTip(count: number, role: string): string {
+function roleChipTip(count: number, role: string, outside = false): string {
 	if (count === 0) return `No one else here has the role ${role}`;
+	if (outside) return `${count === 1 ? 'The 1 person' : `The ${count} people`} with the role ${role} ${count === 1 ? 'isn’t' : 'aren’t'} in this room`;
 	return `Mentions ${count === 1 ? 'the 1 person' : `all ${count} people`} here with the role ${role}`;
 }
 

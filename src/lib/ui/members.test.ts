@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { absentMentions, addMembers, couldNotAdd, isGuest, memberSections, roleSets, unheldRoleHolders, userIdToAdd } from './members';
+import { absentMentions, addMembers, couldNotAdd, isGuest, memberSections, roleSets, unheldRoleHolders, userIdToAdd, outsidersOf } from './members';
 
 describe('adding a member', () => {
 	it('takes exactly the user_id typed, with or without @, and never a display name, which isn’t unique', () => {
@@ -99,5 +99,20 @@ describe('member sections', () => {
 	it('has one Members section without presence, or where nobody has a status, even for a status kept from before', () => {
 		expect(sections([{ id: 'a', status: 'offline' }, { id: 'b', status: 'online' }], false)).toEqual([['Members', ['a', 'b']]]);
 		expect(sections([{ id: 'a' }, { id: 'b', status: '' }])).toEqual([['Members', ['a', 'b']]]);
+	});
+});
+
+describe('people to mention who aren’t here', () => {
+	const skip = (user: { user_id: string }) => user.user_id === 'me' || user.user_id.startsWith('guest_');
+	const known = [{ user_id: 'ada', name: 'Ada' }, { user_id: 'bob', name: 'Bob', roles: ['mod'] }, { user_id: 'me' }, { user_id: 'guest_3' }];
+
+	it('are everyone else the session knows, marked outside, but you and guests', () => {
+		expect(outsidersOf(known, [{ user_id: 'ada' }], undefined, skip)).toEqual([{ id: 'bob', name: 'Bob', roles: ['mod'], outside: true }]);
+	});
+
+	it('are no one while the members aren’t all known, nor when everyone is here', () => {
+		expect(outsidersOf(known, undefined, undefined, skip)).toEqual([]);
+		expect(outsidersOf(known, [{ user_id: 'ada' }], 9, skip)).toEqual([]);
+		expect(outsidersOf(known, [{ user_id: 'ada' }, { user_id: 'bob' }], undefined, skip)).toEqual([]);
 	});
 });

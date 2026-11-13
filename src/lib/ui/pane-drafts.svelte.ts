@@ -1,4 +1,5 @@
 import type { UploadFile } from '$lib/protocol/client';
+import { writtenRoles } from '$lib/protocol/markdown';
 
 /**
  * A file attached to a draft but not sent yet (capability `embed:upload`,
@@ -21,8 +22,32 @@ export interface StagedFile {
  * opaque to this class; the page keys by server and `room_id`.
  */
 export class PaneDrafts {
+	#text = $state('');
+	/**
+	 * The roles the open pane's draft names as written (`writtenRoles`), and whether it starts with `/` (it may be a
+	 * command): kept as the text is set, each replaced only when it changes, so what reads them reruns only then, not on
+	 * each key typed.
+	 */
+	roles = $state.raw<readonly string[]>([]);
+	slashed = $state(false);
+	#rolesKey = '';
 	/** The open pane's draft, bound to the composer. */
-	text = $state('');
+	get text(): string {
+		return this.#text;
+	}
+	set text(text: string) {
+		this.#text = text;
+		// The roles as written, and what can put one in code or a link (backticks, `](`, `<`, an indented line): when
+		// any of these change, whether the draft names a role outside code may have too.
+		const roles = writtenRoles(text);
+		const key = roles.length ? `${roles.join(' ')}|${text.split('`').length}|${text.split('](').length}|${text.split('<').length}|${text.split(/\n(?: {4}|\t)/).length}` : '';
+		if (key !== this.#rolesKey) {
+			this.#rolesKey = key;
+			this.roles = roles;
+		}
+		const slashed = text.startsWith('/');
+		if (slashed !== this.slashed) this.slashed = slashed;
+	}
 	/** The `message_id` the open pane's draft replies to. */
 	reply = $state<string | undefined>();
 	/** The files the open pane's draft will be sent with, in order. */

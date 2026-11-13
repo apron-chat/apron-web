@@ -16,7 +16,7 @@ export const profileEditor = part((m) => m.ProfileEditor);
 export const addMembersDialog = part((m) => m.AddMembersDialog);
 export const autocompletePicker = part((m) => m.AutocompletePicker);
 export const installNudge = part((m) => m.InstallPrompt);
-export const mentionAddNudge = part((m) => m.MentionAddPrompt);
+export const mentionAddLine = part((m) => m.MentionAddLine);
 export const editorsNudge = part((m) => m.EditorsPrompt);
 export const selectionBar = part((m) => m.SelectionBar);
 /**

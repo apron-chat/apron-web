@@ -72,6 +72,10 @@
 		live?: boolean;
 		/** Who an `@` can name: the room's members, else its recent senders. */
 		people: MentionPerson[];
+		/** Who else an `@` can name though they aren't here, offered after `people`, faded, once something is typed. */
+		outsiders?: MentionPerson[];
+		/** The mentions that won't reach anyone as it would go (a `user_id`, or `&role`): their chips are greyed. */
+		quiet?: ReadonlySet<string>;
 		/** Rooms and threads available for `#room` mentions. */
 		rooms?: RoomSuggestion[];
 		/** The message being replied to, when there is one: its sender and first line, or why it can't be shown. */
@@ -92,10 +96,12 @@
 		onup?: () => boolean;
 		/** The mention picker opened: a moment to refresh who can be named. */
 		onmention?: () => void;
+		/** What someone the picker offers who isn't here reads beside their name: "Not in room". */
+		outsideLabel?: string;
 		/** Sending waits until then, as the server asked (`retry_after`, epoch milliseconds): Send counts down, and the draft stays. */
 		waitUntil?: number;
 	}
-	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled, holdSend = false, canUpload, files = [], uploadLimits, canCommand = false, live, people, rooms = [], reply, oninput, onsend, onfiles, onunstage, onrename, oncancelreply, onescape, onup, onmention, waitUntil }: Props = $props();
+	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled, holdSend = false, canUpload, files = [], uploadLimits, canCommand = false, live, people, outsiders, quiet, rooms = [], reply, oninput, onsend, onfiles, onunstage, onrename, oncancelreply, onescape, onup, onmention, outsideLabel, waitUntil }: Props = $props();
 
 	/** The field: chips and autocomplete, as in the message editor. */
 	let field = $state<MessageField | undefined>();
@@ -344,7 +350,7 @@
 />
 
 {#snippet editable({ placeholder, disabled }: ComposerField)}
-	<MessageField bind:this={field} bind:value bind:mentions {people} {rooms} {placeholder} {disabled} newlineOnEnter={expanded} id="message-input" data-testid="message-input" pickerTestid="mention-picker" onsubmit={send} onkey={key} {oninput} oncleared={cleared} {onmention} onpaste={paste} />
+	<MessageField bind:this={field} bind:value bind:mentions {people} {outsiders} {quiet} {rooms} {placeholder} {disabled} newlineOnEnter={expanded} id="message-input" data-testid="message-input" pickerTestid="mention-picker" onsubmit={send} onkey={key} {oninput} oncleared={cleared} {onmention} {outsideLabel} onpaste={paste} />
 {/snippet}
 <!-- The full panel's parts, loaded on demand as it first opens: until they come, it is a tall field with Send. -->
 {#snippet formatting()}{#if formatToolbar.component}{@const FormatToolbar = formatToolbar.component}<FormatToolbar apply={(change) => field?.apply(change) ?? false} {disabled} />{/if}{/snippet}

@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import { flushSync } from 'svelte';
 import { describe, expect, it, vi } from 'vitest';
+import type { MentionPerson } from '$lib/protocol/markdown';
 import { DraftField } from './draft-field.svelte';
 
 /** A field for `@` mentions of Alan, whose picker shows only while `shown` says so (its code loads on demand). */
-function field(shown: { value: boolean }, options: { newlineOnEnter?: boolean } = {}) {
+function field(shown: { value: boolean }, options: { newlineOnEnter?: boolean; outsiders?: MentionPerson[]; people?: MentionPerson[] } = {}) {
 	let value = $state('');
 	let mentions = $state<string[]>([]);
 	const submit = vi.fn();
@@ -17,7 +18,8 @@ function field(shown: { value: boolean }, options: { newlineOnEnter?: boolean } 
 			set value(text) { value = text; },
 			get mentions() { return mentions; },
 			set mentions(ids) { mentions = ids; },
-			people: [{ id: 'alan', name: 'Alan Turing' }],
+			people: options.people ?? [{ id: 'alan', name: 'Alan Turing' }],
+			outsiders: options.outsiders,
 			rooms: [],
 			disabled: false,
 			submit,
@@ -269,5 +271,26 @@ describe('DraftField', () => {
 		expect(f.value()).toBe('**bold** me');
 		expect(f.selected()).toEqual([2, 6]);
 		f.done();
+	});
+
+	it('offers people who aren’t here after those who are, and only once something is typed', () => {
+		const outsiders: MentionPerson[] = [{ id: 'ada', name: 'Ada Outside', outside: true }, { id: 'grace', name: 'Grace', outside: true }];
+		const { draft, type, done } = field({ value: true }, { outsiders });
+		type('@');
+		expect(draft.matches.map((match) => ('id' in match ? match.id : match.role))).toEqual(['alan']);
+		type('a');
+		expect(draft.matches.map((match) => ('id' in match ? match.id : match.role))).toEqual(['alan', 'ada']);
+		done();
+	});
+
+	it('offers a role held only outside after everyone and everything here, in what room is left', () => {
+		const people: MentionPerson[] = Array.from({ length: 9 }, (_, n) => ({ id: `a${n}`, name: `Ann ${n}` }));
+		const outsiders: MentionPerson[] = [{ id: 'ada', name: 'Ada', roles: ['admin'], outside: true }];
+		const { draft, type, done } = field({ value: true }, { people, outsiders });
+		type('@a');
+		const ids = draft.matches.map((match) => ('id' in match ? match.id : `&${match.role}`));
+		// Eight places, all for the people here: neither Ada nor her role takes one from them.
+		expect(ids).toEqual(people.slice(0, 8).map((person) => person.id));
+		done();
 	});
 });

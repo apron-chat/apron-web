@@ -28,10 +28,12 @@
 		onhover: (index: number) => void;
 		/** A `data-testid` for the list. */
 		testid?: string;
+		/** What a person who isn't here reads beside their name, such as "Not in room". */
+		outside?: string;
 	}
-	let { id, query, people, rooms, emoji, active, onpick, onhover, testid }: Props = $props();
+	let { id, query, people, rooms, emoji, active, onpick, onhover, testid, outside = 'Not in room' }: Props = $props();
 
-	let senders = $derived(people?.map((item) => ('role' in item ? { role: item.role, count: item.members.length } : { user_id: item.id, name: item.name, avatar: directory.avatarGate.src(item.avatar) })));
+	let senders = $derived(people?.map((item) => ('role' in item ? { role: item.role, count: item.members.length, ...(item.outside ? { outside } : {}) } : { user_id: item.id, name: item.name, avatar: directory.avatarGate.src(item.avatar), ...(item.outside ? { outside } : {}) })));
 </script>
 
 {#snippet face(person: { user_id: string; name?: string; avatar?: MediaSrc })}

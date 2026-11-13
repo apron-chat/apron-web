@@ -122,4 +122,30 @@ describe('PaneDrafts', () => {
 		drafts.unstage('a');
 		expect(drafts.unsent).toBe(false);
 	});
+
+	it('keeps the roles the open draft names, and whether it starts with /, replaced only as they change', () => {
+		const drafts = new PaneDrafts();
+		drafts.open('lobby');
+		expect(drafts.roles).toEqual([]);
+		drafts.text = 'ask @&moderator';
+		const roles = drafts.roles;
+		expect(roles).toEqual(['moderator']);
+		drafts.text = 'ask @&moderator to look';
+		expect(drafts.roles).toBe(roles);
+		// A backtick may put it in code: the roles are given again, to be checked again.
+		drafts.text = 'ask `@&moderator` to look';
+		expect(drafts.roles).not.toBe(roles);
+		expect(drafts.roles).toEqual(['moderator']);
+		drafts.text = 'ask @&moderator and @&admin, not a@&b';
+		expect(drafts.roles).toEqual(['moderator', 'admin']);
+		drafts.open('dev');
+		expect(drafts.roles).toEqual([]);
+		drafts.text = '/shrug';
+		expect(drafts.slashed).toBe(true);
+		drafts.open('lobby');
+		expect(drafts.roles).toEqual(['moderator', 'admin']);
+		expect(drafts.slashed).toBe(false);
+		drafts.clear('lobby');
+		expect(drafts.roles).toEqual([]);
+	});
 });

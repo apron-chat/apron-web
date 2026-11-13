@@ -127,6 +127,8 @@ export interface MentionPerson {
 	me?: boolean;
 	/** Their roles (§3.3.4), for `@&role` mentions. */
 	roles?: string[];
+	/** Not in the room or thread: the picker offers them after those who are, once something is typed, and fades them. */
+	outside?: boolean;
 }
 
 /**
@@ -191,6 +193,18 @@ function markdown(source: string): string {
 	}
 	rendered.set(source, html);
 	return html;
+}
+
+/**
+ * The roles `@&role` names in `text` as written, once each in order: a quick scan, without rendering it, so it also
+ * finds those in code or links, which `markdownRoles` leaves out. For telling, as text is typed, whether the roles it
+ * names changed.
+ */
+export function writtenRoles(text: string): string[] {
+	if (!text.includes('@&')) return [];
+	const roles = new Set<string>();
+	for (const match of text.matchAll(MENTION)) if (match[1] !== undefined) roles.add(match[1]);
+	return [...roles];
 }
 
 /**

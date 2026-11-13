@@ -478,6 +478,9 @@ a.ap-embed-card:hover { background: var(--hover); }
 /* On one line, however long the room or thread's name: out of the flow, over the field's padding, cut short. */
 .ap-composer-editable-empty::before { content: attr(data-placeholder); position: absolute; inset: 0; padding: inherit; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--ink-muted); pointer-events: none; }
 .ap-composer-editable .ap-mention { white-space: nowrap; cursor: default; user-select: all; }
+/* A mention that won't reach anyone as the draft would go (not in the room, and not to be added): greyed. */
+.ap-composer-editable .ap-mention.ap-mention-quiet { background: color-mix(in srgb, var(--ink-muted) 14%, transparent); color: var(--ink-muted); }
+.ap-composer-editable .ap-mention-role.ap-mention-quiet { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink-muted) 45%, transparent); }
 /* The autocomplete picker anchors to the composer's row and grows upward. */
 .ap-composer-wrap { position: relative; }
 /* Send counting down a wait on sending (`waitUntil`), after an hourglass: figures that don't shift as they count. */
@@ -845,7 +848,13 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 /* In the main pane: a StatusBanner under the header, and who is typing, in a row kept while nobody is so nothing moves. */
 .ap-shell-banner { padding: var(--space-2) var(--space-4) 0; }
 /* An ask that holds back Send, such as to add who a message mentions: above the composer at any width, pointing at it. */
-.ap-shell-ask:not(:empty) { padding: var(--space-2) var(--space-4) 0; }
+.ap-shell-ask:not(:empty) { display: grid; gap: var(--space-2); padding: var(--space-2) var(--space-4) 0; }
+.ap-mention-outside { display: grid; grid-template-columns: 16px minmax(0, 1fr); align-items: start; gap: var(--space-1_5) var(--space-2); padding-block: var(--space-1_5); padding-inline: var(--space-2) var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--bg-200); font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
+.ap-mention-outside-icon { display: grid; place-items: center; height: var(--leading-sm); color: var(--accent); }
+.ap-mention-outside-busy { grid-row: 2; grid-column: 2; justify-self: end; align-self: center; color: var(--ink-muted); }
+.ap-mention-outside-names { font-weight: 600; color: var(--ink); }
+/* Its own row, the box under the icon and its label under the text: the label spans both columns and takes them as its own. */
+.ap-pref-check.ap-mention-outside-add { grid-column: 1 / -1; grid-row: 2; display: grid; grid-template-columns: 16px minmax(0, 1fr); grid-template-columns: subgrid; align-items: center; margin: 0; color: var(--ink); font-size: var(--text-sm); line-height: var(--leading-sm); }
 /* Waits the server asked for (RateLimitNotice) on what the composer sends, just above it. */
 .ap-shell-waits { display: flex; flex-wrap: wrap; gap: var(--space-2); padding: var(--space-2) var(--space-4) 0; }
 .ap-typing.ap-shell-typing { min-height: 20px; padding-top: var(--space-1); }
@@ -1761,6 +1770,11 @@ button.ap-mention, a.ap-linkchip { max-width: 100%; white-space: normal; overflo
 .ap-mpick-name { font-weight: 600; }
 .ap-mpick-id { color: var(--ink-muted); font-size: var(--text-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ap-mpick-hit { background: transparent; color: var(--accent); }
+.ap-mpick-out > :is(.ap-avatar, .ap-mpick-role-glyph, .ap-mpick-name, .ap-mpick-id) { opacity: var(--opacity-dim); }
+.ap-mpick-out > .ap-mpick-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ap-mpick-out > .ap-mpick-id { flex: 0 1 auto; min-width: 3em; }
+.ap-mpick-tag { margin-inline-start: auto; flex: none; font-size: var(--text-xs); line-height: var(--leading-sm); color: var(--ink-muted); white-space: nowrap; }
+.ap-mpick-tag + .ap-mpick-kbd { margin-inline-start: 0; }
 .ap-mpick-kbd { margin-inline-start: auto; font: inherit; font-size: var(--text-xs); line-height: var(--leading-sm); padding: 0 var(--space-1_5); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); color: var(--ink-muted); }
 .ap-mpick-empty { padding: var(--space-2) var(--space-3); font-size: var(--text-ui); color: var(--ink-muted); }
 .ap-mpick-emoji-glyph { width: 24px; text-align: center; font-size: 20px; line-height: 24px; }

@@ -21,6 +21,10 @@
 		mentions?: string[];
 		/** Who an `@` can name. */
 		people: MentionPerson[];
+		/** Who else an `@` can name though they aren't here, offered after `people`, faded, once something is typed. */
+		outsiders?: MentionPerson[];
+		/** The mentions that won't reach anyone as it would go (a `user_id`, or `&role`): their chips are greyed. */
+		quiet?: ReadonlySet<string>;
 		/** Rooms and threads a `#` can name. */
 		rooms?: RoomSuggestion[];
 		/** More `user_id`s that are people, such as those a message being edited mentions: an `@` of one is a chip. */
@@ -37,10 +41,12 @@
 		oncleared?: () => void;
 		/** The mention picker opened: a moment to refresh who can be named. */
 		onmention?: () => void;
+		/** What someone the picker offers who isn't here reads beside their name: "Not in room". */
+		outsideLabel?: string;
 		/** A `data-testid` for the people's picker. */
 		pickerTestid?: string;
 	}
-	let { value = $bindable(), mentions = $bindable([]), people, rooms = [], known, disabled = false, onsubmit, newlineOnEnter = false, onkey, oninput, oncleared, onmention, pickerTestid, ...rest }: Props = $props();
+	let { value = $bindable(), mentions = $bindable([]), people, outsiders, quiet, rooms = [], known, disabled = false, onsubmit, newlineOnEnter = false, onkey, oninput, oncleared, onmention, outsideLabel, pickerTestid, ...rest }: Props = $props();
 
 	/** Unique per field, for its picker's ID. */
 	const uid = $props.id();
@@ -50,6 +56,8 @@
 		get mentions() { return mentions; },
 		set mentions(ids) { mentions = ids; },
 		get people() { return people; },
+		get outsiders() { return outsiders; },
+		get quiet() { return quiet; },
 		get rooms() { return rooms; },
 		get known() { return known; },
 		get disabled() { return disabled; },
@@ -67,6 +75,11 @@
 	export function focus(end = false): void {
 		draft.focus(end);
 	}
+
+	// The chips of mentions that won't reach anyone are greyed, as that changes: new chips are drawn greyed or not.
+	$effect(() => {
+		if (quiet) draft.markQuiet(quiet);
+	});
 
 	/** Puts a mention chip for this user where the caret was (else at the end), as picking them would, and focuses the field. */
 	export function mention(userId: string): void {
@@ -103,7 +116,7 @@
 {#if (draft.pickerOpen || draft.roomPickerOpen || draft.emojiPickerOpen) && autocompletePicker.component}
 {@const AutocompletePicker = autocompletePicker.component}
 {#if draft.pickerOpen}
-	<AutocompletePicker id={draft.pickerId} query={draft.query ?? ''} people={draft.matches} active={draft.activeIndex} testid={pickerTestid} onpick={(index) => draft.pick(draft.matches[index])} onhover={(index) => draft.hover(index)} />
+	<AutocompletePicker id={draft.pickerId} query={draft.query ?? ''} people={draft.matches} active={draft.activeIndex} testid={pickerTestid} outside={outsideLabel} onpick={(index) => draft.pick(draft.matches[index])} onhover={(index) => draft.hover(index)} />
 {:else if draft.roomPickerOpen}
 	<AutocompletePicker id={draft.pickerId} query={draft.roomFound?.query ?? ''} rooms={draft.roomMatches} active={draft.activeIndex} onpick={(index) => draft.pickRoom(draft.roomMatches[index])} onhover={(index) => draft.hover(index)} />
 {:else if draft.emojiPickerOpen}
