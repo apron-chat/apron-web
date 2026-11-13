@@ -83,13 +83,17 @@ unused and the first is waited on as before. So a socket
 that died while a phone's app was away, or a handshake sent before its network
 was back, costs about 2 seconds and a handshake, not the whole wait.
 A check races at once, its second connection opening with the ping, where
-there is reason to think the socket gone already: nothing heard on it for two
-ping intervals (its pongs stopped, as a page frozen in the background stops
-pinging, and a server may close a connection that stopped), or the browser
-moving to another kind of network (Chrome on Android says when wifi gives way
-to cellular, which fires no `online`; that also checks a page shown all
-along, and replaces a connection still opening). A tab whose timers ran while
-it was hidden heard its pongs meanwhile, and gets the usual 2 seconds.
+the socket has gone four ping intervals with nothing heard on it (its pongs
+stopped, as a page frozen in the background stops pinging): past where a
+server closes a connection that stopped (server.apron.chat after 150 seconds,
+with pings every 45), so it is gone. Sooner than that it may well be alive, and
+gets the usual 2 seconds, as does a tab whose timers ran while it was hidden,
+which heard its pongs meanwhile. The browser moving to another kind of network
+counts as the network coming back (Chrome on Android says when wifi gives way
+to cellular, which fires no `online`): a page shown all along checks its
+socket, with the usual 2 seconds, since one on a network that is still up (as
+cellular is kept a while when wifi takes over) answers within them and is
+kept, and a connection still opening is replaced.
 When the browser tells of the first connection's close only once the page runs
 again, with the second already opening, the second carries on as the next,
 rather than a third opening after the backoff.

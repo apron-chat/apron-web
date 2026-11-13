@@ -939,17 +939,21 @@ describe('a connection that doesn’t come up', () => {
 			expect(socket.readyState).toBe(FakeSocket.OPEN);
 		});
 
-		it('races at once a socket gone two ping intervals unheard, as a frozen page’s is, keeping it if it answers', async () => {
+		it('races at once a socket gone four ping intervals unheard, as a frozen page’s is, keeping it if it answers', async () => {
 			const { away } = page();
 			let snapshot: ClientSnapshot | undefined;
 			const { socket } = startClient({ onSnapshot: (next) => (snapshot = next) });
 			await socket.greet([], { ping: 30 });
-			// Frozen for 59 s: not two intervals since it last heard anything (its greeting), so the usual 2 s.
-			away(59_000);
+			// Frozen for 119 s: not four intervals since it last heard anything (its greeting), so the usual 2 s, and
+			// answered within them, no standby at all: a server keeps a silent connection that long (§1).
+			away(119_000);
 			expect(FakeSocket.instances).toHaveLength(1);
+			vi.advanceTimersByTime(500);
 			socket.receive({ method: 'pong' });
-			// Frozen for a minute: overdue, and the standby opens with the ping, not 2 s later.
-			away(60_000);
+			vi.advanceTimersByTime(5_000);
+			expect(FakeSocket.instances).toHaveLength(1);
+			// Frozen for two minutes: overdue, and the standby opens with the ping, not 2 s later.
+			away(120_000);
 			expect(pings(socket)).toBe(2);
 			expect(FakeSocket.instances).toHaveLength(2);
 			const standby = latest();
@@ -991,7 +995,7 @@ describe('a connection that doesn’t come up', () => {
 			expect(FakeSocket.instances).toEqual([socket, standby, after]);
 		});
 
-		it('checks the socket, racing it at once, when the browser moves to another kind of network, not when its estimates change', async () => {
+		it('checks the socket when the browser moves to another kind of network, keeping it if it answers, not when its estimates change', async () => {
 			const { network } = page();
 			const { socket } = startClient();
 			await socket.greet([], { ping: 30 });
@@ -999,20 +1003,30 @@ describe('a connection that doesn’t come up', () => {
 			network({ downlink: 1.5 });
 			expect(pings(socket)).toBe(0);
 			expect(FakeSocket.instances).toHaveLength(1);
-			// Wifi to cellular, no `online` fired, the page shown all along: a ping, and a standby with it.
+			// Cellular to wifi, the cellular network kept a while: the socket answers within the 2 s, and nothing opens.
 			network({ type: 'cellular' });
 			expect(pings(socket)).toBe(1);
+			vi.advanceTimersByTime(1_000);
+			socket.receive({ method: 'pong' });
+			vi.advanceTimersByTime(5_000);
+			expect(FakeSocket.instances).toHaveLength(1);
+			// Wifi to cellular, no `online` fired, the page shown all along: no answer, and a standby after 2 s.
+			network({ type: 'wifi' });
+			expect(pings(socket)).toBe(2);
+			vi.advanceTimersByTime(1_999);
+			expect(FakeSocket.instances).toHaveLength(1);
+			vi.advanceTimersByTime(1);
 			expect(FakeSocket.instances).toHaveLength(2);
 			const standby = latest();
 			await standby.greet([], { ping: 30 });
 			expect(socket.readyState).toBe(FakeSocket.CLOSED);
 			// The same kind again: nothing more.
-			network({ type: 'cellular', downlink: 3 });
+			network({ type: 'wifi', downlink: 3 });
 			expect(FakeSocket.instances).toHaveLength(2);
 			// One still opening when the network changes is replaced at once, as when it comes back.
 			standby.drop();
 			const opening = await nextSocket(standby);
-			network({ type: 'wifi' });
+			network({ type: 'cellular' });
 			expect(opening.readyState).toBe(FakeSocket.CLOSED);
 			expect(latest()).not.toBe(opening);
 		});

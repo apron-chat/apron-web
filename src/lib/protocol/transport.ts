@@ -131,28 +131,25 @@ export class Transport {
 	 * goes now, its backoff from the start.
 	 */
 	readonly #networkReturned = (): void => {
-		this.#networkBack(false);
+		this.#backAt = this.#now();
+		if (this.#current && !this.#waiting?.opening) this.#probe();
+		else this.#replaceOpening('network changed', true);
 	};
 	/**
 	 * The kind of network changed (`navigator.connection`, where the browser says: Chrome on Android): wifi to
 	 * cellular and back fires no `online`, the browser having been online all along, yet a socket on the network
 	 * left is gone, with nothing to say so until a ping goes unanswered, up to two intervals later. As the network
-	 * back, and racing the socket at once. Only the kind counts: the estimates of speed beside it change all the time.
+	 * back: checked, with the usual 2 s before a standby, since a socket on a network still up (cellular kept a
+	 * while as wifi takes over) answers within it, and is kept. Only the kind counts: the estimates of speed beside
+	 * it change all the time.
 	 */
 	readonly #networkChanged = (): void => {
 		const type = networkType();
 		if (type === undefined || type === this.#networkType) return;
 		const known = this.#networkType !== undefined;
 		this.#networkType = type;
-		if (known) this.#networkBack(true);
+		if (known) this.#networkReturned();
 	};
-
-	/** The network back, or another one: what was on it is checked (`now`: racing it at once), or opening, replaced. */
-	#networkBack(now: boolean): void {
-		this.#backAt = this.#now();
-		if (this.#current && !this.#waiting?.opening) this.#probe(now);
-		else this.#replaceOpening('network changed', true);
-	}
 
 	readonly #hooks: TransportHooks;
 	readonly #webSocketFactory: WebSocketFactory;
@@ -565,14 +562,14 @@ export class Transport {
 	/**
 	 * Checks at once that an open socket still answers, on a page someone can see: one ping, and the socket is
 	 * waited on for anything back (`waitFor`). Only where the server pings (§1); the regular pings carry on as
-	 * they were. Its standby opens at once (`now`, or the socket `overdue`), else after `STANDBY_AFTER_MS`.
+	 * they were. Its standby opens at once where the socket is `overdue`, else after `STANDBY_AFTER_MS`.
 	 */
-	#probe(now = false): void {
+	#probe(): void {
 		const socket = this.#current;
 		if (!this.#isRunning || !socket || socket.readyState !== WebSocket.OPEN || this.#hooks.ping() === undefined || this.#waiting || absent()) return;
 		const overdue = this.#overdue();
 		socket.send(PING_FRAME);
-		this.#waitFor(socket, false, now || overdue);
+		this.#waitFor(socket, false, overdue);
 	}
 
 	/**
