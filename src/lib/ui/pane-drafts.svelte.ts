@@ -1,5 +1,6 @@
 import type { UploadFile } from '$lib/protocol/client';
 import { writtenRoles } from '$lib/protocol/markdown';
+import type { SavedDraft } from './storage';
 
 /**
  * A file attached to a draft but not sent yet (capability `embed:upload`,
@@ -16,10 +17,27 @@ export interface StagedFile {
 	title?: string;
 }
 
+/** Where drafts are kept between visits (`DraftKeeper`): what a pane first opened this visit starts from. */
+export interface DraftStore {
+	/** Whether drafts are kept now: when not, a reload loses them. */
+	keeps(): boolean;
+	/** Whether it is known whose `key`'s draft is: until it is, what was kept of it isn't read. */
+	knows(key: string): boolean;
+	/** The draft kept for `key` from before, if any. */
+	load(key: string): SavedDraft | undefined;
+	/** `key`'s draft changed: the store reads it with `read` when it writes, so a change costs no more than saying so. */
+	changed(key: string, read: (key: string) => SavedDraft): void;
+	/** Every key with a draft here, and how to read each: for the store to write them all again, as keeping resumes. */
+	attach?(keys: () => Iterable<string>, read: (key: string) => SavedDraft): void;
+}
+
 /**
  * The composer's text, reply target, staged files and removed link previews, kept per destination:
  * each room, and each thread, since a thread is a room of its own. Keys are
- * opaque to this class; the page keys by server and `room_id`.
+ * opaque to this class; the page keys by server and `room_id`. With a `store`,
+ * all but the files outlast the visit: a pane opened empty starts from what it
+ * kept, and each change goes back to it, however it is made (typed, set from
+ * outside, a preview removed).
  */
 export class PaneDrafts {
 	#text = $state('');
@@ -37,6 +55,7 @@ export class PaneDrafts {
 	}
 	set text(text: string) {
 		this.#text = text;
+		if (this.key !== undefined) this.store?.changed(this.key, this.read);
 		// The roles as written, and what can put one in code or a link (backticks, `](`, `<`, an indented line): when
 		// any of these change, whether the draft names a role outside code may have too.
 		const roles = writtenRoles(text);
@@ -48,17 +67,40 @@ export class PaneDrafts {
 		const slashed = text.startsWith('/');
 		if (slashed !== this.slashed) this.slashed = slashed;
 	}
+	#reply = $state<string | undefined>();
 	/** The `message_id` the open pane's draft replies to. */
-	reply = $state<string | undefined>();
+	get reply(): string | undefined {
+		return this.#reply;
+	}
+	set reply(messageId: string | undefined) {
+		this.#reply = messageId;
+		if (this.key !== undefined) this.store?.changed(this.key, this.read);
+	}
 	/** The files the open pane's draft will be sent with, in order. */
 	files = $state.raw<StagedFile[]>([]);
+	#dismissed = $state.raw<string[]>([]);
 	/** The link previews removed from the open pane's draft, by URL: it goes out without them. */
-	dismissed = $state.raw<string[]>([]);
+	get dismissed(): string[] {
+		return this.#dismissed;
+	}
+	set dismissed(urls: string[]) {
+		this.#dismissed = urls;
+		if (this.key !== undefined) this.store?.changed(this.key, this.read);
+	}
 	private key: string | undefined;
 	private readonly texts = new Map<string, string>();
 	private readonly replies = new Map<string, string | undefined>();
 	private readonly staged = new Map<string, StagedFile[]>();
 	private readonly dismissals = new Map<string, string[]>();
+	/** The keys looked up in the store for whose they are now: each is, once, as it is opened, given back or claimed. */
+	private readonly recalled = new Set<string>();
+
+	/** What the store reads a changed draft with, as it writes it. */
+	private readonly read = (key: string): SavedDraft => this.draftOf(key);
+
+	constructor(private readonly store?: DraftStore) {
+		store?.attach?.(() => new Set([...this.texts.keys(), ...this.replies.keys(), ...(this.key === undefined ? [] : [this.key])]), this.read);
+	}
 
 	/** The open pane's key, if a pane is open. */
 	get current(): string | undefined {
@@ -68,6 +110,7 @@ export class PaneDrafts {
 	/** Keeps the open pane's draft and shows `key`'s, or an empty one when there's no pane. */
 	open(key: string | undefined): void {
 		this.save();
+		if (key !== undefined) this.recall(key);
 		this.key = key;
 		this.text = key !== undefined ? this.texts.get(key) ?? '' : '';
 		this.reply = key !== undefined ? this.replies.get(key) : undefined;
@@ -82,6 +125,7 @@ export class PaneDrafts {
 		this.replies.set(this.key, this.reply);
 		this.staged.set(this.key, this.files);
 		this.dismissals.set(this.key, this.dismissed);
+		this.persist(this.key);
 	}
 
 	/** Keeps the open pane's text as it is typed. */
@@ -128,6 +172,7 @@ export class PaneDrafts {
 		this.replies.set(key, undefined);
 		this.staged.set(key, []);
 		this.dismissals.set(key, []);
+		this.persist(key);
 	}
 
 	/**
@@ -138,6 +183,7 @@ export class PaneDrafts {
 		this.texts.set(key, '');
 		this.replies.set(key, undefined);
 		this.dismissals.set(key, []);
+		this.persist(key);
 		if (this.key !== key) return;
 		this.text = '';
 		this.reply = undefined;
@@ -152,11 +198,13 @@ export class PaneDrafts {
 	 */
 	restore(key: string, text: string, reply: string | undefined, files: StagedFile[] = [], dismissed: string[] = []): boolean {
 		const open = this.key === key;
+		this.recall(key);
 		if (!this.texts.get(key) && !this.replies.get(key) && !this.staged.get(key)?.length && !(open && this.busy())) {
 			this.texts.set(key, text);
 			this.replies.set(key, reply);
 			this.staged.set(key, files);
 			this.dismissals.set(key, dismissed);
+			this.persist(key);
 		}
 		if (!open || this.busy()) return false;
 		this.text = this.texts.get(key) ?? '';
@@ -167,20 +215,83 @@ export class PaneDrafts {
 	}
 
 	/**
-	 * Some draft has text or files that reloading would lose: the open pane's,
-	 * or one kept for another. Reactive through the open pane's, which every
-	 * kept draft passes through.
+	 * Drops every draft here whose key passes `goes`, the open pane's too: the session they were written in signed
+	 * out, or another account signed in. The store forgets its own (`DraftKeeper.forget`, `claim`).
+	 */
+	forgetWhere(goes: (key: string) => boolean): void {
+		for (const map of [this.texts, this.replies, this.staged, this.dismissals]) {
+			for (const key of [...map.keys()]) if (goes(key)) map.delete(key);
+		}
+		if (this.key === undefined || !goes(this.key)) return;
+		this.text = '';
+		this.reply = undefined;
+		this.files = [];
+		this.dismissed = [];
+	}
+
+	/**
+	 * Looks again in the store for the drafts whose key passes `test`, now whose they are is known (`DraftKeeper.claim`):
+	 * each kept one fills its pane where it is empty. With `again`, whose they are changed (a guest signed in): those
+	 * looked up already are looked up for the new account, and every one is marked changed, to be kept as theirs.
+	 */
+	recallWhere(test: (key: string) => boolean, again: boolean): void {
+		const keys = new Set([...this.texts.keys(), ...this.replies.keys(), ...this.recalled, ...(this.key === undefined ? [] : [this.key])]);
+		for (const key of keys) {
+			if (!test(key)) continue;
+			if (again) this.recalled.delete(key);
+			this.recall(key);
+			if (again) this.persist(key);
+		}
+	}
+
+	/**
+	 * Some draft has what reloading would lose: files, which are never kept, or text, where the store doesn't keep
+	 * it; the open pane's, or one kept for another. Reactive through the open pane's, which every kept draft passes
+	 * through.
 	 */
 	get unsent(): boolean {
-		if (this.text.trim() || this.files.length) return true;
-		for (const [key, text] of this.texts) if (key !== this.key && text.trim()) return true;
+		if (this.files.length) return true;
 		for (const [key, files] of this.staged) if (key !== this.key && files.length) return true;
+		if (this.store?.keeps()) return false;
+		if (this.text.trim()) return true;
+		for (const [key, text] of this.texts) if (key !== this.key && text.trim()) return true;
 		return false;
 	}
 
 	/** The open pane's draft has something in it. */
 	private busy(): boolean {
 		return Boolean(this.text || this.reply || this.files.length);
+	}
+
+	/**
+	 * The first time `key` is asked for once whose it is is known, what the store kept of it, where this visit has
+	 * nothing of its own there: the open pane shows it at once.
+	 */
+	private recall(key: string): void {
+		if (!this.store || this.recalled.has(key) || !this.store.knows(key)) return;
+		this.recalled.add(key);
+		const open = key === this.key;
+		if (open ? this.text.trim() || this.reply : this.texts.get(key)?.trim() || this.replies.get(key)) return;
+		const kept = this.store.load(key);
+		if (!kept) return;
+		this.texts.set(key, kept.text);
+		this.replies.set(key, kept.reply);
+		this.dismissals.set(key, kept.dismissed ?? []);
+		if (!open) return;
+		this.text = kept.text;
+		this.reply = kept.reply;
+		this.dismissed = kept.dismissed ?? [];
+	}
+
+	/** Tells the store `key`'s draft changed. */
+	private persist(key: string): void {
+		this.store?.changed(key, this.read);
+	}
+
+	/** `key`'s draft as it now is: the open pane's as shown, which is ahead of what `save` last kept of it. */
+	private draftOf(key: string): SavedDraft {
+		if (key === this.key) return { text: this.text, reply: this.reply, dismissed: this.dismissed };
+		return { text: this.texts.get(key) ?? '', reply: this.replies.get(key), dismissed: this.dismissals.get(key) ?? [] };
 	}
 }
 

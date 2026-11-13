@@ -15,7 +15,7 @@
 		},
 		"load-busy": {
 			"requests": 20,
-			"startupJsKB": 920.2,
+			"startupJsKB": 929.8,
 			"domNodes": 1149,
 			"layouts": 13,
 			"styleRecalcs": 16,
@@ -33,7 +33,7 @@
 		},
 		"load-phone-busy": {
 			"requests": 20,
-			"startupJsKB": 920.2,
+			"startupJsKB": 929.8,
 			"domNodes": 1150,
 			"layouts": 9,
 			"styleRecalcs": 15,
@@ -68,12 +68,12 @@
 		"open-thread": {
 			"layouts": 4,
 			"styleRecalcs": 14,
-			"calls": 65368
+			"calls": 64023
 		},
 		"open-preferences": {
 			"layouts": 3,
 			"styleRecalcs": 9,
-			"calls": 4287
+			"calls": 4309
 		},
 		"scroll-timeline": {
 			"layouts": 9,
@@ -107,7 +107,7 @@
 		}
 	},
 	"bundle": {
-		"jsGzipKB": 608.2,
+		"jsGzipKB": 614.3,
 		"cssGzipKB": 29.1
 	},
 	"production": {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { PaneDrafts, type StagedFile } from './pane-drafts.svelte';
+import { PaneDrafts, type DraftStore, type StagedFile } from './pane-drafts.svelte';
+import type { SavedDraft } from './storage';
 
 function staged(id: string): StagedFile {
 	const file = new File(['x'], `${id}.png`, { type: 'image/png' });
@@ -147,5 +148,47 @@ describe('PaneDrafts', () => {
 		expect(drafts.slashed).toBe(false);
 		drafts.clear('lobby');
 		expect(drafts.roles).toEqual([]);
+	});
+
+	it('starts each pane from the draft its store kept, the first time, and hands it each change', () => {
+		const kept = new Map<string, SavedDraft>([['lobby', { text: 'from before', reply: 'm1', dismissed: ['https://a.example/'] }]]);
+		const store: DraftStore = { keeps: () => true, knows: () => true, load: (key) => kept.get(key), changed: (key, read) => void kept.set(key, read(key)) };
+		const drafts = new PaneDrafts(store);
+		drafts.open('lobby');
+		expect([drafts.text, drafts.reply, drafts.dismissed]).toEqual(['from before', 'm1', ['https://a.example/']]);
+		drafts.text = 'from before, and more';
+		drafts.saveText();
+		expect(kept.get('lobby')).toEqual({ text: 'from before, and more', reply: 'm1', dismissed: ['https://a.example/'] });
+		// Removing a preview is a change too: what is read is the draft as shown.
+		drafts.dismissed = [];
+		expect(kept.get('lobby')?.dismissed).toEqual([]);
+		// Kept for the visit: the store isn't asked again, even when it changes under it.
+		kept.set('lobby', { text: 'another tab' });
+		drafts.open('thread');
+		drafts.open('lobby');
+		expect(drafts.text).toBe('from before, and more');
+		drafts.clear('lobby');
+		expect(kept.get('lobby')).toEqual({ text: '', reply: undefined, dismissed: [] });
+		// Kept text is no loss on reload: only files are.
+		drafts.text = 'typing';
+		expect(drafts.unsent).toBe(false);
+		drafts.stage([staged('a')]);
+		expect(drafts.unsent).toBe(true);
+	});
+
+	it('forgets the drafts of a session that signed out, the open one too', () => {
+		const drafts = new PaneDrafts();
+		drafts.open('a:lobby');
+		drafts.text = 'mine';
+		drafts.open('b:lobby');
+		drafts.text = 'elsewhere';
+		drafts.open('a:thread');
+		drafts.text = 'open';
+		drafts.forgetWhere((key) => key.startsWith('a:'));
+		expect(drafts.text).toBe('');
+		drafts.open('a:lobby');
+		expect(drafts.text).toBe('');
+		drafts.open('b:lobby');
+		expect(drafts.text).toBe('elsewhere');
 	});
 });

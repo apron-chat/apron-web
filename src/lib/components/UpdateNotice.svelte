@@ -14,8 +14,8 @@
 	 * that failed to load has it check at once, for a deploy that removed the
 	 * chunk means this tab is stale too. A dropped connection fails the same
 	 * way but finds no newer deploy, so it isn't taken for one (the toast says
-	 * the load failed). It never reloads by itself, and drafts live only in
-	 * memory, so it says when reloading would clear one.
+	 * the load failed). It never reloads by itself, and says when reloading
+	 * would clear a draft: its files, which are never kept, or its text where drafts aren't kept on this device.
 	 */
 	let dismissed = $state(false);
 	let unsent = $derived(pageDrafts.current?.unsent ?? false);

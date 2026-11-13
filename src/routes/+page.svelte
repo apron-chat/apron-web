@@ -109,6 +109,8 @@
 	import { linkPreviews } from '$lib/ui/link-previews';
 	import { carriesFiles, fileDrop, pastedFiles } from '$lib/ui/file-transfer';
 	import { PaneDrafts, pageDrafts, type StagedFile } from '$lib/ui/pane-drafts.svelte';
+	import { DraftKeeper, draftServer } from '$lib/ui/draft-keeper.svelte';
+	import { loadKeptSessionUser } from '$lib/protocol/client-internals';
 	import { PagePresence } from '$lib/ui/presence.svelte';
 	import { JUMP_WAIT_MS, TimelineViewport, until } from '$lib/ui/timeline-viewport.svelte';
 	import { setAppBadge, closeReadNotifications, messageNotificationTag, notificationBody, notificationClickTarget, notificationGroup, notificationTitle, notificationPermission, pushClickTarget, PUSH_ID_PARAM, PUSH_ID_QUERY, PUSH_MESSAGE_PARAM, PUSH_ROOM_PARAM, pushRoute, offersAtSignIn, offersNotifications, requestNotificationPermission, showNotification, type PushTarget, type NotificationPermissionState, type NotificationTarget, type NotificationTestResult } from '$lib/ui/notifications';
@@ -160,7 +162,9 @@
 	/** How far you have read each room and thread, kept for the account (or this server's guests) on this device. */
 	const readPositions = new ReadPositions(() => notifyKey);
 	const presence = new PagePresence();
-	const drafts = new PaneDrafts();
+	/** Each pane's unsent draft, kept on this device so a reload doesn't lose it, unless local history is turned off. */
+	const draftKeeper = new DraftKeeper(() => historySettings.retention !== 'off', draftOwner);
+	const drafts = new PaneDrafts(draftKeeper);
 	// The update notice, in the layout, says when reloading would lose a draft.
 	$effect(() => {
 		pageDrafts.current = drafts;
@@ -629,8 +633,11 @@
 	let liveLoaded: LiveComposer | undefined;
 	/** The open pane's draft is a live message. */
 	let composingLive = $derived(liveComposer?.composing ?? false);
-	/** Files dropped on the conversation or pasted outside the field attach to the draft while the composer is showing. */
-	let canAttach = $derived(paneSteady && !session.readOnly && session.capabilities['embed:upload'] && !selection.active && !composingLive);
+	/**
+	 * Files dropped on the conversation or pasted outside the field attach to the open pane's draft, whatever the
+	 * connection: staging is local, as typing is, and sending waits for it.
+	 */
+	let canAttach = $derived(session.activeRoomId !== undefined && !session.readOnly && session.capabilities['embed:upload'] && !selection.active && !composingLive);
 	/** Files are being dragged over the conversation. */
 	let dropping = $state(false);
 	/** Files dropped on the conversation pane's `<main>`. */
@@ -798,6 +805,31 @@
 	const arrivals = new ArrivalWatch();
 	/** Whose added rooms, and the sidebar's folded rooms, are kept: each account on each server. */
 	let addedAccount = $derived(notifyAccount(serverUrl, session.you?.user_id));
+	/**
+	 * Whose drafts on `server` are (`notifyAccount`), for `DraftKeeper`: the account its session is signed in as, or
+	 * its guests'; until the session is, the account saved on this device for it, where that is noted, else its guests'
+	 * where none is saved. Undefined: not known yet.
+	 */
+	function draftOwner(server: string): string | undefined {
+		if (!client) return undefined;
+		if (client.url === server && session.ready) return notifyAccount(server, session.passkeySession ? session.you?.user_id : undefined);
+		if (!client.keptSessionFor(server)) return notifyAccount(server, undefined);
+		const userId = loadKeptSessionUser(server);
+		return userId === undefined ? undefined : notifyAccount(server, userId);
+	}
+	// Signed in: the drafts this page holds for the server are this account's (or its guests'). A guest's become the
+	// account's it signs in as; another account's go. What waited to know whose it is is read now.
+	$effect(() => {
+		const chat = client;
+		if (!chat || !session.ready) return;
+		const owner = notifyAccount(chat.url, session.passkeySession ? session.you?.user_id : undefined);
+		untrack(() => {
+			const here = (key: string) => draftServer(key) === chat.url;
+			const claim = draftKeeper.claim(chat.url, owner);
+			if (claim === 'dropped') drafts.forgetWhere(here);
+			drafts.recallWhere(here, claim !== 'same');
+		});
+	});
 	/** The order of the sidebar's top-level rooms, kept on this device for the account. */
 	const roomOrder = new RoomOrder();
 	$effect(() => roomOrder.load(addedAccount));
@@ -1654,6 +1686,9 @@
 		return () => {
 			if (chat && account) void pushSettings.signedOut(chat, account);
 			if (chat) void viewKeeper.forget(chat.url);
+			// Unsent drafts aren't forgotten here, which signing in by a code or a link to this server also comes through:
+			// whose they are is settled as the next session is ready (`draftKeeper.claim`), and an account's go with its
+			// history (Sign out's Keep local history, `HistoryKeeper.forget`).
 			// History kept here stays, for when this account signs in again: deleting it is its own choice (Sign out's
 			// Keep local history, or Clear in Preferences).
 			session.forget();
@@ -2135,8 +2170,8 @@
 		editorsAsk = undefined;
 		// A draft that mentions no one starts the hint's checkbox afresh.
 		if (!composerMentions.length && paneRoom && paneRoom.id in addMentionedChoices) forgetAddMentioned(paneRoom.id);
-		if (!client || !paneRoom) return;
 		drafts.saveText();
+		if (!client || !paneRoom) return;
 		// A live message shows itself as it is typed: no typing indicator besides.
 		if (liveLoaded?.composing) return;
 		const roomId = paneRoom.id;
@@ -2415,8 +2450,8 @@
 	 * the server said it doesn't take, is taken back off with the reason.
 	 */
 	function stageFiles(picked: File[]): void {
-		// Staging is local: a quiet reconnect takes files as it takes typing, and sending waits for the connection.
-		if (!paneSteady || session.readOnly || !session.capabilities['embed:upload']) return;
+		// Staging is local: it goes on whatever the connection, as typing does, and sending waits for it.
+		if (session.readOnly || !session.capabilities['embed:upload']) return;
 		const limits = serverMedia(session.server).upload;
 		const staged = picked.map((file): StagedFile => ({ id: `staged-${++stagedCount}`, file, prepared: prepareUpload(file, { limits }) }));
 		for (const { id, prepared } of staged) {
@@ -3455,8 +3490,8 @@
 	}
 </script>
 
-<svelte:window onkeydown={windowKeydown} onpointerdowncapture={() => (tabbing = false)} onpaste={windowPaste} ondragover={refuseDrop} ondrop={refuseDrop} onfocus={() => { presence.focus(); refreshNotificationPermission(); }} onblur={() => presence.blur()} />
-<svelte:document onclick={mediaAskClick} onvisibilitychange={() => { presence.visibilityChanged(); refreshNotificationPermission(); if (document.visibilityState === 'hidden') { keepView(); void historyKeeper?.flush(); } }} />
+<svelte:window onpagehide={() => draftKeeper.flush()} onkeydown={windowKeydown} onpointerdowncapture={() => (tabbing = false)} onpaste={windowPaste} ondragover={refuseDrop} ondrop={refuseDrop} onfocus={() => { presence.focus(); refreshNotificationPermission(); }} onblur={() => presence.blur()} />
+<svelte:document onclick={mediaAskClick} onvisibilitychange={() => { presence.visibilityChanged(); refreshNotificationPermission(); if (document.visibilityState === 'hidden') { keepView(); void historyKeeper?.flush(); draftKeeper.flush(); } }} />
 
 <svelte:head>
 	<title>{tabTitle(unreadAlerting, presence.titleFlash)}</title>
@@ -3726,7 +3761,6 @@
 					bind:mentions={composerMentions}
 					bind:dismissed={drafts.dismissed}
 					placeholder={activeThread ? `Reply in ${threadTitle(activeThread)}` : `Message ${activeRoom.title}`}
-					disabled={!paneSteady || session.readOnly}
 					holdSend={!canCompose || Boolean(paneMentionAdding)}
 					canUpload={session.capabilities['embed:upload'] && !composingLive}
 					live={composingLive}

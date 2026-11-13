@@ -225,7 +225,7 @@ export class SessionView {
 	readonly reconnectingQuietly = $derived(this.connection === 'reconnecting' && !this.reconnectNeedsAttention && !this.live.held && this.lastReady !== undefined);
 	/**
 	 * Ready, or reconnecting quietly: controls that come and go with the session (a room's +, the member list's
-	 * sections, the composer's field) stay as they were, rather than blinking out and back with a short drop.
+	 * sections) stay as they were, rather than blinking out and back with a short drop.
 	 * Anything they ask for waits for the connection, as requests do (`ready` says whether it is there now).
 	 */
 	readonly steady = $derived(this.ready || this.reconnectingQuietly);
@@ -329,8 +329,12 @@ export class SessionView {
 	readonly editors = $derived(hasEditors(this.server));
 	/** Create and update rooms and threads (capability `rooms`). */
 	readonly canManageRooms = $derived(canManageRooms(this.server));
-	/** You only read (`ext:permissions` with `write: false`): no composer, reactions, joins, or new threads. */
-	readonly readOnly = $derived(Boolean(this.live.readOnly) || (this.reconnectingQuietly && Boolean(this.lastReady?.readOnly)));
+	/**
+	 * You only read (`ext:permissions` with `write: false`): no composer, reactions, joins, or new threads. Kept through
+	 * any reconnect from a ready session short of being signed out, quiet or not: a slow way back changes nothing you
+	 * may do, and the composer, which takes typing however the connection is, mustn't show meanwhile.
+	 */
+	readonly readOnly = $derived(Boolean(this.live.readOnly) || (this.connection === 'reconnecting' && !this.live.held && Boolean(this.lastReady?.readOnly)));
 	/** Reaction chips and the React action (capability `reactions`). */
 	readonly canReact = $derived(canReact(this.server));
 
