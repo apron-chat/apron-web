@@ -3,12 +3,13 @@
  * still answers, and making the next. `ChatClient` reads every frame, signs in, and keeps the session; this keeps
  * only the sockets, through `TransportHooks`.
  *
- * A socket opens (`openingUntil`), within `openingWait`, until its `server` frame greets the client (`greeted`), which
- * signs it in; signed in and up for `STABLE_CONNECTION_MS` (`stayUp`), the backoff starts over. From the greeting on,
- * pings watch it, and a page shown again or the network back probes it (`probe`), with a standby beside it after a
- * long absence, which takes over at once should it greet first (`replaceQuietSocket`). Between sockets a reconnect
- * waits out its backoff (`scheduleReconnect`), the server's hold or wait (`held`, `retryAfter`), or the page's
- * absence (`waitForPresence`).
+ * A socket opens until its `server` frame greets the client (`greeted`), which signs it in; signed in and up for
+ * `STABLE_CONNECTION_MS` (`stayUp`), the backoff starts over. From the greeting on, pings watch it, and a page shown
+ * again or the network back probes it (`probe`). Both times the client waits to hear from the socket, the greeting or
+ * the probe's answer, the wait is one thing (`waitFor`): the socket has so long, a standby opens beside it meanwhile
+ * and takes over at once should it greet first, and a socket that outlasts its wait goes as if it had closed, its
+ * standby carrying on (`replaceQuiet`). Between sockets a reconnect waits out its backoff (`scheduleReconnect`), the
+ * server's hold or wait (`held`, `retryAfter`), or the page's absence (`waitForPresence`).
  */
 import {
 	MAX_UNANSWERED_PINGS,
@@ -20,7 +21,6 @@ import {
 	PROBE_PATIENT_MS,
 	RETRY_AFTER_MAX_MS,
 	STABLE_CONNECTION_MS,
-	STANDBY_AFTER_HIDDEN_MS,
 	STANDBY_AFTER_MS,
 	absent,
 	pageHidden,
@@ -73,27 +73,29 @@ export class Transport {
 	#presenceWaiter?: () => void;
 	/** Pings sent on the current socket since its last `pong`. */
 	#unansweredPings = 0;
-	/** A probe's ping waits for an answer (`patientOr(PROBE_MS)`): without one, the socket is dropped. */
-	#probeTimer?: ReturnType<typeof setTimeout>;
-	/** When a socket was last replaced for staying quiet: a probe it didn't answer, or an opening that ran out. */
-	#quietDroppedAt?: number;
-	/** The current socket has `openingWait` to open and bring its `server` frame (§3.1), or it is replaced. */
-	#openingTimer?: ReturnType<typeof setTimeout>;
-	/** Until when the current socket may take to open (`openingWait` from its start), until its `server` frame came. */
-	#openingUntil?: number;
 	/**
-	 * A socket opened beside the one a probe checks after a long absence (`probe`), sending nothing, as the app's
-	 * early connection does: `probed` answering first closes it, and its `server` frame coming first, a whole
-	 * handshake before one ping's answer, means `probed` is gone: it takes over at once, the handshake done.
-	 * It touches nothing of the client's but this until it takes over, through `connectNow` as a new connection.
+	 * The client waits to hear from the current socket (`waitFor`): its `server` frame (§3.1) while it is `opening`,
+	 * else anything in answer to a probe's ping. `until` is when the wait runs out, by `timer`, and the socket goes;
+	 * `race` opens the standby beside it meanwhile.
 	 */
-	#standby?: { socket: WebSocket; probed: WebSocket; frames: unknown[] };
-	/** The probe's wait (`STANDBY_AFTER_MS`) before it opens the standby. */
-	#standbyTimer?: ReturnType<typeof setTimeout>;
+	#waiting?: { socket: WebSocket; opening: boolean; until: number; timer: ReturnType<typeof setTimeout>; race: ReturnType<typeof setTimeout> };
+	/** When a socket was last replaced for outlasting its wait: a probe it didn't answer, or an opening that ran out. */
+	#quietDroppedAt?: number;
+	/**
+	 * A socket opened beside the one waited on (`beside`), sending nothing, as the app's early connection does:
+	 * `beside` heard from first closes it, and its own `server` frame coming first, a whole handshake before the
+	 * other's greeting or one ping's answer, means `beside` is gone or going nowhere: it takes over at once, the
+	 * handshake done. It touches nothing of the client's but this until it takes over, through `connectNow` as a
+	 * new connection.
+	 */
+	#standby?: { socket: WebSocket; beside: WebSocket; frames: unknown[] };
 	/** When the page was last hidden, while it still is. */
 	#hiddenAt?: number;
-	/** Drops the current socket as if it had closed: for one that stopped answering, `reason` its close's. */
-	#abandonSocket?: (reason: string) => void;
+	/**
+	 * Drops the current socket as if it had closed: for one that stopped answering, `reason` its close's. With
+	 * `handover`, no reconnect follows: its standby carries on.
+	 */
+	#abandonSocket?: (reason: string, handover?: boolean) => void;
 	#connectionId = 0;
 	#reconnectAttempt = 0;
 	#isRunning = false;
@@ -110,18 +112,18 @@ export class Transport {
 			this.#hiddenAt = undefined;
 			// One still opening may have outrun its wait while hidden pages' timers were held back: the next goes now,
 			// as it would have once shown, had its timer run.
-			if (this.#openingUntil !== undefined && this.#now() >= this.#openingUntil) this.#replaceOpening('opening timed out', false);
-			else if (away >= PROBE_AFTER_HIDDEN_MS) this.#probe(away >= STANDBY_AFTER_HIDDEN_MS);
+			if (this.#waiting?.opening && this.#now() >= this.#waiting.until) this.#replaceOpening('opening timed out', false);
+			else if (away >= PROBE_AFTER_HIDDEN_MS) this.#probe();
 		}
 		this.#hooks.visibilityChanged();
 	};
 	/**
-	 * The network back: the socket may not have survived it, and an open one is probed, with a standby. What failed
-	 * or is still opening did so on the network that went (nothing opens while the browser is offline): the next
-	 * connection goes now, its backoff from the start.
+	 * The network back: the socket may not have survived it, and one that has greeted is probed. What failed or is
+	 * still opening did so on the network that went (nothing opens while the browser is offline): the next connection
+	 * goes now, its backoff from the start.
 	 */
 	readonly #networkReturned = (): void => {
-		if (this.#current && this.#openingUntil === undefined) this.#probe(true);
+		if (this.#current && !this.#waiting?.opening) this.#probe();
 		else this.#replaceOpening('network changed', true);
 	};
 
@@ -210,8 +212,8 @@ export class Transport {
 
 	/**
 	 * Lets go of the current socket as its connection ends (`ChatClient.endConnection`): nothing it does reaches the
-	 * client any more, and its pings, probe, opening wait, standby and stable timer go, as does a diagnosis under way.
-	 * Returns it, to close.
+	 * client any more, and its pings, the wait to hear from it, its standby and stable timer go, as does a diagnosis
+	 * under way. Returns it, to close.
 	 */
 	drop(): WebSocket | undefined {
 		const socket = this.#current;
@@ -219,8 +221,7 @@ export class Transport {
 		this.#abandonSocket = undefined;
 		this.#current = undefined;
 		this.#stopPing();
-		this.#clearOpening();
-		this.#dropStandby();
+		this.#heard();
 		this.#clearStableTimer();
 		return socket;
 	}
@@ -230,15 +231,13 @@ export class Transport {
 	 * authentication (§1); a replacing frame may change the interval (`pingChanged`).
 	 */
 	greeted(pingChanged: boolean): void {
-		this.#clearOpening();
+		this.#heard();
 		if (!this.#pingTimer || pingChanged) this.#startPing();
 	}
 
 	/** The server answered a ping. */
 	pong(): void {
 		this.#unansweredPings = 0;
-		if (this.#probeTimer) clearTimeout(this.#probeTimer);
-		this.#probeTimer = undefined;
 	}
 
 	/**
@@ -269,7 +268,7 @@ export class Transport {
 		if ((timed || this.#now() - signedIn.at >= STABLE_CONNECTION_MS) && signedIn.still()) this.#reconnectAttempt = 0;
 	}
 
-	/** Opens the next connection, or goes on with `handover`, one opened already (a probe's standby). */
+	/** Opens the next connection, or goes on with `handover`, one opened already (the standby of a socket waited on). */
 	#connectNow(handover?: EarlyConnection): void {
 		if (!this.#isRunning || this.#current) return;
 		this.#stopWaitingForPresence();
@@ -310,48 +309,88 @@ export class Transport {
 		};
 		socket.onmessage = (event) => {
 			if (!this.#isCurrentSocket(id, socket)) return;
-			// Anything heard answers a probe: the socket is alive, and needs no standby.
-			if (this.#probeTimer) clearTimeout(this.#probeTimer);
-			this.#probeTimer = undefined;
-			this.#dropStandby();
+			// Anything heard answers a probe: the socket is alive, and needs no standby. One still opening is waited
+			// on for its greeting, which the client tells of (`greeted`).
+			if (this.#waiting && !this.#waiting.opening) this.#heard();
 			this.#hooks.frame(event.data);
 		};
 		socket.onerror = () => {
 			this.#hooks.errored(this.#isCurrentSocket(id, socket));
 		};
-		const closed = (): void => {
+		/** `handover`: the standby carries on as the next connection (`replaceQuiet`), so no reconnect is due. */
+		const closed = (handover = false): void => {
 			if (!this.#isCurrentSocket(id, socket)) return;
 			// Before the client ends the connection (`drop`), while it can still say it was signed in.
 			this.#stayedUp(socket);
 			this.#hooks.closed();
-			if (this.#isRunning) {
+			if (this.#isRunning && !handover) {
 				if (opened) this.scheduleReconnect();
 				else void this.#diagnoseConnection(id);
 			}
 			this.#hooks.emit();
 		};
-		socket.onclose = closed;
+		socket.onclose = () => closed();
 		// A socket whose peer vanished can stay OPEN here indefinitely, and one
 		// whose handshake went into a vanished network CONNECTING; close it and
 		// carry on as if the close had arrived, without waiting for it.
-		this.#abandonSocket = (reason) => {
+		this.#abandonSocket = (reason, handover) => {
 			try { socket.close(4000, reason); } catch { /* already closed */ }
-			closed();
+			closed(handover);
 		};
-		this.#watchOpening(socket);
+		// Until its `server` frame (§3.1): browsers put no limit on a handshake.
+		this.#waitFor(socket, true);
 	}
 
-	/** Gives `socket`, the current one, `openingWait` to open and bring its `server` frame, else replaces it. */
-	#watchOpening(socket: WebSocket): void {
-		this.#clearOpening();
-		const wait = this.#openingWait();
-		this.#openingUntil = this.#now() + wait;
-		this.#openingTimer = setTimeout(() => {
-			this.#openingTimer = undefined;
-			if (socket !== this.#current) return;
-			this.#quietDroppedAt = this.#now();
-			this.#abandonSocket?.('opening timed out');
-		}, wait);
+	/**
+	 * Waits to hear from `socket`, the current one: its `server` frame while `opening`, else an answer to the ping
+	 * just sent. It has `OPENING_MS` or `PROBE_MS`, and a standby opens beside it after `STANDBY_AFTER_MS`, so one
+	 * that is gone, or whose handshake went nowhere, is replaced by a connection already made rather than waited
+	 * out. For `PROBE_PATIENT_FOR_MS` after a socket outlasted its wait (`patient`), the network may only be slow:
+	 * the socket then has `PROBE_PATIENT_MS`, and the standby opens only once its usual wait is over, so a slow
+	 * network is met with one more socket, not one after another.
+	 */
+	#waitFor(socket: WebSocket, opening: boolean): void {
+		this.#stopWaiting();
+		const usual = opening ? OPENING_MS : PROBE_MS;
+		const patient = this.#patient();
+		const wait = patient ? PROBE_PATIENT_MS : usual;
+		const waiting = {
+			socket, opening, until: this.#now() + wait,
+			timer: setTimeout(() => {
+				if (this.#waiting !== waiting || socket !== this.#current) return;
+				this.#quietDroppedAt = this.#now();
+				this.#replaceQuiet();
+			}, wait),
+			race: setTimeout(() => {
+				if (this.#waiting === waiting && socket === this.#current && this.#mayReplace()) this.#openStandby(socket);
+			}, patient ? usual : STANDBY_AFTER_MS)
+		};
+		this.#waiting = waiting;
+	}
+
+	/** The wait to hear from the current socket is over, however it ended: its timers go. */
+	#stopWaiting(): void {
+		const waiting = this.#waiting;
+		if (!waiting) return;
+		this.#waiting = undefined;
+		clearTimeout(waiting.timer);
+		clearTimeout(waiting.race);
+	}
+
+	/** The current socket was heard from, or its connection ended: nothing waits on it, and its standby closes unused. */
+	#heard(): void {
+		this.#stopWaiting();
+		const standby = this.#standby;
+		this.#standby = undefined;
+		if (standby) closeUnused(standby.socket);
+	}
+
+	/**
+	 * Whether a connection may open, or be taken, in a quiet one's place now: the client running, the page shown and
+	 * online, and no hold (`denied`, a sign-in) or wait from the server, which a second connection would get around.
+	 */
+	#mayReplace(): boolean {
+		return this.#isRunning && !this.#hooks.held() && !this.#hooks.retryAfter() && !absent();
 	}
 
 	/**
@@ -359,7 +398,7 @@ export class Transport {
 	 * backoff (`fresh`: starting the backoff over), unless the server asked for a wait or holds reconnecting.
 	 */
 	#replaceOpening(reason: string, fresh: boolean): void {
-		if (this.#openingUntil !== undefined) this.#abandonSocket?.(reason);
+		if (this.#waiting?.opening) this.#abandonSocket?.(reason);
 		if (!this.#isRunning || this.#current || this.#hooks.held()) return;
 		if (this.#reconnectTimer) clearTimeout(this.#reconnectTimer);
 		this.#reconnectTimer = undefined;
@@ -371,17 +410,6 @@ export class Transport {
 		}
 		this.#reconnectAttempt += 1;
 		this.#connectNow();
-	}
-
-	#clearOpening(): void {
-		if (this.#openingTimer) clearTimeout(this.#openingTimer);
-		this.#openingTimer = undefined;
-		this.#openingUntil = undefined;
-	}
-
-	/** How long a socket may take to open: `OPENING_MS`, or longer just after one was replaced for staying quiet (`patientOr`). */
-	#openingWait(): number {
-		return this.#patientOr(OPENING_MS);
 	}
 
 	/**
@@ -460,101 +488,74 @@ export class Transport {
 	#stopPing(): void {
 		if (this.#pingTimer) clearInterval(this.#pingTimer);
 		this.#pingTimer = undefined;
-		if (this.#probeTimer) clearTimeout(this.#probeTimer);
-		this.#probeTimer = undefined;
 	}
 
 	/**
 	 * Checks at once that an open socket still answers, on a page someone can see: one ping, and the socket is
-	 * replaced through the usual reconnect if nothing comes back within `PROBE_MS` (`patientOr`). Only where the
-	 * server pings (§1); the regular pings carry on as they were. With `standby` (after a long absence, or the
-	 * network back), a second socket opens alongside if no answer comes within `STANDBY_AFTER_MS`, so a dead one
-	 * is replaced by a connection already made; not while a recent replacement makes the probe patient.
+	 * waited on for anything back (`waitFor`). Only where the server pings (§1); the regular pings carry on as
+	 * they were.
 	 */
-	#probe(standby = false): void {
+	#probe(): void {
 		const socket = this.#current;
-		if (!this.#isRunning || !socket || socket.readyState !== WebSocket.OPEN || this.#hooks.ping() === undefined || this.#probeTimer || absent()) return;
+		if (!this.#isRunning || !socket || socket.readyState !== WebSocket.OPEN || this.#hooks.ping() === undefined || this.#waiting || absent()) return;
 		socket.send(PING_FRAME);
-		// Not while the server holds reconnecting (`denied`, a sign-in) or asked for a wait: a standby would get around it.
-		if (standby && !this.#patient() && !this.#hooks.held() && !this.#hooks.retryAfter()) {
-			this.#standbyTimer = setTimeout(() => {
-				this.#standbyTimer = undefined;
-				if (socket === this.#current && this.#probeTimer && !absent()) this.#openStandby(socket);
-			}, STANDBY_AFTER_MS);
-		}
-		this.#probeTimer = setTimeout(() => {
-			this.#probeTimer = undefined;
-			if (socket !== this.#current) return;
-			this.#quietDroppedAt = this.#now();
-			this.#replaceQuietSocket();
-		}, this.#patientOr(PROBE_MS));
+		this.#waitFor(socket, false);
 	}
 
 	/**
-	 * Opens the standby beside `probed`, sending nothing. Its first frame (the `server` frame, after a whole
-	 * handshake) coming while `probed` has yet to answer one ping replaces `probed` with it at once.
+	 * Opens the standby beside `beside`, the socket waited on, sending nothing. Its first frame (the `server` frame,
+	 * after a whole handshake) coming while `beside` has yet to be heard from replaces `beside` with it at once.
 	 */
-	#openStandby(probed: WebSocket): void {
-		this.#dropStandby();
+	#openStandby(beside: WebSocket): void {
+		// One at a time: none is left from an earlier wait, which closes its own as it ends (`heard`).
+		if (this.#standby) return;
 		let socket: WebSocket;
 		try {
 			socket = this.#webSocketFactory(this.#hooks.url());
 		} catch {
 			return;
 		}
-		const standby = { socket, probed, frames: [] as unknown[] };
+		const standby = { socket, beside, frames: [] as unknown[] };
 		this.#standby = standby;
 		socket.onmessage = (event: MessageEvent) => {
 			standby.frames.push(event.data);
 			// Its greeting, a whole handshake done: anything else (an error before a close) proves nothing.
-			if (this.#standby === standby && this.#current === probed && this.#probeTimer && isServerFrame(event.data)) this.#replaceQuietSocket();
+			if (this.#standby === standby && this.#current === beside && this.#waiting?.socket === beside && isServerFrame(event.data)) this.#replaceQuiet();
 		};
 		socket.onclose = socket.onerror = () => {
 			if (this.#standby === standby) this.#standby = undefined;
 		};
 	}
 
-	/** Closes the standby, if any, or stops it opening: the probed socket answered, or it ended. */
-	#dropStandby(): void {
-		if (this.#standbyTimer) clearTimeout(this.#standbyTimer);
-		this.#standbyTimer = undefined;
-		const standby = this.#standby;
-		this.#standby = undefined;
-		if (standby) closeUnused(standby.socket);
-	}
-
 	/**
-	 * Drops the current socket, gone quiet, as if it had closed. With a standby still open or opening, connects
-	 * again on it at once, taking it as the app's early connection is taken; otherwise through the usual backoff.
+	 * Drops the socket waited on, gone quiet or nowhere, as if it had closed. With a standby still open or opening,
+	 * and connecting allowed now (`mayReplace`), goes on with it at once, taking it as the app's early connection is
+	 * taken; otherwise through what follows any close (the backoff, or the server asked why its handshake failed).
 	 */
-	#replaceQuietSocket(): void {
+	#replaceQuiet(): void {
+		const waiting = this.#waiting;
+		if (!waiting) return;
 		const standby = this.#standby;
+		// Ending the quiet connection (`drop`) closes a standby still there: this one is taken first.
 		this.#standby = undefined;
-		// Ending the probed connection (`endConnection`) drops a standby still waiting to open.
-		this.#abandonSocket?.('ping unanswered');
-		if (!standby) return;
+		const usable = standby !== undefined && (standby.socket.readyState === WebSocket.CONNECTING || standby.socket.readyState === WebSocket.OPEN) && this.#mayReplace();
+		if (standby && !usable) closeUnused(standby.socket);
+		this.#abandonSocket?.(waiting.opening ? 'opening timed out' : 'ping unanswered', usable);
+		if (!standby || !usable) return;
 		const { socket, frames } = standby;
-		const usable = socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN;
-		// Taken only where connecting now is: the client running with no other connection, the page shown and online,
-		// and no hold or wait from the server since it opened.
-		if (!usable || !this.#isRunning || this.#current || this.#hooks.held() || this.#hooks.retryAfter() || absent()) {
+		// The connection ended there (`drop`), as the client's does: with one still current, the standby is nobody's.
+		if (this.#current) {
 			closeUnused(socket);
 			return;
 		}
 		if (this.#reconnectTimer) clearTimeout(this.#reconnectTimer);
 		this.#reconnectTimer = undefined;
+		// One more try, as a reconnect after the backoff would have been.
+		this.#reconnectAttempt += 1;
 		this.#connectNow({ socket, open: socket.readyState === WebSocket.OPEN, frames });
 	}
 
-	/**
-	 * `wait`, or `PROBE_PATIENT_MS` while a socket was replaced for staying quiet within `PROBE_PATIENT_FOR_MS`, so
-	 * a slow network isn't met with one new socket after another.
-	 */
-	#patientOr(wait: number): number {
-		return this.#patient() ? PROBE_PATIENT_MS : wait;
-	}
-
-	/** A socket was replaced for staying quiet within `PROBE_PATIENT_FOR_MS`: the network may be slow or flaky. */
+	/** A socket outlasted its wait within `PROBE_PATIENT_FOR_MS`: the network may be slow or flaky. */
 	#patient(): boolean {
 		const dropped = this.#quietDroppedAt;
 		return dropped !== undefined && this.#now() - dropped < PROBE_PATIENT_FOR_MS;
@@ -621,7 +622,7 @@ export class Transport {
 	}
 }
 
-/** Closes a socket nobody took (a probe's standby), its handlers first, so nothing it does after reaches the client. */
+/** Closes a socket nobody took (a standby), its handlers first, so nothing it does after reaches the client. */
 function closeUnused(socket: WebSocket): void {
 	socket.onopen = socket.onmessage = socket.onclose = socket.onerror = null;
 	try {

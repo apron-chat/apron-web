@@ -55,24 +55,27 @@ Where the server pings (§1), a tab shown again after 10 seconds or more away,
 or a network that comes back, checks at once that its socket still answers:
 one ping, and a socket that hears nothing back (a `pong`, or any other frame)
 within 5 seconds is replaced as if it had closed, rather than looking connected
-for up to a whole ping interval after a laptop slept. For 3 minutes after a
-check replaced a socket, the next waits 30 seconds instead, so a slow network
-that outlasts 5 seconds isn't met with one new connection after another.
-Back after a minute or more away, or with the network back, a check that
-hears nothing within 2 seconds also opens a second connection beside the
-first, which sends nothing (none within 3 minutes of a socket replaced for
-staying quiet, so a flaky network has one connection at a time): if the first
-answers, the second closes unused; if the second's greeting arrives first (a
-whole handshake before one ping's answer), the first is gone, and the second
-takes over at once with its handshake already done, as it does when the check
-runs out (the client then running, shown and online, with no wait or hold
-from the server, which also keep any from opening). A new connection gets 10 seconds to open and bring the server's
-`server` frame, or it is dropped as if it had failed and the next tried
-(browsers put no limit on a handshake, and one sent into a network that went
-away waits out the system's connect timeout, a minute or more, showing
-**Still trying to reconnect…** all the while); for 3 minutes after one was
-dropped for staying quiet, the next gets 30 seconds. One still opening when
-the network comes back, or when the page is shown again after its 10 seconds
+for up to a whole ping interval after a laptop slept. A new connection is
+waited on the same way: it gets 10 seconds to open and bring the server's
+`server` frame, or it is dropped as if it had failed (browsers put no limit on
+a handshake, and one sent into a network that went away waits out the system's
+connect timeout, a minute or more).
+Either wait races the socket after 2 seconds: with nothing heard by then, a
+second connection opens beside the first, which sends nothing. If the first is
+heard from, the second closes unused; if the second's greeting arrives first
+(a whole handshake before one ping's answer, or before the greeting of a
+handshake begun 2 seconds sooner), the first is gone or going nowhere, and the
+second takes over at once with its handshake already done. It takes over too
+when the wait runs out (the client then running, shown and online, with no
+wait or hold from the server, which also keep any from opening). So a socket
+that died while a phone's app was away, or a handshake sent before its network
+was back, costs about 2 seconds and a handshake, not the whole wait.
+For 3 minutes after a socket outlasted its wait, the network may only be slow:
+the next check, and the next connection opening, get 30 seconds, and the
+second connection opens only once the usual wait (5 seconds, 10 seconds) is
+over, so a slow network is met with one more connection, not one after
+another. One still opening when
+the network comes back, or when the page is shown again after its wait
 ran out while hidden, is replaced at once, the next connection opening then
 rather than after the backoff; the network back between attempts also
 connects at once, and starts the backoff over. An explicit server retry window takes precedence, including a

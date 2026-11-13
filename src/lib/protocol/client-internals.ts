@@ -238,15 +238,15 @@ export const MAX_UNANSWERED_PINGS = 1;
  */
 export const PROBE_MS = 5_000;
 /**
- * How long a probe waits instead while a probe replaced a socket within
- * `PROBE_PATIENT_FOR_MS`: a slow network (a laptop's Wi-Fi coming back) can
- * outlast `PROBE_MS` on a socket that was alive, and replacing healthy sockets
- * one after another would cost more than it saves.
+ * How long a probe, or a socket opening, waits instead while a socket outlasted its wait within
+ * `PROBE_PATIENT_FOR_MS`: a slow network (a laptop's Wi-Fi coming back) can outlast `PROBE_MS` on a socket that
+ * was alive, and replacing healthy sockets one after another would cost more than it saves. The standby then opens
+ * only once the usual wait (`PROBE_MS`, `OPENING_MS`) is over, rather than after `STANDBY_AFTER_MS`.
  */
 export const PROBE_PATIENT_MS = 30_000;
 /**
- * How long after a socket was last replaced for staying quiet (a probe unanswered, or an opening that ran out) the
- * next probe or opening waits `PROBE_PATIENT_MS`; then `PROBE_MS` or `OPENING_MS` again.
+ * How long after a socket last outlasted its wait (a probe unanswered, or an opening that ran out) the next probe or
+ * opening waits `PROBE_PATIENT_MS`; then `PROBE_MS` or `OPENING_MS` again.
  */
 export const PROBE_PATIENT_FOR_MS = 180_000;
 /**
@@ -257,16 +257,11 @@ export const PROBE_PATIENT_FOR_MS = 180_000;
  */
 export const OPENING_MS = 10_000;
 /**
- * How long the page must have been hidden for the probe on its return to open a standby socket beside the one it
- * checks: away this long, a socket has often died without a close (a phone's app suspended, its network changed),
- * and the standby's handshake then runs during the probe instead of after it. A network that comes back always
- * opens one.
- */
-export const STANDBY_AFTER_HIDDEN_MS = 60_000;
-/**
- * How long such a probe waits for its answer before it opens the standby: a socket that is alive answers well within
- * it, and opens none. Nor does a probe within `PROBE_PATIENT_FOR_MS` of a socket replaced for staying quiet: a flaky
- * network gets one socket at a time.
+ * How long the client waits to hear from a socket (a probe's answer, or the greeting of one opening) before it opens
+ * a standby beside it: a socket that is alive answers, and a handshake on a working network is done, well within it,
+ * and opens none. One that died without a close (a phone's app suspended, its network changed), or whose handshake
+ * went nowhere, is then replaced by a connection whose handshake ran meanwhile, not after the wait. Each standby
+ * costs the server a connection, so no sooner than this.
  */
 export const STANDBY_AFTER_MS = 2_000;
 /**

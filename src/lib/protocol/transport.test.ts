@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OPENING_MS, STABLE_CONNECTION_MS } from './client-internals';
 import { Transport, type TransportHooks } from './transport';
+import { afterBackoff } from '$lib/test/client';
 import { FakeSocket } from '$lib/test/fake-socket';
 
 /**
@@ -81,7 +82,7 @@ describe('Transport', () => {
 		expect(calls.slice(-2)).toEqual(['closed', 'emit']);
 		expect(transport.socket).toBeUndefined();
 		expect(transport.retrying).toBe(true);
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		expect(FakeSocket.instances).toHaveLength(2);
 		expect(transport.id).toBe(first + 1);
 		expect(calls.at(-1)).toBe('reconnecting');
@@ -154,7 +155,7 @@ describe('Transport', () => {
 		transport.connect();
 		latest().open();
 		latest().drop();
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		expect(transport.retrying).toBe(true);
 		latest().open();
 		transport.greeted(false);
@@ -179,10 +180,10 @@ describe('Transport', () => {
 		};
 		// Up for less than it takes, then for long enough but signed in as no one: each next connection is one more try.
 		visit(true, STABLE_CONNECTION_MS - 1);
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		expect(transport.retrying).toBe(true);
 		visit(false, STABLE_CONNECTION_MS);
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		expect(transport.retrying).toBe(true);
 		// Signed in, and up for long enough: the next is the first again, within a quarter second, not after seconds.
 		visit(true, STABLE_CONNECTION_MS);

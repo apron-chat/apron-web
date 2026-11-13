@@ -4,7 +4,7 @@ import { REQUEST_TIMEOUT_MS } from './client-internals';
 import { PROPOSAL_MS } from './signin-connection';
 import { findProposal } from './proposals';
 import { requestPasskey } from './webauthn';
-import { FakeSocket, nextSocket, settle, startClient } from '$lib/test/client';
+import { FakeSocket, nextSocket, settle, startClient, afterBackoff } from '$lib/test/client';
 
 vi.mock('./webauthn', () => ({ requestPasskey: vi.fn(), signalPasskeyLabel: vi.fn() }));
 
@@ -117,7 +117,7 @@ describe('sign-in', () => {
 
 		// The next connection resumes with the bearer token.
 		side.drop();
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		await latest().greet([], { auth: ['email', 'token', 'guest'], you: { user_id: 'ada', name: 'Ada' } });
 		expect(auths()[0].params).toMatchObject({ scheme: 'token', token: 'st_Hk41' });
 	});
@@ -192,7 +192,7 @@ describe('sign-in', () => {
 		await approve(side, '418092', { you: { user_id: 'ada' } });
 		expect(snapshot.passkeySession).toBe(true);
 		side.drop();
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		const next = latest();
 		next.open();
 		next.receive({ method: 'server', params: { apron: 10, auth: ['email', 'guest', 'webauthn'], capabilities: [] } });
@@ -226,7 +226,7 @@ describe('sign-in', () => {
 		const side = await propose('ada@example.com', ['email', 'guest', 'webauthn']);
 		await approve(side, '418092', { you: { user_id: 'ada' } });
 		side.drop();
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		const next = latest();
 		next.open();
 		next.receive({ method: 'server', params: { apron: 9, auth: ['email', 'guest', 'webauthn'], capabilities: [] } });
@@ -282,7 +282,7 @@ describe('sign-in', () => {
 		expect(snapshot.signedInWith).toBe('email');
 		// Nothing to resume with: the next connection asks for the email again rather than a new guest.
 		socket.drop();
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		const next = latest();
 		next.open();
 		next.receive({ method: 'server', params: { apron: 10, auth: ['email', 'guest'], capabilities: [] } });
@@ -297,7 +297,7 @@ describe('sign-in', () => {
 		await latest().reply('auth', {});
 		await asked;
 		latest().drop();
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		await latest().greet([], { auth: ['email', 'token', 'guest'] });
 		await expect(client.addWithCode('418092')).rejects.toThrow('Send a new code');
 		expect(auths()).toHaveLength(1);
@@ -333,7 +333,7 @@ describe('sign-in', () => {
 		expect(storage.has(TOKEN_KEY)).toBe(false);
 		// The next connection is never Bob again behind Ada's back.
 		side.drop();
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		const next = latest();
 		next.open();
 		next.receive({ method: 'server', params: { apron: 10, auth: ['email', 'token', 'guest'], capabilities: ['rooms'] } });
@@ -623,7 +623,7 @@ describe('sign-in', () => {
 
 		// The page comes back to a new page load: another connection, the same account.
 		latest().drop();
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		await latest().greet([], { auth: ['email', 'external', 'token', 'guest'], you: { user_id: 'ada' } });
 		const socket = latest();
 		const added = client.addWithLink(' Hk41x9 ', state);
@@ -652,7 +652,7 @@ describe('sign-in', () => {
 		await asked;
 		expect(findProposal(state)).toMatchObject({ kind: 'addition', account: 'guest_1', email: 'ada@example.com' });
 		latest().drop();
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		await latest().greet([], { auth: ['email', 'token', 'guest'], you: { user_id: 'bob' } });
 		const sent = latest().sent.length;
 		await expect(client.addWithLink('Hk41x9', state)).rejects.toThrow('@guest_1');

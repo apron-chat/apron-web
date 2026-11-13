@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { ChatClient, type ClientSnapshot } from './client';
-import { FakeSocket, quiet, SERVER_URL, settle, startClient } from '$lib/test/client';
+import { FakeSocket, quiet, SERVER_URL, settle, startClient, afterBackoff } from '$lib/test/client';
 
 /**
  * The session a client keeps (§3.2): its token per server, which it resumes
@@ -239,7 +239,7 @@ describe('persisted session tokens', () => {
 		expect(auths()[0].params).toMatchObject({ scheme: 'token', token: 'old' });
 		expect(storage.get(TOKEN_KEY)).toBe('rotated');
 		latest().drop();
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		await latest().greet([], { auth: ['token', 'guest'], you: { user_id: 'ada' } });
 		expect(auths()[0].params).toMatchObject({ scheme: 'token', token: 'rotated' });
 		// A result without a token keeps the saved one.
@@ -268,7 +268,7 @@ describe('display name on connect', () => {
 		first.receive({ id: first.request('me').id, error: { code: -32001, message: 'Only registered users may change their name' } });
 		await Promise.resolve();
 		first.drop();
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		await latest().greet();
 		expect(latest()).not.toBe(first);
 		expect(renames(latest())).toBe(0);
@@ -279,7 +279,7 @@ describe('display name on connect', () => {
 		second.receive({ id: second.request('me').id, error: { code: -32602, message: 'Names are at most 32 characters' } });
 		await Promise.resolve();
 		second.drop();
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		await latest().greet();
 		expect(latest()).not.toBe(second);
 		expect(renames(latest())).toBe(0);
@@ -297,7 +297,7 @@ describe('display name on connect', () => {
 		// The server normalizes the name it keeps (§1.1).
 		await first.reply('me', { you: { user_id: 'guest_1', name: 'dana' } });
 		first.drop();
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		await latest().greet(undefined, { you: { user_id: 'guest_1', name: 'dana' } });
 		expect(latest()).not.toBe(first);
 		expect(renames(latest())).toBe(0);
@@ -307,7 +307,7 @@ describe('display name on connect', () => {
 		await profile;
 		const second = latest();
 		second.drop();
-		vi.advanceTimersByTime(5_000);
+		afterBackoff();
 		await latest().greet(undefined, { you: { user_id: 'guest_1', name: 'Dee' } });
 		expect(latest()).not.toBe(second);
 		expect(renames(latest())).toBe(0);
