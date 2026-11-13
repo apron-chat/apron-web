@@ -157,6 +157,46 @@ test.describe('a draft naming someone who isn’t here, and a role no one here h
 		expect((await preview.sent('room_join')).map((p) => p.user_id).sort()).toEqual(['grace', 'margaret']);
 	});
 
+	test('each room keeps its own choice: sending elsewhere doesn’t reset it', async ({ preview, page }) => {
+		await preview.open();
+		await preview.openRoom('engineering');
+		await preview.composer().click();
+		await page.keyboard.type('@gr');
+		await page.keyboard.press('Tab');
+		await page.keyboard.type('hi');
+		const tick = page.getByTestId('mention-outside-add');
+		await tick.uncheck();
+		await preview.openRoom('general');
+		await preview.composer().click();
+		await page.keyboard.type('ok');
+		await page.keyboard.press('Enter');
+		await preview.waitForSent('message', (p) => p.body?.text === 'ok');
+		await preview.openRoom('engineering');
+		await expect(tick).not.toBeChecked();
+		await preview.composer().click();
+		await page.keyboard.press('Enter');
+		await preview.waitForSent('message', (p) => p.body?.text?.endsWith('hi'));
+		expect(await preview.sent('room_join')).toEqual([]);
+	});
+
+	test('a live message adds no one: no line, and its mentions of who isn’t here are greyed', async ({ preview, page }) => {
+		await preview.open();
+		await preview.openRoom('engineering');
+		await preview.composer().click();
+		await page.keyboard.insertText('/live');
+		await page.keyboard.press('Enter');
+		await expect(page.getByTestId('live-tag')).toHaveText('Live');
+		await page.keyboard.type('@gr');
+		await page.keyboard.press('Tab');
+		await page.keyboard.type('hi');
+		const grace = preview.composer().locator('.ap-mention[data-user-id="grace"]');
+		await expect(grace).toHaveClass(/ap-mention-quiet/);
+		await expect(page.getByTestId('mention-outside-hint')).toHaveCount(0);
+		await page.keyboard.press('Enter');
+		await preview.waitForSent('message', (p) => p.message_id !== undefined);
+		expect(await preview.sent('room_join')).toEqual([]);
+	});
+
 	test('a role written in code names no one: the line drops it as it is typed, and Send adds no one for it', async ({ preview, page }) => {
 		await preview.open();
 		await preview.openRoom('engineering');

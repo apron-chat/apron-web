@@ -196,10 +196,6 @@ function markdown(source: string): string {
 }
 
 /**
- * The roles a markdown body mentions (`@&role`, Appendix A.3) where it renders them: outside code and links, as
- * `linkText` skips them. Once each, in order. A role typed whole counts though no chip names it.
- */
-/**
  * The roles `@&role` names in `text` as written, once each in order: a quick scan, without rendering it, so it also
  * finds those in code or links, which `markdownRoles` leaves out. For telling, as text is typed, whether the roles it
  * names changed.
@@ -211,6 +207,10 @@ export function writtenRoles(text: string): string[] {
 	return [...roles];
 }
 
+/**
+ * The roles a markdown body mentions (`@&role`, Appendix A.3) where it renders them: outside code and links, as
+ * `linkText` skips them. Once each, in order. A role typed whole counts though no chip names it.
+ */
 export function markdownRoles(source: string): string[] {
 	const roles = new Set<string>();
 	let codeDepth = 0;

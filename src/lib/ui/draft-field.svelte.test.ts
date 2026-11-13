@@ -5,7 +5,7 @@ import type { MentionPerson } from '$lib/protocol/markdown';
 import { DraftField } from './draft-field.svelte';
 
 /** A field for `@` mentions of Alan, whose picker shows only while `shown` says so (its code loads on demand). */
-function field(shown: { value: boolean }, options: { newlineOnEnter?: boolean; outsiders?: MentionPerson[] } = {}) {
+function field(shown: { value: boolean }, options: { newlineOnEnter?: boolean; outsiders?: MentionPerson[]; people?: MentionPerson[] } = {}) {
 	let value = $state('');
 	let mentions = $state<string[]>([]);
 	const submit = vi.fn();
@@ -18,7 +18,7 @@ function field(shown: { value: boolean }, options: { newlineOnEnter?: boolean; o
 			set value(text) { value = text; },
 			get mentions() { return mentions; },
 			set mentions(ids) { mentions = ids; },
-			people: [{ id: 'alan', name: 'Alan Turing' }],
+			people: options.people ?? [{ id: 'alan', name: 'Alan Turing' }],
 			outsiders: options.outsiders,
 			rooms: [],
 			disabled: false,
@@ -280,6 +280,17 @@ describe('DraftField', () => {
 		expect(draft.matches.map((match) => ('id' in match ? match.id : match.role))).toEqual(['alan']);
 		type('a');
 		expect(draft.matches.map((match) => ('id' in match ? match.id : match.role))).toEqual(['alan', 'ada']);
+		done();
+	});
+
+	it('offers a role held only outside after everyone and everything here, in what room is left', () => {
+		const people: MentionPerson[] = Array.from({ length: 9 }, (_, n) => ({ id: `a${n}`, name: `Ann ${n}` }));
+		const outsiders: MentionPerson[] = [{ id: 'ada', name: 'Ada', roles: ['admin'], outside: true }];
+		const { draft, type, done } = field({ value: true }, { people, outsiders });
+		type('@a');
+		const ids = draft.matches.map((match) => ('id' in match ? match.id : `&${match.role}`));
+		// Eight places, all for the people here: neither Ada nor her role takes one from them.
+		expect(ids).toEqual(people.slice(0, 8).map((person) => person.id));
 		done();
 	});
 });

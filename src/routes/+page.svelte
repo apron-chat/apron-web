@@ -643,16 +643,26 @@
 	const NO_NAMES: string[] = [];
 	const NO_ROLES: readonly string[] = [];
 	const NO_QUIET: ReadonlySet<string> = new Set();
+	/** `outsideMentioned`'s last list, kept while its contents stay the same. */
+	let lastOutside: { id: string; role?: string }[] = NO_ONE_OUTSIDE;
 	/** Everyone else the session knows, whom the composer's picker offers after those in the pane, faded: read only once something is typed after an `@`. */
-	let outsiders = $derived(outsidersOf(directory.known(), paneRoom?.members, paneRoom?.memberCount, notMentionable));
 	/**
-	 * The hint's checkbox, as changed for the pane's draft (its room's ID): whether Send adds those it names first. Until
-	 * changed, ticked, but in a private room, where adding someone may show them what was said before.
+	 * The pane's member list and how many it has: apart from the room, a new object on every message, so what reads
+	 * them reruns only as they change.
 	 */
-	let addMentionedChoice = $state<{ roomId: string; add: boolean } | undefined>();
-	let addMentioned = $derived(addMentionedChoice && addMentionedChoice.roomId === paneRoom?.id ? addMentionedChoice.add : !(paneRoom?.private || activeRoom?.private));
+	let paneMembers = $derived(paneRoom?.members);
+	let paneMemberCount = $derived(paneRoom?.memberCount);
+	let outsiders = $derived(outsidersOf(directory.known(), paneMembers, paneMemberCount, notMentionable));
+	/**
+	 * The line's checkbox, as changed for each pane's draft (by its room's or thread's ID): whether Send adds those it
+	 * names first. Until changed, ticked, but in a private room, where adding someone may show them what was said before.
+	 */
+	let addMentionedChoices = $state.raw<Readonly<Record<string, boolean>>>({});
+	let addMentioned = $derived((paneRoom && addMentionedChoices[paneRoom.id]) ?? !(paneRoom?.private || activeRoom?.private));
 	/** You may add whom a draft mentions: you may add members here, and the server takes member changes. */
-	const mayAddMentioned = (): boolean => canAddMembers && !session.snapshot.memberChangesUnsupported;
+	/** The server takes member changes: a yes or no, so what reads it doesn't rerun on each snapshot. */
+	let memberChangesOk = $derived(!session.snapshot.memberChangesUnsupported);
+	const mayAddMentioned = (): boolean => canAddMembers && memberChangesOk;
 	/**
 	 * The roles the draft names outside code and links (`markdownRoles`), which renders it: only as the roles it names as
 	 * written change (`drafts.roles`, a quick scan as it is typed), not on each key. Wrapping a role already written in
@@ -676,14 +686,15 @@
 	 */
 	let outsideMentioned = $derived.by((): { id: string; role?: string }[] => {
 		if (!composerMentions.length && !draftRoles.length) return NO_ONE_OUTSIDE;
-		const room = paneRoom;
-		if (!room) return NO_ONE_OUTSIDE;
+		const members = paneMembers;
+		if (!members) return NO_ONE_OUTSIDE;
+		const room = { members, memberCount: paneMemberCount };
 		// Only a draft that starts with `/` may be a command: only then is its text read here, on each key.
 		if (drafts.slashed && composerAction(drafts.text, { command: session.capabilities.command, rooms: false }).kind !== 'message') return NO_ONE_OUTSIDE;
 		const skip = (userId: string) => notMentionable(directory.person({ user_id: userId }) ?? { user_id: userId });
 		const roleOf = new Map<string, string>();
 		if (draftRoles.length) {
-			const memberIds = new Set((room.members ?? []).map((member) => member.user_id));
+			const memberIds = new Set(members.map((member) => member.user_id));
 			const known = directory.known();
 			for (const role of draftRoles) {
 				for (const userId of unheldRoleHolders([role], known, memberIds, (id) => directory.isMe(id))) if (!roleOf.has(userId)) roleOf.set(userId, role);
@@ -691,10 +702,15 @@
 		}
 		const ids = absentMentions([...composerMentions, ...roleOf.keys()], room, skip);
 		if (!ids.length) return NO_ONE_OUTSIDE;
-		return ids.map((id) => (roleOf.has(id) ? { id, role: roleOf.get(id) } : { id }));
+		const next = ids.map((id) => (roleOf.has(id) ? { id, role: roleOf.get(id) } : { id }));
+		// The same as before (a member list relisted as it was, the directory updated): the same list, so nothing reruns.
+		const last = lastOutside;
+		if (last.length === next.length && last.every((entry, index) => entry.id === next[index].id && entry.role === next[index].role)) return last;
+		lastOutside = next;
+		return next;
 	});
-	/** Those of them the line names, to add: while you may. */
-	let mentionedOutside = $derived(outsideMentioned !== NO_ONE_OUTSIDE && mayAddMentioned() ? outsideMentioned : NO_ONE_OUTSIDE);
+	/** Those of them the line names, to add: while you may, and but for a live message, which adds no one. */
+	let mentionedOutside = $derived(outsideMentioned !== NO_ONE_OUTSIDE && mayAddMentioned() && !composingLive ? outsideMentioned : NO_ONE_OUTSIDE);
 	/**
 	 * The mentions that won't reach anyone as the draft would go, whose chips are greyed: those of whom isn't here, by
 	 * `user_id` and by `&role`, unless Send is to add them.
@@ -2118,7 +2134,7 @@
 		// The draft changed under the ask: Send asks again about what it mentions then.
 		editorsAsk = undefined;
 		// A draft that mentions no one starts the hint's checkbox afresh.
-		if (!composerMentions.length && addMentionedChoice) addMentionedChoice = undefined;
+		if (!composerMentions.length && paneRoom && paneRoom.id in addMentionedChoices) forgetAddMentioned(paneRoom.id);
 		if (!client || !paneRoom) return;
 		drafts.saveText();
 		// A live message shows itself as it is typed: no typing indicator besides.
@@ -2165,6 +2181,13 @@
 		mentionAdding = { roomId: room.id, userIds, text, files: stagedIds() };
 		void addMentionedAndSend();
 		return true;
+	}
+
+	/** The pane's draft went, or mentions no one now: its line's checkbox starts from the default again. */
+	function forgetAddMentioned(roomId: string): void {
+		if (!(roomId in addMentionedChoices)) return;
+		const { [roomId]: _, ...rest } = addMentionedChoices;
+		addMentionedChoices = rest;
 	}
 
 	/** The draft's staged files, as `mentionAdding.files` keeps them. */
@@ -2263,7 +2286,7 @@
 		if (drafts.files.length) {
 			if (!asked && addMentionedFirst(paneRoom, drafts.text)) return;
 			if (editors === undefined && askEditors(paneRoom, drafts.text, added)) return;
-			addMentionedChoice = undefined;
+			forgetAddMentioned(paneRoom.id);
 			void sendFiles(added, editors);
 			return;
 		}
@@ -2271,7 +2294,7 @@
 		if (!asked && addMentionedFirst(paneRoom, drafts.text)) return;
 		if (editors === undefined && askEditors(paneRoom, drafts.text, added)) return;
 		// It goes: the next draft's line starts from the default.
-		addMentionedChoice = undefined;
+		forgetAddMentioned(paneRoom.id);
 		const chat = client;
 		const draft = drafts.text;
 		const roomId = paneRoom.id;
@@ -3687,7 +3710,7 @@
 						{@const MentionAddLine = mentionAddLine.component}
 						<MentionAddLine
 							names={lineNames} thread={Boolean(activeThread)}
-							busy={Boolean(paneMentionAdding)} add={addMentioned} onchange={(add) => { if (paneRoom) addMentionedChoice = { roomId: paneRoom.id, add }; }}
+							busy={Boolean(paneMentionAdding)} add={addMentioned} onchange={(add) => { if (paneRoom) addMentionedChoices = { ...addMentionedChoices, [paneRoom.id]: add }; }}
 						/>
 					{/if}{#if editorsAsk && editorsAsk.roomId === paneRoom?.id && editorsNudge.component}
 						{@const EditorsPrompt = editorsNudge.component}

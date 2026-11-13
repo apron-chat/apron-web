@@ -587,12 +587,15 @@ export class DraftField {
 			.filter((entry) => entry !== undefined);
 		const people = scored.sort((a, b) => a.rank - b.rank || Number(a.person.outside ?? false) - Number(b.person.outside ?? false)).map((entry) => entry.person);
 		const exactRoles = roles.filter((suggestion) => exact && suggestion.role.toLowerCase() === exact);
-		const otherRoles = roles.filter((suggestion) => !exactRoles.includes(suggestion));
+		// Roles held only outside take only what room is left: never a place a person or role here would have.
+		const otherRoles = roles.filter((suggestion) => !exactRoles.includes(suggestion) && !suggestion.outside);
+		const outsideOnly = roles.filter((suggestion) => !exactRoles.includes(suggestion) && suggestion.outside);
 		const named = people.filter((_, index) => scored[index].rank === 0);
 		const rest = people.slice(named.length);
 		const free = MENTION_MATCHES_MAX - named.length - exactRoles.length - rest.length;
 		const roleCount = Math.min(otherRoles.length, Math.max(ROLE_MATCHES_MAX, free));
-		return [...named, ...exactRoles, ...rest.slice(0, Math.max(0, MENTION_MATCHES_MAX - named.length - exactRoles.length - roleCount)), ...otherRoles.slice(0, roleCount)].slice(0, MENTION_MATCHES_MAX);
+		const listed = [...named, ...exactRoles, ...rest.slice(0, Math.max(0, MENTION_MATCHES_MAX - named.length - exactRoles.length - roleCount)), ...otherRoles.slice(0, roleCount)];
+		return [...listed, ...outsideOnly].slice(0, MENTION_MATCHES_MAX);
 	}
 
 	/** Closes whichever picker is open. */
