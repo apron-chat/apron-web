@@ -91,7 +91,7 @@ export class Transport {
 	#standby?: { socket: WebSocket; beside: WebSocket; frames: unknown[] };
 	/** When the page was last hidden, while it still is. */
 	#hiddenAt?: number;
-	/** When the page last came back: its start, being shown again, the network back (`justBack`). */
+	/** When the page last came back: its start, being shown again, the network back (`raced`). */
 	#backAt?: number;
 	/**
 	 * Drops the current socket as if it had closed: for one that stopped answering, `reason` its close's. With
@@ -387,8 +387,7 @@ export class Transport {
 
 	/**
 	 * Whether a socket waited on gets a standby (after `STANDBY_AFTER_MS`, or its usual wait while `patient`): where
-	 * the page has just come back, which
-	 * is when sockets die unnoticed and handshakes go nowhere (a phone's app away, its network not back yet). A
+	 * the page has just come back, which is when sockets die unnoticed and handshakes go nowhere (a phone's app away, its network not back yet). A
 	 * probe always follows that. A socket opening does within `STANDBY_OPENING_FOR_MS` of the page's start, of its
 	 * being shown again, or of the network's return; one opening at any other time (the server restarted, and every
 	 * client is back at once) is slow because the server is, and a second handshake each would only add to it.
@@ -609,7 +608,7 @@ export class Transport {
 		this.#standby = undefined;
 		const usable = carryOn && standby !== undefined && (standby.socket.readyState === WebSocket.CONNECTING || standby.socket.readyState === WebSocket.OPEN) && this.#mayReplace();
 		if (standby && !usable) closeUnused(standby.socket);
-		this.#abandonSocket?.(waiting.opening ? 'opening timed out' : 'ping unanswered', usable);
+		this.#abandonSocket?.(!waiting.opening ? 'ping unanswered' : carryOn ? 'not greeted' : 'opening timed out', usable);
 		if (!standby || !usable) return;
 		const { socket, frames } = standby;
 		// The connection ended there (`drop`), as the client's does. With one still current, or the client stopped

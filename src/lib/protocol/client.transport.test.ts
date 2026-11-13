@@ -675,6 +675,25 @@ describe('a connection that doesn’t come up', () => {
 		vi.restoreAllMocks();
 	});
 
+	it('takes nothing over while the server asked for a wait: the standby greeted then closes unused', async () => {
+		startClient();
+		const limited = latest();
+		limited.open();
+		vi.advanceTimersByTime(2_000);
+		const beside = latest();
+		expect(beside).not.toBe(limited);
+		// The connection put off for 10 minutes (§1.1), before its greeting: a second one would get around the wait.
+		limited.receive({ error: { code: -32002, message: 'Slow down', data: { retry_after: 600 } } });
+		beside.open();
+		beside.receive(server());
+		expect(beside.readyState).toBe(FakeSocket.CLOSED);
+		expect(limited.readyState).toBe(FakeSocket.OPEN);
+		// Nor does another open once the first runs out its wait: the next connection waits out the server's.
+		vi.advanceTimersByTime(60_000);
+		expect(limited.readyState).toBe(FakeSocket.CLOSED);
+		expect(FakeSocket.instances).toEqual([limited, beside]);
+	});
+
 	it('takes over from a socket that opened and was never greeted as from one that closed, and not at all while the server holds reconnecting', async () => {
 		const snapshots: ClientSnapshot[] = [];
 		startClient({ onSnapshot: (next) => snapshots.push(next) });
@@ -1011,6 +1030,30 @@ describe('a connection that doesn’t come up', () => {
 			expect(unseen.readyState).toBe(FakeSocket.CLOSED);
 			vi.advanceTimersByTime(60_000);
 			expect(latest()).toBe(unseen);
+		});
+
+		it('closes the standby when the client stops as it hears of the close a hand-over makes', async () => {
+			const { away } = page();
+			let stopping: ChatClient | undefined;
+			const { client, socket } = startClient({ onSnapshot: (next) => {
+				if (next.status !== 'reconnecting' || !stopping) return;
+				const stopped = stopping;
+				stopping = undefined;
+				stopped.stop();
+			} });
+			await socket.greet([], { ping: 30 });
+			away(5 * 60_000);
+			vi.advanceTimersByTime(2_000);
+			const standby = latest();
+			expect(standby).not.toBe(socket);
+			// The probe runs out: the probed socket goes, and the client, told so, stops before the standby is taken.
+			stopping = client;
+			vi.advanceTimersByTime(3_000);
+			expect(socket.readyState).toBe(FakeSocket.CLOSED);
+			expect(standby.readyState).toBe(FakeSocket.CLOSED);
+			expect([standby.onopen, standby.onmessage, standby.onclose, standby.onerror]).toEqual([null, null, null, null]);
+			vi.advanceTimersByTime(60_000);
+			expect(FakeSocket.instances).toEqual([socket, standby]);
 		});
 
 		it('opens none, and takes none, while the server holds reconnecting or asked for a wait', async () => {

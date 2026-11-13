@@ -82,8 +82,9 @@ server, which also keep any from opening: greeted where it may not, it closes
 unused and the first is waited on as before. So a socket
 that died while a phone's app was away, or a handshake sent before its network
 was back, costs about 2 seconds and a handshake, not the whole wait.
-When the wait runs out, a check's second connection, if still opening, carries
-on as the next (the socket died; no handshake failed). A new connection that
+When the wait runs out, a check's second connection, still opening or open,
+carries on as the next where one may take over (the socket died; no handshake
+failed). A new connection that
 runs out its wait, or fails, takes its second with it: the handshake failed,
 and the usual question to the server and backoff follow, so handshakes going
 nowhere one after another still back off to about one a minute.
