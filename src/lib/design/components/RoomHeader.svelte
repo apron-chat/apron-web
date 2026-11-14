@@ -146,7 +146,7 @@
 <header class={['ap-roomhead', isPrivate && 'ap-roomhead-private', className]}>
 	{#if onback}
 		<button type="button" class={['ap-iconbtn', 'ap-iconbtn-lg', 'ap-roomhead-back', elsewhere > 0 && 'ap-roomhead-back-tagged']} aria-label={backLabel} onclick={onback}>
-			{#if elsewhere > 0}<span class={['ap-roomhead-tag', mentionsElsewhere ? 'ap-roomhead-tag-at' : 'ap-roomhead-tag-quiet']} data-testid={tagTestid} aria-hidden="true">{#if mentionsElsewhere}@&#8239;{/if}{count99(elsewhere)}</span>{:else}<ChevronLeft size={20} aria-hidden="true" />{/if}
+			{#if elsewhere > 0}<span class={['ap-roomhead-tag', 'ap-pill', mentionsElsewhere ? 'ap-roomhead-tag-at' : 'ap-roomhead-tag-quiet']} data-testid={tagTestid} aria-hidden="true">{#if mentionsElsewhere}@&#8239;{/if}{count99(elsewhere)}</span>{:else}<ChevronLeft size={20} aria-hidden="true" />{/if}
 		</button>
 	{/if}
 	{#if faces?.length && !thread}<Faces people={faces} size="sm" class="ap-roomhead-faces" />{/if}
@@ -156,10 +156,10 @@
 			<h1 class="ap-roomhead-name">
 				<button type="button" class="ap-roomhead-crumb" aria-label="Back to room" onclick={onroom}>{roomName(name, room)}</button>
 				<span class="ap-roomhead-sep" aria-hidden="true"> › </span>
-				<bdi title={roomNameTip(threadName, thread, { thread: true })}>{roomName(threadName, thread, { thread: true })}</bdi>{#if isPrivate}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}
+				<bdi title={roomNameTip(threadName, thread, { thread: true })}>{roomName(threadName, thread, { thread: true })}</bdi>{#if isPrivate}<Lock class="ap-lock ap-inline-icon" role="img" aria-label="Private" />{/if}
 			</h1>
 		{:else}
-			<h1 class="ap-roomhead-name">{roomName(name, room)}{#if isPrivate}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}</h1>
+			<h1 class="ap-roomhead-name">{roomName(name, room)}{#if isPrivate}<Lock class="ap-lock ap-inline-icon" role="img" aria-label="Private" />{/if}</h1>
 		{/if}
 		{#if typing.length}
 			<p class="ap-roomhead-sub ap-roomhead-typing">{#if typing.length === 1}<bdi>{typing[0]}</bdi> is typing…{:else}{typing.length} people are typing…{/if}</p>

@@ -22,5 +22,5 @@
 
 <!-- What's new, in one bubble: ink for unread messages, orange with an @ when they include a mention of you, in a muted room too. Its label is its hover title too. -->
 {#if count > 0}
-	<span aria-label={label} title={label} data-testid={testid} class={['ap-count', mentions ? 'ap-count-at' : 'ap-count-quiet', className]}>{#if mentions}@&#8239;{/if}{count99(count)}</span>
+	<span aria-label={label} title={label} data-testid={testid} class={['ap-count', 'ap-pill', mentions ? 'ap-count-at' : 'ap-count-quiet', className]}>{#if mentions}@&#8239;{/if}{count99(count)}</span>
 {/if}

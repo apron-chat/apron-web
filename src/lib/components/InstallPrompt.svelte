@@ -43,19 +43,19 @@
 		{#if showingSteps && way !== 'prompt'}
 			<ol class="ap-nudge-steps" data-testid="install-steps">
 				{#if way === 'ios-safari'}
-					<li>Tap <b><Share class="ap-nudge-glyph" />Share</b>, in the toolbar or Safari’s <Ellipsis class="ap-nudge-glyph" role="img" aria-label="More" /> menu</li>
-					<li>Choose <b><SquarePlus class="ap-nudge-glyph" />Add to Home Screen</b> (under <b>View More</b>, if it isn’t listed)</li>
+					<li>Tap <b><Share class="ap-nudge-glyph ap-inline-icon" />Share</b>, in the toolbar or Safari’s <Ellipsis class="ap-nudge-glyph ap-inline-icon" role="img" aria-label="More" /> menu</li>
+					<li>Choose <b><SquarePlus class="ap-nudge-glyph ap-inline-icon" />Add to Home Screen</b> (under <b>View More</b>, if it isn’t listed)</li>
 					<li>Tap <b>Add</b></li>
 				{:else if way === 'ios-browser'}
-					<li>Tap <b><Share class="ap-nudge-glyph" />Share</b>, by the address or in the browser’s menu</li>
-					<li>Choose <b><SquarePlus class="ap-nudge-glyph" />Add to Home Screen</b> (under <b>View More</b>, if it isn’t listed)</li>
+					<li>Tap <b><Share class="ap-nudge-glyph ap-inline-icon" />Share</b>, by the address or in the browser’s menu</li>
+					<li>Choose <b><SquarePlus class="ap-nudge-glyph ap-inline-icon" />Add to Home Screen</b> (under <b>View More</b>, if it isn’t listed)</li>
 					<li>Tap <b>Add</b></li>
 				{:else if way === 'android'}
-					<li>Open the browser’s menu <EllipsisVertical class="ap-nudge-glyph" role="img" aria-label="Menu" /></li>
+					<li>Open the browser’s menu <EllipsisVertical class="ap-nudge-glyph ap-inline-icon" role="img" aria-label="Menu" /></li>
 					<li>Choose <b>Install app</b> or <b>Add to Home screen</b></li>
 					<li>Confirm</li>
 				{:else}
-					<li>Open this app’s menu (<Ellipsis class="ap-nudge-glyph" role="img" aria-label="More" /> or <EllipsisVertical class="ap-nudge-glyph" role="img" aria-label="Menu" />) and choose to open the page in your browser</li>
+					<li>Open this app’s menu (<Ellipsis class="ap-nudge-glyph ap-inline-icon" role="img" aria-label="More" /> or <EllipsisVertical class="ap-nudge-glyph ap-inline-icon" role="img" aria-label="Menu" />) and choose to open the page in your browser</li>
 					<li>From there, add Apron to your Home Screen</li>
 				{/if}
 			</ol>

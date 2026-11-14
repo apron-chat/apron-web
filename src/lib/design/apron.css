@@ -30,7 +30,7 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
  * - A field it is typed into is dir="auto" (the composer, the message editor, name and title fields).
  * The design components carry these classes and elements, so every consumer gets the rule.
  */
-:where(.ap-msg-text, .ap-description-text, .ap-welcome, .ap-connect-server-desc, .ap-servcard-description), :where(.ap-msg-text, .ap-description-text, .ap-welcome, .ap-connect-server-desc, .ap-servcard-description) :where(p, li, h1, h2, h3, h4, h5, h6, blockquote, th, td) { unicode-bidi: plaintext; text-align: start; }
+:where(.ap-msg-text, .ap-servcard-description), :where(.ap-msg-text, .ap-servcard-description) :where(p, li, h1, h2, h3, h4, h5, h6, blockquote, th, td) { unicode-bidi: plaintext; text-align: start; }
 :where(.ap-msg-sender, .ap-msg-handle, .ap-msg-system-who, .ap-notice-title, .ap-reply-who, .ap-reply-text, .ap-linkcard-step, .ap-linkcard-name, .ap-linkcard-text, .ap-room-name, .ap-room-topic, .ap-tline-text, .ap-tline-sender, .ap-thread-name, .ap-dmintro-name, .ap-roomhead-name, .ap-roomhead-crumb, .ap-roomhead-sub, .ap-profile-name, .ap-profcard-name, .ap-servcard-name, .ap-profcard-handle, .ap-profcard-bio, .ap-member-handle, .ap-reactors-name, .ap-reactors-handle, .ap-mpick-name, .ap-mpick-id, .ap-mention, .ap-emojipop-text, .ap-embed-title, .ap-embed-desc, .ap-attachment-name, .ap-viewer-title, .ap-shell-sidehead-name, .ap-connect-server-name) { unicode-bidi: plaintext; text-align: left; }
 :where([dir='rtl']) :where(.ap-msg-sender, .ap-msg-handle, .ap-msg-system-who, .ap-notice-title, .ap-reply-who, .ap-reply-text, .ap-linkcard-step, .ap-linkcard-name, .ap-linkcard-text, .ap-room-name, .ap-room-topic, .ap-tline-text, .ap-tline-sender, .ap-thread-name, .ap-dmintro-name, .ap-roomhead-name, .ap-roomhead-crumb, .ap-roomhead-sub, .ap-profile-name, .ap-profcard-name, .ap-servcard-name, .ap-profcard-handle, .ap-profcard-bio, .ap-member-handle, .ap-reactors-name, .ap-reactors-handle, .ap-mpick-name, .ap-mpick-id, .ap-mention, .ap-emojipop-text, .ap-embed-title, .ap-embed-desc, .ap-attachment-name, .ap-viewer-title, .ap-shell-sidehead-name, .ap-connect-server-name) { text-align: right; }
 
@@ -296,11 +296,11 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-msg-text p + p { margin-top: var(--space-2); }
 /* Wherever Markdown is drawn, a word too long for its line breaks rather than running out of its box, except in a
    table, whose columns would otherwise narrow to a letter. */
-:where(.ap-msg-text, .ap-description-text, .ap-welcome, .ap-connect-server-desc, .ap-servcard-description) { overflow-wrap: anywhere; }
-:where(.ap-msg-text, .ap-description-text, .ap-welcome, .ap-connect-server-desc, .ap-servcard-description) table { overflow-wrap: normal; }
+:where(.ap-msg-text, .ap-servcard-description) { overflow-wrap: anywhere; }
+:where(.ap-msg-text, .ap-servcard-description) table { overflow-wrap: normal; }
 /* Wherever Markdown is drawn, a list's items, and a nested list under its item, a little apart: a mention or link chip
    on one line clears the next's. */
-:where(.ap-msg-text, .ap-description-text, .ap-welcome, .ap-connect-server-desc, .ap-servcard-description) :is(li + li, li > :is(ul, ol)) { margin-top: var(--space-1); }
+:where(.ap-msg-text, .ap-servcard-description) :is(li + li, li > :is(ul, ol)) { margin-top: var(--space-1); }
 .ap-msg-text a { color: var(--denim); }
 /* Who else saved a message's text (`ext:editors`): a quiet line under it. */
 .ap-msg-edited { font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
@@ -477,7 +477,7 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-composer-editable { position: relative; height: auto; overflow-y: auto; white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; }
 /* On one line, however long the room or thread's name: out of the flow, over the field's padding, cut short. */
 .ap-composer-editable-empty::before { content: attr(data-placeholder); position: absolute; inset: 0; padding: inherit; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--ink-muted); pointer-events: none; }
-.ap-composer-editable .ap-mention { white-space: nowrap; cursor: default; user-select: all; }
+.ap-composer-editable .ap-mention { padding-block: 2px; white-space: nowrap; cursor: default; user-select: all; }
 /* A mention that won't reach anyone as the draft would go (not in the room, and not to be added): greyed. */
 .ap-composer-editable .ap-mention.ap-mention-quiet { background: color-mix(in srgb, var(--ink-muted) 14%, transparent); color: var(--ink-muted); }
 .ap-composer-editable .ap-mention-role.ap-mention-quiet { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink-muted) 45%, transparent); }
@@ -570,8 +570,8 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-tline-multi .ap-tline-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: var(--ap-tline-lines); line-clamp: var(--ap-tline-lines); white-space: pre-wrap; overflow-wrap: anywhere; }
 .ap-room-unread .ap-tline-latest { color: var(--ink); }
 /* A private room (§4.2.4): a small lock beside its name, wherever the name shows. */
-.ap-lock { flex: none; display: inline-block; width: 12px; height: 12px; margin-inline-start: var(--space-1); vertical-align: -1px; color: var(--ink-muted); }
-.ap-count { flex: none; min-width: 20px; height: 20px; padding: 0 var(--space-1_5); box-sizing: border-box; border-radius: var(--radius-full); background: var(--accent); color: var(--on-accent); font-size: var(--text-sm); line-height: var(--leading-field); font-weight: 600; text-align: center; font-variant-numeric: tabular-nums; }
+.ap-lock { --ap-icon-size: 12px; flex: none; margin-inline-start: var(--space-1); color: var(--ink-muted); }
+.ap-count { --ap-pill-h: 20px; flex: none; min-width: 20px; padding-inline: var(--space-1_5); border-radius: var(--radius-full); background: var(--accent); color: var(--on-accent); font-size: var(--text-sm); line-height: var(--leading-field); font-weight: 600; text-align: center; font-variant-numeric: tabular-nums; }
 
 /* StatusBanner */
 /* Even on both sides; a button at the end (`ap-status-action`) takes the right side closer, its own padding making up the rest. */
@@ -614,7 +614,7 @@ a.ap-embed-card:hover { background: var(--hover); }
 /* Steps to follow, under its detail: numbered, each naming what to tap in bold, with its icon where the browser shows one. */
 .ap-nudge-steps { display: grid; gap: var(--space-1); margin: var(--space-1) 0 0; padding-inline-start: var(--space-4); font-size: var(--text-sm); line-height: var(--leading-sm); }
 .ap-nudge-steps b { font-weight: 600; white-space: nowrap; }
-.ap-nudge-glyph { width: 14px; height: 14px; margin-inline: 1px 3px; vertical-align: -2px; }
+.ap-nudge-glyph { --ap-icon-size: 14px; margin-inline: 1px 3px; }
 .ap-nudge-actions { display: flex; justify-content: flex-end; gap: var(--space-1); }
 .ap-nudge-actions .ap-btn-ghost { color: var(--ink-muted); }
 .ap-nudge-actions .ap-btn-ghost:hover:not(:disabled) { color: var(--ink); }
@@ -697,7 +697,7 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-roomhead-back, .ap-roomhead-typing { display: none; }
 .ap-roomhead-members, .ap-roomhead-description { flex: none; }
 /* With something new elsewhere, the ‹ becomes the point of a tag holding the count: ink for unread, orange with an @ for a mention, as in the rooms list. */
-.ap-roomhead-tag { position: relative; display: inline-flex; align-items: center; height: var(--control-xs); padding: 0 var(--space-2); padding-inline-start: 3px; border-radius: 0; border-start-end-radius: var(--radius-sm); border-end-end-radius: var(--radius-sm); isolation: isolate; font-size: var(--text-sm); font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ap-roomhead-tag { --ap-pill-h: var(--control-xs); position: relative; padding-inline: 3px var(--space-2); border-radius: 0; border-start-end-radius: var(--radius-sm); border-end-end-radius: var(--radius-sm); isolation: isolate; font-size: var(--text-sm); font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; white-space: nowrap; }
 /* The point: a square turned on its corner, rounded at the tip, behind the count (its side the tag's 22px over √2). */
 .ap-roomhead-tag::before { content: ''; position: absolute; z-index: -1; inset-inline-start: -7.78px; top: 3.22px; width: 15.56px; height: 15.56px; border-bottom-left-radius: 3px; background: inherit; transform: rotate(45deg); }
 /* Mirrored, the tag points the other way: the turned square's tip is its top right corner. */
@@ -983,7 +983,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 
 /* FloatingDay — the day of the messages in view, floating at the top of the timeline while it scrolls: a zero-height sticky row, so it takes no space */
 .ap-dayfloat { position: sticky; top: var(--space-2); z-index: var(--z-float); height: 0; display: flex; align-items: flex-start; justify-content: center; pointer-events: none; }
-.ap-dayfloat-pill { padding: 3px var(--space-3); border-radius: var(--radius-full); background: var(--bg-200); border: 1px solid var(--line); box-shadow: var(--shadow-float); color: var(--ink); font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 500; white-space: nowrap; opacity: 0; transform: translateY(-4px); transition: opacity var(--duration-slow), transform var(--duration-slow); }
+.ap-dayfloat-pill { --ap-pill-h: calc(var(--leading-sm) + 8px); --ap-pill-border: 1px; padding-inline: var(--space-3); border-radius: var(--radius-full); background: var(--bg-200); border: 1px solid var(--line); box-shadow: var(--shadow-float); color: var(--ink); font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 500; white-space: nowrap; opacity: 0; transform: translateY(-4px); transition: opacity var(--duration-slow), transform var(--duration-slow); }
 .ap-dayfloat-shown .ap-dayfloat-pill { opacity: 1; transform: none; }
 @media (prefers-reduced-motion: reduce) { .ap-dayfloat-pill { transition: none; transform: none; } }
 
@@ -1737,24 +1737,61 @@ label.ap-pref-setting-title { color: var(--ink); font-weight: 600; cursor: point
 .ap-font-option-active { background: var(--hover); }
 .ap-font-status { margin: 0; padding: var(--space-2); color: var(--ap-tone, var(--ink-muted)); font-size: var(--text-sm); line-height: var(--leading-sm); }
 
-/* Mention — the @name chip inside message text */
-/* A mention, room link or link chip is --chip-inline tall, as a pick chip is, around running text's 15px: a span or link
-   is its font's box (19px in Inter) and 2px above and below, a button its own line height and 2.5px. A pixel taller than
-   the 22px line it sits in, a chip on the line under another overlaps it by a pixel, its padding past the line. */
-.ap-mention { display: inline; padding: 2px 6px; border-radius: var(--radius-sm); background: var(--denim-soft); color: var(--denim); font-weight: 600; white-space: nowrap; }
+/*
+ * Centered on the capitals: the building blocks for a label in a box, and an icon in a line of text. A font's box has
+ * room above and below its letters, and fonts split it differently (DejaVu Sans leaves more above, Inter less), so a
+ * label centered by its box (a line height, align-items: center, equal padding around a span) sits a pixel or two off
+ * its middle in some face. Where the browser can trim a box to its letters (text-box: trim-both cap alphabetic, from
+ * the top of the capitals to the baseline), the same room above and below centers them in any face; only a block can
+ * be trimmed. Elsewhere, the fallback below each one. An element takes one by its class and sets only its own size
+ * (--ap-pill-h, --ap-icon-size), colors and inline padding: these own its display, height and block padding.
+ *
+ * - .ap-chip: a chip in running text (a mention, a room or a link). An inline block, as a button already is: one moves
+ *   to the next line whole, and only one wider than its line wraps, inside its own box. Its padding is in em, so it
+ *   scales with its text: .37em, about 22px around 15px text, its line's height; a margin as deep takes it back, so it
+ *   never makes its line taller, and it sits centered on the capitals beside it. A description, cut off at its box,
+ *   leaves room past its lines for the chips in it; text ended with an ellipsis keeps its chips inline (below).
+ * - .ap-pill: a box --ap-pill-h tall, its border (--ap-pill-border) included, holding only its label.
+ * - .ap-pill-label: the label of a pill that holds more (an emoji, an avatar, a button), which centers it as a flex
+ *   item. Its box keeps .3em past the capitals and the baseline, for a label cut off at its box (ellipsized).
+ * - .ap-inline-icon: an icon --ap-icon-size square in a line of text, centered on its capitals, (1cap - size) / 2 off
+ *   the baseline; without the cap unit, a usual cap height, .7em.
+ */
+.ap-pill { display: inline-flex; align-items: center; justify-content: center; height: var(--ap-pill-h); box-sizing: border-box; white-space: nowrap; }
+.ap-inline-icon, .ap-media-ask-what::before { display: inline-block; width: var(--ap-icon-size); height: var(--ap-icon-size); vertical-align: calc((1cap - var(--ap-icon-size)) / 2); }
+/* Without the cap unit, a usual cap height. (Not as a declaration before it: one holding var() is never dropped.) */
+@supports not (height: 1cap) { .ap-inline-icon, .ap-media-ask-what::before { vertical-align: calc((.7em - var(--ap-icon-size)) / 2); } }
+@supports (text-box: trim-both cap alphabetic) {
+	.ap-chip { --ap-chip-pad: .37em; display: inline-block; text-box: trim-both cap alphabetic; line-height: inherit; padding-block: var(--ap-chip-pad); margin-block: calc(-1 * var(--ap-chip-pad)); }
+	.ap-chip.ap-linkchip-elsewhere { padding-block: calc(var(--ap-chip-pad) - 1px); }
+	/* Text ended with an ellipsis (a reply's quote, a preview's or link card's clamped text) hides an inline block that
+	   reaches past its end whole, name and all: a chip there stays inline, sized as without trimming, cut off mid-name. */
+	:is(.ap-reply-text, .ap-embed-desc) .ap-chip { display: inline; text-box: normal; padding-block: 1px; margin-block: 0; }
+	:is(.ap-reply-text, .ap-embed-desc) button.ap-chip { margin-block: -1px; line-height: var(--leading-ui); }
+	:is(.ap-reply-text, .ap-embed-desc) .ap-chip.ap-linkchip-elsewhere { padding-block: 0; }
+	.ap-description-text { padding-block: 2px; margin-block: -2px; }
+	.ap-pill { display: inline-block; height: auto; padding-block: calc((var(--ap-pill-h) - 2 * var(--ap-pill-border, 0px) - 1cap) / 2); text-box: trim-both cap alphabetic; }
+	.ap-pill-label { padding-block: .3em; margin-block: -.3em; text-box: trim-both cap alphabetic; }
+}
+/* Without trimming, a chip is --chip-inline tall around running text's 15px: a span or link is its font's box (19px in
+   Inter) and 2px above and below, a button its own line height and 2.5px, with a margin as deep that takes it back, so
+   it spills past its line as a span's does and never makes that line taller. In a heading, the heading's own line
+   height. Where small text is cut off at its box, a pixel above and below, so its edges aren't the part cut off; a chip
+   to another server's border is that pixel. */
+@supports not (text-box: trim-both cap alphabetic) {
+	.ap-chip { padding-block: 2px; }
+	button.ap-chip { padding-block: 2.5px; margin-block: -2.5px; line-height: var(--leading-ui); }
+	:is(h1, h2, h3, h4, h5, h6) button.ap-chip { line-height: inherit; }
+	.ap-chip.ap-linkchip-elsewhere { padding-block: 1px; }
+	:is(.ap-reply-text, .ap-embed-desc, .ap-description-text) .ap-chip { padding-block: 1px; }
+	:is(.ap-reply-text, .ap-embed-desc, .ap-description-text) button.ap-chip { margin-block: -1px; }
+	:is(.ap-reply-text, .ap-embed-desc, .ap-description-text) .ap-chip.ap-linkchip-elsewhere { padding-block: 0; }
+}
+
+/* Mention — the @name chip inside message text (an .ap-chip; in the composer, a span of its own) */
+.ap-mention { padding-inline: 6px; border-radius: var(--radius-sm); background: var(--denim-soft); color: var(--denim); font-weight: 600; white-space: nowrap; }
 .ap-mention-me { background: var(--accent); color: var(--on-accent); }
-/* A button is laid out as a box: a line height of its own sizes the highlight as a span's would be around the name, and
-   a margin as deep as its padding takes the padding back, so it spills past its line as a span's does and never makes
-   that line taller, whatever the line's height. */
-button.ap-mention { padding-block: 2.5px; margin-block: -2.5px; font-family: inherit; font-size: inherit; line-height: var(--leading-ui); border: 0; cursor: pointer; }
-/* In a heading, set larger than running text, the heading's own line height. */
-:is(h1, h2, h3, h4, h5, h6) button.ap-mention { line-height: inherit; }
-/* Where small text is cut off at its box (a reply's quote, a link card's or preview's clamped text, a description held
-   to three lines), a chip keeps a pixel of padding above and below, so its edges aren't the part cut off. */
-:is(.ap-reply-text, .ap-linkcard-text, .ap-embed-desc, .ap-description-text) .ap-mention { padding-block: 1px; }
-:is(.ap-reply-text, .ap-linkcard-text, .ap-embed-desc, .ap-description-text) button.ap-mention { margin-block: -1px; }
-/* A chip to another server isn't a mention: its border is that pixel, as it is in running text. */
-:is(.ap-reply-text, .ap-linkcard-text, .ap-embed-desc, .ap-description-text) a.ap-linkchip-elsewhere { padding-block: 0; }
+button.ap-mention { font-family: inherit; font-size: inherit; border: 0; cursor: pointer; }
 .ap-msg-mention .ap-mention-me { box-shadow: 0 0 0 1px var(--bg-100); }
 /* Inline chips (inline code, mentions, room links): one that wraps is drawn on each line as a chip of its own, padding
    and corners on every piece, rather than one box cut open at the line ends. A chip that is a button (a mention or room
@@ -1942,7 +1979,7 @@ a.ap-embed-ogcard:hover { background: var(--hover); }
 .ap-media-ask-label { overflow-wrap: anywhere; }
 .ap-media-ask-what { font-weight: 600; }
 /* An icon of its kind before what it is, drawn in its text colour: from CSS, so the sanitizer's copy gets it too. */
-.ap-media-ask-what::before { content: ''; display: inline-block; width: 1.15em; height: 1.15em; margin-inline-end: var(--space-1); vertical-align: -0.2em; background: currentColor; -webkit-mask: var(--ap-media-ask-icon) center / contain no-repeat; mask: var(--ap-media-ask-icon) center / contain no-repeat; }
+.ap-media-ask-what::before { content: ''; --ap-icon-size: 1.15em; margin-inline-end: var(--space-1); background: currentColor; -webkit-mask: var(--ap-media-ask-icon) center / contain no-repeat; mask: var(--ap-media-ask-icon) center / contain no-repeat; }
 .ap-media-ask-image { --ap-media-ask-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='18' height='18' x='3' y='3' rx='2'/%3E%3Ccircle cx='9' cy='9' r='2'/%3E%3Cpath d='m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21'/%3E%3C/svg%3E"); }
 .ap-media-ask-video { --ap-media-ask-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m16 13 5.22 3.48a.5.5 0 0 0 .78-.42V7.87a.5.5 0 0 0-.75-.43L16 10.5'/%3E%3Crect x='2' y='6' width='14' height='12' rx='2'/%3E%3C/svg%3E"); }
 .ap-media-ask-audio { --ap-media-ask-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18V5l12-2v13'/%3E%3Ccircle cx='6' cy='18' r='3'/%3E%3Ccircle cx='18' cy='16' r='3'/%3E%3C/svg%3E"); }
@@ -2001,7 +2038,7 @@ a.ap-linkchip { text-decoration: none; }
    globe (Lucide's) before its host, and an arrow after, since opening it leaves this server (the connect screen asks
    first). It has the height of a mention, its border in place of a pixel of padding, and the same 6px to its sides. */
 a.ap-linkchip-elsewhere { --ap-linkchip-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20M2 12h20'/%3E%3C/svg%3E");
-	padding: 1px 5px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); color: var(--ink); font-weight: 600; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+	padding-inline: 5px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); color: var(--ink); font-weight: 600; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 a.ap-linkchip-elsewhere::after { content: " \2197"; font-weight: 400; color: var(--ink-muted); }
 a.ap-linkchip-elsewhere:hover { background: var(--hover); }
 .ap-status-retry { color: var(--ink-muted); font-variant-numeric: tabular-nums; }
@@ -2040,7 +2077,7 @@ a.ap-linkchip-elsewhere:hover { background: var(--hover); }
 .ap-dmintro-detail, .ap-dmintro-text { margin: 0; font-size: var(--text-ui); line-height: var(--leading-ui); color: var(--ink-muted); }
 .ap-dmintro-detail { overflow-wrap: anywhere; }
 .ap-dmintro-private { color: var(--private); font-weight: 600; }
-.ap-dmintro-private svg { display: inline-block; margin-inline-end: var(--space-2); vertical-align: -2px; }
+.ap-dmintro-private svg { --ap-icon-size: 13px; margin-inline-end: var(--space-2); }
 /* AddedBanner — under a private room's header when someone else added you: what happened, its × in the corner, then Mute, Leave and Dismiss. */
 .ap-addedbar { flex: none; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: var(--space-1) var(--space-2); margin: var(--space-3) var(--space-4) var(--space-1); padding: var(--space-1) var(--space-1) var(--space-2) var(--space-3); border: 1px solid color-mix(in srgb, var(--private) 30%, transparent); border-radius: var(--radius-md); background: color-mix(in srgb, var(--private-soft) 70%, var(--bg-100)); color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); }
 /* Its sentence beside the × in the top corner, centred on the ×'s first line; its actions in one row under both. */
