@@ -17,7 +17,8 @@ export function copyCode(node: HTMLElement, _html?: string): { update: (html?: s
 			button.addEventListener('click', (event) => {
 				event.stopPropagation();
 				const text = pre.querySelector('code')?.textContent ?? pre.textContent ?? '';
-				void navigator.clipboard?.writeText(text.replace(/\n$/, '')).then(
+				// No clipboard (a page served over plain http) fails as a refused copy does, rather than doing nothing.
+				void Promise.resolve().then(() => navigator.clipboard.writeText(text.replace(/\n$/, ''))).then(
 					() => (button.textContent = 'Copied'),
 					() => (button.textContent = 'Copy failed')
 				).finally(() => {

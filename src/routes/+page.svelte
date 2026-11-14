@@ -2847,6 +2847,7 @@
 				await navigator.clipboard.writeText(text);
 				return true;
 			} catch {
+				feedback.error('Unable to copy the text');
 				return false;
 			}
 		},
@@ -3445,8 +3446,9 @@
 	function windowKeydown(event: KeyboardEvent): void {
 		tabbing = event.key === 'Tab';
 		// ↑ or ↓ with the keyboard nowhere (a guest who only reads has no composer to go up from, and the page starts
-		// with nothing focused): onto the newest message, and from there the timeline's keys (timelineKey).
-		if ((event.key === 'ArrowUp' || event.key === 'ArrowDown') && (event.target === document.body || event.target === document.documentElement) &&
+		// with nothing focused, or on the conversation itself after its skip link): onto the newest message, and from there
+		// the timeline's keys (timelineKey).
+		if ((event.key === 'ArrowUp' || event.key === 'ArrowDown') && (event.target === document.body || event.target === document.documentElement || (event.target instanceof HTMLElement && event.target.classList.contains('ap-shell-main'))) &&
 			!event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.defaultPrevented && !modalOpen()) {
 			if (focusNewestMessage()) event.preventDefault();
 			return;

@@ -386,6 +386,30 @@ test.describe('the full panel', () => {
 	/** The field's text, its line breaks included (an element, which textContent leaves out). */
 	const written = (preview: Preview) => preview.composer().evaluate((el) => (el as HTMLElement).innerText.replace(/\n$/, ''));
 
+	test('its formatting toolbar is one Tab stop, the arrows moving through its groups', async ({ preview, page }) => {
+		await preview.open();
+		await preview.composer().click();
+		await page.keyboard.type('notes');
+		await page.keyboard.press('Shift+Enter');
+		await page.getByTestId('composer-expand').click();
+		const toolbar = panel(preview).getByRole('toolbar', { name: 'Formatting' });
+		await expect(toolbar.getByRole('group', { name: 'Lists' }).getByRole('button')).toHaveCount(4);
+		await toolbar.getByRole('button', { name: 'Bold', exact: true }).focus();
+		await page.keyboard.press('ArrowRight');
+		await expect(toolbar.getByRole('button', { name: 'Italic' })).toBeFocused();
+		await page.keyboard.press('End');
+		await expect(toolbar.getByRole('button', { name: 'Code block' })).toBeFocused();
+		await page.keyboard.press('ArrowRight');
+		await expect(toolbar.getByRole('button', { name: 'Bold', exact: true })).toBeFocused();
+		await page.keyboard.press('ArrowLeft');
+		await expect(toolbar.getByRole('button', { name: 'Code block' })).toBeFocused();
+		// Tab leaves it, rather than stepping through its other nine; Shift+Tab comes back to where it was.
+		await page.keyboard.press('Tab');
+		expect(await toolbar.evaluate((bar) => bar.contains(document.activeElement))).toBe(false);
+		await page.keyboard.press('Shift+Tab');
+		await expect(toolbar.getByRole('button', { name: 'Code block' })).toBeFocused();
+	});
+
 	test('opens from Expand on a draft of two lines, keeps the caret, formats with its toolbar, previews, and sends with Ctrl+Enter', async ({ preview, page }) => {
 		await preview.open();
 		await preview.composer().click();

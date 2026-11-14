@@ -9,7 +9,7 @@
 	import type { ClassValue } from 'svelte/elements';
 	import Attachments from './Attachments.svelte';
 	import Button from './Button.svelte';
-	import { enterAction } from './compose';
+	import { composing, enterAction } from './compose';
 	import type { MessageEditorField } from './types';
 
 	interface Props {
@@ -52,12 +52,6 @@
 		field.style.height = 'auto';
 		field.style.height = `${field.scrollHeight}px`;
 	});
-
-	/**
-	 * A key an input method is still using. Safari fires the Enter that commits a composition after `compositionend`,
-	 * so `isComposing` is false then, but its `keyCode` is 229, as during one.
-	 */
-	const composing = (event: KeyboardEvent) => event.isComposing || event.keyCode === 229;
 
 	function keydown(event: KeyboardEvent): void {
 		if (event.key !== 'Escape' || composing(event) || event.defaultPrevented) return;

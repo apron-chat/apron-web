@@ -50,6 +50,16 @@ describe('AddMembersForm', () => {
 		expect(ids()).toEqual(['bob']);
 	});
 
+	it('leaves Enter to an input method while it composes a name, as Safari after compositionend too', () => {
+		const { state, ids, field } = render();
+		dom.type(field as HTMLInputElement, 'ぼ');
+		expect(dom.press(field, 'Enter', { isComposing: true })).toBe(true);
+		expect(dom.press(field, 'Enter', { keyCode: 229 })).toBe(true);
+		flushSync();
+		expect(ids()).toEqual([]);
+		expect(state.onpick).not.toHaveBeenCalled();
+	});
+
 	it('picks everyone in a set, such as a role, together, and puts them back together once all are picked', () => {
 		const mods: PickPerson = { user_id: 'mod', name: '@mod', group: ['bob', 'carol'], detail: '2 people with this role' };
 		const { state, list } = render({ people: [mods, bob, carol] });

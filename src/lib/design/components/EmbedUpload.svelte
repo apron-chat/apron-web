@@ -11,6 +11,11 @@
 	import { ogRatio, plainClick, safeHttp } from './util';
 
 	let { url: rawUrl, title: rawTitle, og = {}, progress, failed, detail, onview, onpreview, viewer, class: className, testid }: EmbedComponentProps = $props();
+	/**
+	 * A video fetches its poster and metadata only as it nears the screen, not every one in the history loaded
+	 * (`loading` on media: Chrome 148; others load as before). Spread, as Svelte's types don't know it on `<video>` yet.
+	 */
+	const lazyMedia = { loading: 'lazy' };
 	const url = $derived(safeHttp(rawUrl));
 	const title = $derived(rawTitle || og.title || 'File');
 	const pct = $derived(progress != null ? Math.round(progress * 100) : null);
@@ -37,7 +42,8 @@
 {:else if video}
 	<figure data-testid={testid} class={['ap-embed', 'ap-embed-figure', className]}>
 		<!-- svelte-ignore a11y_media_has_caption -->
-		<video class="ap-embed-media" src={video} poster={image} controls preload="metadata" style={ogRatio(og.video) || ogRatio(og.image)}></video>
+		<!-- spread: `loading`, which Svelte's types don't know on <video> yet (see lazyMedia) -->
+		<video class="ap-embed-media" src={video} poster={image} controls preload="metadata" {...lazyMedia} style={ogRatio(og.video) || ogRatio(og.image)}></video>
 		<figcaption class="ap-embed-caption"><a href={url} download={title} target="_blank" rel="noreferrer noopener">{title}</a></figcaption>
 	</figure>
 {:else if audio}

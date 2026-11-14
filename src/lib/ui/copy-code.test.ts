@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest';
-import { decorateCode } from './copy-code';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { copyCode, decorateCode } from './copy-code';
+
+afterEach(() => vi.unstubAllGlobals());
 
 function body(): HTMLElement {
 	const node = document.createElement('div');
@@ -16,5 +18,15 @@ describe('decorateCode', () => {
 		const message = body();
 		expect(decorateCode(message, false)).toBeUndefined();
 		expect(message.querySelector('button')).toBeNull();
+	});
+
+	it('says Copy failed where there is no clipboard (plain http), rather than nothing', async () => {
+		vi.stubGlobal('navigator', {});
+		const node = body();
+		const action = copyCode(node);
+		const copy = node.querySelector('button')!;
+		copy.click();
+		await vi.waitFor(() => expect(copy.textContent).toBe('Copy failed'));
+		action.destroy();
 	});
 });

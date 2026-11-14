@@ -320,8 +320,8 @@ export class DraftField {
 
 	keydown = (event: KeyboardEvent): void => {
 		const completion = this.completion;
-		// A key the input method takes, as part of a composition. Safari sends the Enter that commits one after
-		// `compositionend`, so `isComposing` is false then, but its `keyCode` is 229, as during one: it sends nothing.
+		// A key the input method takes, as part of a composition: it sends nothing. compose.ts's `composing()`, written out
+		// here: this runs on every key typed, and the call costs the type-composer probes a call a key.
 		const composing = event.isComposing || event.keyCode === 229;
 		if (completion && !composing) {
 			if (event.key === 'Escape') {

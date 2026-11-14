@@ -411,7 +411,7 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-thread .ap-tline > svg { color: var(--ink-muted); }
 .ap-thread .ap-tline-sender { font-weight: 600; }
 .ap-thread-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-.ap-thread-name::before { content: "↳ "; }
+.ap-thread-name::before { content: "↳ "; content: "↳ " / ""; }
 .ap-thread-faces + .ap-thread-name::before { content: none; }
 .ap-thread-name .ap-lock { margin: 0 4px 0 0; }
 /* A private thread's card, in plum: its title and lock take the hue, its preview lines stay in ink. */
@@ -476,7 +476,7 @@ a.ap-embed-card:hover { background: var(--hover); }
 /* The rich field (editable): a plain-text editable whose mentions are chips; it sizes like the textarea. */
 .ap-composer-editable { position: relative; height: auto; overflow-y: auto; white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; }
 /* On one line, however long the room or thread's name: out of the flow, over the field's padding, cut short. */
-.ap-composer-editable-empty::before { content: attr(data-placeholder); position: absolute; inset: 0; padding: inherit; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--ink-muted); pointer-events: none; }
+.ap-composer-editable-empty::before { content: attr(data-placeholder); content: attr(data-placeholder) / ""; position: absolute; inset: 0; padding: inherit; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--ink-muted); pointer-events: none; }
 .ap-composer-editable .ap-mention { padding-block: 2px; white-space: nowrap; cursor: default; user-select: all; }
 /* A mention that won't reach anyone as the draft would go (not in the room, and not to be added): greyed. */
 .ap-composer-editable .ap-mention.ap-mention-quiet { background: color-mix(in srgb, var(--ink-muted) 14%, transparent); color: var(--ink-muted); }
@@ -527,7 +527,9 @@ a.ap-embed-card:hover { background: var(--hover); }
 /* One row, which scrolls sideways where the pane is too narrow for every button (a phone), rather than wrapping under the view switch. */
 .ap-composer-format { display: flex; align-items: center; gap: var(--space-0_5); min-width: 0; overflow-x: auto; scrollbar-width: none; }
 .ap-composer-format > * { flex: none; }
-.ap-composer-format-sep { width: 1px; height: var(--space-4); margin: 0 var(--space-1); background: var(--line); }
+.ap-composer-format-group { display: flex; align-items: center; gap: var(--space-0_5); }
+/* A border, not a background, which forced colors would paint as the page. */
+.ap-composer-format-sep { width: 0; height: var(--space-4); margin: 0 var(--space-1); border-inline-start: 1px solid var(--line); }
 .ap-composer-full :is(.ap-composer-field, .ap-composer-recording, .ap-composer-rendered) { grid-area: body; align-self: stretch; min-height: 0; border-bottom: 1px solid var(--line); }
 .ap-composer-full .ap-composer-field { height: auto; max-height: none; overflow-y: auto; padding: var(--space-3) var(--space-4); }
 .ap-composer-full .ap-composer-recording { height: auto; padding: 0 var(--space-4); }
@@ -763,6 +765,12 @@ a.ap-embed-card:hover { background: var(--hover); }
 /* Its rows are edge rows (below) on its start side; a button doesn't stretch, so a room's is widened by hand. */
 .ap-shell-sidebody .ap-room { width: calc(100% + var(--edge)); }
 .ap-shell-main { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; container-type: inline-size; }
+/* Where the skip link puts the focus: the landmark, which the next Tab goes on from. Nothing to ring; it's the whole pane. */
+.ap-shell-main:focus { outline: none; }
+/* The skip link: out of the grid (absolute), hidden as .ap-sr is until the keyboard is on it, then a button in the corner. */
+.ap-skip { position: absolute; z-index: var(--z-banner); top: var(--space-2); inset-inline-start: var(--space-2); padding: var(--space-1_5) var(--space-3); border: 1px solid var(--line-strong); border-radius: var(--radius-md); background: var(--bg-100); color: var(--ink); font: inherit; font-size: var(--text-ui); line-height: var(--leading-ui); font-weight: 600; cursor: pointer; box-shadow: var(--shadow-popover); }
+.ap-skip:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
+.ap-skip:not(:focus) { width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 /*
  * Filling the window (ap-shell-viewport). While an on-screen keyboard is up (the page sets data-keyboard, --app-height and
  * --app-top on the root), the part of it above the keyboard: its header stays at the top and the composer sits on the
@@ -884,7 +892,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 	.ap-shell .ap-shell-side { align-items: stretch; }
 	.ap-shell .ap-shell-side > * { width: auto; }
 	.ap-shell[data-pane='main'] .ap-shell-side { display: none; }
-	.ap-shell[data-pane='rooms'] .ap-shell-main, .ap-shell[data-pane='rooms'] .ap-memberlist { display: none; }
+	.ap-shell[data-pane='rooms'] .ap-shell-main, .ap-shell[data-pane='rooms'] .ap-memberlist, .ap-shell[data-pane='rooms'] .ap-skip { display: none; }
 	.ap-shell-side-shut .ap-shell-side, .ap-shell-slides.ap-shell-side-shut .ap-shell-side { opacity: 1; visibility: visible; transition: none; }
 	/*
 	 * Over a room or thread (ap-shell-peeking), the rooms list leaves a sliver of it at the inline end, in reach of a thumb:
@@ -969,7 +977,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 }
 
 /* EmptyState — the main pane, or a timeline, with nothing in it: a title, a line on what to do, and a button */
-.ap-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-2); padding: var(--space-8); color: var(--ink-muted); text-align: center; }
+.ap-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-2); padding: var(--space-8); color: var(--ink-muted); text-align: center; text-wrap: balance; }
 .ap-empty-title { margin: 0; font-size: var(--text-title); line-height: var(--leading-title); font-weight: 600; color: var(--ink); }
 .ap-empty-detail { margin: 0; }
 .ap-empty .ap-btn { margin-top: var(--space-2); }
@@ -1394,7 +1402,7 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 /* As the app's whole page: the viewport's height. */
 .ap-connect-page { height: 100dvh; }
 .ap-connect-card { display: flex; flex-direction: column; gap: var(--space-3); width: min(100%, 400px); box-sizing: border-box; padding: var(--space-6); background: var(--bg-100); border: 1px solid var(--line); border-radius: var(--radius-lg); }
-.ap-connect-title { margin: 0; font-size: 28px; line-height: var(--leading-display); font-weight: 600; letter-spacing: -.02em; }
+.ap-connect-title { margin: 0; font-size: 28px; line-height: var(--leading-display); font-weight: 600; letter-spacing: -.02em; text-wrap: balance; }
 .ap-connect-tag { margin: calc(-1 * var(--space-1_5)) 0 var(--space-1); font-size: var(--text-field); line-height: var(--leading-field); color: var(--ink-muted); }
 .ap-field-mono { font-family: var(--font-mono); font-size: var(--text-ui); }
 /* The server's welcome (§3.2): its Markdown, rendered and sanitized like a message, above the sign-in fields. */
@@ -1469,6 +1477,10 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-dialog-md { --dialog-w: 600px; }
 .ap-dialog-lg { --dialog-w: 760px; height: min(560px, calc(100dvh - 32px)); }
 .ap-dialog::backdrop { background: var(--scrim); backdrop-filter: blur(2px); }
+/* A modal keeps scroll gestures to itself: one that runs past its top or bottom doesn't pull the page under it to
+   refresh (Android) or bounce it (iOS). The body that scrolls holds them too, where a browser honors only that. */
+dialog:modal { overscroll-behavior: contain; }
+.ap-dialog-body { overscroll-behavior: contain; }
 /* The frame sizes to its content, up to the dialog's max-height; only lg, with a set height, fills it. A percentage height (or 0% flex-basis) against a dialog sized by its content collapses to nothing in Safari. */
 .ap-dialog-frame { display: flex; flex-direction: column; max-height: inherit; margin: 0; }
 .ap-dialog-lg .ap-dialog-frame { height: 100%; }
@@ -1479,7 +1491,7 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 /* That control as a word of the title: its size and weight, in the link's blue on its soft ground (as a mention chip), deeper under the pointer. */
 .ap-dialog-titlebtn { margin: 0; padding: 0 var(--space-1_5); border: 0; border-radius: var(--radius-sm); background: var(--denim-soft); color: var(--denim); font: inherit; font-size: var(--text-title); line-height: var(--leading-title); font-weight: 600; white-space: nowrap; cursor: pointer; }
 .ap-dialog-titlebtn:hover { background: color-mix(in srgb, var(--denim) 22%, var(--denim-soft)); }
-.ap-dialog-title { margin: 0; font-size: var(--text-title); line-height: var(--leading-title); font-weight: 600; overflow-wrap: anywhere; }
+.ap-dialog-title { margin: 0; font-size: var(--text-title); line-height: var(--leading-title); font-weight: 600; overflow-wrap: anywhere; text-wrap: balance; }
 .ap-dialog-sub { margin: 0; font-size: var(--text-ui); line-height: var(--leading-ui); color: var(--ink-muted); }
 .ap-dialog-close { flex: none; }
 .ap-dialog-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-6); }
@@ -1569,7 +1581,9 @@ pre.ap-termviewer-text { width: 80ch; font-family: var(--font-mono); font-size: 
 .ap-docviewer-stage:focus { outline: none; }
 .ap-docviewer-stage:focus-visible { outline: var(--focus-ring); outline-color: var(--viewer-ink); outline-offset: var(--focus-offset-inset); }
 .ap-docviewer-page { box-sizing: border-box; max-width: 46rem; margin: 0 auto; padding: var(--space-6) var(--space-8); border-radius: var(--radius-md); background: var(--bg-100); color: var(--ink); font-size: var(--text-body); line-height: var(--leading-body); }
-.ap-docviewer-page .ap-msg-text :is(h1, h2, h3, h4, h5, h6) { margin: 1.4em 0 0.5em; }
+.ap-docviewer-page .ap-msg-text :is(h1, h2, h3, h4, h5, h6) { margin: 1.4em 0 0.5em; text-wrap: balance; }
+/* A document's prose avoids a last line of one short word. */
+.ap-docviewer-page .ap-msg-text :is(p, li, blockquote) { text-wrap: pretty; }
 .ap-docviewer-page .ap-msg-text :is(h1, h2) { padding-bottom: 0.25em; border-bottom: 1px solid var(--line); }
 .ap-docviewer-page .ap-msg-text h1 { font-size: 1.75em; line-height: var(--leading-display); }
 .ap-docviewer-page .ap-msg-text h2 { font-size: 1.4em; line-height: var(--leading-title); }
@@ -1579,8 +1593,9 @@ pre.ap-termviewer-text { width: 80ch; font-family: var(--font-mono); font-size: 
 .ap-docviewer-page .ap-msg-text p + p { margin-top: var(--space-3); }
 .ap-docviewer-page .ap-msg-text :is(ul, ol, pre, blockquote, .ap-table) { margin-block: var(--space-3); }
 .ap-docviewer-page .ap-msg-text hr { margin: var(--space-6) 0; border: 0; border-top: 1px solid var(--line); }
-.ap-docviewer-page .ap-msg-text img { max-width: 100%; height: auto; }
-.ap-docviewer-status { display: flex; flex-direction: column; align-items: center; gap: var(--space-3); padding: var(--space-8) var(--space-4); text-align: center; color: var(--ap-tone, var(--viewer-ink-muted)); }
+/* An image in a message's Markdown (§5.5) fits its column, in the timeline as in the document viewer; a custom emoji keeps its line's height. */
+.ap-msg-text img:not(.ap-cemoji) { max-width: 100%; height: auto; }
+.ap-docviewer-status { display: flex; flex-direction: column; align-items: center; gap: var(--space-3); padding: var(--space-8) var(--space-4); text-align: center; text-wrap: balance; color: var(--ap-tone, var(--viewer-ink-muted)); }
 .ap-docviewer-status p { margin: 0; }
 .ap-docviewer-download { text-decoration: none; }
 @media (max-width: 560px) {
@@ -2016,7 +2031,7 @@ a.ap-embed-ogcard:hover { background: var(--hover); }
 
 /* Room mentions and unknown mentions */
 .ap-mention-room { font: inherit; border: 0; cursor: pointer; text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 3px; }
-.ap-mention-room::before { content: "\21B3 "; font-weight: 400; }
+.ap-mention-room::before { content: "\21B3 "; content: "\21B3 " / ""; font-weight: 400; }
 .ap-mention-hash-room::before { content: none; }
 .ap-mention-unknown { color: var(--ink-muted); }
 /* A role's chip (`@&role`): a mention's tint, outlined so it reads as a group rather than one person, and only reads. */
@@ -2039,7 +2054,7 @@ a.ap-linkchip { text-decoration: none; }
    first). It has the height of a mention, its border in place of a pixel of padding, and the same 6px to its sides. */
 a.ap-linkchip-elsewhere { --ap-linkchip-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20M2 12h20'/%3E%3C/svg%3E");
 	padding-inline: 5px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); color: var(--ink); font-weight: 600; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
-a.ap-linkchip-elsewhere::after { content: " \2197"; font-weight: 400; color: var(--ink-muted); }
+a.ap-linkchip-elsewhere::after { content: " \2197"; content: " \2197" / ""; font-weight: 400; color: var(--ink-muted); }
 a.ap-linkchip-elsewhere:hover { background: var(--hover); }
 .ap-status-retry { color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 .ap-profedit-avbtns { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); }
@@ -2167,3 +2182,24 @@ a.ap-linkchip-elsewhere:hover { background: var(--hover); }
 .ap-quota-bar .ap-quota-on { background: var(--private); }
 /* A Callout for what stands in the way, such as a limit reached. */
 .ap-callout-warn { border-color: color-mix(in srgb, var(--warn) 70%, transparent); background: var(--bg-200); }
+
+/*
+ * Forced colors (Windows High Contrast): the system's palette replaces backgrounds and drops box-shadows, so whatever
+ * shows a state only that way (the message the keyboard is on, the option it's on in a picker, a chosen segment, a
+ * switch that's on, presence, the bar on the open room) gets an outline or a system color of its own. Nothing here
+ * applies otherwise.
+ */
+@media (forced-colors: active) {
+	/* The focus ring's own outline, inset: forced colors draw it in the system's color. */
+	.ap-msg:focus-visible, :is(.ap-mpick-active, .ap-font-option-active, .ap-pick-row-active, .ap-search-row-active, .ap-seg-on, .ap-choice-on, .ap-preferences-nav button[aria-current='page']) { outline: var(--focus-ring); outline-offset: var(--focus-offset-inset); }
+	:is(.ap-room-active, .ap-msg-mention)::before, .ap-msg:focus-visible::before, .ap-shell-handle::after { forced-color-adjust: none; background: CanvasText; }
+	.ap-shell-handle:is(:hover, :focus-visible)::after, .ap-shell-handle-resizing::after { background: Highlight; }
+	.ap-switch { border: 1px solid ButtonText; }
+	.ap-switch span { forced-color-adjust: none; background: ButtonText; }
+	.ap-switch[aria-checked='true'] span { background: Highlight; }
+	/* The rows' transparent edge (a wider target, out to the pane's edge) is drawn in the system's text color otherwise. */
+	.ap-shell-sidebody .ap-room, .ap-timeline .ap-msg:not(.ap-msg-system) { border-inline-start-color: Canvas; }
+	.ap-member { border-inline-end-color: Canvas; }
+	/* Each status keeps its shape (its mask); only the color is the system's. */
+	.ap-presence { forced-color-adjust: none; background: CanvasText; }
+}

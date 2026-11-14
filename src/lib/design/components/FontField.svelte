@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { ClassValue } from 'svelte/elements';
+	import { composing } from './compose';
 
 	/** A label, the field and its hint, with no root of their own. */
 	interface Props {
@@ -54,6 +55,8 @@
 	}
 
 	function keydown(event: KeyboardEvent): void {
+		// Enter or an arrow that an input method is using confirms or picks its text, not a font.
+		if (composing(event)) return;
 		if (event.key === 'Escape' && open) {
 			event.preventDefault();
 			open = false;

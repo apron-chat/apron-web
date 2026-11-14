@@ -53,6 +53,6 @@
 {#if linked && !server}<p class="ap-connect-intent">A link opened this page to <strong>{linked}</strong> on this server.</p>{/if}
 {#if !(server && onchange)}
 	<label class="ap-fieldlabel">Server
-		<input class="ap-field ap-field-mono" data-testid={urlTestid} type="text" inputmode="url" bind:value={url} placeholder="wss://server.apron.chat/" disabled={busy} autocomplete="url" spellcheck="false" />
+		<input class="ap-field ap-field-mono" data-testid={urlTestid} type="text" inputmode="url" bind:value={url} placeholder="wss://server.apron.chat/" disabled={busy} autocomplete="url" autocapitalize="none" autocorrect="off" spellcheck="false" />
 	</label>
 {/if}

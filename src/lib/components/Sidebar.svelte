@@ -148,7 +148,7 @@
 		void roomDrag.whenLoaded().then((dragRooms) => {
 			if (gone) return;
 			node.removeEventListener('pointerover', ask);
-			drag = dragRooms(node, { holdMs: HOLD_MS, slopPx: MOUSE_SLOP, settleMs: FLIP_MS, onlift: () => carry(section), onmove: (ids) => carry(section, ids), ondrop: (id, ids) => drop(section, id, ids) });
+			drag = dragRooms(node, { holdMs: HOLD_MS, slopPx: MOUSE_SLOP, get settleMs() { return flipMs(); }, onlift: () => carry(section), onmove: (ids) => carry(section, ids), ondrop: (id, ids) => drop(section, id, ids) });
 			node.dataset.reorderable = '';
 		});
 		return {
@@ -159,8 +159,9 @@
 			}
 		};
 	}
-	/** How long the other rooms take to make way, and the one let go to slide into its place; none for reduced motion. */
-	const FLIP_MS = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 150;
+	const reducedMotion = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : undefined;
+	/** How long the other rooms take to make way, and the one let go to slide into its place; none for reduced motion, as it is at the drag (it can change while the app is open). */
+	const flipMs = (): number => (reducedMotion?.matches ? 0 : 150);
 	type Section = 'rooms' | 'private';
 	/** Each section's rooms while one is carried in it, as they'd land; none between drags. */
 	let carried = $state.raw<Partial<Record<Section, RoomSnapshot[]>>>({});
@@ -345,7 +346,7 @@
 			<!-- Each row takes its room as it is now on its own, so a message redraws (and marks to check) only its room's row. -->
 			{@const room = session.room(listedRoom.id) ?? listedRoom}
 			<!-- The others make way for a carried room; a fold or a new room isn't animated. -->
-			<div class="ap-roomblock" animate:flip={{ duration: reordering ? FLIP_MS : 0 }}>{@render roomRow(room, withFaces ? roomFaces(room, session.you) : undefined)}</div>
+			<div class="ap-roomblock" animate:flip={{ duration: reordering ? flipMs() : 0 }}>{@render roomRow(room, withFaces ? roomFaces(room, session.you) : undefined)}</div>
 		{/each}
 	</div>
 {/snippet}

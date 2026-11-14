@@ -443,3 +443,27 @@ test('the timeline is one Tab stop: ← → go through a message, its words show
 		expect(onCard).toBe(true);
 	});
 });
+
+test('the first Tab shows a skip link past the rooms list, which takes the keyboard to the conversation', async ({ preview, page }) => {
+	await preview.open();
+	const url = page.url();
+	await page.keyboard.press('Tab');
+	const skip = page.getByRole('button', { name: 'Skip to conversation' });
+	await expect(skip).toBeFocused();
+	const box = (await skip.boundingBox())!;
+	expect(box.width).toBeGreaterThan(40);
+	await page.keyboard.press('Enter');
+	await expect(page.getByRole('main', { name: 'Conversation' })).toBeFocused();
+	// Not a navigation: the address stays as it was.
+	expect(page.url()).toBe(url);
+	await page.keyboard.press('Tab');
+	await expect(page.getByRole('button', { name: 'Room actions' })).toBeFocused();
+	// Hidden again once the keyboard has left it.
+	expect((await skip.boundingBox())!.width).toBeLessThanOrEqual(1);
+	// From the conversation itself, as from nowhere, ↓ goes onto the newest message.
+	await skip.focus();
+	await page.keyboard.press('Enter');
+	await expect(page.getByRole('main', { name: 'Conversation' })).toBeFocused();
+	await page.keyboard.press('ArrowDown');
+	expect(await page.evaluate(() => document.activeElement?.matches('article.ap-msg') ?? false)).toBe(true);
+});

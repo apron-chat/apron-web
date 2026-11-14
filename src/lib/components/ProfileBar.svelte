@@ -20,6 +20,7 @@
 	import type { WebPushPreference } from '$lib/ui/web-push';
 	import type { PausedUntil } from '$lib/ui/pause';
 	import DesignProfileBar from '$lib/design/components/ProfileBar.svelte';
+	import { composing } from '$lib/design/components/compose';
 	import { ownStatusLabel } from '$lib/ui/user-status';
 	import { signOutThen, type SignOutHandler } from '$lib/ui/sign-in';
 	import Avatar from '$lib/design/components/Avatar.svelte';
@@ -417,7 +418,7 @@
 
 	/** Enter in the Add email fields continues that form, not the profile's. */
 	function addEmailKeydown(event: KeyboardEvent): void {
-		if (event.key !== 'Enter') return;
+		if (event.key !== 'Enter' || composing(event)) return;
 		event.preventDefault();
 		void continueAddEmail();
 	}
@@ -569,7 +570,7 @@
 					<input class="ap-field" type="email" aria-label="Email address to add" placeholder="you@example.com" autocomplete="email" bind:value={addEmail.email} disabled={addEmail.busy} onkeydown={addEmailKeydown} />
 					<button class="ap-btn ap-btn-sm" type="button" disabled={addEmail.busy || !addEmail.email.trim()} onclick={continueAddEmail}>Send code</button>
 				{:else}
-					<input class="ap-field ap-field-mono" aria-label={addEmail.scheme === 'email' ? 'Code from the email' : 'Code from the sign-in page'} placeholder="Code" inputmode={addEmail.scheme === 'email' ? 'numeric' : 'text'} autocomplete="one-time-code" bind:value={addEmail.code} disabled={addEmail.busy} onkeydown={addEmailKeydown} />
+					<input class="ap-field ap-field-mono" aria-label={addEmail.scheme === 'email' ? 'Code from the email' : 'Code from the sign-in page'} placeholder="Code" inputmode={addEmail.scheme === 'email' ? 'numeric' : 'text'} autocomplete="one-time-code" autocapitalize="none" autocorrect="off" spellcheck="false" bind:value={addEmail.code} disabled={addEmail.busy} onkeydown={addEmailKeydown} />
 					<button class="ap-btn ap-btn-sm" type="button" disabled={addEmail.busy || !addEmail.code.trim()} onclick={continueAddEmail}>Add</button>
 				{/if}
 				<button class="ap-link" type="button" disabled={addEmail.busy} onclick={() => (addEmail = undefined)}>Cancel</button>

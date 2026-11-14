@@ -37,7 +37,7 @@ describe('CopyButton', () => {
 		expect([copy.getAttribute('aria-label'), copy.innerHTML]).toEqual(['Copy the address', glyph]);
 	});
 
-	it('stops saying Copied when a later copy fails', async () => {
+	it('stops saying Copied when a later copy fails, and says that instead', async () => {
 		const oncopy = vi.fn(async () => true);
 		render(CopyButton, { label: 'Copy the address', oncopy });
 		button('Copy the address').click();
@@ -46,7 +46,26 @@ describe('CopyButton', () => {
 		oncopy.mockResolvedValue(false);
 		button('Copied').click();
 		await vi.advanceTimersByTimeAsync(0);
+		expect(button("Couldn't copy").title).toBe("Couldn't copy");
+		await vi.advanceTimersByTimeAsync(1500);
 		expect(queryByRole('button', 'Copy the address')).not.toBeNull();
+	});
+
+	it('says aloud what a copy came to, in a status beside the button, and nothing between copies', async () => {
+		const oncopy = vi.fn(() => true);
+		render(CopyButton, { label: 'Copy terminal text', oncopy });
+		const status = document.querySelector('[role="status"]')!;
+		expect(status.nextElementSibling).toBe(button('Copy terminal text'));
+		expect(status.textContent).toBe('');
+		button('Copy terminal text').click();
+		await vi.advanceTimersByTimeAsync(0);
+		expect(status.textContent).toBe('Copied');
+		await vi.advanceTimersByTimeAsync(1500);
+		expect(status.textContent).toBe('');
+		oncopy.mockReturnValue(false);
+		button('Copy terminal text').click();
+		await vi.advanceTimersByTimeAsync(0);
+		expect(status.textContent).toBe("Couldn't copy");
 	});
 
 	it('sets nothing, and leaves no timer, when a copy resolves after it is gone', async () => {
@@ -59,16 +78,12 @@ describe('CopyButton', () => {
 		expect(vi.getTimerCount()).toBe(0);
 	});
 
-	it('says nothing when it could not copy, and Copied unless told otherwise', async () => {
-		const oncopy = vi.fn(() => false);
+	it('says Copied unless told otherwise', async () => {
+		const oncopy = vi.fn(() => true);
 		render(CopyButton, { label: 'Copy terminal text', oncopy });
 		button('Copy terminal text').click();
 		await vi.advanceTimersByTimeAsync(0);
 		expect(oncopy).toHaveBeenCalledOnce();
-		expect(queryByRole('button', 'Copied')).toBeNull();
-		oncopy.mockReturnValue(true);
-		button('Copy terminal text').click();
-		await vi.advanceTimersByTimeAsync(0);
 		expect(button('Copied').title).toBe('Copied');
 	});
 });
