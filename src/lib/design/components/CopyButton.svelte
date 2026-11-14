@@ -1,11 +1,14 @@
 <script lang="ts">
 	import Check from '@lucide/svelte/icons/check';
 	import Copy from '@lucide/svelte/icons/copy';
+	import X from '@lucide/svelte/icons/x';
 	import type { ClassValue } from 'svelte/elements';
 
 	/**
 	 * A Copy icon button: `oncopy` copies (the caller writes to the clipboard), and once it resolves true the button
-	 * shows a check and says `copiedLabel` for a moment (`COPIED_MS`), then goes back to Copy.
+	 * shows a check and says `copiedLabel` for a moment (`COPIED_MS`), then goes back to Copy. One that resolves false
+	 * (the clipboard refused, as it can) shows an ✕ and says Couldn't copy for that moment instead. Either is also said
+	 * aloud, by a status beside the button: a button's own name changing while it has focus isn't announced reliably.
 	 */
 	interface Props {
 		/** Copies; resolves whether it did. */
@@ -25,8 +28,11 @@
 
 	/** How long it says it copied, in ms. */
 	const COPIED_MS = 1500;
+	const FAILED = "Couldn't copy";
 
-	let copied = $state(false);
+	/** What the last copy came to, while it's said. */
+	let said = $state<'copied' | 'failed'>();
+	let name = $derived(said === 'copied' ? copiedLabel : said === 'failed' ? FAILED : label);
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	/** Gone: a copy that resolves later sets nothing. */
 	let gone = false;
@@ -40,12 +46,13 @@
 		if (gone) return;
 		clearTimeout(timer);
 		// One that failed doesn't keep saying an earlier one copied.
-		copied = done;
-		if (!done) return;
-		timer = setTimeout(() => (copied = false), COPIED_MS);
+		said = done ? 'copied' : 'failed';
+		timer = setTimeout(() => (said = undefined), COPIED_MS);
 	}
 </script>
 
-<button type="button" class={['ap-iconbtn', className]} aria-label={copied ? copiedLabel : label} title={copied ? copiedLabel : label} data-testid={testid} onclick={copy}>
-	{#if copied}<Check {size} aria-hidden="true" />{:else}<Copy {size} aria-hidden="true" />{/if}
+<!-- Before the button, out of the layout (`ap-sr`), so the button stays its row's last child. -->
+<span class="ap-sr" role="status">{said ? name : ''}</span>
+<button type="button" class={['ap-iconbtn', className]} aria-label={name} title={name} data-testid={testid} onclick={copy}>
+	{#if said === 'copied'}<Check {size} aria-hidden="true" />{:else if said === 'failed'}<X {size} aria-hidden="true" />{:else}<Copy {size} aria-hidden="true" />{/if}
 </button>

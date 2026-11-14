@@ -2847,6 +2847,7 @@
 				await navigator.clipboard.writeText(text);
 				return true;
 			} catch {
+				feedback.error('Unable to copy the text');
 				return false;
 			}
 		},
