@@ -19,14 +19,15 @@ async function openArchive(page, baseUrl) {
 }
 
 /**
- * Before the app loads: its face, as a theme in Preferences sets one (`family`, or the system's), and, for the
+ * Before the app loads: its system face (`family`, as a machine whose system-ui is it; the theme's --font-sans, set on
+ * the root's style, reads it), and, for the
  * preview, empty knobs, so the preview's server is reachable to post to (`window.__apronPreview`).
  */
 const prepare = (family) => (context) =>
 	context.addInitScript((family) => {
 		/** @type {any} */ (window).__APRON_PREVIEW__ = {};
 		if (!family) return;
-		const style = () => document.head.append(Object.assign(document.createElement('style'), { textContent: `:root { --font-sans: ${family}; }` }));
+		const style = () => document.head.append(Object.assign(document.createElement('style'), { textContent: `:root { --font-sans-system: ${family}; }` }));
 		if (document.head) style();
 		else document.addEventListener('DOMContentLoaded', style, { once: true });
 	}, family);
