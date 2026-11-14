@@ -1753,6 +1753,8 @@ button.ap-mention { padding-block: 2.5px; margin-block: -2.5px; font-family: inh
    to three lines), a chip keeps a pixel of padding above and below, so its edges aren't the part cut off. */
 :is(.ap-reply-text, .ap-linkcard-text, .ap-embed-desc, .ap-description-text) .ap-mention { padding-block: 1px; }
 :is(.ap-reply-text, .ap-linkcard-text, .ap-embed-desc, .ap-description-text) button.ap-mention { margin-block: -1px; }
+/* A chip to another server isn't a mention: its border is that pixel, as it is in running text. */
+:is(.ap-reply-text, .ap-linkcard-text, .ap-embed-desc, .ap-description-text) a.ap-linkchip-elsewhere { padding-block: 0; }
 .ap-msg-mention .ap-mention-me { box-shadow: 0 0 0 1px var(--bg-100); }
 /* Inline chips (inline code, mentions, room links): one that wraps is drawn on each line as a chip of its own, padding
    and corners on every piece, rather than one box cut open at the line ends. A chip that is a button (a mention or room
