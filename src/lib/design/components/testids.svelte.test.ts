@@ -76,7 +76,7 @@ const rows: Row[] = [
 		replyTestid: 'reply', attachmentsTestid: 'files', previewsTestid: 'previews', fileInputTestid: 'file-input', commandTestid: 'command', emojiTestid: 'emoji', sendTestid: 'send'
 	}, {
 		reply: () => dom.byRole('status', /^Replying to Ada/), files: () => labelled('Files to send'), previews: () => labelled('Link previews to send'),
-		'file-input': () => document.querySelector('input[type="file"]')!, command: () => byText('Command'), emoji: () => dom.button('Insert emoji'), send: () => dom.button('Run command')
+		'file-input': () => document.querySelector('input[type="file"]')!, command: () => around('Command'), emoji: () => dom.button('Insert emoji'), send: () => dom.button('Run command')
 	}],
 	['MemberList', MemberList, {
 		room: 'General', count: 5, sections: [{ key: 'online', label: 'Online', people: [{ user_id: 'ada', status: 'online' }, { user_id: 'bo', status: 'online' }] }],

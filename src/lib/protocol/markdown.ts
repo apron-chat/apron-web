@@ -321,7 +321,8 @@ export function mentionClass({ target, hash }: Mention): string {
 function mentionChip(mention: Mention): string {
 	const { target } = mention;
 	const label = escapeHtml(mentionLabel(mention));
-	const className = mentionClass(mention);
+	// A chip in text (apron.css: .ap-chip); the composer draws its own with mentionClass alone.
+	const className = `ap-chip ${mentionClass(mention)}`;
 	if (target.kind === 'role') return `<span class="${className}" title="${escapeHtml(roleMentionTip(target.id))}">${label}</span>`;
 	if (target.kind === 'room') {
 		return `<button type="button" class="${className}" data-room-id="${escapeHtml(target.id)}" title="Open ${escapeHtml(target.title)}${target.untitled ? ` (#${escapeHtml(target.id)})` : ''}">${label}</button>`;
@@ -402,8 +403,8 @@ function linkChip(href: string, resolveLink: LinkResolver): string | undefined {
 	const chip = resolveLink(unescapeHtml(href));
 	if (!chip) return undefined;
 	// A user's reads as a user mention; the rest on this server as a room mention, with their kind's icon in front; another server's as neither.
-	const className = chip.elsewhere ? 'ap-linkchip ap-linkchip-elsewhere'
-		: chip.kind === 'user' ? 'ap-mention ap-linkchip' : `ap-mention ap-mention-room ap-linkchip ap-linkchip-${chip.kind}`;
+	const className = chip.elsewhere ? 'ap-chip ap-linkchip ap-linkchip-elsewhere'
+		: chip.kind === 'user' ? 'ap-chip ap-mention ap-linkchip' : `ap-chip ap-mention ap-mention-room ap-linkchip ap-linkchip-${chip.kind}`;
 	const detail = chip.detail ? `<span class="ap-linkchip-detail">${escapeHtml(chip.detail)}</span>` : '';
 	return `<a href="${escapeHtml(chip.href)}"${LINK_ATTRS} class="${className}" title="${escapeHtml(chip.title)}">${escapeHtml(chip.label)}${detail}</a>`;
 }

@@ -188,7 +188,7 @@
 				>
 					<span class="ap-search-kind">{#if result.faces?.length}<Faces people={result.faces} size="sm" />{:else if result.thread}<CornerDownRight size={16} role="img" aria-label="Thread" />{:else}<Hash size={16} role="img" aria-label="Room" />{/if}</span>
 					<span class="ap-search-main">
-						<span class="ap-search-title"><bdi>{#each result.parts as part, p (p)}{#if part.match}<mark>{part.text}</mark>{:else}{part.text}{/if}{/each}</bdi>{#if result.private && !result.faces?.length}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}</span>
+						<span class="ap-search-title"><bdi>{#each result.parts as part, p (p)}{#if part.match}<mark>{part.text}</mark>{:else}{part.text}{/if}{/each}</bdi>{#if result.private && !result.faces?.length}<Lock class="ap-lock ap-inline-icon" role="img" aria-label="Private" />{/if}</span>
 						{#if detail}<span class="ap-search-detail" dir="auto">{detail}</span>{/if}
 					</span>
 					{#if result.muted}<BellOff class="ap-muted" role="img" aria-label="Muted" />{/if}

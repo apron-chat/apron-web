@@ -27,7 +27,7 @@
 		>
 			<span class="ap-rail-pip" aria-hidden="true"></span>
 			{#if b.icon}<img class="ap-rail-tile" src={b.icon} alt="" />{:else}<span class="ap-rail-tile">{initials(b.label)}</span>{/if}
-			{#if b.mentions}<span class="ap-count ap-rail-count">{count99(b.mentions)}</span>{/if}
+			{#if b.mentions}<span class="ap-count ap-pill ap-rail-count">{count99(b.mentions)}</span>{/if}
 		</button>
 	{/each}
 	{#if onadd}

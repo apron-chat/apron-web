@@ -25,9 +25,9 @@ describe('bidi embeddings and overrides (§3.5.2)', () => {
 
 describe('mentions (Appendix A.3)', () => {
 	it('renders a known user_id with the latest name, marking the viewer’s own chip', () => {
-		expect(renderMarkdown('Handing this to @alice.', resolve)).toBe('<p>Handing this to <button type="button" class="ap-mention" data-user-id="alice" title="@alice">@Alice Chen</button>.</p>\n');
+		expect(renderMarkdown('Handing this to @alice.', resolve)).toBe('<p>Handing this to <button type="button" class="ap-chip ap-mention" data-user-id="alice" title="@alice">@Alice Chen</button>.</p>\n');
 		// The viewer's own chip is marked.
-		expect(renderMarkdown('@guest_1 can you look?', resolve)).toContain('class="ap-mention ap-mention-me" data-user-id="guest_1"');
+		expect(renderMarkdown('@guest_1 can you look?', resolve)).toContain('class="ap-chip ap-mention ap-mention-me" data-user-id="guest_1"');
 	});
 
 	it('reads @ as a user only, so a room ID after @ stays text (Appendix A.3)', () => {
@@ -35,19 +35,19 @@ describe('mentions (Appendix A.3)', () => {
 	});
 
 	it('links #room IDs with a hash label, but leaves unknown or embedded hashtags alone', () => {
-		expect(renderMarkdown('see #ops.', resolve)).toContain('<button type="button" class="ap-mention ap-mention-room ap-mention-hash-room" data-room-id="ops" title="Open Ops &amp; Co">#Ops &amp; Co</button>.');
+		expect(renderMarkdown('see #ops.', resolve)).toContain('<button type="button" class="ap-chip ap-mention ap-mention-room ap-mention-hash-room" data-room-id="ops" title="Open Ops &amp; Co">#Ops &amp; Co</button>.');
 		expect(renderPlain('#nobody tag#ops', resolve)).toBe('#nobody tag#ops');
 		expect(renderMarkdown('`#ops`', resolve)).toBe('<p><code>#ops</code></p>\n');	});
 
 	it('links a thread by its all-digit ID, naming an untitled one’s ID on hover, and leaves numbers that name no room as text', () => {
 		const threads = (id: string) => (id === '1790473611343' ? { kind: 'room' as const, id, title: 'Deploy checklist' } : undefined);
 		expect(renderPlain('see #1790473611343, not #1.', undefined, threads)).toBe(
-			'see <button type="button" class="ap-mention ap-mention-room ap-mention-hash-room" data-room-id="1790473611343" title="Open Deploy checklist">#Deploy checklist</button>, not #1.'
+			'see <button type="button" class="ap-chip ap-mention ap-mention-room ap-mention-hash-room" data-room-id="1790473611343" title="Open Deploy checklist">#Deploy checklist</button>, not #1.'
 		);
 		// An untitled thread's ID is named on its chip's hover.
 		const untitled = (id: string) => (id === '1790473611343' ? { kind: 'room' as const, id, title: 'Untitled', untitled: true as const } : undefined);
 		expect(renderPlain('see #1790473611343', undefined, untitled)).toBe(
-			'see <button type="button" class="ap-mention ap-mention-room ap-mention-hash-room" data-room-id="1790473611343" title="Open Untitled (#1790473611343)">#Untitled</button>'
+			'see <button type="button" class="ap-chip ap-mention ap-mention-room ap-mention-hash-room" data-room-id="1790473611343" title="Open Untitled (#1790473611343)">#Untitled</button>'
 		);
 	});
 
@@ -71,7 +71,7 @@ describe('mentions (Appendix A.3)', () => {
 	});
 
 	it('ends an ID at its last letter, digit or _, and never reads a system identity as a mention', () => {
-		expect(renderPlain('ask @alice-- now', resolve)).toBe('ask <button type="button" class="ap-mention" data-user-id="alice" title="@alice">@Alice Chen</button>-- now');
+		expect(renderPlain('ask @alice-- now', resolve)).toBe('ask <button type="button" class="ap-chip ap-mention" data-user-id="alice" title="@alice">@Alice Chen</button>-- now');
 		expect(renderPlain('@alice: @alice+ @alice@', resolve).match(/data-user-id="alice"/g)).toHaveLength(3);
 		const any: MentionResolver = (id) => ({ kind: 'user', id, name: id });
 		expect(renderPlain('ask ~server or @~server', any)).toBe('ask ~server or @~server');
@@ -98,7 +98,7 @@ describe('mentions (Appendix A.3)', () => {
 		expect(html).toContain('<a href="https://example.com/@alice" rel="noreferrer noopener" target="_blank">');
 		expect(html).not.toContain('ap-mention');
 		// A plain body is escaped around its mentions, and without a resolver there are none.
-		expect(renderPlain('<b>@alice</b>', resolve)).toBe('&lt;b&gt;<button type="button" class="ap-mention" data-user-id="alice" title="@alice">@Alice Chen</button>&lt;/b&gt;');
+		expect(renderPlain('<b>@alice</b>', resolve)).toBe('&lt;b&gt;<button type="button" class="ap-chip ap-mention" data-user-id="alice" title="@alice">@Alice Chen</button>&lt;/b&gt;');
 		expect(renderMarkdown('@alice is here')).toBe('<p>@alice is here</p>\n');
 	});
 });
@@ -158,20 +158,20 @@ describe('bare links', () => {
 			if (href === 'apron:?room=ops&user=alice') return { kind: 'user', href: 'apron:?server=wss://h/&room=ops&user=alice', label: '@Alice', title: 'Alice in #Ops & Co' };
 			return undefined;
 		};
-		const chip = '<a href="apron:?room=ops&amp;message=1" rel="noreferrer noopener" target="_blank" class="ap-mention ap-mention-room ap-linkchip ap-linkchip-message" title="A message in #Ops &amp; Co">Message<span class="ap-linkchip-detail"> in #Ops &amp; Co</span></a>';
+		const chip = '<a href="apron:?room=ops&amp;message=1" rel="noreferrer noopener" target="_blank" class="ap-chip ap-mention ap-mention-room ap-linkchip ap-linkchip-message" title="A message in #Ops &amp; Co">Message<span class="ap-linkchip-detail"> in #Ops &amp; Co</span></a>';
 		expect(renderPlain('see apron:?room=ops&message=1.', undefined, undefined, resolveLink)).toBe(`see ${chip}.`);
 		expect(renderMarkdown('see <apron:?room=ops&message=1>', undefined, undefined, resolveLink)).toBe(`<p>see ${chip}</p>\n`);
 		// The link under it is the one the resolver gives, where it gives one.
 		expect(renderMarkdown('apron:?room=ops&user=alice', undefined, undefined, resolveLink))
-			.toContain('<a href="apron:?server=wss://h/&amp;room=ops&amp;user=alice" rel="noreferrer noopener" target="_blank" class="ap-mention ap-linkchip" title="Alice in #Ops &amp; Co">@Alice</a>');
+			.toContain('<a href="apron:?server=wss://h/&amp;room=ops&amp;user=alice" rel="noreferrer noopener" target="_blank" class="ap-chip ap-mention ap-linkchip" title="Alice in #Ops &amp; Co">@Alice</a>');
 		// Another server's is no mention.
-		expect(renderPlain('apron:?server=wss://h/&room=ops', undefined, undefined, resolveLink)).toContain('class="ap-linkchip ap-linkchip-elsewhere" title="A room on h">h<span class="ap-linkchip-detail"> · Room</span></a>');
+		expect(renderPlain('apron:?server=wss://h/&room=ops', undefined, undefined, resolveLink)).toContain('class="ap-chip ap-linkchip ap-linkchip-elsewhere" title="A room on h">h<span class="ap-linkchip-detail"> · Room</span></a>');
 		// Its own text stays, as does code, and a link the resolver leaves.
 		expect(renderMarkdown('[that one](apron:?room=ops&message=1)', undefined, undefined, resolveLink)).toContain('>that one</a>');
 		expect(renderMarkdown('`apron:?room=ops&message=1`', undefined, undefined, resolveLink)).not.toContain('<a');
 		expect(renderPlain('apron:?room=other', undefined, undefined, resolveLink)).toBe(link('apron:?room=other'));
 		// An autolink whose href Markdown percent-encodes, but not its text, is still its own URL.
-		expect(renderMarkdown('<https://link.apron.chat/#room=général>', undefined, undefined, resolveLink)).toContain('class="ap-mention ap-mention-room ap-linkchip ap-linkchip-room" title="Open">général</a>');
+		expect(renderMarkdown('<https://link.apron.chat/#room=général>', undefined, undefined, resolveLink)).toContain('class="ap-chip ap-mention ap-mention-room ap-linkchip ap-linkchip-room" title="Open">général</a>');
 	});
 
 	it('leaves trailing punctuation and an unmatched closing paren out', () => {
@@ -398,7 +398,7 @@ describe('emoji', () => {
 	});
 
 	it('keeps mentions working beside emoji', () => {
-		expect(renderPlain('🎉@alice', resolve)).toBe(`${emoji('🎉')}<button type="button" class="ap-mention" data-user-id="alice" title="@alice">@Alice Chen</button>`);
+		expect(renderPlain('🎉@alice', resolve)).toBe(`${emoji('🎉')}<button type="button" class="ap-chip ap-mention" data-user-id="alice" title="@alice">@Alice Chen</button>`);
 	});
 });
 
@@ -437,7 +437,7 @@ describe('custom emoji in text (ext:emoji)', () => {
 
 	it('keeps a mention that runs into a key a mention, and the key after a space an image', () => {
 		const people: MentionResolver = (id) => (id === 'ada' ? { kind: 'user', id, name: 'Ada' } : undefined);
-		expect(renderPlain('@ada :a:', people, undefined, undefined, emoji, any)).toBe(`<button type="button" class="ap-mention" data-user-id="ada" title="@ada">@Ada</button> ${img(':a:')}`);
+		expect(renderPlain('@ada :a:', people, undefined, undefined, emoji, any)).toBe(`<button type="button" class="ap-chip ap-mention" data-user-id="ada" title="@ada">@Ada</button> ${img(':a:')}`);
 	});
 
 	it('lets no other style through the sanitizer', () => {
@@ -467,13 +467,13 @@ describe('role mentions (@&role)', () => {
 	});
 
 	it('renders a role as a chip that only reads, showing @role', () => {
-		expect(renderPlain('hey @&mods.', resolve)).toBe('hey <span class="ap-mention ap-mention-role" title="Everyone with the role mods">@mods</span>.');
+		expect(renderPlain('hey @&mods.', resolve)).toBe('hey <span class="ap-chip ap-mention ap-mention-role" title="Everyone with the role mods">@mods</span>.');
 	});
 });
 
 describe('role mentions in Markdown', () => {
 	it('chips @&role in rendered Markdown, but not inside code', () => {
-		expect(renderMarkdown('**@&mods** `@&mods`', resolve)).toContain('<strong><span class="ap-mention ap-mention-role" title="Everyone with the role mods">@mods</span></strong> <code>@&amp;mods</code>');
+		expect(renderMarkdown('**@&mods** `@&mods`', resolve)).toContain('<strong><span class="ap-chip ap-mention ap-mention-role" title="Everyone with the role mods">@mods</span></strong> <code>@&amp;mods</code>');
 	});
 });
 

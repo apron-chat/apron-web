@@ -312,8 +312,8 @@
 			{#if recording}
 				<span class="ap-composer-recording" role="status"><span class="ap-composer-recdot" aria-hidden="true"></span>Recording <span class="ap-composer-rectime">{recordingTime || '0:00'}</span></span>
 			{:else}
-				{#if cmd}<span class="ap-composer-cmdtag" data-testid={commandTestid} title="Sent to the server, not posted">Command</span>{/if}
-				{#if live}<span class="ap-composer-cmdtag ap-composer-livetag" data-testid={liveTestid} title="Everyone sees this message as you type it; Send finishes it"><span class="ap-composer-livedot" aria-hidden="true"></span>Live</span>{/if}
+				{#if cmd}<span class="ap-composer-cmdtag" data-testid={commandTestid} title="Sent to the server, not posted"><span class="ap-pill-label">Command</span></span>{/if}
+				{#if live}<span class="ap-composer-cmdtag ap-composer-livetag" data-testid={liveTestid} title="Everyone sees this message as you type it; Send finishes it"><span class="ap-composer-livedot" aria-hidden="true"></span><span class="ap-pill-label">Live</span></span>{/if}
 				{#if field}{@render field(fieldArgs)}
 				{:else}
 					<textarea rows="1" dir="auto" placeholder={ph} {disabled} aria-label={cmd ? 'Command' : 'Message'} class={['ap-composer-field', className]} bind:value={() => value, (v) => { value = v; oninput?.(v); }}></textarea>

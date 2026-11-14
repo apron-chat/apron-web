@@ -24,11 +24,11 @@
 {#snippet jump(jumpClass?: ClassValue)}
 	{#if fab}
 		<button type="button" data-testid={buttonTestid} aria-label={count ? `${count === 1 ? '1 new message' : `${count} new messages`}, jump to latest` : 'Jump to latest'} title="Jump to latest" class={['ap-jumpfab', jumpClass]} onclick={onjump}>
-			<span aria-hidden="true">↓</span>{#if count}<span class="ap-count ap-jumpfab-count">{count99(count)}</span>{/if}
+			<span aria-hidden="true">↓</span>{#if count}<span class="ap-count ap-pill ap-jumpfab-count">{count99(count)}</span>{/if}
 		</button>
 	{:else}
 		<div role="status" class={['ap-jumpbar', 'ap-jumpbar-at', jumpClass]}>
-			<span class="ap-count ap-count-at" aria-hidden="true">@</span>
+			<span class="ap-count ap-pill ap-count-at" aria-hidden="true">@</span>
 			<span class="ap-jumpbar-text">{label}</span>
 			<button type="button" class="ap-jumpbar-btn" data-testid={buttonTestid} onclick={onjumpmention ?? onjump}>Jump to mention</button>
 		</div>

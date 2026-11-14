@@ -31,5 +31,5 @@
 			{#if detail}<p class="ap-dmintro-detail">{detail}</p>{/if}
 		</div>
 	</div>
-	<p class="ap-dmintro-text"><span class="ap-dmintro-private"><Lock size={13} aria-hidden="true" />Private room.</span> Only members and the server host can read messages here. Only members can add others.</p>
+	<p class="ap-dmintro-text"><span class="ap-dmintro-private"><Lock class="ap-inline-icon" size={13} aria-hidden="true" />Private room.</span> Only members and the server host can read messages here. Only members can add others.</p>
 </section>

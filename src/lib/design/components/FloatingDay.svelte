@@ -15,4 +15,4 @@
 </script>
 
 <!-- First in the timeline: a zero-height sticky row, so the pill floats over the messages without taking space. -->
-<div aria-hidden="true" data-testid={testid} class={['ap-dayfloat', shown && 'ap-dayfloat-shown', className]}><span class="ap-dayfloat-pill">{label}</span></div>
+<div aria-hidden="true" data-testid={testid} class={['ap-dayfloat', shown && 'ap-dayfloat-shown', className]}><span class="ap-dayfloat-pill ap-pill">{label}</span></div>

@@ -149,7 +149,7 @@
 	--control-lg: 32px;  /* buttons and fields, a header's back, the gear */
 	--control-xl: 40px;  /* the floating jump-to-latest button */
 	--chip-h: 28px;      /* a reaction chip, and its + */
-	--chip-inline: 23px; /* a chip in text (a mention, room link or link chip), and a pick chip, which matches it */
+	--chip-inline: 23px; /* a pick chip; and a chip in text where a box can't be trimmed to its letters (apron.css: Centered on the capitals) */
 	--check-size: 17px;  /* a checklist's round check, in a message and in the composer */
 	--touch-target: 44px; /* the least a control meant for a finger takes: the media viewer's ‹ and › */
 

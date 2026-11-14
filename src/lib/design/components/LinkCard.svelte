@@ -48,7 +48,7 @@
 		{#if card.sender}
 			<span class="ap-embed-title ap-linkcard-title"><Avatar name={card.sender.name} src={card.sender.avatar} hue={card.sender.hue} size="xs" /><span class="ap-linkcard-name">{card.sender.name}</span>{#if t.short}<time datetime={t.iso} title={t.exact}>{t.short}</time>{/if}</span>
 		{:else if card.room}
-			<span class="ap-embed-title ap-linkcard-title">{@render step(card.room, card.kind === 'room')}{#if card.private}<Lock class="ap-lock" role="img" aria-label="Private" />{/if}</span>
+			<span class="ap-embed-title ap-linkcard-title">{@render step(card.room, card.kind === 'room')}{#if card.private}<Lock class="ap-lock ap-inline-icon" role="img" aria-label="Private" />{/if}</span>
 		{/if}
 		{#if card.deleted}<span class="ap-embed-desc ap-linkcard-text"><em>Message deleted</em></span>
 		{:else if card.snippet?.length}<span class="ap-embed-desc ap-linkcard-text">{#each card.snippet as part, index (index)}{#if typeof part === 'string'}{part}{:else if 'role' in part}<Mention role={part.role} />{:else if 'roomId' in part}<Mention roomId={part.roomId} name={part.name} thread={part.thread} hash={part.hash} />{:else}<Mention user_id={part.user_id} name={part.name} me={part.me} />{/if}{/each}</span>
