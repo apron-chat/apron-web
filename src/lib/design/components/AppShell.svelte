@@ -14,6 +14,8 @@
 		mainLabel?: string;
 		/** An attachment for the main pane's `<main>`, such as one taking files dropped on it. */
 		mainAttach?: Attachment<HTMLElement>;
+		/** The skip link's words: the shell's first Tab stop, shown only then, which takes the keyboard past the rooms list to the main pane. */
+		skipLabel?: string;
 		/** The MemberList: a column of its own with `membersWide`, else over the conversation, sliding in from the inline end (the right, or the left under `dir="rtl"`). */
 		members?: Snippet;
 		/** The rooms list's <PanelToggle>, at its inner edge: at the end of its header, or the start of the room's once it's shut, which keep clear of it. */
@@ -71,10 +73,24 @@
 		class?: ClassValue;
 	}
 	let {
-		rail, side, main, mainLabel, mainAttach, members, sideToggle, sideHandle, membersToggle, membersHandle, nudge, children,
+		rail, side, main, mainLabel, mainAttach, skipLabel = 'Skip to conversation', members, sideToggle, sideHandle, membersToggle, membersHandle, nudge, children,
 		sideCollapsed = false, membersOpen = false, membersWide = false, pane, peek = false, onpeek, sideWidth, membersWidth, resizing = false, slides = false, viewport = false,
 		class: className
 	}: Props = $props();
+
+	/**
+	 * The skip link takes the focus to the main pane itself, as a landmark: the next Tab goes on from its start. The pane
+	 * is focusable only for that moment, or a click anywhere in it that lands on nothing focusable would focus it. Found
+	 * from the link, its sibling, rather than kept with `bind:this`, whose effect would cost calls on every update.
+	 */
+	function skipToMain(event: MouseEvent): void {
+		event.preventDefault();
+		const pane = (event.currentTarget as HTMLElement).parentElement?.querySelector<HTMLElement>(':scope > main');
+		if (!pane) return;
+		pane.tabIndex = -1;
+		pane.addEventListener('blur', () => pane.removeAttribute('tabindex'), { once: true });
+		pane.focus();
+	}
 
 	/** The rooms list shows over a conversation whose sliver is in view. */
 	const peeking = $derived(peek && pane === 'rooms' && Boolean(onpeek));
@@ -144,6 +160,8 @@
 	style={shellStyle}
 	{@attach swipeBack}
 >
+	<!-- Before everything else in the shell, and seen only when focused; its href says where it goes, the click does it (a fragment would be a navigation). -->
+	{#if main && side}<a class="ap-skip" href="#conversation" onclick={skipToMain}>{skipLabel}</a>{/if}
 	{@render rail?.()}
 	{@render sideToggle?.()}
 	{@render side?.()}

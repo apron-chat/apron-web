@@ -51,10 +51,27 @@ describe('AppShell', () => {
 		expect(shell.classList.contains('ap-shell-norail')).toBe(true);
 		expect(shell.classList.contains('ap-shell-side-toggle')).toBe(true);
 		expect(shell.classList.contains('ap-shell-members-toggle')).toBe(false);
-		expect([...shell.children].map((child) => child.id || child.className)).toEqual(['toggle', 'side', 'ap-shell-nudge', 'ap-shell-main', 'members']);
+		expect([...shell.children].map((child) => child.id || child.className)).toEqual(['ap-skip', 'toggle', 'side', 'ap-shell-nudge', 'ap-shell-main', 'members']);
 		const main = shell.querySelector('main')!;
 		expect(main.getAttribute('aria-label')).toBe('Conversation');
 		expect(main.querySelector('#pane')).not.toBeNull();
+	});
+
+	it('starts with a skip link past the rooms list, which focuses the main pane for that moment only', () => {
+		const shell = render({ side: markup('<aside><button>general</button></aside>'), main: markup('<div><button>Room actions</button></div>'), mainLabel: 'Conversation' });
+		const skip = shell.firstElementChild as HTMLAnchorElement;
+		expect([skip.tagName, skip.textContent]).toEqual(['A', 'Skip to conversation']);
+		const main = shell.querySelector('main')!;
+		const navigated = !skip.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+		// No fragment navigation, which the app's routing would take for one.
+		expect(navigated).toBe(true);
+		expect(document.activeElement).toBe(main);
+		// Focusable only while it has the focus: a click in it that lands on nothing focusable doesn't focus it later.
+		dom.button('Room actions').focus();
+		expect(main.hasAttribute('tabindex')).toBe(false);
+		dom.unmount();
+		// Without a rooms list to skip, none.
+		expect(render({ main: markup('<div></div>') }).querySelector('.ap-skip')).toBeNull();
 	});
 
 	it('takes a class beside its own, and an attachment for the main pane', () => {
