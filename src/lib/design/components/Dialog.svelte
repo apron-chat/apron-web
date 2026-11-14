@@ -56,11 +56,6 @@
 		onclose?.();
 	}
 
-	/**
-	 * Locked, nothing closes it. `closedby="none"` tells the browser so, Escape and Android's back gesture included:
-	 * cancelling `cancel` alone works only once, since a browser lets a page refuse a second close request in a row
-	 * only after the user has done something on it. The handler stays for browsers without `closedby` (Safari).
-	 */
 	function cancel(event: Event): void {
 		if (locked) event.preventDefault();
 	}
@@ -80,7 +75,7 @@
 </script>
 
 <!-- Named by its title. -->
-<dialog bind:this={dialog} class={['ap-dialog', 'ap-dialog-' + size, className]} aria-labelledby={titleId} closedby={locked ? 'none' : undefined} oncancel={cancel} onclose={closed} {onpointerdown} onclick={click}>
+<dialog bind:this={dialog} class={['ap-dialog', 'ap-dialog-' + size, className]} aria-labelledby={titleId} oncancel={cancel} onclose={closed} {onpointerdown} onclick={click}>
 	<svelte:element this={onsubmit ? 'form' : 'div'} class="ap-dialog-frame" role={onsubmit ? undefined : 'presentation'} {onsubmit}>
 		<header class="ap-dialog-head">
 			<div class="ap-dialog-heading">

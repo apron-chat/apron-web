@@ -460,4 +460,10 @@ test('the first Tab shows a skip link past the rooms list, which takes the keybo
 	await expect(page.getByRole('button', { name: 'Room actions' })).toBeFocused();
 	// Hidden again once the keyboard has left it.
 	expect((await skip.boundingBox())!.width).toBeLessThanOrEqual(1);
+	// From the conversation itself, as from nowhere, ↓ goes onto the newest message.
+	await skip.focus();
+	await page.keyboard.press('Enter');
+	await expect(page.getByRole('main', { name: 'Conversation' })).toBeFocused();
+	await page.keyboard.press('ArrowDown');
+	expect(await page.evaluate(() => document.activeElement?.matches('article.ap-msg') ?? false)).toBe(true);
 });

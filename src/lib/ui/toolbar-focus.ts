@@ -3,8 +3,8 @@
  * all its groups, wrapping at the ends and reversed right to left, and Home and End go to the first and last.
  *
  * The toolbar says `focusgroup="toolbar wrap"`, which browsers that have focusgroup do all this for. Where one
- * doesn't, this attachment does: it keeps `tabindex="0"` on the button last focused (so Tab comes back to it, a
- * click included) and `-1` on the rest. It does nothing where focusgroup is native, so the two never both run.
+ * doesn't, this attachment does: it keeps `tabindex="0"` on the button last focused (so Tab comes back to it)
+ * and `-1` on the rest. It does nothing where focusgroup is native, so the two never both run.
  */
 export function rovingToolbar(bar: HTMLElement): (() => void) | undefined {
 	if (typeof HTMLElement !== 'undefined' && 'focusGroup' in HTMLElement.prototype) return undefined;

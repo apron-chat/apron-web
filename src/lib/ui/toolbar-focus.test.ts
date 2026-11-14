@@ -16,7 +16,7 @@ const stops = (buttons: HTMLButtonElement[]) => buttons.map((button) => button.t
 afterEach(() => (document.body.innerHTML = ''));
 
 describe('rovingToolbar', () => {
-	it('is one Tab stop, which follows the focus, a click included', () => {
+	it('is one Tab stop, which follows the focus', () => {
 		const { buttons } = toolbar();
 		expect(stops(buttons)).toEqual([0, -1, -1]);
 		buttons[2].focus();

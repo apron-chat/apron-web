@@ -1479,7 +1479,8 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-dialog::backdrop { background: var(--scrim); backdrop-filter: blur(2px); }
 /* A modal keeps scroll gestures to itself: one that runs past its top or bottom doesn't pull the page under it to
    refresh (Android) or bounce it (iOS). The body that scrolls holds them too, where a browser honors only that. */
-dialog:modal, .ap-dialog-body { overscroll-behavior: contain; }
+dialog:modal { overscroll-behavior: contain; }
+.ap-dialog-body { overscroll-behavior: contain; }
 /* The frame sizes to its content, up to the dialog's max-height; only lg, with a set height, fills it. A percentage height (or 0% flex-basis) against a dialog sized by its content collapses to nothing in Safari. */
 .ap-dialog-frame { display: flex; flex-direction: column; max-height: inherit; margin: 0; }
 .ap-dialog-lg .ap-dialog-frame { height: 100%; }
