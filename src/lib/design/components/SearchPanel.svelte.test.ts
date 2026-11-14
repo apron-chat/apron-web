@@ -64,6 +64,18 @@ describe('SearchPanel', () => {
 		expect(state.open).toBe(false);
 	});
 
+	it('leaves Enter and the arrows to an input method while it composes, as Safari after compositionend too', () => {
+		const { state, field, list } = render({ query: 'でぷろい', results: [result('2', 'deploy'), result('1', 'deploys')] });
+		const first = list.querySelector('[role="option"]')!.id;
+		expect(dom.press(field, 'ArrowDown', { isComposing: true })).toBe(true);
+		expect(dom.press(field, 'Enter', { isComposing: true })).toBe(true);
+		expect(dom.press(field, 'Enter', { keyCode: 229 })).toBe(true);
+		flushSync();
+		expect(state.onpick).not.toHaveBeenCalled();
+		expect(state.open).toBe(true);
+		expect(field.getAttribute('aria-activedescendant')).toBe(first);
+	});
+
 	it('says when only the newest are listed', () => {
 		render({ query: 'the', results: [result('1', 'the')], more: true });
 		expect(queryByText('Only the newest are listed. Add words to narrow it down.')).not.toBeNull();

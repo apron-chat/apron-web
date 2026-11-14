@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { tick, untrack, type Snippet } from 'svelte';
 	import type { ClassValue } from 'svelte/elements';
+	import { composing } from './compose';
 	import BellOff from '@lucide/svelte/icons/bell-off';
 	import CornerDownRight from '@lucide/svelte/icons/corner-down-right';
 	import Hash from '@lucide/svelte/icons/hash';
@@ -128,6 +129,8 @@
 	}
 
 	function keydown(event: KeyboardEvent): void {
+		// Enter or an arrow that an input method is using confirms or picks its text, not a result.
+		if (composing(event)) return;
 		if (onfieldkey?.(event, results[active]?.id)) return;
 		if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
 			if (!results.length) return;

@@ -7,6 +7,7 @@
 	 */
 	import { tick } from 'svelte';
 	import type { ClassValue } from 'svelte/elements';
+	import { composing } from './compose';
 	import AudioPlayer from './AudioPlayer.svelte';
 	import FileGlyph from './FileGlyph.svelte';
 
@@ -62,7 +63,7 @@
 
 	/* The keys stop here: Enter must not send or save the message around it, nor Escape cancel it. */
 	function keydown(event: KeyboardEvent): void {
-		if (event.isComposing) return;
+		if (composing(event)) return;
 		if (event.key === 'Enter' || event.key === 'Escape') {
 			event.preventDefault();
 			event.stopPropagation();

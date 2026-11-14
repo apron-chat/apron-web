@@ -3,6 +3,7 @@
 	import Users from '@lucide/svelte/icons/users';
 	import X from '@lucide/svelte/icons/x';
 	import Avatar from './Avatar.svelte';
+	import { composing } from './compose';
 	import type { PickPerson } from './types';
 
 	/**
@@ -79,6 +80,8 @@
 	}
 
 	function keydown(event: KeyboardEvent): void {
+		// Enter or an arrow that an input method is using confirms or picks its text, not a person.
+		if (composing(event)) return;
 		if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
 			if (!people.length) return;
 			event.preventDefault();

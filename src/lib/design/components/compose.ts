@@ -9,6 +9,16 @@ export function enterAction(event: Pick<KeyboardEvent, 'shiftKey'>, onHandheld: 
 	return event.shiftKey || onHandheld ? 'newline' : 'send';
 }
 
+/**
+ * A key an input method is still using, as part of a composition: any field that acts on Enter or the arrows ignores
+ * it, or confirming a conversion (Japanese, Chinese, Korean) would send, pick or move instead. Safari fires the Enter
+ * that commits a composition after `compositionend`, so `isComposing` is false then, but its `keyCode` is 229, as
+ * during one.
+ */
+export function composing(event: Pick<KeyboardEvent, 'isComposing' | 'keyCode'>): boolean {
+	return event.isComposing || event.keyCode === 229;
+}
+
 /** Draft text that is a command (§4.1): one leading `/`. `//` posts a message that starts with `/`. */
 export function isCommand(text: string): boolean {
 	return text.startsWith('/') && !text.startsWith('//');

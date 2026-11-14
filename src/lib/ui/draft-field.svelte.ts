@@ -11,6 +11,7 @@ import type { EmojiMartData } from '@emoji-mart/data';
 import { loadEmojiData } from './emoji-picker.svelte';
 import { directory } from './directory.svelte';
 import { enterAction, handheld } from './handheld';
+import { composing as isComposing } from '$lib/design/components/compose';
 import type { TextEdit } from './text-edit';
 
 /**
@@ -320,9 +321,8 @@ export class DraftField {
 
 	keydown = (event: KeyboardEvent): void => {
 		const completion = this.completion;
-		// A key the input method takes, as part of a composition. Safari sends the Enter that commits one after
-		// `compositionend`, so `isComposing` is false then, but its `keyCode` is 229, as during one: it sends nothing.
-		const composing = event.isComposing || event.keyCode === 229;
+		// A key the input method takes, as part of a composition: it sends nothing.
+		const composing = isComposing(event);
 		if (completion && !composing) {
 			if (event.key === 'Escape') {
 				event.preventDefault();
