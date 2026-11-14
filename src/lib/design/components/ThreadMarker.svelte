@@ -71,7 +71,7 @@
 			<span class="ap-thread-head">
 				{#if facesSnippet || faces.length}<span class="ap-thread-faces" aria-hidden="true">{#if facesSnippet}{@render facesSnippet()}{:else}{#each faces as f, i (uid(f) || i)}<Avatar name={f.name || uid(f)} src={f.avatar} size="sm" />{/each}{/if}</span>{/if}
 				<!-- The lock leads the title, so its ellipsis never cuts it off. -->
-				<span class="ap-thread-name" title={tip}>{#if isPrivate}<Lock class="ap-lock" aria-label="Private" role="img" />{/if}{shown}</span>
+				<span class="ap-thread-name" title={tip}>{#if isPrivate}<Lock class="ap-lock ap-inline-icon" aria-label="Private" role="img" />{/if}{shown}</span>
 				<UnreadCount {unread} {mentions} noun="reply" testid={unreadTestid} />
 				{#if lastReply && at.iso}<time class="ap-thread-last" data-testid={lastReplyTestid} datetime={at.iso} title={`Last reply ${at.exact}`}>{lastReply}</time>
 				{:else if lastReply}<span class="ap-thread-last" data-testid={lastReplyTestid} title="Last reply">{lastReply}</span>{/if}

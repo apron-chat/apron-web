@@ -27,12 +27,12 @@
 	const id = $derived(roomId || user_id);
 	const shown = $derived(roomId ? roomName(name || title, roomId, { thread }) : name || id);
 	const tip = $derived(roomId ? roomNameTip(name || title, roomId, { thread }) : undefined);
-	const roomClass = $derived(['ap-mention', 'ap-mention-room', hash && 'ap-mention-hash-room', className]);
-	const userClass = $derived(['ap-mention', me && 'ap-mention-me', className]);
+	const roomClass = $derived(['ap-chip', 'ap-mention', 'ap-mention-room', hash && 'ap-mention-hash-room', className]);
+	const userClass = $derived(['ap-chip', 'ap-mention', me && 'ap-mention-me', className]);
 	// A room's chip that only reads carries no data-room-id: a click delegated on its ID would open the room.
 </script>
 
-{#if role}<span title="Everyone with the role {role}" class={['ap-mention', 'ap-mention-role', className]}>@{role}</span>
+{#if role}<span title="Everyone with the role {role}" class={['ap-chip', 'ap-mention', 'ap-mention-role', className]}>@{role}</span>
 {:else if roomId && onopen}<button type="button" data-room-id={id} title={tip ? `Open ${shown} (#${tip})` : `Open ${shown}`} class={roomClass} onclick={onopen}>{hash ? '#' : ''}{shown}</button>
 {:else if roomId}<span title="#{id}" class={roomClass}>{hash ? '#' : ''}{shown}</span>
 {:else if unknown}<span class={['ap-mention-unknown', className]}>@{id}</span>

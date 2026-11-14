@@ -173,3 +173,73 @@ describe('apron.css: only what the app renders', () => {
 		expect(readFileSync(new URL('../../../scripts/design-bundle.js', import.meta.url), 'utf8')).toMatch(/\['apron\.css', 'rail\.css'\]/);
 	});
 });
+
+describe('apron.css: labels centered on their capitals', () => {
+	const components = readdirSync(new URL('./components/', import.meta.url)).filter((name) => name.endsWith('.svelte'));
+	const sources = Object.fromEntries([
+		...components.map((name) => [name, readFileSync(new URL(`./components/${name}`, import.meta.url), 'utf8')]),
+		['markdown.ts', readFileSync(new URL('../protocol/markdown.ts', import.meta.url), 'utf8')]
+	]);
+	/** The other classes written beside `block` in one class list (`class="…"`, `class={[…]}` or a class string), anywhere. */
+	function besides(block: string): Set<string> {
+		const found = new Set<string>();
+		for (const source of Object.values(sources))
+			for (const [list] of source.matchAll(/class="[^"]*"|class=\{\[[^\]]*\]\}|'ap-[^']*'|`ap-[^`]*`/g)) {
+				const names = [...list.matchAll(/ap-[a-z0-9-]+/g)].map(([name]) => name);
+				if (names.includes(block)) for (const name of names) if (name !== block && !name.endsWith('-')) found.add(name);
+			}
+		return found;
+	}
+	/** The rules that style `name` itself: `.name`, or `tag.name`. */
+	const own = (name: string) => rules.filter((rule) => rule.selectors.some((selector) => new RegExp(`^(?:[a-z]+)?\\.${name}$`).test(selector)));
+	const owned = { 'ap-pill': ['display', 'height', 'padding', 'padding-block', 'padding-top', 'padding-bottom', 'box-sizing'], 'ap-pill-label': ['padding', 'padding-block', 'margin', 'margin-block', 'display'], 'ap-chip': ['display', 'padding', 'padding-block', 'padding-top', 'padding-bottom', 'margin-block'] };
+
+	it('leaves an element that takes a building block its size and colors: the block owns its display, height and block padding', () => {
+		const taken = Object.entries(owned).flatMap(([block, properties]) => [...besides(block)].flatMap((name) => own(name).flatMap((rule) => properties.filter((property) => rule.declarations.has(property)).map((property) => `.${name} sets ${property} (.${block})`))));
+		expect(besides('ap-pill').size).toBeGreaterThan(3);
+		expect(besides('ap-chip').has('ap-mention')).toBe(true);
+		expect(taken).toEqual([]);
+	});
+
+	it('gives every pill its height, --ap-pill-h', () => {
+		const pills = [...besides('ap-pill')].filter((name) => !/-(?:at|quiet|count)$/.test(name) || name === 'ap-count');
+		expect(pills.filter((name) => !own(name).some((rule) => rule.declarations.has('--ap-pill-h')))).toEqual([]);
+	});
+
+	/** Boxes of a fixed height that center what they hold, and why theirs isn't a label to center on its capitals. */
+	const NOT_A_LABEL: Record<string, string> = {
+		'.ap-iconbtn': 'an icon',
+		'.ap-msg-check': 'a check mark, drawn',
+		'.ap-jumpfab': 'an arrow'
+	};
+	/** Not yet centered on their capitals: their label is bare text in the box (Button.svelte, the composer). */
+	const NOT_YET: Record<string, string> = {
+		'.ap-btn': 'a button’s label',
+		'.ap-composer-recording': 'the recording’s "Recording" and its time'
+	};
+
+	it('centers a box of a fixed height on its label’s capitals: a pill, or a box whose label is an .ap-pill-label', () => {
+		const boxes = rules
+			.filter(({ declarations: d }) => /^(?:\d+(?:\.\d+)?px|var\(--(?:control|chip)[\w-]*\))$/.test(d.get('height') ?? '') && (d.get('align-items') === 'center' || d.get('place-items') === 'center') && (d.has('font-size') || d.has('font')))
+			.flatMap((rule) => rule.selectors);
+		const labeled = (selector: string) => Object.values(sources).some((source) => source.includes(selector.slice(1)) && source.includes('ap-pill-label'));
+		expect(boxes.filter((selector) => !labeled(selector) && !(selector in NOT_A_LABEL) && !(selector in NOT_YET))).toEqual([]);
+		// And neither list keeps a box that no longer is one.
+		expect([...Object.keys(NOT_A_LABEL), ...Object.keys(NOT_YET)].filter((selector) => !boxes.includes(selector))).toEqual([]);
+	});
+
+	it('aligns an icon in a line of text by its size, --ap-icon-size, rather than by a length tried in one face', () => {
+		const lengths = rules.filter((rule) => /\d(?:px|em)|calc/.test(rule.declarations.get('vertical-align') ?? '')).flatMap((rule) => rule.selectors);
+		// A custom emoji is an emoji, aligned as the face's own are; the experimental badge isn't centered on its capitals yet.
+		expect(lengths.filter((selector) => !['.ap-inline-icon', '.ap-media-ask-what::before', '.ap-cemoji', '.ap-pref-experimental'].includes(selector))).toEqual([]);
+		expect(own('ap-lock').some((rule) => rule.declarations.has('--ap-icon-size'))).toBe(true);
+	});
+
+	it('keeps the sizes main had where the browser can’t trim a box: a fallback for each building block', () => {
+		const fallback = css.slice(css.indexOf('@supports not (text-box: trim-both cap alphabetic)'));
+		expect(css).toContain('@supports (text-box: trim-both cap alphabetic)');
+		expect(fallback.length).toBeLessThan(css.length);
+		expect(rules.some((rule) => rule.selectors.includes('.ap-pill') && rule.declarations.get('height') === 'var(--ap-pill-h)')).toBe(true);
+		expect(fallback).toMatch(/\.ap-chip \{ padding-block: 2px; \}/);
+	});
+});
