@@ -411,7 +411,7 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-thread .ap-tline > svg { color: var(--ink-muted); }
 .ap-thread .ap-tline-sender { font-weight: 600; }
 .ap-thread-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-.ap-thread-name::before { content: "↳ "; }
+.ap-thread-name::before { content: "↳ "; content: "↳ " / ""; }
 .ap-thread-faces + .ap-thread-name::before { content: none; }
 .ap-thread-name .ap-lock { margin: 0 4px 0 0; }
 /* A private thread's card, in plum: its title and lock take the hue, its preview lines stay in ink. */
@@ -476,7 +476,7 @@ a.ap-embed-card:hover { background: var(--hover); }
 /* The rich field (editable): a plain-text editable whose mentions are chips; it sizes like the textarea. */
 .ap-composer-editable { position: relative; height: auto; overflow-y: auto; white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; }
 /* On one line, however long the room or thread's name: out of the flow, over the field's padding, cut short. */
-.ap-composer-editable-empty::before { content: attr(data-placeholder); position: absolute; inset: 0; padding: inherit; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--ink-muted); pointer-events: none; }
+.ap-composer-editable-empty::before { content: attr(data-placeholder); content: attr(data-placeholder) / ""; position: absolute; inset: 0; padding: inherit; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--ink-muted); pointer-events: none; }
 .ap-composer-editable .ap-mention { padding-block: 2px; white-space: nowrap; cursor: default; user-select: all; }
 /* A mention that won't reach anyone as the draft would go (not in the room, and not to be added): greyed. */
 .ap-composer-editable .ap-mention.ap-mention-quiet { background: color-mix(in srgb, var(--ink-muted) 14%, transparent); color: var(--ink-muted); }
@@ -2016,7 +2016,7 @@ a.ap-embed-ogcard:hover { background: var(--hover); }
 
 /* Room mentions and unknown mentions */
 .ap-mention-room { font: inherit; border: 0; cursor: pointer; text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 3px; }
-.ap-mention-room::before { content: "\21B3 "; font-weight: 400; }
+.ap-mention-room::before { content: "\21B3 "; content: "\21B3 " / ""; font-weight: 400; }
 .ap-mention-hash-room::before { content: none; }
 .ap-mention-unknown { color: var(--ink-muted); }
 /* A role's chip (`@&role`): a mention's tint, outlined so it reads as a group rather than one person, and only reads. */
@@ -2039,7 +2039,7 @@ a.ap-linkchip { text-decoration: none; }
    first). It has the height of a mention, its border in place of a pixel of padding, and the same 6px to its sides. */
 a.ap-linkchip-elsewhere { --ap-linkchip-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20M2 12h20'/%3E%3C/svg%3E");
 	padding-inline: 5px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); color: var(--ink); font-weight: 600; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
-a.ap-linkchip-elsewhere::after { content: " \2197"; font-weight: 400; color: var(--ink-muted); }
+a.ap-linkchip-elsewhere::after { content: " \2197"; content: " \2197" / ""; font-weight: 400; color: var(--ink-muted); }
 a.ap-linkchip-elsewhere:hover { background: var(--hover); }
 .ap-status-retry { color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 .ap-profedit-avbtns { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); }
@@ -2167,3 +2167,24 @@ a.ap-linkchip-elsewhere:hover { background: var(--hover); }
 .ap-quota-bar .ap-quota-on { background: var(--private); }
 /* A Callout for what stands in the way, such as a limit reached. */
 .ap-callout-warn { border-color: color-mix(in srgb, var(--warn) 70%, transparent); background: var(--bg-200); }
+
+/*
+ * Forced colors (Windows High Contrast): the system's palette replaces backgrounds and drops box-shadows, so whatever
+ * shows a state only that way (the message the keyboard is on, the option it's on in a picker, a chosen segment, a
+ * switch that's on, presence, the bar on the open room) gets an outline or a system color of its own. Nothing here
+ * applies otherwise.
+ */
+@media (forced-colors: active) {
+	.ap-msg:focus-visible { outline: 2px solid CanvasText; outline-offset: -2px; }
+	:is(.ap-mpick-active, .ap-font-option-active, .ap-pick-row-active, .ap-search-row-active, .ap-seg-on, .ap-choice-on, .ap-preferences-nav button[aria-current='page']) { outline: 2px solid Highlight; outline-offset: -2px; }
+	:is(.ap-room-active, .ap-msg-mention)::before, .ap-msg:focus-visible::before, .ap-shell-handle::after { forced-color-adjust: none; background: CanvasText; }
+	.ap-shell-handle:is(:hover, :focus-visible)::after, .ap-shell-handle-resizing::after { background: Highlight; }
+	.ap-switch { border: 1px solid ButtonText; }
+	.ap-switch span { forced-color-adjust: none; background: ButtonText; }
+	.ap-switch[aria-checked='true'] span { background: Highlight; }
+	/* The rows' transparent edge (a wider target, out to the pane's edge) is drawn in the system's text color otherwise. */
+	.ap-shell-sidebody .ap-room, .ap-timeline .ap-msg:not(.ap-msg-system) { border-inline-start-color: Canvas; }
+	.ap-member { border-inline-end-color: Canvas; }
+	/* Each status keeps its shape (its mask); only the color is the system's. */
+	.ap-presence { forced-color-adjust: none; background: CanvasText; }
+}
