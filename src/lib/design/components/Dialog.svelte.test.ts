@@ -46,6 +46,8 @@ describe('Dialog', () => {
 
 	it('while locked, ignores Escape, its close button and the backdrop', () => {
 		const { dialog, state } = render({ locked: true, backdropCloses: true });
+		// The browser's own close requests too (Escape again, Android's back), where it knows `closedby`.
+		expect(dialog.getAttribute('closedby')).toBe('none');
 		expect(escape(dialog)).toBe(false);
 		expect(dom.button('Close', dialog).disabled).toBe(true);
 		press(dialog);
@@ -54,6 +56,7 @@ describe('Dialog', () => {
 		// Unlocked again, Escape closes it.
 		state.locked = false;
 		flushSync();
+		expect(dialog.hasAttribute('closedby')).toBe(false);
 		expect(escape(dialog)).toBe(true);
 		expect(state.open).toBe(false);
 	});
