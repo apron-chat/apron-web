@@ -1584,8 +1584,8 @@ pre.ap-termviewer-text { width: 80ch; font-family: var(--font-mono); font-size: 
 .ap-docviewer-page .ap-msg-text p + p { margin-top: var(--space-3); }
 .ap-docviewer-page .ap-msg-text :is(ul, ol, pre, blockquote, .ap-table) { margin-block: var(--space-3); }
 .ap-docviewer-page .ap-msg-text hr { margin: var(--space-6) 0; border: 0; border-top: 1px solid var(--line); }
-/* An image in a message's Markdown (§5.5) fits its column, in the timeline as in the document viewer. */
-.ap-msg-text img { max-width: 100%; height: auto; }
+/* An image in a message's Markdown (§5.5) fits its column, in the timeline as in the document viewer; a custom emoji keeps its line's height. */
+.ap-msg-text img:not(.ap-cemoji) { max-width: 100%; height: auto; }
 .ap-docviewer-status { display: flex; flex-direction: column; align-items: center; gap: var(--space-3); padding: var(--space-8) var(--space-4); text-align: center; text-wrap: balance; color: var(--ap-tone, var(--viewer-ink-muted)); }
 .ap-docviewer-status p { margin: 0; }
 .ap-docviewer-download { text-decoration: none; }
@@ -2181,8 +2181,8 @@ a.ap-linkchip-elsewhere:hover { background: var(--hover); }
  * applies otherwise.
  */
 @media (forced-colors: active) {
-	.ap-msg:focus-visible { outline: 2px solid CanvasText; outline-offset: -2px; }
-	:is(.ap-mpick-active, .ap-font-option-active, .ap-pick-row-active, .ap-search-row-active, .ap-seg-on, .ap-choice-on, .ap-preferences-nav button[aria-current='page']) { outline: 2px solid Highlight; outline-offset: -2px; }
+	/* The focus ring's own outline, inset: forced colors draw it in the system's color. */
+	.ap-msg:focus-visible, :is(.ap-mpick-active, .ap-font-option-active, .ap-pick-row-active, .ap-search-row-active, .ap-seg-on, .ap-choice-on, .ap-preferences-nav button[aria-current='page']) { outline: var(--focus-ring); outline-offset: var(--focus-offset-inset); }
 	:is(.ap-room-active, .ap-msg-mention)::before, .ap-msg:focus-visible::before, .ap-shell-handle::after { forced-color-adjust: none; background: CanvasText; }
 	.ap-shell-handle:is(:hover, :focus-visible)::after, .ap-shell-handle-resizing::after { background: Highlight; }
 	.ap-switch { border: 1px solid ButtonText; }

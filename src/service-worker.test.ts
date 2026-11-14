@@ -34,7 +34,8 @@ const subscribe = vi.fn(async () => ({}));
 const cached = new Map<string, unknown>();
 const key = (request: unknown) => (typeof request === 'string' ? request : (request as { url: string }).url);
 const cache = {
-	addAll: vi.fn(async (paths: string[]) => paths.forEach((path) => cached.set(path, `cached ${path}`))),
+	/** Installing: the worker asks for each file as a low-priority Request; kept here by its path, as the worker looks it up. */
+	addAll: vi.fn(async (requests: Request[]) => requests.map((request) => new URL(request.url).pathname).forEach((path) => cached.set(path, `cached ${path}`))),
 	match: async (request: unknown) => cached.get(key(request)),
 	put: vi.fn(async (request: unknown, response: unknown) => void cached.set(key(request), response))
 };
@@ -215,9 +216,22 @@ describe('the service worker', () => {
 	});
 
 	it('installs the app’s files but not the themes’ fonts, and keeps a font once a theme loads it', async () => {
+		// Node's Request drops `priority`; this one keeps what the worker asked for.
+		const NodeRequest = Request;
+		vi.stubGlobal('Request', class extends NodeRequest {
+			readonly priority?: string;
+			constructor(input: RequestInfo | URL, init?: RequestInit) {
+				super(input, init);
+				this.priority = init?.priority;
+			}
+		});
 		await dispatch('install', {});
+		vi.stubGlobal('Request', NodeRequest);
 		// Nor what the app never loads: the link preview's image, robots.txt, and a preview build's own page.
-		expect(cache.addAll).toHaveBeenCalledWith(['/app/_app/immutable/start.js', '/app/icon-192.png', '/app/']);
+		const installed: Request[] = cache.addAll.mock.calls[0][0];
+		expect(installed.map((request) => request.url)).toEqual(['https://apron.example/app/_app/immutable/start.js', 'https://apron.example/app/icon-192.png', 'https://apron.example/app/']);
+		// Behind whatever the page open as it installs is fetching.
+		expect(installed.map((request) => (request as Request & { priority?: string }).priority)).toEqual(['low', 'low', 'low']);
 		const font = { method: 'GET', mode: 'cors', url: 'https://apron.example/app/_app/immutable/assets/nunito-latin.abc.woff2' };
 		const fetched = { ok: true, clone: () => 'kept font' };
 		vi.stubGlobal('fetch', vi.fn(async () => fetched));

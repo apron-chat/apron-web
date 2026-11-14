@@ -42,7 +42,7 @@ const ASSETS = new Set([...build, ...files, ...prerendered].filter((path) => !pa
 sw.addEventListener('install', (event) => {
 	// Take over right away: older tabs keep finding their files in the older caches. Low priority: the page open as this
 	// installs (a first visit, or a deploy) fetches its own chunks, avatars and images first, rather than queued behind these.
-	event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll([...ASSETS].map((path) => new Request(path, { priority: 'low' })))).then(() => sw.skipWaiting()));
+	event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll([...ASSETS].map((path) => new Request(new URL(path, sw.location.origin), { priority: 'low' })))).then(() => sw.skipWaiting()));
 });
 
 sw.addEventListener('activate', (event) => {

@@ -42,6 +42,7 @@
 {:else if video}
 	<figure data-testid={testid} class={['ap-embed', 'ap-embed-figure', className]}>
 		<!-- svelte-ignore a11y_media_has_caption -->
+		<!-- spread: `loading`, which Svelte's types don't know on <video> yet (see lazyMedia) -->
 		<video class="ap-embed-media" src={video} poster={image} controls preload="metadata" {...lazyMedia} style={ogRatio(og.video) || ogRatio(og.image)}></video>
 		<figcaption class="ap-embed-caption"><a href={url} download={title} target="_blank" rel="noreferrer noopener">{title}</a></figcaption>
 	</figure>
