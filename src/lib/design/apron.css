@@ -527,7 +527,9 @@ a.ap-embed-card:hover { background: var(--hover); }
 /* One row, which scrolls sideways where the pane is too narrow for every button (a phone), rather than wrapping under the view switch. */
 .ap-composer-format { display: flex; align-items: center; gap: var(--space-0_5); min-width: 0; overflow-x: auto; scrollbar-width: none; }
 .ap-composer-format > * { flex: none; }
-.ap-composer-format-sep { width: 1px; height: var(--space-4); margin: 0 var(--space-1); background: var(--line); }
+.ap-composer-format-group { display: flex; align-items: center; gap: var(--space-0_5); }
+/* A border, not a background, which forced colors would paint as the page. */
+.ap-composer-format-sep { width: 0; height: var(--space-4); margin: 0 var(--space-1); border-inline-start: 1px solid var(--line); }
 .ap-composer-full :is(.ap-composer-field, .ap-composer-recording, .ap-composer-rendered) { grid-area: body; align-self: stretch; min-height: 0; border-bottom: 1px solid var(--line); }
 .ap-composer-full .ap-composer-field { height: auto; max-height: none; overflow-y: auto; padding: var(--space-3) var(--space-4); }
 .ap-composer-full .ap-composer-recording { height: auto; padding: 0 var(--space-4); }
