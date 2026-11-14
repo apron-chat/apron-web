@@ -969,7 +969,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 }
 
 /* EmptyState — the main pane, or a timeline, with nothing in it: a title, a line on what to do, and a button */
-.ap-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-2); padding: var(--space-8); color: var(--ink-muted); text-align: center; }
+.ap-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-2); padding: var(--space-8); color: var(--ink-muted); text-align: center; text-wrap: balance; }
 .ap-empty-title { margin: 0; font-size: var(--text-title); line-height: var(--leading-title); font-weight: 600; color: var(--ink); }
 .ap-empty-detail { margin: 0; }
 .ap-empty .ap-btn { margin-top: var(--space-2); }
@@ -1394,7 +1394,7 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 /* As the app's whole page: the viewport's height. */
 .ap-connect-page { height: 100dvh; }
 .ap-connect-card { display: flex; flex-direction: column; gap: var(--space-3); width: min(100%, 400px); box-sizing: border-box; padding: var(--space-6); background: var(--bg-100); border: 1px solid var(--line); border-radius: var(--radius-lg); }
-.ap-connect-title { margin: 0; font-size: 28px; line-height: var(--leading-display); font-weight: 600; letter-spacing: -.02em; }
+.ap-connect-title { margin: 0; font-size: 28px; line-height: var(--leading-display); font-weight: 600; letter-spacing: -.02em; text-wrap: balance; }
 .ap-connect-tag { margin: calc(-1 * var(--space-1_5)) 0 var(--space-1); font-size: var(--text-field); line-height: var(--leading-field); color: var(--ink-muted); }
 .ap-field-mono { font-family: var(--font-mono); font-size: var(--text-ui); }
 /* The server's welcome (§3.2): its Markdown, rendered and sanitized like a message, above the sign-in fields. */
@@ -1482,7 +1482,7 @@ dialog:modal, .ap-dialog-body { overscroll-behavior: contain; }
 /* That control as a word of the title: its size and weight, in the link's blue on its soft ground (as a mention chip), deeper under the pointer. */
 .ap-dialog-titlebtn { margin: 0; padding: 0 var(--space-1_5); border: 0; border-radius: var(--radius-sm); background: var(--denim-soft); color: var(--denim); font: inherit; font-size: var(--text-title); line-height: var(--leading-title); font-weight: 600; white-space: nowrap; cursor: pointer; }
 .ap-dialog-titlebtn:hover { background: color-mix(in srgb, var(--denim) 22%, var(--denim-soft)); }
-.ap-dialog-title { margin: 0; font-size: var(--text-title); line-height: var(--leading-title); font-weight: 600; overflow-wrap: anywhere; }
+.ap-dialog-title { margin: 0; font-size: var(--text-title); line-height: var(--leading-title); font-weight: 600; overflow-wrap: anywhere; text-wrap: balance; }
 .ap-dialog-sub { margin: 0; font-size: var(--text-ui); line-height: var(--leading-ui); color: var(--ink-muted); }
 .ap-dialog-close { flex: none; }
 .ap-dialog-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-6); }
@@ -1572,7 +1572,9 @@ pre.ap-termviewer-text { width: 80ch; font-family: var(--font-mono); font-size: 
 .ap-docviewer-stage:focus { outline: none; }
 .ap-docviewer-stage:focus-visible { outline: var(--focus-ring); outline-color: var(--viewer-ink); outline-offset: var(--focus-offset-inset); }
 .ap-docviewer-page { box-sizing: border-box; max-width: 46rem; margin: 0 auto; padding: var(--space-6) var(--space-8); border-radius: var(--radius-md); background: var(--bg-100); color: var(--ink); font-size: var(--text-body); line-height: var(--leading-body); }
-.ap-docviewer-page .ap-msg-text :is(h1, h2, h3, h4, h5, h6) { margin: 1.4em 0 0.5em; }
+.ap-docviewer-page .ap-msg-text :is(h1, h2, h3, h4, h5, h6) { margin: 1.4em 0 0.5em; text-wrap: balance; }
+/* A document's prose avoids a last line of one short word. */
+.ap-docviewer-page .ap-msg-text :is(p, li, blockquote) { text-wrap: pretty; }
 .ap-docviewer-page .ap-msg-text :is(h1, h2) { padding-bottom: 0.25em; border-bottom: 1px solid var(--line); }
 .ap-docviewer-page .ap-msg-text h1 { font-size: 1.75em; line-height: var(--leading-display); }
 .ap-docviewer-page .ap-msg-text h2 { font-size: 1.4em; line-height: var(--leading-title); }
@@ -1582,8 +1584,9 @@ pre.ap-termviewer-text { width: 80ch; font-family: var(--font-mono); font-size: 
 .ap-docviewer-page .ap-msg-text p + p { margin-top: var(--space-3); }
 .ap-docviewer-page .ap-msg-text :is(ul, ol, pre, blockquote, .ap-table) { margin-block: var(--space-3); }
 .ap-docviewer-page .ap-msg-text hr { margin: var(--space-6) 0; border: 0; border-top: 1px solid var(--line); }
-.ap-docviewer-page .ap-msg-text img { max-width: 100%; height: auto; }
-.ap-docviewer-status { display: flex; flex-direction: column; align-items: center; gap: var(--space-3); padding: var(--space-8) var(--space-4); text-align: center; color: var(--ap-tone, var(--viewer-ink-muted)); }
+/* An image in a message's Markdown (§5.5) fits its column, in the timeline as in the document viewer. */
+.ap-msg-text img { max-width: 100%; height: auto; }
+.ap-docviewer-status { display: flex; flex-direction: column; align-items: center; gap: var(--space-3); padding: var(--space-8) var(--space-4); text-align: center; text-wrap: balance; color: var(--ap-tone, var(--viewer-ink-muted)); }
 .ap-docviewer-status p { margin: 0; }
 .ap-docviewer-download { text-decoration: none; }
 @media (max-width: 560px) {
