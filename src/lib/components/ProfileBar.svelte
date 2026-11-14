@@ -570,7 +570,7 @@
 					<input class="ap-field" type="email" aria-label="Email address to add" placeholder="you@example.com" autocomplete="email" bind:value={addEmail.email} disabled={addEmail.busy} onkeydown={addEmailKeydown} />
 					<button class="ap-btn ap-btn-sm" type="button" disabled={addEmail.busy || !addEmail.email.trim()} onclick={continueAddEmail}>Send code</button>
 				{:else}
-					<input class="ap-field ap-field-mono" aria-label={addEmail.scheme === 'email' ? 'Code from the email' : 'Code from the sign-in page'} placeholder="Code" inputmode={addEmail.scheme === 'email' ? 'numeric' : 'text'} autocomplete="one-time-code" bind:value={addEmail.code} disabled={addEmail.busy} onkeydown={addEmailKeydown} />
+					<input class="ap-field ap-field-mono" aria-label={addEmail.scheme === 'email' ? 'Code from the email' : 'Code from the sign-in page'} placeholder="Code" inputmode={addEmail.scheme === 'email' ? 'numeric' : 'text'} autocomplete="one-time-code" autocapitalize="none" autocorrect="off" spellcheck="false" bind:value={addEmail.code} disabled={addEmail.busy} onkeydown={addEmailKeydown} />
 					<button class="ap-btn ap-btn-sm" type="button" disabled={addEmail.busy || !addEmail.code.trim()} onclick={continueAddEmail}>Add</button>
 				{/if}
 				<button class="ap-link" type="button" disabled={addEmail.busy} onclick={() => (addEmail = undefined)}>Cancel</button>

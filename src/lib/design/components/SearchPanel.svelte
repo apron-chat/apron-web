@@ -171,7 +171,7 @@
 			<input
 				id="{uid}-query" class="ap-field ap-search-input" type="search" bind:this={input} bind:value={query} onkeydown={keydown} oninput={moved} onkeyup={moved} onclick={moved} onselect={moved}
 				role="combobox" aria-autocomplete="list" aria-expanded={suggesting !== undefined || results.length > 0} aria-controls={suggesting?.list ?? listId} aria-activedescendant={suggesting ? suggesting.option : results.length ? `${listId}-${active}` : undefined}
-				{placeholder} autocomplete="off" spellcheck="false" dir="auto"
+				{placeholder} autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" dir="auto"
 			/>
 			{#if suggestions}{@render suggestions()}{/if}
 		</div>

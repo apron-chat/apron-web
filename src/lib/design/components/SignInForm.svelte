@@ -122,7 +122,7 @@
 			{#if sent}
 				<label class="ap-fieldlabel">Code
 					<!-- svelte-ignore a11y_autofocus -->
-					<input class="ap-field ap-field-mono" data-testid={codeTestid} bind:value={code} placeholder={sent.scheme === 'email' ? 'From the email' : 'From the sign-in page'} disabled={busy} inputmode={sent.scheme === 'email' ? 'numeric' : 'text'} autocomplete="one-time-code" spellcheck="false" autofocus />
+					<input class="ap-field ap-field-mono" data-testid={codeTestid} bind:value={code} placeholder={sent.scheme === 'email' ? 'From the email' : 'From the sign-in page'} disabled={busy} inputmode={sent.scheme === 'email' ? 'numeric' : 'text'} autocomplete="one-time-code" autocapitalize="none" autocorrect="off" spellcheck="false" autofocus />
 				</label>
 			{/if}
 			{#if askName}
