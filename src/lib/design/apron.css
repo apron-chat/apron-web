@@ -1749,8 +1749,8 @@ label.ap-pref-setting-title { color: var(--ink); font-weight: 600; cursor: point
  * - .ap-chip: a chip in running text (a mention, a room or a link). An inline block, as a button already is: one moves
  *   to the next line whole, and only one wider than its line wraps, inside its own box. Its padding is in em, so it
  *   scales with its text: .37em, about 22px around 15px text, its line's height; a margin as deep takes it back, so it
- *   never makes its line taller, and it sits centered on the capitals beside it. Text cut off at its box (a quote, a
- *   card's or preview's clamped text, a description) leaves room past its lines for the chips in it.
+ *   never makes its line taller, and it sits centered on the capitals beside it. A description, cut off at its box,
+ *   leaves room past its lines for the chips in it; text ended with an ellipsis keeps its chips inline (below).
  * - .ap-pill: a box --ap-pill-h tall, its border (--ap-pill-border) included, holding only its label.
  * - .ap-pill-label: the label of a pill that holds more (an emoji, an avatar, a button), which centers it as a flex
  *   item. Its box keeps .3em past the capitals and the baseline, for a label cut off at its box (ellipsized).
@@ -1758,11 +1758,18 @@ label.ap-pref-setting-title { color: var(--ink); font-weight: 600; cursor: point
  *   the baseline; without the cap unit, a usual cap height, .7em.
  */
 .ap-pill { display: inline-flex; align-items: center; justify-content: center; height: var(--ap-pill-h); box-sizing: border-box; white-space: nowrap; }
-.ap-inline-icon, .ap-media-ask-what::before { display: inline-block; width: var(--ap-icon-size); height: var(--ap-icon-size); vertical-align: calc((.7em - var(--ap-icon-size)) / 2); vertical-align: calc((1cap - var(--ap-icon-size)) / 2); }
+.ap-inline-icon, .ap-media-ask-what::before { display: inline-block; width: var(--ap-icon-size); height: var(--ap-icon-size); vertical-align: calc((1cap - var(--ap-icon-size)) / 2); }
+/* Without the cap unit, a usual cap height. (Not as a declaration before it: one holding var() is never dropped.) */
+@supports not (height: 1cap) { .ap-inline-icon, .ap-media-ask-what::before { vertical-align: calc((.7em - var(--ap-icon-size)) / 2); } }
 @supports (text-box: trim-both cap alphabetic) {
 	.ap-chip { --ap-chip-pad: .37em; display: inline-block; text-box: trim-both cap alphabetic; line-height: inherit; padding-block: var(--ap-chip-pad); margin-block: calc(-1 * var(--ap-chip-pad)); }
 	.ap-chip.ap-linkchip-elsewhere { padding-block: calc(var(--ap-chip-pad) - 1px); }
-	:is(.ap-reply-text, .ap-embed-desc, .ap-description-text) { padding-block: 2px; margin-block: -2px; }
+	/* Text ended with an ellipsis (a reply's quote, a preview's or link card's clamped text) hides an inline block that
+	   reaches past its end whole, name and all: a chip there stays inline, sized as without trimming, cut off mid-name. */
+	:is(.ap-reply-text, .ap-embed-desc) .ap-chip { display: inline; text-box: normal; padding-block: 1px; margin-block: 0; }
+	:is(.ap-reply-text, .ap-embed-desc) button.ap-chip { margin-block: -1px; line-height: var(--leading-ui); }
+	:is(.ap-reply-text, .ap-embed-desc) .ap-chip.ap-linkchip-elsewhere { padding-block: 0; }
+	.ap-description-text { padding-block: 2px; margin-block: -2px; }
 	.ap-pill { display: inline-block; height: auto; padding-block: calc((var(--ap-pill-h) - 2 * var(--ap-pill-border, 0px) - 1cap) / 2); text-box: trim-both cap alphabetic; }
 	.ap-pill-label { padding-block: .3em; margin-block: -.3em; text-box: trim-both cap alphabetic; }
 }

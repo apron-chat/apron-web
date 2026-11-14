@@ -2,7 +2,8 @@
 // mentions, room and link chips, a heading, a quote, a link card, reactions and role badges, read from an archive
 // (scenes/chips.jsonl, opened at /archive, as scene.apron.chat serves one); and from the preview's own server, what
 // only a signed-in app draws: unread counts, a thread's tag for mentions elsewhere, the composer's Command tag and a
-// pick chip. Each in the system face and in DejaVu Sans, whose room above its capitals differs most from it.
+// pick chip. Each in the system face and in DejaVu Sans (installed on most Linux; where it isn't, those shots fall back
+// to the system face), whose room above its capitals differs most from Inter's.
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { VIEWPORTS, fontsReady, openPreview, openRoom, parkPointer, press, pressButton, timeline, typeInComposer, wait } from '../lib/helpers.js';
@@ -37,13 +38,13 @@ async function unread(p) {
 	await p.evaluate(() => {
 		const server = /** @type {any} */ (window).__apronPreview;
 		server.post('engineering', 'ada', { text: '@preview_guest the deploy is yours.', mentions: ['preview_guest'] });
-		server.post('engineering', 'grace', { text: 'And @preview_guest, the review too.', mentions: ['preview_guest'] });
+		server.post('engineering', 'linus', { text: 'And @preview_guest, the review too.', mentions: ['preview_guest'] });
 		for (let n = 1; n <= 12; n++) server.post('engineering', 'linus', `Build ${n} of 12 passed.`);
 	});
 	await wait(p, 400);
 	// The first mention offers notifications, over the room list: answered, so the counts show.
 	const later = p.getByRole('button', { name: 'Not now' });
-	if (await later.isVisible()) await press(later);
+	if (await later.waitFor({ state: 'visible', timeout: 2000 }).then(() => true, () => false)) await press(later);
 	await wait(p, 200);
 }
 
@@ -77,7 +78,7 @@ const live = [
 		steps: async (p) => {
 			await pressButton(p, 'Add member');
 			await wait(p, 300);
-			// Someone the preview doesn't know, offered by @user_id: picked, a chip.
+			// Someone the preview doesn't know, offered as an ID ("Add by @user_id"): picked, a chip named as typed.
 			await p.keyboard.type('Hazel');
 			await wait(p, 300);
 			await press(p.getByRole('option').first());

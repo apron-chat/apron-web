@@ -190,8 +190,10 @@ describe('apron.css: labels centered on their capitals', () => {
 			}
 		return found;
 	}
-	/** The rules that style `name` itself: `.name`, or `tag.name`. */
-	const own = (name: string) => rules.filter((rule) => rule.selectors.some((selector) => new RegExp(`^(?:[a-z]+)?\\.${name}$`).test(selector)));
+	/** Where an element styles what its block would: the composer's chips aren't .ap-chip, and size themselves. */
+	const AWAY = ['.ap-composer-editable .ap-mention'];
+	/** The rules that style `name` itself, in any context: their selector ends in `.name` or `tag.name`. */
+	const own = (name: string) => rules.filter((rule) => rule.selectors.some((selector) => !AWAY.includes(selector) && new RegExp(`(?:^|[\\s>+~])(?:[a-z]+)?\\.${name}$`).test(selector)));
 	const owned = { 'ap-pill': ['display', 'height', 'padding', 'padding-block', 'padding-top', 'padding-bottom', 'box-sizing'], 'ap-pill-label': ['padding', 'padding-block', 'margin', 'margin-block', 'display'], 'ap-chip': ['display', 'padding', 'padding-block', 'padding-top', 'padding-bottom', 'margin-block'] };
 
 	it('leaves an element that takes a building block its size and colors: the block owns its display, height and block padding', () => {
@@ -218,7 +220,7 @@ describe('apron.css: labels centered on their capitals', () => {
 		'.ap-composer-recording': 'the recording’s "Recording" and its time'
 	};
 
-	it('centers a box of a fixed height on its label’s capitals: a pill, or a box whose label is an .ap-pill-label', () => {
+	it('centers a box of a fixed height on its label’s capitals: a pill, or a box whose component draws an .ap-pill-label', () => {
 		const boxes = rules
 			.filter(({ declarations: d }) => /^(?:\d+(?:\.\d+)?px|var\(--(?:control|chip)[\w-]*\))$/.test(d.get('height') ?? '') && (d.get('align-items') === 'center' || d.get('place-items') === 'center') && (d.has('font-size') || d.has('font')))
 			.flatMap((rule) => rule.selectors);
@@ -235,10 +237,13 @@ describe('apron.css: labels centered on their capitals', () => {
 		expect(own('ap-lock').some((rule) => rule.declarations.has('--ap-icon-size'))).toBe(true);
 	});
 
-	it('keeps the sizes main had where the browser can’t trim a box: a fallback for each building block', () => {
+	it('keeps a fallback for each building block, where a box can’t be trimmed or there is no cap unit', () => {
 		const fallback = css.slice(css.indexOf('@supports not (text-box: trim-both cap alphabetic)'));
 		expect(css).toContain('@supports (text-box: trim-both cap alphabetic)');
 		expect(fallback.length).toBeLessThan(css.length);
+		// An icon's: in a block of its own, since a declaration holding var() is never dropped for the one after it.
+		expect(css).toMatch(/@supports not \(height: 1cap\) \{ \.ap-inline-icon[^{]*\{ vertical-align: calc\(\(\.7em/);
+		expect(rules.find((rule) => rule.selectors.includes('.ap-inline-icon'))?.declarations.get('vertical-align')).toBe('calc((1cap - var(--ap-icon-size)) / 2)');
 		expect(rules.some((rule) => rule.selectors.includes('.ap-pill') && rule.declarations.get('height') === 'var(--ap-pill-h)')).toBe(true);
 		expect(fallback).toMatch(/\.ap-chip \{ padding-block: 2px; \}/);
 	});

@@ -11,7 +11,7 @@
   var link = function (keys, server) { return 'https://link.apron.chat/#server=' + (server || 'wss://server.apron.chat/') + '&' + keys; };
   // An Apron link written as its URL, as the page draws it in a body: a chip that says what it is (`directory.resolveLink`).
   var chip = function (keys, kind, label, detail, server) {
-    var classes = kind === 'elsewhere' ? 'ap-linkchip ap-linkchip-elsewhere' : 'ap-mention ap-mention-room ap-linkchip ap-linkchip-' + kind;
+    var classes = kind === 'elsewhere' ? 'ap-chip ap-linkchip ap-linkchip-elsewhere' : 'ap-chip ap-mention ap-mention-room ap-linkchip ap-linkchip-' + kind;
     return '<a class="' + classes + '" href="' + link(keys, server) + '">' + label + (detail ? '<span class="ap-linkchip-detail">' + detail + '</span>' : '') + '</a>';
   };
   var at = Date.parse('2026-10-24T14:05:00');

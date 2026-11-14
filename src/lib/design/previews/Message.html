@@ -27,7 +27,7 @@
   msg({ id: '5', sender: { user_id: 'deploy', name: 'Deploy', roles: ['bot'] }, time: '14:04', body: { html: 'Rolled out 1.4.2 to 3 of 3 regions.' },
     embeds: [{ key: '0', embed: { kind: 'upload', url: '#', title: 'rollout.log', og: { description: 'text/plain · 4 KB' } } }] });
   msg({ id: '6', sender: bob, time: '14:05', mention: true, pinged: true, caps: theirs,
-    body: { html: '<p><span class="ap-mention ap-mention-me" data-user-id="sam" title="@sam">@Sam</span> can you check the migration logs? <span class="ap-mention" data-user-id="dana" title="@dana">@Dana</span> already looked.</p>', markdown: true } });
+    body: { html: '<p><span class="ap-chip ap-mention ap-mention-me" data-user-id="sam" title="@sam">@Sam</span> can you check the migration logs? <span class="ap-chip ap-mention" data-user-id="dana" title="@dana">@Dana</span> already looked.</p>', markdown: true } });
   msg({ id: '7', sender: bob, time: '14:05', grouped: true, deleted: true });
   msg({ id: '8', sender: me, time: '14:06', body: { html: 'On it, pulling them up.' }, reply: { id: '6', name: bob.name, hue: bob.hue, snippet: [{ user_id: 'sam', name: 'Sam', me: true }, ' can you check the migration logs?'] }, caps: all });
   msg({ id: '9', sender: me, time: '14:06', grouped: true, body: { html: 'Looks like the lock timed out.' }, caps: all,
