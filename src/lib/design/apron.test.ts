@@ -176,7 +176,7 @@ describe('apron.css: only what the app renders', () => {
 
 describe('apron.css: labels centered on their capitals', () => {
 	const components = readdirSync(new URL('./components/', import.meta.url)).filter((name) => name.endsWith('.svelte'));
-	const sources = Object.fromEntries([
+	const sources: Record<string, string> = Object.fromEntries([
 		...components.map((name) => [name, readFileSync(new URL(`./components/${name}`, import.meta.url), 'utf8')]),
 		['markdown.ts', readFileSync(new URL('../protocol/markdown.ts', import.meta.url), 'utf8')]
 	]);
