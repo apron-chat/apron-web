@@ -1762,6 +1762,22 @@ button.ap-mention { padding-block: 2.5px; margin-block: -2.5px; font-family: inh
    inside its own box, rather than running out of the message. */
 :where(.ap-msg-text, .ap-description-text, .ap-welcome, .ap-form-hint) :not(pre) > code, .ap-mention { -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 button.ap-mention, a.ap-linkchip { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+/* Where the browser can trim a box to its letters, a chip is sized from them rather than from the font's box, whose
+   room above and below the letters differs from font to font, and between a button and a span: trimmed to the top of
+   its capitals and its baseline, the same padding above and below centers the name in any font, and centers the chip
+   on the text beside it. The padding is in em, so a chip scales with its text, but never more than leaves it as tall as
+   its line: (1lh - 1cap) / 2. A margin as deep takes it back, so a chip never makes its line taller. A box can be
+   trimmed only when it is a block, so every chip is an inline block, as a button already is: one moves to the next line
+   whole, and only one wider than its line wraps, inside its own box. Not in the composer, where an inline block would
+   hold the caret. Text cut off at its box leaves room past its lines for the chips in it, which reach a pixel or two
+   beyond the line where a font's capitals sit off its middle. Without trimming, the sizes above stay. */
+@supports (text-box: trim-both cap alphabetic) {
+	:is(.ap-mention, a.ap-linkchip):not(.ap-composer-editable *) { --ap-chip-pad: min(.4em, (1lh - 1cap) / 2);
+		display: inline-block; vertical-align: baseline; text-box: trim-both cap alphabetic; line-height: inherit;
+		padding-block: var(--ap-chip-pad); margin-block: calc(-1 * var(--ap-chip-pad)); }
+	a.ap-linkchip-elsewhere:not(.ap-composer-editable *) { padding-block: calc(var(--ap-chip-pad) - 1px); }
+	:is(.ap-reply-text, .ap-linkcard-text, .ap-embed-desc, .ap-description-text) { padding-block: 2px; margin-block: -2px; }
+}
 
 /* Shared autocomplete picker — above the composer while typing @…, #… or :… */
 .ap-mpick { position: absolute; inset-inline-start: var(--space-4); bottom: calc(100% + var(--space-1)); z-index: var(--z-menu); width: min(320px, calc(100% - 2 * var(--space-4))); max-height: 240px; overflow: auto; }
