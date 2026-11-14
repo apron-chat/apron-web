@@ -40,8 +40,9 @@ const NOT_THE_APPS = new Set([`${base}/og.png`, `${base}/robots.txt`, `${base}/_
 const ASSETS = new Set([...build, ...files, ...prerendered].filter((path) => !path.endsWith('/_app/version.json') && !isFont(path) && !NOT_THE_APPS.has(path)));
 
 sw.addEventListener('install', (event) => {
-	// Take over right away: older tabs keep finding their files in the older caches.
-	event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll([...ASSETS])).then(() => sw.skipWaiting()));
+	// Take over right away: older tabs keep finding their files in the older caches. Low priority: the page open as this
+	// installs (a first visit, or a deploy) fetches its own chunks, avatars and images first, rather than queued behind these.
+	event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll([...ASSETS].map((path) => new Request(path, { priority: 'low' })))).then(() => sw.skipWaiting()));
 });
 
 sw.addEventListener('activate', (event) => {
