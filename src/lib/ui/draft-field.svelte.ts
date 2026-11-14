@@ -11,7 +11,6 @@ import type { EmojiMartData } from '@emoji-mart/data';
 import { loadEmojiData } from './emoji-picker.svelte';
 import { directory } from './directory.svelte';
 import { enterAction, handheld } from './handheld';
-import { composing as isComposing } from '$lib/design/components/compose';
 import type { TextEdit } from './text-edit';
 
 /**
@@ -321,8 +320,9 @@ export class DraftField {
 
 	keydown = (event: KeyboardEvent): void => {
 		const completion = this.completion;
-		// A key the input method takes, as part of a composition: it sends nothing.
-		const composing = isComposing(event);
+		// A key the input method takes, as part of a composition: it sends nothing. compose.ts's `composing()`, written out
+		// here: this runs on every key typed, and the call costs the type-composer probes a call a key.
+		const composing = event.isComposing || event.keyCode === 229;
 		if (completion && !composing) {
 			if (event.key === 'Escape') {
 				event.preventDefault();

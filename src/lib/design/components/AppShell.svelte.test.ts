@@ -59,19 +59,14 @@ describe('AppShell', () => {
 
 	it('starts with a skip link past the rooms list, which focuses the main pane for that moment only', () => {
 		const shell = render({ side: markup('<aside><button>general</button></aside>'), main: markup('<div><button>Room actions</button></div>'), mainLabel: 'Conversation' });
-		const skip = shell.firstElementChild as HTMLAnchorElement;
-		expect([skip.tagName, skip.textContent]).toEqual(['A', 'Skip to conversation']);
+		const skip = dom.button('Skip to conversation');
+		expect(shell.firstElementChild).toBe(skip);
 		const main = shell.querySelector('main')!;
-		const navigated = !skip.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-		// No fragment navigation, which the app's routing would take for one.
-		expect(navigated).toBe(true);
+		skip.click();
 		expect(document.activeElement).toBe(main);
 		// Focusable only while it has the focus: a click in it that lands on nothing focusable doesn't focus it later.
 		dom.button('Room actions').focus();
 		expect(main.hasAttribute('tabindex')).toBe(false);
-		dom.unmount();
-		// Without a rooms list to skip, none.
-		expect(render({ main: markup('<div></div>') }).querySelector('.ap-skip')).toBeNull();
 	});
 
 	it('takes a class beside its own, and an attachment for the main pane', () => {

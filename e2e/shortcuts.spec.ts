@@ -448,13 +448,13 @@ test('the first Tab shows a skip link past the rooms list, which takes the keybo
 	await preview.open();
 	const url = page.url();
 	await page.keyboard.press('Tab');
-	const skip = page.getByRole('link', { name: 'Skip to conversation' });
+	const skip = page.getByRole('button', { name: 'Skip to conversation' });
 	await expect(skip).toBeFocused();
 	const box = (await skip.boundingBox())!;
 	expect(box.width).toBeGreaterThan(40);
 	await page.keyboard.press('Enter');
 	await expect(page.getByRole('main', { name: 'Conversation' })).toBeFocused();
-	// Not a navigation: the room stays in the address.
+	// Not a navigation: the address stays as it was.
 	expect(page.url()).toBe(url);
 	await page.keyboard.press('Tab');
 	await expect(page.getByRole('button', { name: 'Room actions' })).toBeFocused();

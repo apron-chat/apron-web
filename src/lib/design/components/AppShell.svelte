@@ -14,8 +14,6 @@
 		mainLabel?: string;
 		/** An attachment for the main pane's `<main>`, such as one taking files dropped on it. */
 		mainAttach?: Attachment<HTMLElement>;
-		/** The skip link's words: the shell's first Tab stop, shown only then, which takes the keyboard past the rooms list to the main pane. */
-		skipLabel?: string;
 		/** The MemberList: a column of its own with `membersWide`, else over the conversation, sliding in from the inline end (the right, or the left under `dir="rtl"`). */
 		members?: Snippet;
 		/** The rooms list's <PanelToggle>, at its inner edge: at the end of its header, or the start of the room's once it's shut, which keep clear of it. */
@@ -73,7 +71,7 @@
 		class?: ClassValue;
 	}
 	let {
-		rail, side, main, mainLabel, mainAttach, skipLabel = 'Skip to conversation', members, sideToggle, sideHandle, membersToggle, membersHandle, nudge, children,
+		rail, side, main, mainLabel, mainAttach, members, sideToggle, sideHandle, membersToggle, membersHandle, nudge, children,
 		sideCollapsed = false, membersOpen = false, membersWide = false, pane, peek = false, onpeek, sideWidth, membersWidth, resizing = false, slides = false, viewport = false,
 		class: className
 	}: Props = $props();
@@ -84,7 +82,6 @@
 	 * from the link, its sibling, rather than kept with `bind:this`, whose effect would cost calls on every update.
 	 */
 	function skipToMain(event: MouseEvent): void {
-		event.preventDefault();
 		const pane = (event.currentTarget as HTMLElement).parentElement?.querySelector<HTMLElement>(':scope > main');
 		if (!pane) return;
 		pane.tabIndex = -1;
@@ -160,8 +157,12 @@
 	style={shellStyle}
 	{@attach swipeBack}
 >
-	<!-- Before everything else in the shell, and seen only when focused; its href says where it goes, the click does it (a fragment would be a navigation). -->
-	{#if main && side}<a class="ap-skip" href="#conversation" onclick={skipToMain}>{skipLabel}</a>{/if}
+	<!--
+		The skip link: the shell's first Tab stop, seen only when focused, past the rooms list to the main pane. A button,
+		as it navigates nowhere (a fragment would be, and the app routes by it). Static, with no block or prop, which cost
+		~140 calls at every start; a shell without a main pane (a preview) has nowhere to skip to and it does nothing.
+	-->
+	<button type="button" class="ap-skip" onclick={skipToMain}>Skip to conversation</button>
 	{@render rail?.()}
 	{@render sideToggle?.()}
 	{@render side?.()}
