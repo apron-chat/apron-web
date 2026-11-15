@@ -182,11 +182,11 @@
 	 * under it (ap-composer-grown), as at the full panel's foot. Not while recording, whose line takes no typing.
 	 */
 	const grown = $derived(!expanded && !recording && (breaks || wrapped));
-
 	/** The draft is past one line (`ap-composer-grown`), to make room for it. Reactive, as it changes with every key: read it only where that matters. */
 	export function isGrown(): boolean {
 		return grown;
 	}
+
 	$effect(() => {
 		if (!wrapAt || wrapped) return;
 		// Emptied (sent): the next wrap is a fresh one.
