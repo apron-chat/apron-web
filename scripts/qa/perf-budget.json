@@ -47,8 +47,8 @@
 		},
 		"send-message-busy": {
 			"layouts": 38,
-			"styleRecalcs": 16,
-			"calls": 278244
+			"styleRecalcs": 13,
+			"calls": 274559
 		},
 		"sidebar-collapse": {
 			"layouts": 3,
@@ -83,12 +83,12 @@
 		"type-composer-role": {
 			"layouts": 46,
 			"styleRecalcs": 1,
-			"calls": 52561
+			"calls": 44653
 		},
 		"type-composer": {
 			"layouts": 36,
 			"styleRecalcs": 6,
-			"calls": 36588
+			"calls": 30315
 		},
 		"hover-messages": {
 			"layouts": 7,

@@ -151,7 +151,7 @@ describe('Composer', () => {
 		expect(form().classList.contains('ap-composer-grown')).toBe(true);
 		dom.unmount();
 		// The field's own word wins over the draft's text, which it then doesn't read on every key.
-		render({ value: 'one line', multiline: true });
+		render({ value: 'one line', facts: { blank: false, multiline: true, command: false, linked: false } });
 		expect(form().classList.contains('ap-composer-grown')).toBe(true);
 		dom.unmount();
 		// Not while recording, nor as the full panel, which lay out their own.

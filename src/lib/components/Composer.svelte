@@ -3,7 +3,7 @@
 	import type { MentionPerson } from '$lib/protocol/markdown';
 	import type { RoomSuggestion } from '$lib/ui/room-autocomplete';
 	import { emojiAnchor, emojiPicker } from '$lib/ui/emoji-picker.svelte';
-	import { isCommand } from '$lib/ui/commands';
+	import { draftFacts } from '$lib/design/components/compose';
 	import { mediaLimit, type MediaTypes } from '$lib/protocol/client';
 	import { MARKDOWN_EXTENSIONS } from '$lib/protocol/client-views';
 	import { linkPreviews } from '$lib/ui/link-previews';
@@ -148,21 +148,22 @@
 	let draftType = $derived(uploadLimits ? DRAFT_TYPES.find((type) => mediaLimit(uploadLimits, type)) : 'text/markdown');
 	/** Voice messages need uploads, a type the server takes, and a browser that can record. */
 	let canRecord = $derived(canUpload && voice !== undefined && Boolean(navigator.mediaDevices?.getUserMedia));
-	let command = $derived(canCommand && isCommand(value) && !live);
+	/** What the field tells of the draft as it changes (`DraftField.facts`), where reading it would ask again on every key; the draft's own until the field is drawn. */
+	let facts = $derived(field?.facts() ?? draftFacts(value));
+	let command = $derived(canCommand && facts.command && !live);
 	let emojiOpen = $derived(emojiPicker.isOpenFor(emojiButton));
 	/**
 	 * Expand is offered once the draft has a second line and can be written; the design system's Composer leaves it
-	 * out for a command or live text, as it already tells those apart on every key. The field says when the draft
-	 * gains or loses a line (`multiline`), so typing on a line doesn't ask again.
+	 * out for a command or live text.
 	 */
-	let canExpand = $derived(!expanded && !disabled && (field?.multiline() ?? false));
+	let canExpand = $derived(!expanded && !disabled && facts.multiline);
 	/** Bumped when a fetched preview arrives, so the previews below are redrawn. */
 	let previewsArrived = $state(0);
 	/**
 	 * The draft where it may hold a link (every one previewed has `://`), else empty: what link previews read, so a
 	 * draft without a link doesn't look for them again on every key.
 	 */
-	let linkText = $derived(value.includes('://') ? value : '');
+	let linkText = $derived(facts.linked ? value : '');
 	/** The link embeds the draft will be sent with (a command takes none). */
 	let previews = $derived.by(() => {
 		void previewsArrived;
@@ -182,9 +183,8 @@
 		return () => clearTimeout(timer);
 	});
 	// A sent or cleared draft forgets which previews were removed.
-	let blank = $derived(!value.trim());
 	$effect(() => {
-		if (blank && untrack(() => dismissed.length)) dismissed = [];
+		if (facts.blank && untrack(() => dismissed.length)) dismissed = [];
 	});
 
 	export function focus(): void {
@@ -360,7 +360,7 @@
 	{previewing}
 	onpreview={(on) => (previewing = on)}
 	{sendKeys}
-	multiline={field?.multiline() ?? false}
+	{facts}
 	expandTestid="composer-expand"
 	panelTestid="composer-panel"
 />
