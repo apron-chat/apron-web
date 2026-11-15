@@ -1580,7 +1580,7 @@ pre.ap-termviewer-text { width: 80ch; font-family: var(--font-mono); font-size: 
 /* The document has focus once it opens (to scroll it by keys): from the keyboard, a ring just inside the stage. */
 .ap-docviewer-stage:focus { outline: none; }
 .ap-docviewer-stage:focus-visible { outline: var(--focus-ring); outline-color: var(--viewer-ink); outline-offset: var(--focus-offset-inset); }
-.ap-docviewer-page { box-sizing: border-box; max-width: 46rem; margin: 0 auto; padding: var(--space-6) var(--space-8); border-radius: var(--radius-md); background: var(--bg-100); color: var(--ink); font-size: var(--text-body); line-height: var(--leading-body); }
+.ap-docviewer-page { box-sizing: border-box; max-width: 52rem; margin: 0 auto; padding: var(--space-6) var(--space-8); border-radius: var(--radius-md); background: var(--bg-100); color: var(--ink); font-size: var(--text-body); line-height: var(--leading-body); }
 .ap-docviewer-page .ap-msg-text :is(h1, h2, h3, h4, h5, h6) { margin: 1.4em 0 0.5em; text-wrap: balance; }
 /* A document's prose avoids a last line of one short word. */
 .ap-docviewer-page .ap-msg-text :is(p, li, blockquote) { text-wrap: pretty; }
