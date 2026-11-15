@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { findLinks, findUrls, LinkPreviews, previewLink, trimUrl } from './link-previews';
+import { findLinks, findUrls, LinkPreviews, previewLink, samePreviews, trimUrl } from './link-previews';
 import type { Site } from './link-sites';
 
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
@@ -38,6 +38,32 @@ describe('finding links', () => {
 		expect(findLinks('https://x.com/Jack/status/20 https://x.com/jack/status/20 https://github.com/a/b/commit/ABCDEF1 https://github.com/a/b/commit/abcdef1')).toHaveLength(2);
 		expect(findLinks('[https://github.com/a/b/pull/1](https://github.com/a/b/pull/1) (https://github.com/a/b/pull/2)and').map((link) => link.url)).toEqual(['https://github.com/a/b/pull/1', 'https://github.com/a/b/pull/2']);
 		expect(findLinks(text, ['https://github.com/a/b/issues/2']).map((link) => link.url)).toEqual(['https://github.com/a/b/pull/1', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'https://github.com/e/f']);
+	});
+
+	it('reads each URL as written once, as a draft is typed on: only the one being typed into is read again', () => {
+		const match = vi.fn((url: URL) => (url.pathname.startsWith('/p/') ? { url: url.href, api: url.href, preview: () => undefined } : undefined));
+		const sites: Record<string, Site> = { 'a.example': { name: 'A', match } };
+		const draft = 'see https://a.example/p/1 and https://a.example/q/2 then https://a.example/p/3';
+		expect(findLinks(draft, [], sites).map((link) => link.url)).toEqual(['https://a.example/p/1', 'https://a.example/p/3']);
+		expect(match).toHaveBeenCalledTimes(3);
+		// A key after the links: none of them is read again.
+		expect(findLinks(`${draft} ok`, [], sites)).toEqual(findLinks(draft, [], sites));
+		expect(match).toHaveBeenCalledTimes(3);
+		// A key in the last one: only it is.
+		expect(findLinks(draft.replace('/p/3', '/p/34'), [], sites).map((link) => link.url)).toEqual(['https://a.example/p/1', 'https://a.example/p/34']);
+		expect(match).toHaveBeenCalledTimes(4);
+		// Another set of sites reads it afresh.
+		expect(findLinks(draft, [], { 'a.example': { name: 'A', match: () => undefined } })).toEqual([]);
+	});
+
+	it('tells the same previews apart from new ones by link and details', () => {
+		const og = { title: 'One' };
+		const one = { kind: 'link' as const, url: 'https://a.example/1', og };
+		expect(samePreviews([one], [{ ...one }])).toBe(true);
+		expect(samePreviews([one], [{ ...one, og: { title: 'One' } }])).toBe(false);
+		expect(samePreviews([one], [{ ...one, url: 'https://a.example/2' }])).toBe(false);
+		expect(samePreviews([one], [])).toBe(false);
+		expect(samePreviews([], [])).toBe(true);
 	});
 });
 

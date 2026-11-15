@@ -83,7 +83,7 @@
 		"type-composer-role": {
 			"layouts": 46,
 			"styleRecalcs": 1,
-			"calls": 44653
+			"calls": 31773
 		},
 		"type-composer": {
 			"layouts": 36,
@@ -112,7 +112,7 @@
 	},
 	"production": {
 		"startupFiles": 13,
-		"startupJsKB": 860.5,
-		"startupJsBrotliKB": 242.5
+		"startupJsKB": 869.3,
+		"startupJsBrotliKB": 244.8
 	}
 }

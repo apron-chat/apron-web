@@ -6,7 +6,8 @@
 	import { draftFacts } from '$lib/design/components/compose';
 	import { mediaLimit, type MediaTypes } from '$lib/protocol/client';
 	import { MARKDOWN_EXTENSIONS } from '$lib/protocol/client-views';
-	import { linkPreviews } from '$lib/ui/link-previews';
+	import { linkPreviews, samePreviews } from '$lib/ui/link-previews';
+	import type { Embed as LinkEmbed } from '$lib/protocol/types';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { loadableOg } from './embeds/og';
 	import { pastedFiles } from '$lib/ui/file-transfer';
@@ -24,6 +25,8 @@
 
 	/** How long typing pauses before the draft's links are looked up; a paste looks them up at once. */
 	const PREVIEW_TYPING_PAUSE_MS = 800;
+	/** No link previews: one array, so a draft without them hands the design system's Composer the same one on every key. */
+	const NO_PREVIEWS: LinkEmbed[] = [];
 	/** What a clip may be recorded as where the server states the types it takes, by preference. */
 	const VOICE_TYPES = ['audio/webm', 'audio/ogg', 'audio/mp4'];
 	/** What an embedded draft goes as where the server states the types it takes, by preference: its name says Markdown either way. */
@@ -164,12 +167,14 @@
 	 * draft without a link doesn't look for them again on every key.
 	 */
 	let linkText = $derived(facts.linked ? value : '');
+	/** The previews last found: kept while typing finds the same ones, so their cards aren't drawn again on every key. */
+	let lastPreviews: LinkEmbed[] = NO_PREVIEWS;
 	/** The link embeds the draft will be sent with (a command takes none). */
 	let previews = $derived.by(() => {
 		void previewsArrived;
-		if (!linkText || command || disabled) return [];
-		const embeds = linkPreviews.embeds(linkText, dismissed);
-		return embeds.length && live ? [] : embeds;
+		const embeds = !linkText || command || disabled ? NO_PREVIEWS : linkPreviews.embeds(linkText, dismissed);
+		const next = embeds.length && live ? NO_PREVIEWS : embeds;
+		return (lastPreviews = samePreviews(lastPreviews, next) ? lastPreviews : next);
 	});
 	/** Those as the design system's Composer takes them: their pictures only from where link previews may load from (each is drawn by `preview` below, which asks the same). */
 	let previewCards = $derived(previews.map((embed) => ({ ...embed, og: loadableOg(embed.og, directory.mediaGate) })));
