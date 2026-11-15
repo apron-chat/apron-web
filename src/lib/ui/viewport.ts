@@ -36,14 +36,18 @@ export function keyboardFit(viewport: VisualViewportLike, layoutHeight: number):
 
 /**
  * Keeps `--app-height`, `--app-top` and `data-keyboard` on the root element up
- * to date with the keyboard; all three are absent while it's down. Returns the
- * cleanup.
+ * to date with the keyboard; all three are absent while it's down. `onchange`
+ * hears the height the app takes, from the start and as it changes: the
+ * window's, or what a keyboard leaves of it. Returns the cleanup.
  */
-export function trackKeyboard(root: HTMLElement = document.documentElement): () => void {
+export function trackKeyboard(onchange?: (height: number) => void, root: HTMLElement = document.documentElement): () => void {
 	const viewport = window.visualViewport;
 	if (!viewport) return () => {};
+	let height: number | undefined;
 	const update = () => {
 		const fit = keyboardFit(viewport, root.clientHeight);
+		const now = fit?.height ?? root.clientHeight;
+		if (now !== height) onchange?.((height = now));
 		if (fit) {
 			root.style.setProperty('--app-height', `${fit.height}px`);
 			root.style.setProperty('--app-top', `${fit.top}px`);

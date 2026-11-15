@@ -110,6 +110,7 @@
 	/** The field: chips and autocomplete, as in the message editor. */
 	let field = $state<MessageField | undefined>();
 	let emojiButton = $state<HTMLButtonElement | undefined>();
+	let design = $state<DesignComposer | undefined>();
 	const recorder = new VoiceRecorder();
 	/**
 	 * The full panel, for writing at length, with formatting: Expand offers it once the draft has a second line. Its formatting and
@@ -188,6 +189,16 @@
 
 	export function focus(): void {
 		field?.focus();
+	}
+
+	/** The full panel is open, to make room for it. Reactive. */
+	export function isExpanded(): boolean {
+		return expanded;
+	}
+
+	/** The draft is past one line, to make room for it. Reactive, as it changes with every key: read it only where that matters. */
+	export function isGrown(): boolean {
+		return design?.isGrown() ?? false;
 	}
 
 	/** Puts a mention chip for this user where the caret was (else at the end), as picking them would, and focuses the field. */
@@ -342,6 +353,7 @@
 	onexpand={canExpand ? expand : undefined}
 	onattachdraft={canUpload && draftType && !live && !command ? attachDraft : undefined}
 	{expanded}
+	bind:this={design}
 	oncollapse={() => setExpanded(false)}
 	toolbar={formatting}
 	{rendered}

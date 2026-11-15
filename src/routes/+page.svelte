@@ -149,6 +149,12 @@
 	const THREADS_WAIT_MS = 3000;
 	/** The shortest gap between listings made because the pane has no members. */
 	const MEMBERS_RETRY_MS = 10_000;
+	/**
+	 * A window shorter than this has no room for the header, a room's description at its five and a half lines, a draft
+	 * at the composer's 200px and three lines of the timeline (about 44 + 150 + 270 + 96): the description makes way for
+	 * the draft. An iPhone SE's with its keyboard up is 330px, a large phone's 590px or so, and a tablet's more.
+	 */
+	const SHORT_PANE_PX = 560;
 
 	const session = new SessionView();
 	const feedback = new FeedbackState();
@@ -435,6 +441,8 @@
 	let memberRowsKept = false;
 	let memberRowsDrawn = $derived(firstScreenDrawn || (memberRowsKept ||= memberListOpen));
 	let composer = $state<Composer | undefined>();
+	/** The height the app takes (`trackKeyboard`): the window's, or what an on-screen keyboard leaves of it. */
+	let appHeight = $state(Infinity);
 	let memberListToggle = $state<PanelToggle | undefined>();
 	/** The room your typing indicator shows in, and the timer that ends it there 5 s after the last keystroke. */
 	let typingIn: { room: string; timer: ReturnType<typeof setTimeout> } | undefined;
@@ -786,6 +794,13 @@
 	let descriptionPutAway = $derived(Boolean(editTarget?.description && descriptionHidden(hiddenDescriptions, draftKey(editTarget.id), editTarget.description)));
 	/** The open room's or thread's description, pinned under the header until its × puts it away (and again once it's edited). */
 	let pinnedDescription = $derived(editTarget?.description && !descriptionPutAway ? { id: editTarget.id, description: editTarget.description } : undefined);
+	/**
+	 * The pinned description makes way, for now (not put away), while the composer needs its room: as the full panel, whose
+	 * timeline keeps its few lines and its foot in view, or past one line in a short window (a phone's, its keyboard up).
+	 * Whether it is past one line is asked only in a short window, as it is asked again with every key. With no composer
+	 * (a selection, a read-only pane), it stays.
+	 */
+	let descriptionMakesWay = $derived(Boolean(composer?.isExpanded() || (appHeight < SHORT_PANE_PX && composer?.isGrown())));
 	/** Adding and removing other members of the open pane's room (§4.2.2), until the server says it can't. */
 	let canChangeMembers = $derived(session.canManageRooms && !session.readOnly && paneSteady);
 	/**
@@ -1183,7 +1198,7 @@
 	// At the latest while pinned there, anchored at the pane's bottom edge, and watching whether the latest shows.
 	viewport.watchLatest();
 
-	onMount(() => trackKeyboard());
+	onMount(() => trackKeyboard((height) => (appHeight = height)));
 
 	onMount(() => {
 		passkeyUnavailable = passkeySupportError();
@@ -3644,7 +3659,7 @@
 				/>
 			{/if}
 
-			{#if pinnedDescription}
+			{#if pinnedDescription && !descriptionMakesWay}
 				{@const pinned = pinnedDescription}
 				{#key pinned.id}
 					<ThreadDescription description={pinned.description} thread={Boolean(activeThread)} onopenroom={openMentionedRoom} ondismiss={() => (hiddenDescriptions = hideDescription(hiddenDescriptions, draftKey(pinned.id), pinned.description))} />
