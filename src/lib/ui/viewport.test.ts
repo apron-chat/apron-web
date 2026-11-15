@@ -25,11 +25,11 @@ describe('fitting the app to the keyboard', () => {
 describe('hearing the keyboard', () => {
 	afterEach(() => vi.unstubAllGlobals());
 
-	it('tells onchange the height the app takes as it changes, and that the keyboard is down once no longer tracked', () => {
+	it('tells onchange the height the app takes, from the start and as it changes', () => {
 		const viewport = Object.assign(new EventTarget(), { height: LAYOUT, offsetTop: 0, scale: 1 });
 		vi.stubGlobal('window', { visualViewport: viewport });
 		const root = { clientHeight: LAYOUT, style: { setProperty: () => {}, removeProperty: () => {} }, dataset: {} as DOMStringMap } as unknown as HTMLElement;
-		const heard: (number | undefined)[] = [];
+		const heard: number[] = [];
 		const stop = trackKeyboard((height) => heard.push(height), root);
 		const resize = (height: number) => {
 			viewport.height = height;
@@ -44,6 +44,6 @@ describe('hearing the keyboard', () => {
 		resize(LAYOUT);
 		resize(508);
 		stop();
-		expect(heard).toEqual([508, 470, undefined, 508, undefined]);
+		expect(heard).toEqual([LAYOUT, 508, 470, LAYOUT, 508]);
 	});
 });

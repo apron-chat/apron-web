@@ -23,7 +23,7 @@
 	import JumpBar from '$lib/components/JumpBar.svelte';
 	import TimelineMessage from '$lib/components/TimelineMessage.svelte';
 	import EmbedItem from '$lib/components/embeds/Embed.svelte';
-	import type { ComposerSize, Face, MessageEmbed, MessageHandlers, MessageTestids } from '$lib/design/components/types';
+	import type { Face, MessageEmbed, MessageHandlers, MessageTestids } from '$lib/design/components/types';
 	import { linkedRoomIn, messageView, sourceEmbed, type LinkedRoom, type MessageCaps, type MessageContext, type MessageRow, type MessageView } from '$lib/ui/message-view';
 	import { decorateCode } from '$lib/ui/copy-code';
 	import { emojiAnchor, emojiPicker, type EmojiPickerRequest } from '$lib/ui/emoji-picker.svelte';
@@ -106,7 +106,6 @@
 	import { idMillis } from '$lib/ui/time';
 	import { tabTitle } from '$lib/ui/attention';
 	import { trackKeyboard } from '$lib/ui/viewport';
-	import { innerHeight as windowHeight } from 'svelte/reactivity/window';
 	import { linkPreviews } from '$lib/ui/link-previews';
 	import { carriesFiles, fileDrop, pastedFiles } from '$lib/ui/file-transfer';
 	import { PaneDrafts, pageDrafts, type StagedFile } from '$lib/ui/pane-drafts.svelte';
@@ -442,10 +441,8 @@
 	let memberRowsKept = false;
 	let memberRowsDrawn = $derived(firstScreenDrawn || (memberRowsKept ||= memberListOpen));
 	let composer = $state<Composer | undefined>();
-	/** How much of the pane the composer takes (`ComposerSize`), which the room's description makes way for. */
-	let composerSize = $state<ComposerSize>('line');
-	/** The height left above an on-screen keyboard while one is up (`trackKeyboard`), which the app takes. */
-	let keyboardFitHeight = $state<number>();
+	/** The height the app takes (`trackKeyboard`): the window's, or what an on-screen keyboard leaves of it. */
+	let appHeight = $state(Infinity);
 	let memberListToggle = $state<PanelToggle | undefined>();
 	/** The room your typing indicator shows in, and the timer that ends it there 5 s after the last keystroke. */
 	let typingIn: { room: string; timer: ReturnType<typeof setTimeout> } | undefined;
@@ -800,8 +797,10 @@
 	/**
 	 * The pinned description makes way, for now (not put away), while the composer needs its room: as the full panel, whose
 	 * timeline keeps its few lines and its foot in view, or past one line in a short window (a phone's, its keyboard up).
+	 * Whether it is past one line is asked only in a short window, as it is asked again with every key. With no composer
+	 * (a selection, a read-only pane), it stays.
 	 */
-	let descriptionMakesWay = $derived(composerSize === 'full' || (composerSize === 'grown' && (keyboardFitHeight ?? windowHeight.current ?? Infinity) < SHORT_PANE_PX));
+	let descriptionMakesWay = $derived(Boolean(composer?.isExpanded() || (appHeight < SHORT_PANE_PX && composer?.isGrown())));
 	/** Adding and removing other members of the open pane's room (§4.2.2), until the server says it can't. */
 	let canChangeMembers = $derived(session.canManageRooms && !session.readOnly && paneSteady);
 	/**
@@ -1199,7 +1198,7 @@
 	// At the latest while pinned there, anchored at the pane's bottom edge, and watching whether the latest shows.
 	viewport.watchLatest();
 
-	onMount(() => trackKeyboard((height) => (keyboardFitHeight = height)));
+	onMount(() => trackKeyboard((height) => (appHeight = height)));
 
 	onMount(() => {
 		passkeyUnavailable = passkeySupportError();
@@ -3778,7 +3777,6 @@
 					bind:value={drafts.text}
 					bind:mentions={composerMentions}
 					bind:dismissed={drafts.dismissed}
-					onsize={(size) => (composerSize = size)}
 					placeholder={activeThread ? `Reply in ${threadTitle(activeThread)}` : `Message ${activeRoom.title}`}
 					holdSend={!canCompose || Boolean(paneMentionAdding)}
 					canUpload={session.capabilities['embed:upload'] && !composingLive}

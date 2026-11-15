@@ -11,7 +11,7 @@
 	import Paperclip from '@lucide/svelte/icons/paperclip';
 	import Smile from '@lucide/svelte/icons/smile';
 	import Square from '@lucide/svelte/icons/square';
-	import { onDestroy, untrack, type Snippet } from 'svelte';
+	import { untrack, type Snippet } from 'svelte';
 	import type { ClassValue } from 'svelte/elements';
 	import Attachments from './Attachments.svelte';
 	import Button from './Button.svelte';
@@ -20,7 +20,7 @@
 	import WritePreview from './WritePreview.svelte';
 	import { secondNow } from './clock.svelte';
 	import { isCommand } from './compose';
-	import type { ComposerField, ComposerSize, EmbedProps } from './types';
+	import type { ComposerField, EmbedProps } from './types';
 	import { LONG_WAIT_MS, roomName, waitLabel, waitWords } from './util';
 
 	interface Props {
@@ -140,8 +140,6 @@
 		 * to a row under it.
 		 */
 		multiline?: boolean;
-		/** How much of its pane it takes, as that changes, to make room for it; one line (`'line'`) once it is gone. */
-		onsize?: (size: ComposerSize) => void;
 		/** `data-testid` on the Expand button. */
 		expandTestid?: string;
 		/** `data-testid` on the full panel. */
@@ -151,7 +149,7 @@
 		room, placeholder, value = $bindable(''), oninput, onsend, canSend, waitUntil, canUpload, onfiles, accept, onattachdraft, disabled, canRecord, onrecord, onstoprecording, recording, recordingTime, thread, canCommand, live,
 		field, onemoji, emojiOpen, emojiButton = $bindable(), reply, replyText, oncancelreply, attachments, previews, preview, onremovepreview, picker,
 		replyTestid, attachmentsTestid, previewsTestid, fileInputTestid, commandTestid, liveTestid, emojiTestid, sendTestid, class: className,
-		onexpand, expanded = false, oncollapse, toolbar, rendered, previewing = false, onpreview, sendKeys, multiline, onsize, expandTestid, panelTestid
+		onexpand, expanded = false, oncollapse, toolbar, rendered, previewing = false, onpreview, sendKeys, multiline, expandTestid, panelTestid
 	}: Props = $props();
 
 	const ph = $derived(placeholder || (thread ? `Reply in ${roomName(thread.name, thread.thread, { thread: true })}` : `Message ${room || ''}`));
@@ -184,12 +182,11 @@
 	 * under it (ap-composer-grown), as at the full panel's foot. Not while recording, whose line takes no typing.
 	 */
 	const grown = $derived(!expanded && !recording && (breaks || wrapped));
-	const size: ComposerSize = $derived(expanded ? 'full' : grown ? 'grown' : 'line');
-	$effect.pre(() => {
-		const now = size;
-		untrack(() => onsize?.(now));
-	});
-	onDestroy(() => onsize?.('line'));
+
+	/** The draft is past one line (`ap-composer-grown`), to make room for it. Reactive, as it changes with every key: read it only where that matters. */
+	export function isGrown(): boolean {
+		return grown;
+	}
 	$effect(() => {
 		if (!wrapAt || wrapped) return;
 		// Emptied (sent): the next wrap is a fresh one.

@@ -19,7 +19,7 @@
 	import DesignComposer from '$lib/design/components/Composer.svelte';
 	import MessageField from './MessageField.svelte';
 	import { VoiceRecorder, type VoiceFormat } from '$lib/ui/voice-recorder.svelte';
-	import type { ComposerField, ComposerSize } from '$lib/design/components/types';
+	import type { ComposerField } from '$lib/design/components/types';
 	import { draftPreview, formatToolbar } from './lazy';
 
 	/** How long typing pauses before the draft's links are looked up; a paste looks them up at once. */
@@ -104,14 +104,13 @@
 		outsideLabel?: string;
 		/** Sending waits until then, as the server asked (`retry_after`, epoch milliseconds): Send counts down, and the draft stays. */
 		waitUntil?: number;
-		/** How much of its pane it takes (`ComposerSize`), as that changes, to make room for it; one line once it is gone. */
-		onsize?: (size: ComposerSize) => void;
 	}
-	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), onsize, placeholder, disabled = false, holdSend = false, canUpload, files = [], uploadLimits, canCommand = false, live, people, outsiders, quiet, rooms = [], reply, oninput, onsend, onfiles, onunstage, onrename, oncancelreply, onescape, onup, onmention, outsideLabel, waitUntil }: Props = $props();
+	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled = false, holdSend = false, canUpload, files = [], uploadLimits, canCommand = false, live, people, outsiders, quiet, rooms = [], reply, oninput, onsend, onfiles, onunstage, onrename, oncancelreply, onescape, onup, onmention, outsideLabel, waitUntil }: Props = $props();
 
 	/** The field: chips and autocomplete, as in the message editor. */
 	let field = $state<MessageField | undefined>();
 	let emojiButton = $state<HTMLButtonElement | undefined>();
+	let design = $state<DesignComposer | undefined>();
 	const recorder = new VoiceRecorder();
 	/**
 	 * The full panel, for writing at length, with formatting: Expand offers it once the draft has a second line. Its formatting and
@@ -190,6 +189,16 @@
 
 	export function focus(): void {
 		field?.focus();
+	}
+
+	/** The full panel is open, to make room for it. Reactive. */
+	export function isExpanded(): boolean {
+		return expanded;
+	}
+
+	/** The draft is past one line, to make room for it. Reactive, as it changes with every key: read it only where that matters. */
+	export function isGrown(): boolean {
+		return design?.isGrown() ?? false;
 	}
 
 	/** Puts a mention chip for this user where the caret was (else at the end), as picking them would, and focuses the field. */
@@ -344,7 +353,7 @@
 	onexpand={canExpand ? expand : undefined}
 	onattachdraft={canUpload && draftType && !live && !command ? attachDraft : undefined}
 	{expanded}
-	{onsize}
+	bind:this={design}
 	oncollapse={() => setExpanded(false)}
 	toolbar={formatting}
 	{rendered}
