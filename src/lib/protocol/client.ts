@@ -1073,9 +1073,10 @@ export class ChatClient {
 	 * `client_id`, and the `action` of its begin, on this connection, which
 	 * the result then is as with `usePasskey`. `server` is the server it
 	 * began on, which this client must still be connected to; `account`, a
-	 * registration's signed-in account, which this connection must still be
-	 * signed in as (the server takes that code only there). `name` becomes the
-	 * display name, as with `usePasskey`.
+	 * registration's signed-in account, which names it when the server
+	 * refuses the code on a connection signed in as someone else (an
+	 * addition's code works only there). `name` becomes the display name, as
+	 * with `usePasskey`.
 	 */
 	async finishPasskeyWithCode(
 		action: 'register' | 'login', redeem: CodeRedemption, options: { server: string; account?: string; name?: string }
@@ -1089,14 +1090,21 @@ export class ChatClient {
 		try {
 			await this.readyToSignIn(controller.signal);
 			controller.signal.throwIfAborted();
-			if (options.account !== undefined && (!this.authenticated || this.you?.user_id !== options.account)) {
-				throw new Error(`That passkey is for @${options.account}, which this page isn’t signed in as now. Sign in as @${options.account}, and add it again.`);
-			}
+			// A registration begun signed in, a guest's included, adds to that account (§4.10), whose connection alone
+			// takes the code. But a server may make a guest's registration a new account instead, whose code works on
+			// any connection: the code goes anyway, and the server decides.
+			const elsewhere = options.account !== undefined && (!this.authenticated || this.you?.user_id !== options.account);
 			this.claimCeremony(controller);
 			this.passkeyStarting = undefined;
 			const connection = this.connectionId;
 			this.emit();
-			const result = await this.passkeyRequest({ scheme: 'webauthn', action, step: 'finish', ...redeem });
+			let result: JsonObject;
+			try {
+				result = await this.passkeyRequest({ scheme: 'webauthn', action, step: 'finish', ...redeem });
+			} catch (cause) {
+				if (!elsewhere) throw cause;
+				throw new Error(`That passkey is for @${options.account}, which this page isn’t signed in as now. Sign in as @${options.account}, and add it again.`, { cause });
+			}
 			return this.passkeyFinished(action, result, controller, connection, name);
 		} finally {
 			if (this.passkeyStarting === controller) this.passkeyStarting = undefined;

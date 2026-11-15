@@ -436,8 +436,16 @@ describe('the passkey page', () => {
 		const { client, socket } = await connected();
 		const sent = socket.sent.length;
 		await expect(client.finishPasskeyWithCode('register', redeem, { server: 'ws://other.test/' })).rejects.toThrow('another server');
-		await expect(client.finishPasskeyWithCode('register', redeem, { server: 'ws://fake.test/', account: 'ada' })).rejects.toThrow('@ada');
 		expect(socket.sent).toHaveLength(sent);
+		expect(client.snapshot().authBusy).toBe(false);
+
+		// Begun as another account: the code goes anyway, since a server may have made it a new account's
+		// (Cloudflare does for a guest), and a refusal names the account it was for.
+		const elsewhere = client.finishPasskeyWithCode('register', redeem, { server: 'ws://fake.test/', account: 'ada' });
+		await settle();
+		expect(socket.request('auth').params).toEqual({ scheme: 'webauthn', action: 'register', step: 'finish', ...redeem });
+		socket.receive({ id: socket.request('auth').id, error: { code: -32001, message: 'Invalid code' } });
+		await expect(elsewhere).rejects.toThrow('That passkey is for @ada, which this page isn’t signed in as now.');
 		expect(client.snapshot().authBusy).toBe(false);
 
 		const finished = client.finishPasskeyWithCode('register', redeem, { server: 'ws://fake.test/', account: 'guest_1', name: 'Ada' });
