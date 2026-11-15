@@ -435,6 +435,8 @@
 	let memberRowsKept = false;
 	let memberRowsDrawn = $derived(firstScreenDrawn || (memberRowsKept ||= memberListOpen));
 	let composer = $state<Composer | undefined>();
+	/** The composer is the full panel, which the room's description makes way for. */
+	let composerExpanded = $state(false);
 	let memberListToggle = $state<PanelToggle | undefined>();
 	/** The room your typing indicator shows in, and the timer that ends it there 5 s after the last keystroke. */
 	let typingIn: { room: string; timer: ReturnType<typeof setTimeout> } | undefined;
@@ -3644,7 +3646,8 @@
 				/>
 			{/if}
 
-			{#if pinnedDescription}
+			<!-- Not while the composer is the full panel: the timeline above it keeps its few lines, and the panel its foot, on a short pane. -->
+			{#if pinnedDescription && !composerExpanded}
 				{@const pinned = pinnedDescription}
 				{#key pinned.id}
 					<ThreadDescription description={pinned.description} thread={Boolean(activeThread)} onopenroom={openMentionedRoom} ondismiss={() => (hiddenDescriptions = hideDescription(hiddenDescriptions, draftKey(pinned.id), pinned.description))} />
@@ -3762,6 +3765,7 @@
 					bind:value={drafts.text}
 					bind:mentions={composerMentions}
 					bind:dismissed={drafts.dismissed}
+					bind:expanded={composerExpanded}
 					placeholder={activeThread ? `Reply in ${threadTitle(activeThread)}` : `Message ${activeRoom.title}`}
 					holdSend={!canCompose || Boolean(paneMentionAdding)}
 					canUpload={session.capabilities['embed:upload'] && !composingLive}

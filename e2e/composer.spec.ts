@@ -627,3 +627,28 @@ test.describe('the full panel on a phone', () => {
 		await expect(page.getByTestId('composer-panel')).toBeHidden();
 	});
 });
+
+test.describe('the full panel on a small phone with its keyboard up', () => {
+	const description = 'Welcome to the demo server. Messages expire after a month.\n\n- Guests are read-only. Create an account with a passkey to post.\n- Use `/invite-device` to get a login link for another device.\n- Be kind.';
+	// An iPhone SE's screen less its keyboard, and a description long enough to take the timeline's few lines.
+	test.use({ ...DEVICES.phone, viewport: { width: 375, height: 330 }, knobs: { rooms: { general: { description } } } });
+
+	test('puts the room’s description away while it is open, keeps its foot in view, and brings the description back as it closes', async ({ preview, page }) => {
+		await preview.open();
+		await expect(page.getByTestId('pane-description')).toBeVisible();
+		await preview.press(preview.composer());
+		await page.keyboard.type('one');
+		await page.keyboard.press('Enter');
+		await page.keyboard.type('two');
+		await preview.press(page.getByTestId('composer-expand'));
+		await expect(page.getByTestId('composer-panel')).toBeVisible();
+		await expect(page.getByTestId('pane-description')).toHaveCount(0);
+		const pane = (await page.locator('main.ap-shell-main').boundingBox())!;
+		const box = (await page.getByTestId('composer-panel').boundingBox())!;
+		expect(Math.round(box.y + box.height)).toBeLessThanOrEqual(Math.round(pane.y + pane.height));
+		await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeInViewport({ ratio: 1 });
+		await preview.press(page.getByRole('button', { name: 'Collapse composer' }));
+		await expect(page.getByTestId('composer-panel')).toBeHidden();
+		await expect(page.getByTestId('pane-description')).toBeVisible();
+	});
+});
