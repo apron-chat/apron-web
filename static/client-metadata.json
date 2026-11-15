@@ -1,0 +1,11 @@
+{
+	"client_id": "https://web.apron.chat/client-metadata.json",
+	"client_name": "Apron",
+	"client_uri": "https://web.apron.chat/",
+	"logo_uri": "https://web.apron.chat/icon-192.png",
+	"redirect_uris": ["https://web.apron.chat/signed-in/"],
+	"grant_types": ["authorization_code"],
+	"response_types": ["code"],
+	"token_endpoint_auth_method": "none",
+	"application_type": "web"
+}

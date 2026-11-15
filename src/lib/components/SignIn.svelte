@@ -14,7 +14,9 @@
 	import { normalizeWebSocketUrl, type ChatClient } from '$lib/protocol/client';
 	import { offeredSchemes, serverLabel, passkeyMessage, schemeUse } from '$lib/ui/connection';
 	import { greetings } from '$lib/ui/greetings.svelte';
-	import { codeStillFor, returnUrl, type SentCode } from '$lib/ui/sign-in-link';
+	import { codeStillFor, type SentCode } from '$lib/ui/sign-in-link';
+	import { PasskeyPageNeeded } from '$lib/protocol/passkey-route';
+	import { authorize, finishAuthorization, openSignInWindow, passkeyOnPage, signInPageError } from '$lib/ui/sign-in-page';
 	import type { SessionView } from '$lib/ui/session.svelte';
 	import {
 		CANCELLED_TRY_CREATE, UNUSABLE_VIEW, chooseView, firstScheme, passkeyChoice, readsOnly, passkeyMode, signInHint, signInView, signOutThen, unusableMessage, usableSchemes,
@@ -80,15 +82,16 @@
 	let email = $state(untrack(() => initialEmail ?? ''));
 	let code = $state('');
 	/**
-	 * The code asked for, emailed to an address or shown by an external
-	 * sign-in page, and the server that will take it: the code field shows
-	 * while it is set, and the code only ever goes back to the connection that
-	 * proposed it, on that server (§4.11.2). Changing the Server field drops
-	 * it, and so does that connection closing.
+	 * The code emailed to an address, and the server that will take it: the
+	 * code field shows while it is set, and the code only ever goes back to
+	 * the connection that proposed it, on that server (§4.11.2). Changing the
+	 * Server field drops it, and so does that connection closing.
 	 */
 	let codeSent = $state<SentCode | undefined>();
-	/** A proposal or a code is under way, or an external sign-in page is opening in place of this one. */
+	/** A proposal or a code is under way, or a sign-in page is open (a window, or this tab on its way there). */
 	let codeBusy = $state(false);
+	/** Gives up the sign-in page open in a window (`authorize`): Cancel closes it. */
+	let pageAbort = $state.raw<AbortController | undefined>();
 	/** The pasted token for the Token scheme; cleared once handed to the client. */
 	let token = $state('');
 	/**
@@ -211,9 +214,10 @@
 		});
 	});
 
-	// Closing the panel, however it closes, gives up a code still waiting, and a greeting being read: nothing here could use them any more.
+	// Closing the panel, however it closes, gives up a code still waiting, a sign-in window, and a greeting being read: nothing here could use them any more.
 	onDestroy(() => {
 		client.cancelSignInCode();
+		pageAbort?.abort();
 		greetings.cancel();
 	});
 
@@ -222,12 +226,9 @@
 	$effect(() => {
 		if (!codeSent || codeBusy || snapshot.signInCode) return;
 		untrack(() => {
-			const emailed = codeSent?.scheme === 'email';
 			codeSent = undefined;
 			code = '';
-			error = emailed
-				? 'The connection that asked for that code has closed (it expired, or dropped), so the code can’t be typed here now. The link in the email may still work, or send a new code.'
-				: 'The connection that asked for that code has closed (it expired, or dropped). Start again to get a new code.';
+			error = 'The connection that asked for that code has closed (it expired, or dropped), so the code can’t be typed here now. The link in the email may still work, or send a new code.';
 		});
 	});
 
@@ -281,7 +282,6 @@
 				else void sendCode(normalized);
 				return;
 			case 'email-code':
-			case 'external-code':
 				void signInWithCode();
 				return;
 			case 'external-start':
@@ -466,38 +466,43 @@
 	}
 
 	/**
-	 * Proposes an external sign-in to the server in the field (§4.11.5), on a
-	 * connection of its own as `sendCode` does, and opens the server's page.
-	 * It brings the viewer back to this app with a link, which the page signs
-	 * in with on its return; so the page is opened in place of this one. A
-	 * server that won't send the viewer back here shows a code on its page
-	 * instead: the page is offered as a link to open in a new tab, and the
-	 * code field shows.
+	 * External sign-in on the server in the field (§4.12): its sign-in page
+	 * opens in a window, now, while the tap allows one (or in this tab, where
+	 * the browser blocks it), at the address its begin names; the code it
+	 * sends back signs in on a connection of its own, which the client then
+	 * carries on with, as an emailed code does. In this tab the page leaves
+	 * the app, and the page's link controller finishes on its return.
 	 */
 	async function startExternal(url: string): Promise<void> {
 		error = '';
+		notice = '';
+		const popup = openSignInWindow();
+		const abort = new AbortController();
+		pageAbort = abort;
 		codeBusy = true;
-		let leaving = false;
+		const name = displayName.trim() || undefined;
 		try {
-			const { page, returns } = await client.proposeExternal(returnUrl(window.location), url);
-			if (returns) {
-				leaving = true;
-				window.location.assign(page);
-				return;
-			}
-			codeSent = { scheme: 'external', page, url };
-			code = '';
+			const external = await client.beginExternal(url);
+			abort.signal.throwIfAborted();
+			if (popup) notice = 'Finish signing in in the window that opened.';
+			const redeem = await authorize(external, url, { scheme: 'external', kind: 'sign-in' }, { popup, ...(name ? { name } : {}), signal: abort.signal });
+			notice = '';
+			const switching = url !== client.url;
+			await finishAuthorization(client, { server: url, purpose: { scheme: 'external', kind: 'sign-in' }, ...(name ? { name } : {}) }, redeem, () => (switching ? onconnect() : onsignout()()));
+			finish();
 		} catch (cause) {
-			error = cause instanceof Error ? cause.message : 'Unable to start signing in';
+			popup?.close();
+			error = abort.signal.aborted ? 'Cancelled.' : signInPageError(cause, 'Unable to start signing in');
 		} finally {
-			// Busy until the page is replaced.
-			if (!leaving) codeBusy = false;
+			notice = '';
+			if (pageAbort === abort) pageAbort = undefined;
+			codeBusy = false;
 		}
 	}
 
 	/**
-	 * Signs in with the code (emailed, or shown by the sign-in page), approved
-	 * on the connection that asked for it, which the client then carries on
+	 * Signs in with the emailed code, approved on the connection that asked
+	 * for it, which the client then carries on
 	 * with; the bearer token in the result is kept to resume with (§3.2.1).
 	 * The page lets go of the view it held only once the code has worked.
 	 */
@@ -512,7 +517,7 @@
 			return;
 		}
 		if (!code.trim()) {
-			error = sent.scheme === 'email' ? 'Enter the code from the email.' : 'Enter the code from the sign-in page.';
+			error = 'Enter the code from the email.';
 			return;
 		}
 		error = '';
@@ -543,7 +548,13 @@
 		// The guest's name, which the connection carries, isn't the account's: it stays as the account has it.
 		if (action === 'login') client.setDisplayName('');
 		try {
-			await client.usePasskey(action, name);
+			try {
+				await client.usePasskey(action, name);
+			} catch (cause) {
+				// This page can't use the server's passkeys: its passkey page can.
+				if (!(cause instanceof PasskeyPageNeeded)) throw cause;
+				await passkeyPage(cause, name);
+			}
 			// What the account is called from here on, for the form and the next visit.
 			const kept = name ?? client.snapshot().you?.name;
 			if (kept) {
@@ -559,6 +570,26 @@
 			// Most likely no passkey for this server on this device: point to Create account, where there is one.
 			else if (refused && action === 'login' && passkeyChoice(use)) error = CANCELLED_TRY_CREATE;
 			else error = passkeyMessage(cause);
+		}
+	}
+
+	/**
+	 * The passkey ceremony on the server's passkey page, in a window (or this
+	 * tab, where the browser blocks one), finished on this connection with the
+	 * code it sends back.
+	 */
+	async function passkeyPage(needed: PasskeyPageNeeded, name: string | undefined): Promise<void> {
+		const abort = new AbortController();
+		pageAbort = abort;
+		codeBusy = true;
+		notice = '';
+		try {
+			await passkeyOnPage(client, needed, { ...(name ? { name } : {}), signal: abort.signal });
+		} catch (cause) {
+			throw new Error(abort.signal.aborted ? 'Cancelled.' : signInPageError(cause, 'Unable to use passkey'));
+		} finally {
+			if (pageAbort === abort) pageAbort = undefined;
+			codeBusy = false;
 		}
 	}
 
@@ -589,8 +620,8 @@
 	passkeyChoice={chosen === 'webauthn' && passkeyChoice(use) && !(here && registered)} passkeyMode={passkeyChosen} onpasskeymode={(value) => { passkeyChosen = value; error = ''; notice = ''; }} passkeyNudge={error === CANCELLED_TRY_CREATE ? 'register' : undefined}
 	bind:token bind:email bind:code bind:name={() => (chosen === 'token' ? tokenName : displayName), (value) => (chosen === 'token' ? (tokenName = value) : (displayName = value))} askName={!passkeyLogin && !reader}
 	sent={codeSentTo} onrestart={() => { codeSent = undefined; code = ''; error = ''; client.cancelSignInCode(); }}
-	hint={view.phase === 'ready' && notice ? notice : hint} hintStatus={view.phase === 'ready'} error={errorText} {busy}
+	hint={(view.phase === 'ready' || codeBusy) && notice ? notice : hint} hintStatus={view.phase === 'ready' || codeBusy} error={errorText} {busy}
 	submit={view.primary.label} submitTestid={view.primary.action}
-	tokenTestid="connect-token-input" emailTestid="connect-email-input" codeTestid="connect-code-input" nameTestid="connect-name-input" passkeyChoiceTestid="passkey-choice" pageLinkTestid="external-page-link"
-	secondary={joinedAsGuest && view.phase === 'ready' ? { label: 'Stay a guest', onclick: finish } : canCancel ? { label: 'Cancel', onclick: () => { client.cancelPasskeyPrompt(); greetings.cancel(); oncancel(); } } : undefined}
+	tokenTestid="connect-token-input" emailTestid="connect-email-input" codeTestid="connect-code-input" nameTestid="connect-name-input" passkeyChoiceTestid="passkey-choice"
+	secondary={joinedAsGuest && view.phase === 'ready' ? { label: 'Stay a guest', onclick: finish } : canCancel ? { label: 'Cancel', onclick: () => { client.cancelPasskeyPrompt(); pageAbort?.abort(); greetings.cancel(); oncancel(); } } : codeBusy && pageAbort ? { label: 'Cancel', onclick: () => pageAbort?.abort() } : undefined}
 />

@@ -3,13 +3,14 @@ import type { ClientSnapshot } from '$lib/protocol/client';
 import type { Proposal } from '$lib/protocol/proposals';
 import { SignInLinks, type LinkClient } from './link-controller.svelte';
 import { askedLinkFailure } from './sign-in-link';
+import type { PendingAuthorization } from './sign-in-page';
 
 const HERE = 'wss://here.example/';
 const THERE = 'wss://there.example/';
 
 const proposals: Record<string, Proposal> = {
 	mail: { scheme: 'email', kind: 'sign-in', url: THERE, state: 'mail', expires: Infinity },
-	sso: { scheme: 'external', kind: 'sign-in', url: HERE, state: 'sso', expires: Infinity },
+	here: { scheme: 'email', kind: 'sign-in', url: HERE, state: 'here', expires: Infinity },
 	add: { scheme: 'email', kind: 'addition', url: HERE, state: 'add', account: 'ada', expires: Infinity }
 };
 
@@ -27,7 +28,10 @@ function page() {
 		url: HERE,
 		signInWithLink: vi.fn((_token: string, _url: string, options: { beforeSwitch?: () => void }) => answer.signIn.promise.then(() => options.beforeSwitch?.())),
 		addWithConfirmedLink: vi.fn(() => answer.add.promise),
-		addWithLink: vi.fn(() => answer.add.promise)
+		addWithLink: vi.fn(() => answer.add.promise),
+		signInWithExternalCode: vi.fn((_redeem: unknown, _url: string, options: { beforeSwitch?: () => void }) => answer.signIn.promise.then(() => options.beforeSwitch?.())),
+		addExternalWithCode: vi.fn(async () => answer.add.promise.then(() => undefined)),
+		finishPasskeyWithCode: vi.fn(() => answer.add.promise)
 	} satisfies LinkClient;
 	const said: string[] = [];
 	const host = {
@@ -57,7 +61,7 @@ describe('a sign-in link this browser proposed', () => {
 		expect(host.failed).not.toHaveBeenCalled();
 		expect([links.busy, links.failure, said]).toEqual([false, undefined, ['… Signing in…', 'clear']]);
 		// One proposed to the server this page is on switches nothing.
-		links.follow({ token: 'tok2', state: 'sso' });
+		links.follow({ token: 'tok2', state: 'here' });
 		await settled();
 		expect(host.beforeSwitch).toHaveBeenLastCalledWith(false);
 		expect(host.signedIn).toHaveBeenLastCalledWith(HERE, false);
@@ -71,10 +75,6 @@ describe('a sign-in link this browser proposed', () => {
 		const error = 'The sign-in link didn’t work (expired). Send a new code to try again, or pick another server.';
 		expect(host.failed).toHaveBeenCalledWith({ error, server: THERE, scheme: 'email' });
 		expect([host.signedIn.mock.calls, host.beforeSwitch.mock.calls, links.failure, links.busy]).toEqual([[], [], { error }, false]);
-		// An external sign-in's says to sign in again.
-		links.follow({ token: 'tok', state: 'sso' });
-		await settled();
-		expect(host.failed).toHaveBeenLastCalledWith(expect.objectContaining({ server: HERE, scheme: 'external', error: expect.stringContaining('Sign in again to try again') }));
 	});
 });
 
@@ -148,7 +148,7 @@ describe('one link at a time', () => {
 	it('uses no second link while one signs in, so the first is never marked done by another', async () => {
 		const { links, chat, answer } = page();
 		links.follow({ token: 'tok', state: 'mail' });
-		links.follow({ token: 'tok2', state: 'sso' });
+		links.follow({ token: 'tok2', state: 'here' });
 		expect(chat.signInWithLink).toHaveBeenCalledOnce();
 		expect(links.working).toBe('signing-in');
 		answer.signIn.resolve();
@@ -169,5 +169,64 @@ describe('one link at a time', () => {
 		links.settle(snapshot);
 		expect(chat.addWithLink).toHaveBeenCalledWith('add-tok', 'add');
 		expect(links.working).toBe('adding');
+	});
+});
+
+/** A server's sign-in page that sent this tab back (§4.12, the passkey page): its code, redeemed as its request was for. */
+describe('a sign-in page’s answer brought back to this tab', () => {
+	const snapshot = { status: 'connected', authBusy: false, authenticated: true, you: { user_id: 'ada' }, server: { apron: 10, auth: ['external', 'webauthn'], capabilities: [] } } as unknown as ClientSnapshot;
+	const request = (purpose: PendingAuthorization['purpose'], server = THERE): PendingAuthorization => ({
+		state: 'q8Rz', codeVerifier: 'v', redirectUri: 'https://web.example/signed-in/', clientId: 'apron-web', server, purpose, mode: 'page', expires: Infinity
+	});
+	const redeem = { code: 'Hk41x9', code_verifier: 'v', redirect_uri: 'https://web.example/signed-in/', client_id: 'apron-web' };
+
+	it('signs in with an external code at once, on its server, and only then remembers the switch', async () => {
+		const { links, chat, host, said, answer } = page();
+		links.followReturn({ pending: { ...request({ scheme: 'external', kind: 'sign-in' }), name: 'Ada' }, response: { code: 'Hk41x9', state: 'q8Rz' } });
+		expect(chat.signInWithExternalCode).toHaveBeenCalledWith(redeem, THERE, { name: 'Ada', beforeSwitch: expect.any(Function) });
+		expect([links.working, said]).toEqual(['signing-in', ['… Signing in…']]);
+		answer.signIn.resolve();
+		await settled();
+		expect(host.beforeSwitch).toHaveBeenCalledWith(true);
+		expect(host.signedIn).toHaveBeenCalledWith(THERE, true);
+	});
+
+	it('opens the connect screen on its scheme and server for a declined or refused sign-in', async () => {
+		const { links, chat, host, answer } = page();
+		links.followReturn({ pending: request({ scheme: 'external', kind: 'sign-in' }), response: { error: 'access_denied', state: 'q8Rz' } });
+		expect(chat.signInWithExternalCode).not.toHaveBeenCalled();
+		expect(host.failed).toHaveBeenCalledWith({ error: 'Sign-in was cancelled.', server: THERE, scheme: 'external' });
+		expect(links.failure).toEqual({ error: 'Sign-in was cancelled.' });
+		links.followReturn({ pending: request({ scheme: 'webauthn', action: 'login' }, HERE), response: { code: 'Hk41x9', state: 'q8Rz' } });
+		links.settle(snapshot);
+		answer.add.reject(new Error('Invalid code'));
+		await settled();
+		expect(host.failed).toHaveBeenLastCalledWith({ error: 'Invalid code', server: HERE, scheme: 'webauthn' });
+	});
+
+	it('finishes a passkey from the passkey page once the page’s session has settled, signing it in', async () => {
+		const { links, chat, host, answer } = page();
+		links.followReturn({ pending: { ...request({ scheme: 'webauthn', action: 'login' }, HERE), name: 'Ada' }, response: { code: 'Hk41x9', state: 'q8Rz', iss: 'https://here.example' } });
+		expect(links.returned).toBeDefined();
+		links.settle({ ...snapshot, status: 'connecting' });
+		expect(chat.finishPasskeyWithCode).not.toHaveBeenCalled();
+		links.settle(snapshot);
+		expect(chat.finishPasskeyWithCode).toHaveBeenCalledWith('login', redeem, { server: HERE, name: 'Ada' });
+		expect(links.returned).toBeUndefined();
+		answer.add.resolve();
+		await settled();
+		expect(host.signedIn).toHaveBeenCalledWith(HERE, false);
+	});
+
+	it('adds an external sign-in on the account it began on, and says so as a toast when refused', async () => {
+		const { links, chat, host, said, answer } = page();
+		links.followReturn({ pending: request({ scheme: 'external', kind: 'addition', account: 'ada' }, HERE), response: { code: 'Hk41x9', state: 'q8Rz' } });
+		links.settle(snapshot);
+		expect(chat.addExternalWithCode).toHaveBeenCalledWith(redeem, 'ada');
+		answer.add.reject(Object.assign(new Error('denied'), { code: -32001 }));
+		await settled();
+		expect(said.at(-1)).toMatch(/^! That sign-in was refused/);
+		expect(host.failed).not.toHaveBeenCalled();
+		expect(host.signedIn).not.toHaveBeenCalled();
 	});
 });

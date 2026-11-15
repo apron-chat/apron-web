@@ -43,12 +43,9 @@
 		name?: string;
 		/** Asks a display name; not where it isn't used, such as signing in with a passkey. Under Token it asks an optional name, for an invite. */
 		askName?: boolean;
-		/**
-		 * The code asked for (§4.11): its field shows, and the hint says where it went: emailed to `email`,
-		 * or shown on the external sign-in `page` (§4.11.5), linked here to open in a new tab.
-		 */
-		sent?: { scheme: 'email' | 'external'; email?: string; page?: string };
-		/** Gives up the code asked for: Use another address (email), or Start again. */
+		/** The code asked for (§4.11): its field shows, and the hint says where it went, emailed to `email`. */
+		sent?: { scheme: 'email'; email?: string };
+		/** Gives up the code asked for: Use another address, or send a new code. */
 		onrestart?: () => void;
 		/** What the chosen scheme does, or what to do next. Text between backticks shows as code, such as a server's host. */
 		hint?: string;
@@ -71,15 +68,13 @@
 		nameTestid?: string;
 		/** `data-testid` on the passkey choice; each of its two options takes it with `-login` or `-register` after. */
 		passkeyChoiceTestid?: string;
-		/** `data-testid` on the link to the external sign-in page. */
-		pageLinkTestid?: string;
 		/** Classes for the form, added to its own. */
 		class?: ClassValue;
 	}
 	let {
 		header, schemes, fields = true, lastUsed, scheme, onscheme, passkeyChoice = false, passkeyMode = 'login', onpasskeymode, passkeyNudge, token = $bindable(''), email = $bindable(''), code = $bindable(''), name = $bindable(''),
 		askName = true, sent, onrestart, hint, hintStatus = false, error, busy = false, submit, secondary,
-		submitTestid, tokenTestid, emailTestid, codeTestid, nameTestid, passkeyChoiceTestid, pageLinkTestid, onsubmit, label, phase, class: className
+		submitTestid, tokenTestid, emailTestid, codeTestid, nameTestid, passkeyChoiceTestid, onsubmit, label, phase, class: className
 	}: Props = $props();
 </script>
 
@@ -122,7 +117,7 @@
 			{#if sent}
 				<label class="ap-fieldlabel">Code
 					<!-- svelte-ignore a11y_autofocus -->
-					<input class="ap-field ap-field-mono" data-testid={codeTestid} bind:value={code} placeholder={sent.scheme === 'email' ? 'From the email' : 'From the sign-in page'} disabled={busy} inputmode={sent.scheme === 'email' ? 'numeric' : 'text'} autocomplete="one-time-code" autocapitalize="none" autocorrect="off" spellcheck="false" autofocus />
+					<input class="ap-field ap-field-mono" data-testid={codeTestid} bind:value={code} placeholder="From the email" disabled={busy} inputmode="numeric" autocomplete="one-time-code" autocapitalize="none" autocorrect="off" spellcheck="false" autofocus />
 				</label>
 			{/if}
 			{#if askName}
@@ -133,12 +128,6 @@
 	{#if sent?.scheme === 'email'}
 		<p class="ap-form-hint" role="status">If {sent.email} can sign in here, a code is on its way. Enter it, or open the link in the email.</p>
 		<button class="ap-link ap-connect-other" type="button" disabled={busy} onclick={onrestart}>Use another address, or send a new code</button>
-	{:else if sent?.page}
-		<!-- The server won't send the viewer back here (§4.11.5): its page shows a code to type here instead. -->
-		<p class="ap-form-hint" role="status">
-			<a href={sent.page} target="_blank" rel="noopener noreferrer" data-testid={pageLinkTestid}>Open the sign-in page</a>, sign in there, then enter the code it shows you.
-		</p>
-		<button class="ap-link ap-connect-other" type="button" disabled={busy} onclick={onrestart}>Start again</button>
 	{:else if hint}
 		<p class="ap-form-hint" role={hintStatus ? 'status' : undefined}>{#each hint?.split('`') ?? [] as part, index (index)}{#if index % 2}<code>{part}</code>{:else}{part}{/if}{/each}</p>
 	{/if}

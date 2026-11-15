@@ -1,5 +1,6 @@
 import { noteCredentialSource, type CredentialSource } from './passkey-notes';
 import { isJsonObject, type JsonObject } from './types';
+import { ForeignRpIdError } from './passkey-route';
 
 export function passkeySupportError(): string | undefined {
 	if (!globalThis.isSecureContext) return 'Passkeys require HTTPS or a localhost connection.';
@@ -67,7 +68,7 @@ export async function requestPasskey(
 	const publicKey = passkeyPublicKeyOptions(options);
 	if (!publicKey) throw new Error('Invalid passkey options from server');
 	const foreign = passkeyRpIdError(action, publicKey, server);
-	if (foreign) throw new Error(foreign);
+	if (foreign) throw new ForeignRpIdError(foreign);
 	const credential = action === 'register'
 		? await navigator.credentials.create({
 			publicKey: PublicKeyCredential.parseCreationOptionsFromJSON(labelledCreationOptions(publicKey, name) as unknown as PublicKeyCredentialCreationOptionsJSON), signal

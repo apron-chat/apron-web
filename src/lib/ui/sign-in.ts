@@ -16,9 +16,8 @@ import type { ServerParams } from '$lib/protocol/types';
  *   and where the browser won't show its sheet that long after the tap, the
  *   panel is `ready` for a second one.
  * - `email-send` / `email-code`: ask for an emailed code, then sign in with it.
- * - `external-start` / `external-code`: open the server's sign-in page,
- *   which brings the viewer back signed in or, where the server won't
- *   return here, shows a code to sign in with.
+ * - `external-start`: open the server's sign-in page (§4.12), in a window
+ *   or in place of this one, which sends the viewer back here signed in.
  * - `token`: sign in with a pasted token.
  * - `done`, `sign-out`: leave the panel, or leave the registered session.
  *
@@ -55,7 +54,6 @@ export type SignInAction =
 	| 'email-send'
 	| 'email-code'
 	| 'external-start'
-	| 'external-code'
 	| 'token';
 
 /**
@@ -87,7 +85,7 @@ export interface SignInInput {
 	pending: boolean;
 	/** A ceremony, a code, a sign-in page, or a token is under way. */
 	busy: boolean;
-	/** A code was asked for (emailed, or shown by the sign-in page) and the code field shows. */
+	/** An emailed code was asked for, and the code field shows. */
 	codeSent: boolean;
 }
 
@@ -152,7 +150,6 @@ const LABELS: Record<SignInAction, string> = {
 	'email-send': 'Email me a code',
 	'email-code': 'Sign in',
 	'external-start': 'Continue to sign-in page',
-	'external-code': 'Sign in',
 	token: 'Sign in'
 };
 
@@ -259,7 +256,7 @@ function primaryAction(input: SignInInput): Exclude<SignInAction, 'continue' | '
 		case 'email':
 			return input.codeSent ? 'email-code' : 'email-send';
 		case 'external':
-			return input.codeSent ? 'external-code' : 'external-start';
+			return 'external-start';
 		case 'webauthn':
 			if (here && input.registered) return 'done';
 			return passkeyMode(input.use, input.passkey) === 'login' ? 'passkey-login' : 'passkey-register';

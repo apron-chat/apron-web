@@ -2,8 +2,7 @@ import type { ClientSnapshot } from '$lib/protocol/client';
 import type { Proposal, ProposalScheme } from '$lib/protocol/proposals';
 
 /**
- * A sign-in link (PROTOCOL.md §4.11.2), emailed or the return from an
- * external sign-in page. The server puts the temporary token, the `state` of
+ * A sign-in link (PROTOCOL.md §4.11.2), as an email has it. The server puts the temporary token, the `state` of
  * the proposal it answers when that carried one, and, when the link opens a
  * client that isn't tied to one server, the WebSocket URL of the server that
  * sent it in the URL fragment, `application/x-www-form-urlencoded`, so they
@@ -150,16 +149,6 @@ export function sessionSettled(snapshot: Pick<ClientSnapshot, 'status' | 'authBu
 	return Boolean(snapshot.error) && !resuming;
 }
 
-/**
- * Where an external sign-in page sends the user back (`return_url`,
- * §4.11.5): this app, at its own path, without the query or fragment. A
- * server accepts it only on an origin it trusts, and the link's fragment
- * replaces any fragment it had.
- */
-export function returnUrl(location: Pick<Location, 'origin' | 'pathname'>): string {
-	return `${location.origin}${location.pathname}`;
-}
-
 function fragmentParams(hash: string): URLSearchParams | undefined {
 	return hash.startsWith('#') && hash.length > 1 ? new URLSearchParams(hash.slice(1)) : undefined;
 }
@@ -216,12 +205,11 @@ export async function runSignInLink(
 	hooks.onSignedIn(server, switched);
 }
 
-/** A code the connect screen asked for (§4.11): the scheme, the address or page, and the server that will take it. */
+/** A code the connect screen asked for (§4.11): the scheme, the address, and the server that will take it. */
 export interface SentCode {
 	scheme: ProposalScheme;
 	url: string;
 	email?: string;
-	page?: string;
 }
 
 /**

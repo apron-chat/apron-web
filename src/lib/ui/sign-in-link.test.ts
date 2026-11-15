@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Proposal } from '$lib/protocol/proposals';
-import { askedLinkFailure, codeStillFor, linkUse, parseSignInLink, returnUrl, sessionSettled, signInLinkPrompt, takeSignInLink } from './sign-in-link';
+import { askedLinkFailure, codeStillFor, linkUse, parseSignInLink, sessionSettled, signInLinkPrompt, takeSignInLink } from './sign-in-link';
 
 describe('sign-in links (§4.11.2)', () => {
 	it('reads the token, and the optional state and server, from the fragment, refusing one without a token and marking a server that isn’t a WebSocket URL', () => {
@@ -37,8 +37,8 @@ describe('sign-in links (§4.11.2)', () => {
 
 	it('uses its own proposal’s server, ignoring the link’s, and asks about any other link', () => {
 		const find = (proposals: Proposal[]) => (state: string | undefined) => proposals.find((entry) => entry.state === state);
-		const ours = [proposal({ scheme: 'external' }), proposal({ state: 'add', kind: 'addition', account: 'ada' })];
-		expect(linkUse({ token: 't', state: 's', server: 'wss://evil.example/' }, find(ours))).toEqual({ kind: 'own', token: 't', server: 'wss://home.example/', scheme: 'external', state: 's' });
+		const ours = [proposal({}), proposal({ state: 'add', kind: 'addition', account: 'ada' })];
+		expect(linkUse({ token: 't', state: 's', server: 'wss://evil.example/' }, find(ours))).toEqual({ kind: 'own', token: 't', server: 'wss://home.example/', scheme: 'email', state: 's' });
 		// Even a server that isn't one: it is ignored.
 		expect(linkUse({ token: 't', state: 's', badServer: true }, find(ours))).toMatchObject({ kind: 'own', server: 'wss://home.example/' });
 		expect(linkUse({ token: 't', state: 'add' }, find(ours))).toEqual({ kind: 'addition', token: 't', server: 'wss://home.example/', account: 'ada', state: 'add' });
@@ -96,11 +96,6 @@ describe('sign-in links (§4.11.2)', () => {
 		expect(sessionSettled({ ...base, error: 'Sign in with your email from the connect screen.' })).toBe(true);
 		expect(sessionSettled({ ...base, server: { ...server, auth: ['email'] }, keptSession: true, error: 'No token resume' })).toBe(true);
 		expect(sessionSettled(base)).toBe(false);
-	});
-
-	it('returns an external sign-in to this app’s own path', () => {
-		expect(returnUrl({ origin: 'https://web.apron.chat', pathname: '/' })).toBe('https://web.apron.chat/');
-		expect(returnUrl({ origin: 'http://localhost:5173', pathname: '/app/' })).toBe('http://localhost:5173/app/');
 	});
 
 	it('keeps a connect-screen code only for the server that sent it', () => {

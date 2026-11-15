@@ -3,6 +3,7 @@ import type { ChatClient } from './client';
 import { PASSKEY_IDLE_POLL_MS } from './client-internals';
 import { connect, FakeSocket, settle, startClient } from '$lib/test/client';
 import { requestPasskey, signalPasskeyLabel } from './webauthn';
+import { ForeignRpIdError, PasskeyPageNeeded } from './passkey-route';
 
 vi.mock('./webauthn', () => ({
 	requestPasskey: vi.fn(),
@@ -364,5 +365,88 @@ describe('a failed session resume never prompts on its own', () => {
 		await vi.advanceTimersByTimeAsync(10 * 60_000);
 		expect(FakeSocket.instances).toHaveLength(2);
 		expect(requestPasskey).toHaveBeenCalledTimes(1);
+	});
+});
+
+/** The server's passkey page (PLAN_WEBAUTHN_EXTERNAL.md): where this page can't use the RP ID, the ceremony goes there. */
+describe('the passkey page', () => {
+	const page = { url: 'https://chat.example/passkey?action=login' };
+	const redeem = { code: 'Hk41x9', code_verifier: 'dBjftJ', redirect_uri: 'https://web.example/signed-in/', client_id: 'apron-web' };
+
+	/** Begins `action` and answers with `result`; resolves with what `usePasskey` threw. */
+	async function begin(client: ChatClient, socket: FakeSocket, action: 'login' | 'register', result: Record<string, unknown>): Promise<unknown> {
+		const pending = client.usePasskey(action).then(() => undefined, (cause: unknown) => cause);
+		await settle();
+		await socket.reply('auth', result);
+		return pending;
+	}
+
+	it('goes to the page when the browser refuses the RP ID, and only then', async () => {
+		const { client, socket } = await connected();
+		vi.mocked(requestPasskey).mockRejectedValue(new DOMException('The RP ID is not valid for this origin', 'SecurityError'));
+		const refused = await begin(client, socket, 'login', { challenge_id: 'c1', public_key: { challenge: 'x', rpId: 'fake.test' }, external: page });
+		expect(refused).toBeInstanceOf(PasskeyPageNeeded);
+		expect(refused).toMatchObject({ action: 'login', external: page, account: undefined });
+		// No finish step: the page's code finishes it.
+		expect(authRequests(socket).filter((params) => params.step === 'finish')).toEqual([]);
+		expect(client.snapshot().authBusy).toBe(false);
+
+		// The RP ID check failed (§4.10): the page too, never this page's ceremony.
+		vi.mocked(requestPasskey).mockRejectedValue(new ForeignRpIdError('not its own'));
+		await expect(begin(client, socket, 'login', { challenge_id: 'c2', public_key: { challenge: 'x', rpId: 'other.example' }, external: page })).resolves.toBeInstanceOf(PasskeyPageNeeded);
+
+		// A dismissed sheet is the user's no: it stays one.
+		vi.mocked(requestPasskey).mockRejectedValue(new DOMException('Dismissed', 'NotAllowedError'));
+		await expect(begin(client, socket, 'login', { challenge_id: 'c3', public_key: { challenge: 'x' }, external: page })).resolves.toMatchObject({ name: 'NotAllowedError' });
+	});
+
+	it('goes straight to the page when the server sends no public_key, and says where passkeys work without one', async () => {
+		const { client, socket } = await connected();
+		await expect(begin(client, socket, 'login', { challenge_id: 'c1', external: page })).resolves.toBeInstanceOf(PasskeyPageNeeded);
+		expect(requestPasskey).not.toHaveBeenCalled();
+		// A page that isn't a secure web address is no page.
+		const none = await begin(client, socket, 'login', { challenge_id: 'c2', external: { url: 'javascript:alert(1)' } });
+		expect((none as Error).message).toBe('fake.test’s passkeys work only in its own apps and website.');
+		vi.mocked(requestPasskey).mockRejectedValue(new DOMException('The RP ID is not valid for this origin', 'SecurityError'));
+		const refused = await begin(client, socket, 'register', { challenge_id: 'c3', public_key: { challenge: 'x' } });
+		expect((refused as Error).message).toBe('fake.test’s passkeys work only in its own apps and website.');
+	});
+
+	it('names the signed-in account a registration on the page adds to', async () => {
+		const { client, socket } = await connected();
+		const needed = await begin(client, socket, 'register', { challenge_id: 'c1', external: { url: 'https://chat.example/passkey?action=register&request=rq_7' } });
+		// A guest is signed in too (§4.10): the passkey is added to the guest's account, whose connection alone takes the code.
+		expect(needed).toMatchObject({ action: 'register', account: 'guest_1' });
+	});
+
+	it('finishes with the page’s code on this connection, as a ceremony here would', async () => {
+		const { client, socket } = await connected();
+		const finished = client.finishPasskeyWithCode('login', redeem, { server: 'ws://fake.test/' });
+		await settle();
+		expect(socket.request('auth').params).toEqual({ scheme: 'webauthn', action: 'login', step: 'finish', ...redeem });
+		await socket.reply('auth', { you: { user_id: 'ada', name: 'Ada' }, token: 'st_ada' });
+		await finished;
+		const snapshot = client.snapshot();
+		expect(snapshot.you?.user_id).toBe('ada');
+		expect(snapshot.passkeySession).toBe(true);
+		expect(snapshot.signedInWith).toBe('webauthn');
+	});
+
+	it('finishes a registration with the name it began with, and only for its server and account', async () => {
+		const { client, socket } = await connected();
+		const sent = socket.sent.length;
+		await expect(client.finishPasskeyWithCode('register', redeem, { server: 'ws://other.test/' })).rejects.toThrow('another server');
+		await expect(client.finishPasskeyWithCode('register', redeem, { server: 'ws://fake.test/', account: 'ada' })).rejects.toThrow('@ada');
+		expect(socket.sent).toHaveLength(sent);
+		expect(client.snapshot().authBusy).toBe(false);
+
+		const finished = client.finishPasskeyWithCode('register', redeem, { server: 'ws://fake.test/', account: 'guest_1', name: 'Ada' });
+		await settle();
+		expect(socket.request('auth').params).toEqual({ scheme: 'webauthn', action: 'register', step: 'finish', ...redeem });
+		await socket.reply('auth', { you: { user_id: 'guest_1', name: 'guest_1' } });
+		const named = await finished;
+		expect(named).toBeDefined();
+		expect(socket.request('me').params).toEqual({ name: 'Ada' });
+		expect(client.snapshot().passkeySession).toBe(true);
 	});
 });
