@@ -12,7 +12,7 @@
 	import { impliedOrigins } from '$lib/ui/media-settings.svelte';
 	import { addError, passkeyMessage, statusLabel, wayBackNudge, wayBackWords } from '$lib/ui/connection';
 	import { PasskeyPageNeeded } from '$lib/protocol/passkey-route';
-	import { authorize, finishAuthorization, openSignInWindow, passkeyOnPage, signInPageError, type AuthorizationPurpose } from '$lib/ui/sign-in-page';
+	import { openSignInWindow, signInPageError } from '$lib/ui/sign-in-window';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { prepareAvatar } from '$lib/ui/images';
 	import type { SessionView } from '$lib/ui/session.svelte';
@@ -358,7 +358,17 @@
 				} catch (cause) {
 					// This page can't create a passkey for the server's RP ID: its passkey page can.
 					if (!(cause instanceof PasskeyPageNeeded)) throw cause;
-					if (!(await onServerPage('passkey', (signal) => passkeyOnPage(client, cause, { ...(you?.name ? { name: you.name } : {}), signal })))) return;
+					const popup = openSignInWindow();
+					const saved = await onServerPage('passkey', async (signal) => {
+						try {
+							const { passkeyOnPage } = await import('$lib/ui/sign-in-page');
+							await passkeyOnPage(client, cause, { popup, ...(you?.name ? { name: you.name } : {}), signal });
+						} catch (failure) {
+							popup?.close();
+							throw failure;
+						}
+					});
+					if (!saved) return;
 				}
 				passkeyNotice = 'Passkey saved. This server will ask your device next time.';
 			}
@@ -412,13 +422,9 @@
 		if (!account) return;
 		const popup = openSignInWindow();
 		const added = await onServerPage('external', async (signal) => {
-			const purpose: AuthorizationPurpose = { scheme: 'external', kind: 'addition', account };
-			const server = client.url;
 			try {
-				const external = await client.beginExternal(server);
-				signal.throwIfAborted();
-				const redeem = await authorize(external, server, purpose, { popup, signal });
-				await finishAuthorization(client, { server, purpose }, redeem);
+				const { externalOnPage } = await import('$lib/ui/sign-in-page');
+				await externalOnPage(client, client.url, { scheme: 'external', kind: 'addition', account }, { popup, signal });
 			} catch (cause) {
 				popup?.close();
 				throw cause;

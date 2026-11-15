@@ -1,4 +1,6 @@
-import { isJsonObject } from './types';
+import { isLoopback, pageUrl, type CodeRedemption, type External } from './external';
+
+export { isLoopback, pageUrl, parseExternal, type CodeRedemption, type External } from './external';
 
 /**
  * The authorization code flow that external sign-in (PROTOCOL.md §4.12) and
@@ -9,13 +11,6 @@ import { isJsonObject } from './types';
  * on its connection. Only the pieces that need no browser are here: building
  * the URL, reading the answer, and the parameters that redeem it.
  */
-
-/** A begin result's `external` (§4.12.1): the page to send the user to. */
-export interface External {
-	url: string;
-	/** For clients that redeem at the issuer's token endpoint; this client redeems on the connection and ignores it. */
-	issuer?: string;
-}
 
 /** What this client sends as itself (§4.12.2): its `client_id`, and where the page sends the user back. */
 export interface AuthorizationClient {
@@ -35,14 +30,6 @@ export interface AuthorizationRequest {
 	resource: string;
 }
 
-/** The parameters that redeem a code on the connection (§4.12.2), for `external` or a `webauthn` finish step. */
-export interface CodeRedemption {
-	code: string;
-	code_verifier: string;
-	redirect_uri: string;
-	client_id: string;
-}
-
 /** What the page sent the user back with (RFC 6749 §4.1.2, RFC 9207): a code, or an error. */
 export interface AuthorizationResponse {
 	state?: string;
@@ -50,32 +37,6 @@ export interface AuthorizationResponse {
 	iss?: string;
 	error?: string;
 	errorDescription?: string;
-}
-
-/**
- * A begin result's `external`, if a client may open its `url`: an absolute
- * `https` URL, or `http` on a loopback host, for local development. Anything
- * else, such as `javascript:…`, is refused.
- */
-export function parseExternal(value: unknown): External | undefined {
-	if (!isJsonObject(value)) return undefined;
-	const url = pageUrl(value.url);
-	if (!url) return undefined;
-	return { url, ...(typeof value.issuer === 'string' ? { issuer: value.issuer } : {}) };
-}
-
-/** `value` as a page a client may open (see `parseExternal`). */
-export function pageUrl(value: unknown): string | undefined {
-	if (typeof value !== 'string') return undefined;
-	let url: URL;
-	try {
-		url = new URL(value);
-	} catch {
-		return undefined;
-	}
-	if (url.protocol === 'https:' && url.hostname) return url.toString();
-	if (url.protocol === 'http:' && isLoopback(url.hostname)) return url.toString();
-	return undefined;
 }
 
 /**
@@ -193,12 +154,6 @@ export function redemption(request: Pick<AuthorizationRequest, 'state' | 'codeVe
 		throw new AuthorizationError(`The sign-in page couldn’t sign you in${detail ? ` (${detail})` : ''}. Try again.`, 'error');
 	}
 	return { code: response.code, code_verifier: request.codeVerifier, redirect_uri: request.redirectUri, client_id: request.clientId };
-}
-
-/** Whether `hostname` (as `URL` gives it) is a loopback host: `localhost` and its subdomains, 127.0.0.0/8, `[::1]`. */
-export function isLoopback(hostname: string): boolean {
-	const host = hostname.toLowerCase();
-	return host === 'localhost' || host.endsWith('.localhost') || host === '[::1]' || /^127(\.\d{1,3}){3}$/.test(host);
 }
 
 function base64url(bytes: Uint8Array): string {

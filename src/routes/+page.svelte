@@ -101,7 +101,7 @@
 	import { articleOf, isMessageRow, MESSAGE_STEPS, messageRows, rowControls, stepMessage, tabbableOutside, timelineItems } from '$lib/ui/message-focus';
 	import { buildRoomTimeline, steady, threadEntries, threadStartedFrom, threadDescriptionFor, threadTitleFor, type ThreadEntry, type TimelineItem } from '$lib/ui/timeline';
 	import { takeSignInLink } from '$lib/ui/sign-in-link';
-	import { takeReturned } from '$lib/ui/sign-in-page';
+	import { returnedWaiting } from '$lib/ui/sign-in-window';
 	import { SignInLinks } from '$lib/ui/link-controller.svelte';
 	import { findProposal } from '$lib/protocol/proposals';
 	import { idMillis } from '$lib/ui/time';
@@ -1208,8 +1208,9 @@
 		narrowMedia.addEventListener('change', narrowMediaChange);
 		// Taken, and scrubbed from the address bar, before anything else can read or keep the URL.
 		const signInLink = previewMode ? undefined : takeSignInLink(window.location, scrubUrl);
-		// A server's sign-in page that this tab left the app for sent it back (`/signed-in/` brought the answer here).
-		const returned = previewMode ? undefined : takeReturned();
+		// A server's sign-in page that this tab left the app for sent it back (`/signed-in/` brought the answer here):
+		// what finishes it loads only then.
+		const returning = !previewMode && returnedWaiting() ? import('$lib/ui/sign-in-page') : undefined;
 		// A link pasted into this tab later is a same-document fragment change: take (and scrub) it too.
 		const hashChanged = (event: HashChangeEvent) => {
 			// Preferences opening, closing or changing section (`ProfileBar`) doesn't move the page.
@@ -1345,7 +1346,10 @@
 		chat.start();
 		client = chat;
 		if (signInLink) links.follow(signInLink);
-		if (returned) links.followReturn(returned);
+		void returning?.then((signInPage) => {
+			const returned = signInPage.takeReturned();
+			if (returned && client === chat) links.followReturn(returned, signInPage);
+		});
 		if (pushed) void followPush(chat, pushed);
 		if (link.room) linked = { ...link, server: offeredServer ?? chat.url, room: link.room };
 		if (offeredServer) {

@@ -245,7 +245,7 @@ picker and loads emoji-mart), `draft.ts` edits the composer's draft, `draft-fiel
 and `time.ts` read messages, `connection.ts` words the connection state, and
 `commands.ts` maps the composer's `/` commands to requests (and picks the `ext:media` category a send's files fit: `emoji` for `/emoji add`),
 `sign-in-link.ts` reads and scrubs an emailed sign-in link from the URL, tells this browser's own proposals' links from others, and words the question asked before using another's,
-`sign-in-page.ts` signs in on a server's page (external sign-in, and a server's passkey page): it opens the window on the tap, builds the request (`protocol/authorization.ts`), keeps it in session storage, takes the answer at `/signed-in/` (`src/routes/signed-in`) by `state`, and redeems it for its purpose (`finishAuthorization`); `link-controller.svelte.ts` finishes one that came back to this tab,
+`sign-in-page.ts` signs in on a server's page (external sign-in, and a server's passkey page), loaded on demand: it builds the request (`protocol/authorization.ts`), keeps it in session storage, waits for the answer by `state`, and redeems it for its purpose (`finishAuthorization`); `sign-in-window.ts`, which loads with the app, opens the window during the tap and tells whether a page sent this tab back; `sign-in-callback.ts` is the `/signed-in/` page's own (`src/routes/signed-in`), sharing no module with the app's page so it adds no chunk to its start; `link-controller.svelte.ts` finishes an answer that came back to this tab,
 `members.ts` reads the `user_id` typed to add a member, adds people to a room in turn (`addMembers`, whose refusals `couldNotAdd` words) and splits the member list into Online and Offline (`memberSections`), `people.ts` sorts people by name (`byName`) and narrows who could be picked by what's typed (`pickable`, `matching`) for both people pickers, and
 `room-order.svelte.ts` keeps the sidebar's top-level rooms in an order of your own (`RoomOrder`, by account under `apron.roomOrder`), which the sidebar drags rooms in (`room-drag.ts`, on demand) and moves with Alt+↑/↓,
 `storage.ts` keeps everything remembered between visits under `apron.*` keys,
@@ -336,7 +336,9 @@ shown and online), which reaches the session only through its hooks,
 `signin-connection.ts`
 the connection an email sign-in proposes and approves on (and an external
 sign-in begins and redeems on), `proposals.ts` the email proposals this
-browser made, kept by their `state`, `authorization.ts` the OAuth 2.1
+browser made, kept by their `state`, `external.ts` what a begin result says
+about a sign-in page (`parseExternal`, which loads with the app),
+`authorization.ts` the OAuth 2.1
 authorization request that external sign-in and a passkey page share (the
 URL, PKCE, `resource` from the WebSocket address, reading the answer, checking
 `state`), and `passkey-route.ts` where a passkey ceremony runs: in this page,

@@ -1,4 +1,4 @@
-import { parseExternal, type External } from './authorization';
+import { parseExternal, type External } from './external';
 import { isJsonObject, type JsonObject } from './types';
 
 /**

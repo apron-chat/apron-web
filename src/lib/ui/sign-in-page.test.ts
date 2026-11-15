@@ -4,9 +4,11 @@ import { PasskeyPageNeeded } from '$lib/protocol/passkey-route';
 import { memoryStorage } from '$lib/test/storage';
 import metadataText from '../../../static/client-metadata.json?raw';
 import {
-	CALLBACK_PATH, CLIENT_METADATA_PATH, OTHER_CLIENT_ID, PRODUCTION_ORIGIN, answerFrom, appClient, authorize, finishAuthorization, findAuthorization,
-	forgetAuthorization, passkeyOnPage, receiveCallback, rememberAuthorization, takeReturned, type AuthorizationFinisher, type PendingAuthorization
+	CALLBACK_PATH, CHANNEL, CLIENT_METADATA_PATH, OTHER_CLIENT_ID, PENDING_KEY, PRODUCTION_ORIGIN, RETURNED_KEY, answerFrom, appClient, authorize, finishAuthorization, findAuthorization,
+	forgetAuthorization, openSignInWindow, passkeyOnPage, rememberAuthorization, takeReturned, type AuthorizationFinisher, type PendingAuthorization
 } from './sign-in-page';
+import * as callback from './sign-in-callback';
+import { receiveCallback } from './sign-in-callback';
 
 /** Signing in on a server's page in a browser (§4.12, the passkey page): popup or this tab, the way back, and redemption. */
 const values = new Map<string, string>();
@@ -79,6 +81,10 @@ describe('requests kept for the way back', () => {
 });
 
 describe('the callback page', () => {
+	it('keeps its requests and answers where the app does', () => {
+		expect([callback.PENDING_KEY, callback.RETURNED_KEY, callback.CHANNEL]).toEqual([PENDING_KEY, RETURNED_KEY, CHANNEL]);
+	});
+
 	it('brings a request that left this tab back to the app, without the code in the address', () => {
 		rememberAuthorization(pending('q8Rz'));
 		const replace = vi.fn();
@@ -208,10 +214,9 @@ describe('finishing', () => {
 	});
 
 	it('runs a passkey ceremony on the passkey page in this tab where no popup opens', async () => {
-		const open = vi.fn(() => null);
 		const assign = vi.fn();
-		vi.stubGlobal('window', { open, location: { origin: 'https://web.example', assign } });
-		void passkeyOnPage(finisher(), new PasskeyPageNeeded('register', { url: 'https://chat.example/passkey?action=register&request=rq_7' }, 'ada'), { name: 'Ada' });
+		vi.stubGlobal('window', { open: () => null, location: { origin: 'https://web.example', assign } });
+		void passkeyOnPage(finisher(), new PasskeyPageNeeded('register', { url: 'https://chat.example/passkey?action=register&request=rq_7' }, 'ada'), { popup: openSignInWindow(), name: 'Ada' });
 		await vi.waitFor(() => expect(assign).toHaveBeenCalled());
 		const url = new URL(assign.mock.calls[0][0] as string);
 		expect(url.searchParams.get('action')).toBe('register');

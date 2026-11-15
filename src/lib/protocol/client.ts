@@ -4,7 +4,7 @@ import { requestPasskey, signalPasskeyLabel } from './webauthn';
 import { writeEmbed } from './embeds';
 import { SignInConnection, type RpcFailure } from './signin-connection';
 import { PROPOSAL_KEPT_MS, findProposal, forgetProposal, newProposalState, rememberProposal, type ProposalScheme } from './proposals';
-import { parseExternal, type CodeRedemption, type External } from './authorization';
+import { parseExternal, type CodeRedemption, type External } from './external';
 import { PasskeyPageNeeded, passkeyRoute, passkeysOnlyFirstParty, usesPage } from './passkey-route';
 import {
 	ProtocolStore,

@@ -3,6 +3,7 @@ import type { ClientSnapshot } from '$lib/protocol/client';
 import type { Proposal } from '$lib/protocol/proposals';
 import { SignInLinks, type LinkClient } from './link-controller.svelte';
 import { askedLinkFailure } from './sign-in-link';
+import * as signInPage from './sign-in-page';
 import type { PendingAuthorization } from './sign-in-page';
 
 const HERE = 'wss://here.example/';
@@ -182,7 +183,7 @@ describe('a sign-in page’s answer brought back to this tab', () => {
 
 	it('signs in with an external code at once, on its server, and only then remembers the switch', async () => {
 		const { links, chat, host, said, answer } = page();
-		links.followReturn({ pending: { ...request({ scheme: 'external', kind: 'sign-in' }), name: 'Ada' }, response: { code: 'Hk41x9', state: 'q8Rz' } });
+		links.followReturn({ pending: { ...request({ scheme: 'external', kind: 'sign-in' }), name: 'Ada' }, response: { code: 'Hk41x9', state: 'q8Rz' } }, signInPage);
 		expect(chat.signInWithExternalCode).toHaveBeenCalledWith(redeem, THERE, { name: 'Ada', beforeSwitch: expect.any(Function) });
 		expect([links.working, said]).toEqual(['signing-in', ['… Signing in…']]);
 		answer.signIn.resolve();
@@ -193,11 +194,11 @@ describe('a sign-in page’s answer brought back to this tab', () => {
 
 	it('opens the connect screen on its scheme and server for a declined or refused sign-in', async () => {
 		const { links, chat, host, answer } = page();
-		links.followReturn({ pending: request({ scheme: 'external', kind: 'sign-in' }), response: { error: 'access_denied', state: 'q8Rz' } });
+		links.followReturn({ pending: request({ scheme: 'external', kind: 'sign-in' }), response: { error: 'access_denied', state: 'q8Rz' } }, signInPage);
 		expect(chat.signInWithExternalCode).not.toHaveBeenCalled();
 		expect(host.failed).toHaveBeenCalledWith({ error: 'Sign-in was cancelled.', server: THERE, scheme: 'external' });
 		expect(links.failure).toEqual({ error: 'Sign-in was cancelled.' });
-		links.followReturn({ pending: request({ scheme: 'webauthn', action: 'login' }, HERE), response: { code: 'Hk41x9', state: 'q8Rz' } });
+		links.followReturn({ pending: request({ scheme: 'webauthn', action: 'login' }, HERE), response: { code: 'Hk41x9', state: 'q8Rz' } }, signInPage);
 		links.settle(snapshot);
 		answer.add.reject(new Error('Invalid code'));
 		await settled();
@@ -206,7 +207,7 @@ describe('a sign-in page’s answer brought back to this tab', () => {
 
 	it('finishes a passkey from the passkey page once the page’s session has settled, signing it in', async () => {
 		const { links, chat, host, answer } = page();
-		links.followReturn({ pending: { ...request({ scheme: 'webauthn', action: 'login' }, HERE), name: 'Ada' }, response: { code: 'Hk41x9', state: 'q8Rz', iss: 'https://here.example' } });
+		links.followReturn({ pending: { ...request({ scheme: 'webauthn', action: 'login' }, HERE), name: 'Ada' }, response: { code: 'Hk41x9', state: 'q8Rz', iss: 'https://here.example' } }, signInPage);
 		expect(links.returned).toBeDefined();
 		links.settle({ ...snapshot, status: 'connecting' });
 		expect(chat.finishPasskeyWithCode).not.toHaveBeenCalled();
@@ -220,7 +221,7 @@ describe('a sign-in page’s answer brought back to this tab', () => {
 
 	it('adds an external sign-in on the account it began on, and says so as a toast when refused', async () => {
 		const { links, chat, host, said, answer } = page();
-		links.followReturn({ pending: request({ scheme: 'external', kind: 'addition', account: 'ada' }, HERE), response: { code: 'Hk41x9', state: 'q8Rz' } });
+		links.followReturn({ pending: request({ scheme: 'external', kind: 'addition', account: 'ada' }, HERE), response: { code: 'Hk41x9', state: 'q8Rz' } }, signInPage);
 		links.settle(snapshot);
 		expect(chat.addExternalWithCode).toHaveBeenCalledWith(redeem, 'ada');
 		answer.add.reject(Object.assign(new Error('denied'), { code: -32001 }));

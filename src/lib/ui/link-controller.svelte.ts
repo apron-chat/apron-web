@@ -3,8 +3,9 @@ import type { ClientSnapshot } from '$lib/protocol/client';
 import type { Proposal, ProposalScheme } from '$lib/protocol/proposals';
 import { addError, serverLabel } from './connection';
 import { askedLinkFailure, linkUse, runSignInLink, sessionSettled, type LinkUse, type SignInLink, type SignInLinkClient } from './sign-in-link';
-import { finishAuthorization, signInPageError, type AuthorizationFinisher, type PendingAuthorization } from './sign-in-page';
-import { redemption, type AuthorizationResponse, type CodeRedemption } from '$lib/protocol/authorization';
+import type { AuthorizationFinisher, PendingAuthorization } from './sign-in-page';
+import { signInPageError } from './sign-in-window';
+import type { AuthorizationResponse, CodeRedemption } from '$lib/protocol/authorization';
 import { Task } from './task.svelte';
 
 /**
@@ -48,6 +49,9 @@ interface Returned {
 	pending: PendingAuthorization;
 	redeem: CodeRedemption;
 }
+
+/** What finishing one needs of `sign-in-page.ts`, which loads on demand: the page has it once it took the answer. */
+export type SignInPageModule = Pick<typeof import('./sign-in-page'), 'finishAuthorization' | 'redemption'>;
 
 /** An addition this browser proposed, waiting for the session of the account that proposed it. */
 type Addition = Extract<LinkUse, { kind: 'addition' }>;
@@ -111,28 +115,32 @@ export class SignInLinks {
 	 * connection takes the code. A decline or an error says so: on the
 	 * connect screen for a sign-in, as a toast for an addition.
 	 */
-	followReturn(returned: { pending: PendingAuthorization; response: AuthorizationResponse }): void {
+	followReturn(returned: { pending: PendingAuthorization; response: AuthorizationResponse }, page: SignInPageModule): void {
 		const { pending } = returned;
 		const signsIn = pending.purpose.scheme === 'webauthn' ? pending.purpose.account === undefined : pending.purpose.kind === 'sign-in';
+		this.#page = page;
 		let redeem: CodeRedemption;
 		try {
-			redeem = redemption(pending, returned.response);
+			redeem = page.redemption(pending, returned.response);
 		} catch (cause) {
 			this.#returnFailed(pending, signInPageError(cause), signsIn);
 			return;
 		}
-		if (pending.purpose.scheme === 'external' && pending.purpose.kind === 'sign-in') this.#redeemSignIn(pending, redeem);
+		if (pending.purpose.scheme === 'external' && pending.purpose.kind === 'sign-in') this.#redeemSignIn(pending, redeem, page);
 		else this.returned = { pending, redeem };
 	}
 
-	#redeemSignIn(pending: PendingAuthorization, redeem: CodeRedemption): void {
+	/** `sign-in-page.ts`, once an answer brought it (`followReturn`). */
+	#page: SignInPageModule | undefined;
+
+	#redeemSignIn(pending: PendingAuthorization, redeem: CodeRedemption, page: SignInPageModule): void {
 		const chat = this.host.client();
 		if (!chat) return;
 		const switched = pending.server !== chat.url;
 		this.#work('signing-in', async () => {
 			this.host.feedback.pending('Signing in…');
 			try {
-				await finishAuthorization(chat, pending, redeem, () => this.host.beforeSwitch(switched));
+				await page.finishAuthorization(chat, pending, redeem, () => this.host.beforeSwitch(switched));
 			} catch (cause) {
 				this.host.feedback.clear();
 				this.#returnFailed(pending, signInPageError(cause), true);
@@ -225,7 +233,8 @@ export class SignInLinks {
 	#settleReturn(snapshot: Parameters<SignInLinks['settle']>[0]): void {
 		const returned = this.returned;
 		const chat = this.host.client();
-		if (!returned || !chat || this.busy || !sessionSettled(snapshot)) return;
+		const page = this.#page;
+		if (!returned || !chat || !page || this.busy || !sessionSettled(snapshot)) return;
 		untrack(() => {
 			this.returned = undefined;
 			const { pending, redeem } = returned;
@@ -234,7 +243,7 @@ export class SignInLinks {
 			this.#work('adding', async () => {
 				this.host.feedback.pending(adds ? 'Adding…' : 'Signing in…');
 				try {
-					await finishAuthorization(chat, pending, redeem);
+					await page.finishAuthorization(chat, pending, redeem);
 				} catch (cause) {
 					this.host.feedback.clear();
 					this.#returnFailed(pending, purpose.scheme === 'external' ? addError(cause, 'external') : signInPageError(cause), !adds);

@@ -16,7 +16,7 @@
 	import { greetings } from '$lib/ui/greetings.svelte';
 	import { codeStillFor, type SentCode } from '$lib/ui/sign-in-link';
 	import { PasskeyPageNeeded } from '$lib/protocol/passkey-route';
-	import { authorize, finishAuthorization, openSignInWindow, passkeyOnPage, signInPageError } from '$lib/ui/sign-in-page';
+	import { openSignInWindow, signInPageError } from '$lib/ui/sign-in-window';
 	import type { SessionView } from '$lib/ui/session.svelte';
 	import {
 		CANCELLED_TRY_CREATE, UNUSABLE_VIEW, chooseView, firstScheme, passkeyChoice, readsOnly, passkeyMode, signInHint, signInView, signOutThen, unusableMessage, usableSchemes,
@@ -481,14 +481,11 @@
 		pageAbort = abort;
 		codeBusy = true;
 		const name = displayName.trim() || undefined;
+		if (popup) notice = 'Finish signing in in the window that opened.';
+		const switching = url !== client.url;
 		try {
-			const external = await client.beginExternal(url);
-			abort.signal.throwIfAborted();
-			if (popup) notice = 'Finish signing in in the window that opened.';
-			const redeem = await authorize(external, url, { scheme: 'external', kind: 'sign-in' }, { popup, ...(name ? { name } : {}), signal: abort.signal });
-			notice = '';
-			const switching = url !== client.url;
-			await finishAuthorization(client, { server: url, purpose: { scheme: 'external', kind: 'sign-in' }, ...(name ? { name } : {}) }, redeem, () => (switching ? onconnect() : onsignout()()));
+			const { externalOnPage } = await import('$lib/ui/sign-in-page');
+			await externalOnPage(client, url, { scheme: 'external', kind: 'sign-in' }, { popup, ...(name ? { name } : {}), signal: abort.signal, beforeSwitch: () => (switching ? onconnect() : onsignout()()) });
 			finish();
 		} catch (cause) {
 			popup?.close();
@@ -584,7 +581,15 @@
 		codeBusy = true;
 		notice = '';
 		try {
-			await passkeyOnPage(client, needed, { ...(name ? { name } : {}), signal: abort.signal });
+			// Opened before what runs the page loads, while a browser may still allow it.
+			const popup = openSignInWindow();
+			try {
+				const { passkeyOnPage } = await import('$lib/ui/sign-in-page');
+				await passkeyOnPage(client, needed, { popup, ...(name ? { name } : {}), signal: abort.signal });
+			} catch (cause) {
+				popup?.close();
+				throw cause;
+			}
 		} catch (cause) {
 			throw new Error(abort.signal.aborted ? 'Cancelled.' : signInPageError(cause, 'Unable to use passkey'));
 		} finally {
