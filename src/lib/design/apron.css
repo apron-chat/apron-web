@@ -482,7 +482,13 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-composer-editable .ap-mention.ap-mention-quiet { background: color-mix(in srgb, var(--ink-muted) 14%, transparent); color: var(--ink-muted); }
 .ap-composer-editable .ap-mention-role.ap-mention-quiet { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink-muted) 45%, transparent); }
 /* The autocomplete picker anchors to the composer's row and grows upward. */
-.ap-composer-wrap { position: relative; }
+.ap-composer-wrap { position: relative; display: flex; flex-direction: column; }
+/*
+ * Where the pane is too short for a long draft at its full 200px (a small phone with its keyboard up), the composer gives
+ * way rather than run on under the keyboard: it shrinks to what is left, and its field scrolls, so the line being
+ * written and Send stay in view.
+ */
+.ap-composer-wrap, .ap-composer-grown { min-height: 0; }
 /* Send counting down a wait on sending (`waitUntil`), after an hourglass: figures that don't shift as they count. */
 .ap-btn.ap-composer-wait { font-variant-numeric: tabular-nums; }
 /* Above the field: the message being replied to, with Cancel reply */
@@ -515,7 +521,7 @@ a.ap-embed-card:hover { background: var(--hover); }
  * send and Send at its foot.
  */
 .ap-composer-full { flex: none; display: flex; flex-direction: column; height: 75%; max-height: calc(100% - var(--header-h) - 3 * var(--space-8)); }
-.ap-composer-full > .ap-composer-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.ap-composer-full > .ap-composer-wrap { flex: 1; }
 .ap-composer-full .ap-composer { flex: 1; min-height: 0; display: grid; grid-template: "head head head head" auto "body body body body" minmax(0, 1fr) "start end keys send" auto / auto auto minmax(0, 1fr) auto; align-items: center; gap: 0; padding: 0; overflow: hidden; }
 /* A Markdown field's head, on the full panel and a MarkdownEditor alike: its formatting, then Write and Preview at its end. */
 .ap-mdhead { grid-area: head; display: flex; align-items: center; gap: var(--space-0_5); padding: var(--space-1_5) var(--space-2); border-bottom: 1px solid var(--line); }

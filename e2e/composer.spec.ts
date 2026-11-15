@@ -329,6 +329,30 @@ test.describe('a draft past one line', () => {
 	});
 });
 
+test.describe('a long draft on a small phone with its keyboard up', () => {
+	// An iPhone SE's screen less its keyboard: too short for the header, the description and a 200px field.
+	test.use({ ...DEVICES.phone, viewport: { width: 375, height: 330 } });
+
+	test('shrinks the composer to fit, its field scrolled to the line being written, Send in view', async ({ preview, page }) => {
+		await preview.open();
+		await preview.press(preview.composer());
+		const words = 'one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty';
+		await page.keyboard.type(`${words} ${words} ${words} the end`);
+		const pane = (await page.locator('main.ap-shell-main').boundingBox())!;
+		const box = (await page.locator('form.ap-composer').boundingBox())!;
+		expect(box.y + box.height).toBeLessThanOrEqual(pane.y + pane.height);
+		await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeInViewport({ ratio: 1 });
+		const { caret, field } = await preview.composer().evaluate((el) => {
+			const rect = getSelection()!.getRangeAt(0).getBoundingClientRect();
+			const own = el.getBoundingClientRect();
+			return { caret: { top: rect.top, bottom: rect.bottom }, field: { top: own.top, bottom: own.bottom, scrolled: el.scrollTop } };
+		});
+		expect(field.scrolled).toBeGreaterThan(0);
+		expect(caret.top).toBeGreaterThanOrEqual(field.top);
+		expect(caret.bottom).toBeLessThanOrEqual(field.bottom + 1);
+	});
+});
+
 test.describe('a room’s description', () => {
 	test('is written as in the composer: mentions as chips from the picker, formatting, Preview, and Ctrl+Enter saves', async ({ preview, page }) => {
 		const errors: string[] = [];
