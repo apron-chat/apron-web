@@ -214,6 +214,12 @@ export interface AttachmentFile {
 	src?: MediaSrc;
 }
 
+/**
+ * How much of its pane the Composer takes: one line, past one line (`grown`, the field the box's whole width and its
+ * buttons in a row under it), or the full panel.
+ */
+export type ComposerSize = 'line' | 'grown' | 'full';
+
 /** What a Composer hands its `field` snippet: how your own field reads, as its textarea would. */
 export interface ComposerField {
 	/** The placeholder: the Composer's `placeholder`, else "Message {room}" or "Reply in {thread}". */

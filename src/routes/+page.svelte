@@ -23,7 +23,7 @@
 	import JumpBar from '$lib/components/JumpBar.svelte';
 	import TimelineMessage from '$lib/components/TimelineMessage.svelte';
 	import EmbedItem from '$lib/components/embeds/Embed.svelte';
-	import type { Face, MessageEmbed, MessageHandlers, MessageTestids } from '$lib/design/components/types';
+	import type { ComposerSize, Face, MessageEmbed, MessageHandlers, MessageTestids } from '$lib/design/components/types';
 	import { linkedRoomIn, messageView, sourceEmbed, type LinkedRoom, type MessageCaps, type MessageContext, type MessageRow, type MessageView } from '$lib/ui/message-view';
 	import { decorateCode } from '$lib/ui/copy-code';
 	import { emojiAnchor, emojiPicker, type EmojiPickerRequest } from '$lib/ui/emoji-picker.svelte';
@@ -435,8 +435,10 @@
 	let memberRowsKept = false;
 	let memberRowsDrawn = $derived(firstScreenDrawn || (memberRowsKept ||= memberListOpen));
 	let composer = $state<Composer | undefined>();
-	/** The composer is the full panel, which the room's description makes way for. */
-	let composerExpanded = $state(false);
+	/** How much of the pane the composer takes (`ComposerSize`), which the room's description makes way for. */
+	let composerSize = $state<ComposerSize>('line');
+	/** An on-screen keyboard is up (`trackKeyboard`): the pane is what's left above it. */
+	let keyboardUp = $state(false);
 	let memberListToggle = $state<PanelToggle | undefined>();
 	/** The room your typing indicator shows in, and the timer that ends it there 5 s after the last keystroke. */
 	let typingIn: { room: string; timer: ReturnType<typeof setTimeout> } | undefined;
@@ -788,6 +790,11 @@
 	let descriptionPutAway = $derived(Boolean(editTarget?.description && descriptionHidden(hiddenDescriptions, draftKey(editTarget.id), editTarget.description)));
 	/** The open room's or thread's description, pinned under the header until its × puts it away (and again once it's edited). */
 	let pinnedDescription = $derived(editTarget?.description && !descriptionPutAway ? { id: editTarget.id, description: editTarget.description } : undefined);
+	/**
+	 * The pinned description makes way, for now (not put away), while the composer needs its room: as the full panel, whose
+	 * timeline keeps its few lines and its foot in view, or past one line with a keyboard up, the pane too short for both.
+	 */
+	let descriptionMakesWay = $derived(composerSize === 'full' || (composerSize === 'grown' && keyboardUp));
 	/** Adding and removing other members of the open pane's room (§4.2.2), until the server says it can't. */
 	let canChangeMembers = $derived(session.canManageRooms && !session.readOnly && paneSteady);
 	/**
@@ -1185,7 +1192,7 @@
 	// At the latest while pinned there, anchored at the pane's bottom edge, and watching whether the latest shows.
 	viewport.watchLatest();
 
-	onMount(() => trackKeyboard());
+	onMount(() => trackKeyboard((up) => (keyboardUp = up)));
 
 	onMount(() => {
 		passkeyUnavailable = passkeySupportError();
@@ -3646,8 +3653,7 @@
 				/>
 			{/if}
 
-			<!-- Not while the composer is the full panel: the timeline above it keeps its few lines, and the panel its foot, on a short pane. -->
-			{#if pinnedDescription && !composerExpanded}
+			{#if pinnedDescription && !descriptionMakesWay}
 				{@const pinned = pinnedDescription}
 				{#key pinned.id}
 					<ThreadDescription description={pinned.description} thread={Boolean(activeThread)} onopenroom={openMentionedRoom} ondismiss={() => (hiddenDescriptions = hideDescription(hiddenDescriptions, draftKey(pinned.id), pinned.description))} />
@@ -3765,7 +3771,7 @@
 					bind:value={drafts.text}
 					bind:mentions={composerMentions}
 					bind:dismissed={drafts.dismissed}
-					bind:expanded={composerExpanded}
+					bind:size={composerSize}
 					placeholder={activeThread ? `Reply in ${threadTitle(activeThread)}` : `Message ${activeRoom.title}`}
 					holdSend={!canCompose || Boolean(paneMentionAdding)}
 					canUpload={session.capabilities['embed:upload'] && !composingLive}

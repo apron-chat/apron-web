@@ -20,7 +20,7 @@
 	import WritePreview from './WritePreview.svelte';
 	import { secondNow } from './clock.svelte';
 	import { isCommand } from './compose';
-	import type { ComposerField, EmbedProps } from './types';
+	import type { ComposerField, ComposerSize, EmbedProps } from './types';
 	import { LONG_WAIT_MS, roomName, waitLabel, waitWords } from './util';
 
 	interface Props {
@@ -140,6 +140,8 @@
 		 * to a row under it.
 		 */
 		multiline?: boolean;
+		/** How much of its pane it takes, as it changes, to make room for it; `bind:size`, read-only. */
+		size?: ComposerSize;
 		/** `data-testid` on the Expand button. */
 		expandTestid?: string;
 		/** `data-testid` on the full panel. */
@@ -149,7 +151,7 @@
 		room, placeholder, value = $bindable(''), oninput, onsend, canSend, waitUntil, canUpload, onfiles, accept, onattachdraft, disabled, canRecord, onrecord, onstoprecording, recording, recordingTime, thread, canCommand, live,
 		field, onemoji, emojiOpen, emojiButton = $bindable(), reply, replyText, oncancelreply, attachments, previews, preview, onremovepreview, picker,
 		replyTestid, attachmentsTestid, previewsTestid, fileInputTestid, commandTestid, liveTestid, emojiTestid, sendTestid, class: className,
-		onexpand, expanded = false, oncollapse, toolbar, rendered, previewing = false, onpreview, sendKeys, multiline, expandTestid, panelTestid
+		onexpand, expanded = false, oncollapse, toolbar, rendered, previewing = false, onpreview, sendKeys, multiline, size = $bindable('line'), expandTestid, panelTestid
 	}: Props = $props();
 
 	const ph = $derived(placeholder || (thread ? `Reply in ${roomName(thread.name, thread.thread, { thread: true })}` : `Message ${room || ''}`));
@@ -182,6 +184,9 @@
 	 * under it (ap-composer-grown), as at the full panel's foot. Not while recording, whose line takes no typing.
 	 */
 	const grown = $derived(!expanded && !recording && (breaks || wrapped));
+	$effect.pre(() => {
+		size = expanded ? 'full' : grown ? 'grown' : 'line';
+	});
 	$effect(() => {
 		if (!wrapAt || wrapped) return;
 		// Emptied (sent): the next wrap is a fresh one.

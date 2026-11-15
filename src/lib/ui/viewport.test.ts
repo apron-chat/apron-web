@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { keyboardFit } from './viewport';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { keyboardFit, trackKeyboard } from './viewport';
 
 /** An iPhone 14's layout viewport, as tall as the screen under the status bar. */
 const LAYOUT = 844;
@@ -19,5 +19,29 @@ describe('fitting the app to the keyboard', () => {
 		expect(keyboardFit({ height: 507.6, offsetTop: 335.8, scale: 1 }, LAYOUT)).toEqual({ height: 508, top: 336 });
 		// Never above the top of the page: iOS overscroll can report a negative offset as the page bounces.
 		expect(keyboardFit({ height: 508, offsetTop: -12, scale: 1 }, LAYOUT)).toEqual({ height: 508, top: 0 });
+	});
+});
+
+describe('hearing the keyboard', () => {
+	afterEach(() => vi.unstubAllGlobals());
+
+	it('tells onchange as it comes up and goes down, once each, and that it is down once no longer tracked', () => {
+		const viewport = Object.assign(new EventTarget(), { height: LAYOUT, offsetTop: 0, scale: 1 });
+		vi.stubGlobal('window', { visualViewport: viewport });
+		const root = { clientHeight: LAYOUT, style: { setProperty: () => {}, removeProperty: () => {} }, dataset: {} as DOMStringMap } as unknown as HTMLElement;
+		const heard: boolean[] = [];
+		const stop = trackKeyboard((up) => heard.push(up), root);
+		const resize = (height: number) => {
+			viewport.height = height;
+			viewport.dispatchEvent(new Event('resize'));
+		};
+		resize(508);
+		// Panning with it up, or the keyboard's suggestions bar coming and going, is no news.
+		viewport.dispatchEvent(new Event('scroll'));
+		resize(470);
+		resize(LAYOUT);
+		resize(508);
+		stop();
+		expect(heard).toEqual([true, false, true, false]);
 	});
 });

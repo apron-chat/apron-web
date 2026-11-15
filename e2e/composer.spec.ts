@@ -353,6 +353,49 @@ test.describe('a long draft on a small phone with its keyboard up', () => {
 	});
 });
 
+test.describe('a room’s description and a long draft on a phone', () => {
+	const description = 'Welcome to the demo server. Messages expire after a month.\n\n- Guests are read-only. Create an account with a passkey to post.\n- Use `/invite-device` to get a login link for another device.\n- Be kind.';
+	test.use({ ...DEVICES.phone, viewport: { width: 375, height: 667 }, knobs: { rooms: { general: { description } } } });
+
+	test('makes way while the keyboard is up and the draft is past one line, and comes back as either ends', async ({ preview, page }) => {
+		// A stand-in for the visual viewport that an on-screen keyboard shrinks (`trackKeyboard`): an iPhone SE's, its keyboard 337px.
+		await page.addInitScript(() => {
+			const viewport = Object.assign(new EventTarget(), { height: innerHeight, offsetTop: 0, scale: 1 });
+			Object.defineProperty(window, 'visualViewport', { value: viewport, configurable: true });
+			(window as unknown as { keyboard: (up: boolean) => void }).keyboard = (up) => {
+				viewport.height = up ? innerHeight - 337 : innerHeight;
+				viewport.dispatchEvent(new Event('resize'));
+			};
+		});
+		const keyboard = (up: boolean) => page.evaluate((on) => (window as unknown as { keyboard: (up: boolean) => void }).keyboard(on), up);
+		const pinned = page.getByTestId('pane-description');
+		await preview.open();
+		await preview.press(preview.composer());
+		await page.keyboard.type('one line');
+
+		await test.step('one line with the keyboard up: it stays', async () => {
+			await keyboard(true);
+			await expect(page.locator('html')).toHaveAttribute('data-keyboard', '');
+			await expect(pinned).toBeVisible();
+		});
+
+		await test.step('past one line: it makes way, and the field has its room', async () => {
+			const words = 'one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty';
+			await page.keyboard.type(` ${words} ${words} ${words} the end`);
+			await expect(page.locator('form.ap-composer')).toHaveClass(/ap-composer-grown/);
+			await expect(pinned).toHaveCount(0);
+			await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeInViewport({ ratio: 1 });
+			expect((await preview.composer().boundingBox())!.height).toBeGreaterThan(150);
+		});
+
+		await test.step('the keyboard down: it comes back, with the draft as it was', async () => {
+			await keyboard(false);
+			await expect(pinned).toBeVisible();
+			await expect(preview.composer()).toContainText('the end');
+		});
+	});
+});
+
 test.describe('a room’s description', () => {
 	test('is written as in the composer: mentions as chips from the picker, formatting, Preview, and Ctrl+Enter saves', async ({ preview, page }) => {
 		const errors: string[] = [];
