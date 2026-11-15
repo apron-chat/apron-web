@@ -104,10 +104,10 @@
 		outsideLabel?: string;
 		/** Sending waits until then, as the server asked (`retry_after`, epoch milliseconds): Send counts down, and the draft stays. */
 		waitUntil?: number;
-		/** How much of its pane it takes, as it changes, to make room for it (`ComposerSize`); `bind:size`, read-only. */
-		size?: ComposerSize;
+		/** How much of its pane it takes (`ComposerSize`), as that changes, to make room for it; one line once it is gone. */
+		onsize?: (size: ComposerSize) => void;
 	}
-	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), size = $bindable('line'), placeholder, disabled = false, holdSend = false, canUpload, files = [], uploadLimits, canCommand = false, live, people, outsiders, quiet, rooms = [], reply, oninput, onsend, onfiles, onunstage, onrename, oncancelreply, onescape, onup, onmention, outsideLabel, waitUntil }: Props = $props();
+	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), onsize, placeholder, disabled = false, holdSend = false, canUpload, files = [], uploadLimits, canCommand = false, live, people, outsiders, quiet, rooms = [], reply, oninput, onsend, onfiles, onunstage, onrename, oncancelreply, onescape, onup, onmention, outsideLabel, waitUntil }: Props = $props();
 
 	/** The field: chips and autocomplete, as in the message editor. */
 	let field = $state<MessageField | undefined>();
@@ -344,7 +344,7 @@
 	onexpand={canExpand ? expand : undefined}
 	onattachdraft={canUpload && draftType && !live && !command ? attachDraft : undefined}
 	{expanded}
-	bind:size
+	{onsize}
 	oncollapse={() => setExpanded(false)}
 	toolbar={formatting}
 	{rendered}

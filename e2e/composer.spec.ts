@@ -357,42 +357,91 @@ test.describe('a room’s description and a long draft on a phone', () => {
 	const description = 'Welcome to the demo server. Messages expire after a month.\n\n- Guests are read-only. Create an account with a passkey to post.\n- Use `/invite-device` to get a login link for another device.\n- Be kind.';
 	test.use({ ...DEVICES.phone, viewport: { width: 375, height: 667 }, knobs: { rooms: { general: { description } } } });
 
-	test('makes way while the keyboard is up and the draft is past one line, and comes back as either ends', async ({ preview, page }) => {
-		// A stand-in for the visual viewport that an on-screen keyboard shrinks (`trackKeyboard`): an iPhone SE's, its keyboard 337px.
+	test('makes way while the window is short and the draft is past one line, and comes back as either ends', async ({ preview, page }) => {
+		// A stand-in for the visual viewport, which what covers the bottom of the page shrinks (`trackKeyboard`): an iPhone
+		// SE's keyboard, 337px, or a tablet's shortcut bar over a hardware keyboard. The window itself stays as tall.
 		await page.addInitScript(() => {
 			const viewport = Object.assign(new EventTarget(), { height: innerHeight, offsetTop: 0, scale: 1 });
 			Object.defineProperty(window, 'visualViewport', { value: viewport, configurable: true });
-			(window as unknown as { keyboard: (up: boolean) => void }).keyboard = (up) => {
-				viewport.height = up ? innerHeight - 337 : innerHeight;
+			(window as unknown as { cover: (px: number) => void }).cover = (px) => {
+				viewport.height = innerHeight - px;
 				viewport.dispatchEvent(new Event('resize'));
 			};
 		});
-		const keyboard = (up: boolean) => page.evaluate((on) => (window as unknown as { keyboard: (up: boolean) => void }).keyboard(on), up);
+		const cover = (px: number) => page.evaluate((by) => (window as unknown as { cover: (px: number) => void }).cover(by), px);
+		/** How far the composer runs past what the keyboard leaves on screen (none: 0 or less). */
+		const under = () => page.locator('form.ap-composer').evaluate((form) => form.getBoundingClientRect().bottom - window.visualViewport!.height);
 		const pinned = page.getByTestId('pane-description');
+		const words = 'one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty';
 		await preview.open();
 		await preview.press(preview.composer());
 		await page.keyboard.type('one line');
 
 		await test.step('one line with the keyboard up: it stays', async () => {
-			await keyboard(true);
+			await cover(337);
 			await expect(page.locator('html')).toHaveAttribute('data-keyboard', '');
 			await expect(pinned).toBeVisible();
 		});
 
-		await test.step('past one line: it makes way, and the field has its room', async () => {
-			const words = 'one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty';
+		await test.step('past one line: it makes way, and the field has its full 200px above the keyboard', async () => {
 			await page.keyboard.type(` ${words} ${words} ${words} the end`);
 			await expect(page.locator('form.ap-composer')).toHaveClass(/ap-composer-grown/);
 			await expect(pinned).toHaveCount(0);
-			await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeInViewport({ ratio: 1 });
-			expect((await preview.composer().boundingBox())!.height).toBeGreaterThan(150);
+			await expect.poll(async () => (await preview.composer().boundingBox())!.height).toBeGreaterThanOrEqual(199);
+			expect(await under()).toBeLessThanOrEqual(0);
 		});
 
-		await test.step('the keyboard down: it comes back, with the draft as it was', async () => {
-			await keyboard(false);
+		await test.step('the full panel opening and closing keeps the line being written in view, after a line break too', async () => {
+			// The caret is at the end: the field is scrolled to its foot, within half a line (the caret's box is the text's, not its line's).
+			const atFoot = () => preview.composer().evaluate((el) => (el.scrollHeight - el.clientHeight - el.scrollTop) / parseFloat(getComputedStyle(el).lineHeight));
+			await page.keyboard.press('Enter');
+			await page.keyboard.type('a second paragraph');
+			await preview.press(page.getByTestId('composer-expand'));
+			await expect(page.getByTestId('composer-panel')).toBeVisible();
+			await expect.poll(atFoot).toBeLessThan(0.5);
+			expect(await under()).toBeLessThanOrEqual(0);
+			await page.keyboard.press('Enter');
+			await preview.press(page.getByRole('button', { name: 'Collapse composer' }));
+			await expect(page.getByTestId('composer-panel')).toBeHidden();
+			await expect.poll(atFoot).toBeLessThan(0.5);
+			await expect(pinned).toHaveCount(0);
+		});
+
+		await test.step('only a shortcut bar over the bottom, the window tall enough for both: it comes back, with the draft as it was', async () => {
+			await cover(60);
+			await expect(page.locator('html')).toHaveAttribute('data-keyboard', '');
 			await expect(pinned).toBeVisible();
 			await expect(preview.composer()).toContainText('the end');
+			expect(await under()).toBeLessThanOrEqual(0);
 		});
+
+		await test.step('the keyboard down: it stays', async () => {
+			await cover(0);
+			await expect(page.locator('html')).not.toHaveAttribute('data-keyboard');
+			await expect(pinned).toBeVisible();
+		});
+	});
+});
+
+test.describe('a room’s description and the full panel', () => {
+	test.use({ ...DEVICES.desktop, knobs: { rooms: { general: { description: 'Say hello.' } } } });
+
+	test('makes way while it is open, and comes back as the composer goes for a selection', async ({ preview, page }) => {
+		const pinned = page.getByTestId('pane-description');
+		await preview.open();
+		await preview.composer().click();
+		await page.keyboard.type('pick me');
+		await page.keyboard.press('Enter');
+		await expect(preview.message('pick me')).toBeVisible();
+		await page.keyboard.type('one');
+		await page.keyboard.press('Shift+Enter');
+		await page.keyboard.type('two');
+		await page.getByTestId('composer-expand').click();
+		await expect(pinned).toHaveCount(0);
+		await preview.message('pick me').click({ modifiers: ['Shift'] });
+		await expect(page.getByTestId('selection-bar')).toContainText('1 message selected');
+		await expect(page.getByTestId('composer-panel')).toHaveCount(0);
+		await expect(pinned).toBeVisible();
 	});
 });
 
@@ -676,7 +725,7 @@ test.describe('the full panel on a small phone with its keyboard up', () => {
 	// An iPhone SE's screen less its keyboard, and a description long enough to take the timeline's few lines.
 	test.use({ ...DEVICES.phone, viewport: { width: 375, height: 330 }, knobs: { rooms: { general: { description } } } });
 
-	test('puts the room’s description away while it is open, keeps its foot in view, and brings the description back as it closes', async ({ preview, page }) => {
+	test('puts the room’s description away while it is open, keeps its foot in view, and brings the description back once the draft is sent', async ({ preview, page }) => {
 		await preview.open();
 		await expect(page.getByTestId('pane-description')).toBeVisible();
 		await preview.press(preview.composer());
@@ -692,6 +741,10 @@ test.describe('the full panel on a small phone with its keyboard up', () => {
 		await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeInViewport({ ratio: 1 });
 		await preview.press(page.getByRole('button', { name: 'Collapse composer' }));
 		await expect(page.getByTestId('composer-panel')).toBeHidden();
+		// Still two lines, in a window this short: still away.
+		await expect(page.getByTestId('pane-description')).toHaveCount(0);
+		await preview.press(page.getByRole('button', { name: 'Send message', exact: true }));
+		await preview.waitForSent('message', (p) => p.body?.text === 'one\ntwo');
 		await expect(page.getByTestId('pane-description')).toBeVisible();
 	});
 });

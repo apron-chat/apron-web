@@ -25,23 +25,25 @@ describe('fitting the app to the keyboard', () => {
 describe('hearing the keyboard', () => {
 	afterEach(() => vi.unstubAllGlobals());
 
-	it('tells onchange as it comes up and goes down, once each, and that it is down once no longer tracked', () => {
+	it('tells onchange the height the app takes as it changes, and that the keyboard is down once no longer tracked', () => {
 		const viewport = Object.assign(new EventTarget(), { height: LAYOUT, offsetTop: 0, scale: 1 });
 		vi.stubGlobal('window', { visualViewport: viewport });
 		const root = { clientHeight: LAYOUT, style: { setProperty: () => {}, removeProperty: () => {} }, dataset: {} as DOMStringMap } as unknown as HTMLElement;
-		const heard: boolean[] = [];
-		const stop = trackKeyboard((up) => heard.push(up), root);
+		const heard: (number | undefined)[] = [];
+		const stop = trackKeyboard((height) => heard.push(height), root);
 		const resize = (height: number) => {
 			viewport.height = height;
 			viewport.dispatchEvent(new Event('resize'));
 		};
 		resize(508);
-		// Panning with it up, or the keyboard's suggestions bar coming and going, is no news.
+		// The browser panning the page with the keyboard up is no news: the app is as tall as it was.
+		viewport.offsetTop = 336;
 		viewport.dispatchEvent(new Event('scroll'));
+		// The keyboard's suggestions bar coming up is.
 		resize(470);
 		resize(LAYOUT);
 		resize(508);
 		stop();
-		expect(heard).toEqual([true, false, true, false]);
+		expect(heard).toEqual([508, 470, undefined, 508, undefined]);
 	});
 });

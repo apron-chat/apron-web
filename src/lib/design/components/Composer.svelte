@@ -11,7 +11,7 @@
 	import Paperclip from '@lucide/svelte/icons/paperclip';
 	import Smile from '@lucide/svelte/icons/smile';
 	import Square from '@lucide/svelte/icons/square';
-	import { untrack, type Snippet } from 'svelte';
+	import { onDestroy, untrack, type Snippet } from 'svelte';
 	import type { ClassValue } from 'svelte/elements';
 	import Attachments from './Attachments.svelte';
 	import Button from './Button.svelte';
@@ -140,8 +140,8 @@
 		 * to a row under it.
 		 */
 		multiline?: boolean;
-		/** How much of its pane it takes, as it changes, to make room for it; `bind:size`, read-only. */
-		size?: ComposerSize;
+		/** How much of its pane it takes, as that changes, to make room for it; one line (`'line'`) once it is gone. */
+		onsize?: (size: ComposerSize) => void;
 		/** `data-testid` on the Expand button. */
 		expandTestid?: string;
 		/** `data-testid` on the full panel. */
@@ -151,7 +151,7 @@
 		room, placeholder, value = $bindable(''), oninput, onsend, canSend, waitUntil, canUpload, onfiles, accept, onattachdraft, disabled, canRecord, onrecord, onstoprecording, recording, recordingTime, thread, canCommand, live,
 		field, onemoji, emojiOpen, emojiButton = $bindable(), reply, replyText, oncancelreply, attachments, previews, preview, onremovepreview, picker,
 		replyTestid, attachmentsTestid, previewsTestid, fileInputTestid, commandTestid, liveTestid, emojiTestid, sendTestid, class: className,
-		onexpand, expanded = false, oncollapse, toolbar, rendered, previewing = false, onpreview, sendKeys, multiline, size = $bindable('line'), expandTestid, panelTestid
+		onexpand, expanded = false, oncollapse, toolbar, rendered, previewing = false, onpreview, sendKeys, multiline, onsize, expandTestid, panelTestid
 	}: Props = $props();
 
 	const ph = $derived(placeholder || (thread ? `Reply in ${roomName(thread.name, thread.thread, { thread: true })}` : `Message ${room || ''}`));
@@ -184,9 +184,12 @@
 	 * under it (ap-composer-grown), as at the full panel's foot. Not while recording, whose line takes no typing.
 	 */
 	const grown = $derived(!expanded && !recording && (breaks || wrapped));
+	const size: ComposerSize = $derived(expanded ? 'full' : grown ? 'grown' : 'line');
 	$effect.pre(() => {
-		size = expanded ? 'full' : grown ? 'grown' : 'line';
+		const now = size;
+		untrack(() => onsize?.(now));
 	});
+	onDestroy(() => onsize?.('line'));
 	$effect(() => {
 		if (!wrapAt || wrapped) return;
 		// Emptied (sent): the next wrap is a fresh one.

@@ -481,13 +481,13 @@ a.ap-embed-card:hover { background: var(--hover); }
 /* A mention that won't reach anyone as the draft would go (not in the room, and not to be added): greyed. */
 .ap-composer-editable .ap-mention.ap-mention-quiet { background: color-mix(in srgb, var(--ink-muted) 14%, transparent); color: var(--ink-muted); }
 .ap-composer-editable .ap-mention-role.ap-mention-quiet { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink-muted) 45%, transparent); }
-/* The autocomplete picker anchors to the composer's row and grows upward. */
-.ap-composer-wrap { position: relative; display: flex; flex-direction: column; }
 /*
- * Where the pane is too short for a long draft at its full 200px (a small phone with its keyboard up), the composer gives
- * way rather than run on under the keyboard: it shrinks to what is left, and its field scrolls, so the line being
- * written and Send stay in view.
+ * The composer's row, which the autocomplete picker anchors to and grows upward from. A column that can shrink: where the
+ * pane is too short for a long draft at its full 200px (a small phone with its keyboard up), the composer gives way
+ * rather than run on under the keyboard, taking what is left, its field scrolled, so the line being written and Send
+ * stay in view.
  */
+.ap-composer-wrap { position: relative; display: flex; flex-direction: column; }
 .ap-composer-wrap, .ap-composer-grown { min-height: 0; }
 /* Send counting down a wait on sending (`waitUntil`), after an hourglass: figures that don't shift as they count. */
 .ap-btn.ap-composer-wait { font-variant-numeric: tabular-nums; }
