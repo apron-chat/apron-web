@@ -10,7 +10,7 @@
 			"domNodes": 537,
 			"layouts": 10,
 			"styleRecalcs": 18,
-			"calls": 209762,
+			"calls": 210962,
 			"heapMB": 8.4
 		},
 		"load-busy": {
@@ -28,7 +28,7 @@
 			"domNodes": 538,
 			"layouts": 10,
 			"styleRecalcs": 16,
-			"calls": 184342,
+			"calls": 185348,
 			"heapMB": 8.2
 		},
 		"load-phone-busy": {
