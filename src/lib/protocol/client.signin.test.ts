@@ -16,6 +16,8 @@ vi.mock('./webauthn', () => ({ requestPasskey: vi.fn(), signalPasskeyLabel: vi.f
  */
 const storage = new Map<string, string>();
 const TOKEN_KEY = 'apron.session:ws://fake.test/';
+/** What a code refused off the connection that proposed it adds. */
+const CODE_ELSEWHERE_HINT = 'On some servers a code works only in the window that asked for it: use the link in the email, or send a new code.';
 let client: ChatClient;
 let snapshot: ClientSnapshot;
 
@@ -142,7 +144,8 @@ describe('sign-in', () => {
 		const wrong = client.signInWithCode('000000');
 		await settle();
 		side.receive({ id: side.request('auth').id, error: { code: -32001, message: 'Invalid or expired code' } });
-		await expect(wrong).rejects.toThrow('Invalid or expired code');
+		// Refused on the connection that proposed it: the server's words alone.
+		await expect(wrong).rejects.toThrow(/^Invalid or expired code$/);
 		// Nothing changed here, and the proposal is still there.
 		expect(main.readyState).toBe(FakeSocket.OPEN);
 		expect(snapshot.you?.user_id).toBe('guest_1');
@@ -185,7 +188,9 @@ describe('sign-in', () => {
 		// A short code works elsewhere only with its proposal's state (§4.11.2), so it goes along.
 		expect(fresh.request('auth').params).toEqual({ scheme: 'email', token: '000000', state, agent: 'apron-web/0.4' });
 		fresh.receive({ id: fresh.request('auth').id, error: { code: -32001, message: 'Invalid or expired code' } });
-		await expect(wrong).rejects.toThrow('Invalid or expired code');
+		// Some servers take a code only on the connection that proposed it, whatever its state: refused here, it says so.
+		await expect(wrong).rejects.toThrow(`Invalid or expired code. ${CODE_ELSEWHERE_HINT}`);
+		await expect(wrong).rejects.toMatchObject({ code: -32001 });
 		// A wrong code is typed again on that same connection.
 		expect(fresh.readyState).toBe(FakeSocket.OPEN);
 		expect(snapshot.signInCode).toBeDefined();
@@ -352,6 +357,32 @@ describe('sign-in', () => {
 		await added;
 		expect(snapshot.signInMethods).toEqual(['token', 'email']);
 		expect(findProposal(state as string)).toBeUndefined();
+	});
+
+	it('says a code refused off the connection that proposed its addition may work only there', async () => {
+		await latest().greet([], { auth: ['email', 'token', 'guest'], token: 'st_guest' });
+		const socket = latest();
+		const asked = client.requestEmailCodeToAdd('ada@example.com');
+		await socket.reply('auth', {});
+		await asked;
+		// Refused on the connection that proposed it: as the server said it.
+		const wrong = client.addWithCode('000000');
+		await vi.advanceTimersByTimeAsync(0);
+		socket.receive({ id: socket.sent.filter((frame) => frame.method === 'auth').at(-1)!.id, error: { code: -32001, message: 'Invalid or expired code' } });
+		await expect(wrong).rejects.toThrow(/^Invalid or expired code$/);
+		await expect(wrong).rejects.not.toHaveProperty('hint');
+		// After a reconnect to the same account, an older server refuses even the right code (§4.11.2 before `state`).
+		socket.drop();
+		afterBackoff();
+		const next = latest();
+		await next.greet([], { auth: ['email', 'token', 'guest'], you: { user_id: 'guest_1' } });
+		const refused = client.addWithCode('418092');
+		await vi.advanceTimersByTimeAsync(0);
+		next.receive({ id: next.sent.filter((frame) => frame.method === 'auth').at(-1)!.id, error: { code: -32001, message: 'Invalid or expired code' } });
+		await expect(refused).rejects.toThrow(`Invalid or expired code. ${CODE_ELSEWHERE_HINT}`);
+		// Still a refusal, with the hint apart for the profile's own words (`addError`).
+		await expect(refused).rejects.toMatchObject({ code: -32001, hint: CODE_ELSEWHERE_HINT });
+		expect(snapshot.signInMethods).toEqual(['token']);
 	});
 
 	it('makes a guest without a token an email account once an address is added', async () => {

@@ -98,17 +98,20 @@ export function wayBackWords(schemes: readonly AddableScheme[]): string {
 /**
  * What went wrong adding an address (§4.11.3) or an external identity
  * (§4.12.4), in words: `denied` is usually one that belongs to another
- * account already.
+ * account already. A code refused off the connection that asked for it
+ * also says so (its `hint`).
  */
 export function addError(cause: unknown, scheme: 'email' | 'external' | 'link' = 'email'): string {
-	const code = (cause as { code?: number } | undefined)?.code;
+	const { code, hint } = (cause ?? {}) as { code?: number; hint?: unknown };
 	if (code === -32001) {
 		// `link`: a link of no addition made here, which may have been for signing in, or for another account (§4.11.3).
-		return scheme === 'email'
+		const said = scheme === 'email'
 			? 'That code was refused: it may be wrong or expired, or the address may belong to another account. Ask for a new code, or sign in with that address instead.'
 			: scheme === 'external'
 				? 'That sign-in was refused: it may belong to another account already, or it took too long. Try again, or sign in with it instead.'
 				: 'That link was refused: it may have expired or been used, be for signing in rather than adding, or be for another account, which it adds to only where that account is signed in. Open it again to sign in with it instead.';
+		// A code refused off the connection that asked for it, which some servers require (`CODE_ELSEWHERE_HINT`).
+		return typeof hint === 'string' ? `${said} ${hint}` : said;
 	}
 	return cause instanceof Error && cause.message ? cause.message : scheme === 'email' ? 'Unable to add the address' : 'Unable to add the sign-in';
 }

@@ -1890,7 +1890,9 @@ refused code says the address may belong to another account. With the `state`
 a typed code works on a later connection too (§4.11.2), so if this connection
 dropped in between, the code still adds the address once the page has
 reconnected, signed in to the same account; signed in as another, the form
-asks for a new code. The link in the email also adds the address (below).
+asks for a new code. A code refused on another connection than the one that
+proposed it adds the same words as the connect screen's (below), since a server from
+before the `state` takes it only there. The link in the email also adds the address (below).
 **Add external sign-in** opens the server's sign-in page as the connect
 screen's **External** does (below) and redeems its code on this signed-in
 connection, which adds the identity to the account (§4.12.4); the Sign-in row
@@ -2068,7 +2070,10 @@ no address). A wrong code can be typed again on the same proposal. If that
 connection drops before the code is typed (a phone that put the page to sleep
 while you read the email, the server restarting), the code field stays: the
 code goes on a fresh connection to the same server, where the proposal's
-`state` lets it work (§4.11.2). Once the proposal has expired (15 minutes), or
+`state` lets it work (§4.11.2). A server from before the `state` refuses a
+code there, so a code refused on such a connection adds "On some servers a
+code works only in the window that asked for it: use the link in the email,
+or send a new code." to what the server said. Once the proposal has expired (15 minutes), or
 an approval went unanswered, the code field goes and the form asks for a new
 code, though the link in the email may still work (below). The code belongs to the server that proposed it: changing the
 Server field drops it and closes that connection, as does "Use another

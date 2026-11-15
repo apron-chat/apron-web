@@ -100,5 +100,8 @@ describe('ways back into an account', () => {
 		expect(addError(Object.assign(new Error('denied'), { code: -32001 }), 'external')).toMatch(/belong to another account/);
 		expect(addError(new Error('Rate limited'))).toBe('Rate limited');
 		expect(addError(Object.assign(new Error('denied'), { code: -32001 }), 'link')).toMatch(/for signing in rather than adding/);
+		// A code refused off the connection that asked for it says so after the usual words.
+		const hint = 'On some servers a code works only in the window that asked for it: use the link in the email, or send a new code.';
+		expect(addError(Object.assign(new Error('denied'), { code: -32001, hint }))).toBe(`That code was refused: it may be wrong or expired, or the address may belong to another account. Ask for a new code, or sign in with that address instead. ${hint}`);
 	});
 });

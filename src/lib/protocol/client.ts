@@ -417,7 +417,7 @@ export class ChatClient {
 	 * becomes another identity, so nothing is recorded as added to an account
 	 * other than `account`, the one that proposed it.
 	 */
-	private addition?: { scheme: ProposalScheme; state: string; account: string; url: string };
+	private addition?: { scheme: ProposalScheme; state: string; account: string; url: string; connection: number };
 	/** `addWithCode` or `addWithLink` holds the sign-in guard: busy, but not with a passkey. */
 	private adding = false;
 	/**
@@ -1226,6 +1226,7 @@ export class ChatClient {
 	private async openForProposal(proposal: SignInProposal): Promise<SignInConnection> {
 		const connection = this.openSignInConnection(proposal.url);
 		proposal.connection = connection;
+		proposal.reopened = true;
 		connection.onClose = () => this.proposalConnectionClosed(proposal, connection);
 		try {
 			await connection.ready;
@@ -1302,7 +1303,7 @@ export class ChatClient {
 		// Checked before a connection opens, and again (by approveSignIn) once it is ready.
 		this.checkApproval();
 		const connection = proposal.reopening || proposal.connection.closed ? await this.reopenProposal(proposal) : proposal.connection;
-		return this.approveSignIn(connection, { scheme: proposal.scheme, token, state: proposal.state }, { name, beforeSwitch, retryable: true, state: proposal.state });
+		return this.approveSignIn(connection, { scheme: proposal.scheme, token, state: proposal.state }, { name, beforeSwitch, retryable: true, state: proposal.state, elsewhere: proposal.reopened });
 	}
 
 	/**
@@ -1405,7 +1406,7 @@ export class ChatClient {
 	/** Approves a sign-in with `params` (an `auth` request's) on `connection` and carries on with it (see `signInWithCode`). */
 	private async approveSignIn(
 		connection: SignInConnection, params: JsonObject & { scheme: ProposalScheme | 'token' | 'external' },
-		options: { name?: string; beforeSwitch?: () => void; retryable: boolean; state?: string; method?: SignInMethod }
+		options: { name?: string; beforeSwitch?: () => void; retryable: boolean; state?: string; method?: SignInMethod; elsewhere?: boolean }
 	): Promise<OperationHandle | undefined> {
 		try {
 			this.checkApproval();
@@ -1423,7 +1424,8 @@ export class ChatClient {
 			} catch (cause) {
 				// A wrong code may be retyped on the same proposal; anything else ends it.
 				if (!options.retryable || (cause as RpcFailure).code !== -32001 || connection.closed) this.closeSignInConnection(connection);
-				throw cause;
+				// A code typed on another connection than the one that proposed it, which some servers refuse whatever its `state`.
+				throw options.elsewhere ? refusedElsewhere(cause) : cause;
 			}
 			if (!isIdentity(result.you)) {
 				this.closeSignInConnection(connection);
@@ -1546,7 +1548,7 @@ export class ChatClient {
 		}
 		// Proposed by another account than this connection is now: it isn't this one's to approve.
 		if (connection !== this.connectionId || this.you?.user_id !== account) throw new Error('The connection or account changed meanwhile; try again');
-		this.addition = { scheme, state, account, url: this.serverUrl };
+		this.addition = { scheme, state, account, url: this.serverUrl, connection };
 	}
 
 	/**
@@ -1565,7 +1567,7 @@ export class ChatClient {
 		this.checkAddition(addition?.scheme ?? 'email');
 		if (!token) throw new Error('Enter the code you were sent');
 		if (!addition || addition.account !== this.you?.user_id || addition.url !== this.serverUrl) throw new Error('The connection or account changed since the code was sent. Send a new code.');
-		await this.approveAddition({ scheme: addition.scheme, token, state: addition.state }, addition.state);
+		await this.approveAddition({ scheme: addition.scheme, token, state: addition.state }, addition.state, addition.scheme, addition.connection);
 		return addition.scheme;
 	}
 
@@ -1606,9 +1608,13 @@ export class ChatClient {
 		return method;
 	}
 
-	/** Approves an addition with `params` (an `auth` request's) on this connection, holding the sign-in guard meanwhile (see `addWithCode`). */
+	/**
+	 * Approves an addition with `params` (an `auth` request's) on this
+	 * connection, holding the sign-in guard meanwhile (see `addWithCode`).
+	 * `proposedOn` is the connection a code's addition was proposed on.
+	 */
 	private async approveAddition(
-		params: JsonObject & { scheme: ProposalScheme | 'external' }, state: string | undefined, method: ProposalScheme | 'external' | 'link' = params.scheme
+		params: JsonObject & { scheme: ProposalScheme | 'external' }, state: string | undefined, method: ProposalScheme | 'external' | 'link' = params.scheme, proposedOn?: number
 	): Promise<void> {
 		if (this.passkeyStarting) throw new Error('Already signing in; finish or cancel that first');
 		await this.readyToSignIn();
@@ -1620,7 +1626,10 @@ export class ChatClient {
 		const connection = this.connectionId;
 		this.emit();
 		try {
-			await this.passkeyRequest(params);
+			await this.passkeyRequest(params).catch((cause: unknown) => {
+				// Refused on another connection than the one that proposed it, as after a reconnect: some servers refuse a code there whatever its `state`.
+				throw proposedOn !== undefined && proposedOn !== this.connectionId ? refusedElsewhere(cause) : cause;
+			});
 			if (controller.signal.aborted || connection !== this.connectionId || this.you?.user_id !== account) throw new Error('Connection changed; try again');
 			if (state) forgetProposal(state, this.now());
 			if (state && this.addition?.state === state) this.addition = undefined;
@@ -5324,6 +5333,21 @@ const NOT_OFFERED: Record<ProposalScheme, string> = {
 const EXTERNAL_NOT_OFFERED = 'This server does not support external sign-in';
 const EXTERNAL_TOO_OLD = 'This server uses an older external sign-in that this app doesn’t support. Sign in another way, or ask the server’s admin to update it.';
 
+/**
+ * Said with a code refused on another connection than the one that proposed
+ * it: a server from before an approval's `state` (§4.11.2) takes a short
+ * code only on that one, though its link works anywhere.
+ */
+const CODE_ELSEWHERE_HINT = 'On some servers a code works only in the window that asked for it: use the link in the email, or send a new code.';
+
+/** A refused code's error (`denied`, -32001) with `CODE_ELSEWHERE_HINT` after what the server said, and as its `hint`; any other error as it is. */
+function refusedElsewhere(cause: unknown): unknown {
+	if (!(cause instanceof Error) || (cause as RpcFailure).code !== -32001) return cause;
+	const said = cause.message.trim();
+	const message = said ? `${/[.!?…]$/.test(said) ? said : `${said}.`} ${CODE_ELSEWHERE_HINT}` : CODE_ELSEWHERE_HINT;
+	return Object.assign(new Error(message, { cause }), { code: -32001, hint: CODE_ELSEWHERE_HINT });
+}
+
 /** An email sign-in proposal on a connection of its own (§4.11.1). */
 interface SignInProposal {
 	/** The connection that proposed it, or the one opened since for its code. */
@@ -5338,6 +5362,8 @@ interface SignInProposal {
 	expires: number;
 	/** A fresh connection for its code is being opened (`reopenProposal`). */
 	reopening?: Promise<SignInConnection>;
+	/** Its code goes on a connection opened since (`reopenProposal`), not the one that proposed it. */
+	reopened?: boolean;
 }
 
 function signInCodeOf(proposal: SignInProposal): NonNullable<ClientSnapshot['signInCode']> {
