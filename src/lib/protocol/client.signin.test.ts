@@ -584,6 +584,12 @@ describe('sign-in', () => {
 		const empty = await linkConnection(['external', 'token']);
 		empty.receive({ id: empty.request('auth').id, result: {} });
 		await expect(none).rejects.toThrow('no sign-in page');
+		// A server with the older, proposal-based `external` answers a begin with a top-level `url`: not a server fault.
+		const older = client.beginExternal();
+		const old = await linkConnection(['external', 'token']);
+		old.receive({ id: old.request('auth').id, result: { url: 'http://fake.test/external/p_1' } });
+		await expect(older).rejects.toThrow('This server uses an older external sign-in that this app doesn’t support. Sign in another way, or ask the server’s admin to update it.');
+		expect(old.readyState).toBe(FakeSocket.CLOSED);
 		const loopback = client.beginExternal('ws://127.0.0.1:8080/ws');
 		const local = await linkConnection(['external', 'token'], 'ws://127.0.0.1:8080/ws');
 		local.receive({ id: local.request('auth').id, result: { external: { url: 'http://127.0.0.1:8080/oauth/authorize' } } });

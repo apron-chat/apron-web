@@ -2096,7 +2096,11 @@ the server's own page, through OAuth 2.1's authorization code flow with PKCE
    `auth` with `scheme: "external"` and nothing else, whose result names the
    page, `external.url`. That connection closes. Only an `https` page, or
    `http` on a loopback host, is opened; any other `url`, such as
-   `javascript:`, is refused.
+   `javascript:`, is refused. A server with the older, proposal-based
+   `external` answers with a top-level `url` and no `external` instead, which
+   this app can't use: the connect screen and **Add external sign-in** say the
+   server uses an older external sign-in this app doesn't support, to sign in
+   another way or ask its admin to update it.
 2. **Open.** The window goes to `url` with its own query kept and this
    client's parameters added: `response_type=code`, `client_id` (unless `url`
    has one), `redirect_uri`, an S256 `code_challenge`, a random `state`, and

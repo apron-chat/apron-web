@@ -1352,7 +1352,9 @@ export class ChatClient {
 	 * `token`, on a connection of its own that closes once answered, since a
 	 * begin authenticates nothing and binds nothing to its connection.
 	 * Resolves with the page to send the user to, once it is one a client may
-	 * open (`parseExternal`).
+	 * open (`parseExternal`). A server with the older, proposal-based
+	 * `external` answers with a top-level `url` instead, which this client
+	 * can't use: it says so, rather than that the server named no page.
 	 */
 	async beginExternal(url = this.serverUrl): Promise<External> {
 		if (url === this.serverUrl && this.server && !this.offers('external')) throw new Error(EXTERNAL_NOT_OFFERED);
@@ -1362,8 +1364,10 @@ export class ChatClient {
 			if (!connection.offers('external')) throw new Error(EXTERNAL_NOT_OFFERED);
 			const result = await connection.auth({ scheme: 'external' });
 			const external = parseExternal(result.external);
-			if (!external) throw new Error(isJsonObject(result.external) ? 'The server’s sign-in page isn’t a secure web address, so it wasn’t opened' : 'The server gave no sign-in page to open');
-			return external;
+			if (external) return external;
+			if (isJsonObject(result.external)) throw new Error('The server’s sign-in page isn’t a secure web address, so it wasn’t opened');
+			// A server from before OAuth sign-in takes this for an `external` proposal, and answers with a top-level `url`.
+			throw new Error(typeof result.url === 'string' ? EXTERNAL_TOO_OLD : 'The server gave no sign-in page to open');
 		} finally {
 			connection.close();
 		}
@@ -5318,6 +5322,7 @@ const NOT_OFFERED: Record<ProposalScheme, string> = {
 	email: 'This server does not support email sign-in'
 };
 const EXTERNAL_NOT_OFFERED = 'This server does not support external sign-in';
+const EXTERNAL_TOO_OLD = 'This server uses an older external sign-in that this app doesn’t support. Sign in another way, or ask the server’s admin to update it.';
 
 /** An email sign-in proposal on a connection of its own (§4.11.1). */
 interface SignInProposal {
