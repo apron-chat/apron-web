@@ -2,7 +2,7 @@ import { describeError, isCancelled, type PasskeyStage } from './passkey-notes';
 import { startupMark } from '../startup-marks';
 import { requestPasskey, signalPasskeyLabel } from './webauthn';
 import { writeEmbed } from './embeds';
-import { SignInConnection, type RpcFailure } from './signin-connection';
+import { PROPOSAL_MS, SignInConnection, type RpcFailure } from './signin-connection';
 import { PROPOSAL_KEPT_MS, findProposal, forgetProposal, newProposalState, rememberProposal, type ProposalScheme } from './proposals';
 import { parseExternal, type CodeRedemption, type External } from './external';
 import { PasskeyPageNeeded, passkeyRoute, passkeysOnlyFirstParty, usesPage } from './passkey-route';
@@ -402,7 +402,8 @@ export class ChatClient {
 	private passkeyStarting?: AbortController;
 	/**
 	 * An email sign-in proposal (§4.11) waiting for its code, on a connection
-	 * of its own that is not signed in (see `requestEmailCode`).
+	 * of its own that is not signed in (see `requestEmailCode`), or, once that
+	 * closed, until a code opens another (`signInWithCode`).
 	 */
 	private signInProposal?: SignInProposal;
 	/** Every sign-in connection still open (a proposal's, a link's, an external sign-in's), to close on `stop()`. */
@@ -410,13 +411,13 @@ export class ChatClient {
 	/** A sign-in approval has been sent and not answered. */
 	private approvalInFlight = false;
 	/**
-	 * A proposal to add to the signed-in account (§4.11), made on the
-	 * connection `connection` (a `connectionId`), which alone takes its code;
-	 * cleared when the connection signs in again or becomes another identity,
-	 * so nothing is recorded as added to an account other than `account`, the
-	 * one that proposed it.
+	 * A proposal to add to the signed-in account (§4.11), made on the server
+	 * `url`, whose code goes with its `state`, so that it works on a later
+	 * connection too (§4.11.2); cleared when the connection signs in again or
+	 * becomes another identity, so nothing is recorded as added to an account
+	 * other than `account`, the one that proposed it.
 	 */
-	private addition?: { scheme: ProposalScheme; state: string; account: string; connection: number };
+	private addition?: { scheme: ProposalScheme; state: string; account: string; url: string };
 	/** `addWithCode` or `addWithLink` holds the sign-in guard: busy, but not with a passkey. */
 	private adding = false;
 	/**
@@ -1146,7 +1147,8 @@ export class ChatClient {
 	 * proposal goes on a connection of its own that is not signed in, since one
 	 * on a signed-in connection (a guest's too) proposes adding the address
 	 * instead, and that connection stays open for `signInWithCode`: a short
-	 * code works only on the connection that proposed it. This connection, its
+	 * code works on the connection that proposed it, or with the proposal's
+	 * `state` on another, once that one closed (§4.11.2). This connection, its
 	 * rooms, identity and pending requests are left as they are meanwhile. It
 	 * resolves alike whether or not the address has an account. A newer
 	 * proposal replaces the last, whose connection closes; the server keeps
@@ -1170,14 +1172,10 @@ export class ChatClient {
 		const connection = this.openSignInConnection(url);
 		const state = newProposalState();
 		const email = typeof params.email === 'string' ? params.email : undefined;
-		const proposal: SignInProposal = { connection, scheme, state, ...(email ? { email } : {}), proposed: false };
+		const expires = this.now() + PROPOSAL_MS;
+		const proposal: SignInProposal = { connection, scheme, url, state, ...(email ? { email } : {}), proposed: false, expires };
 		this.signInProposal = proposal;
-		connection.onClose = () => {
-			this.signInConnections.delete(connection);
-			if (this.signInProposal !== proposal) return;
-			this.signInProposal = undefined;
-			this.emit();
-		};
+		connection.onClose = () => this.proposalConnectionClosed(proposal, connection);
 		try {
 			await connection.ready;
 			if (!connection.offers(scheme)) throw new Error(unsupported);
@@ -1192,7 +1190,51 @@ export class ChatClient {
 		}
 		if (connection.closed) throw connection.closed;
 		proposal.proposed = true;
+		// A connection open for the code closes by then itself; one opened for none is not there to.
+		setTimeout(() => {
+			if (this.signInProposal === proposal) this.cancelSignInCode();
+		}, Math.max(0, expires - this.now()));
 		this.emit();
+	}
+
+	/**
+	 * The connection `proposal` waited on closed (a drop, a server restart, or
+	 * its lifetime). Before the proposal was made, or once it has expired,
+	 * that ends it; otherwise it stays for its code, which goes with its
+	 * `state` on a fresh connection (`signInWithCode`).
+	 */
+	private proposalConnectionClosed(proposal: SignInProposal, connection: SignInConnection): void {
+		this.signInConnections.delete(connection);
+		if (this.signInProposal !== proposal || proposal.connection !== connection) return;
+		if (proposal.proposed && this.now() < proposal.expires) return;
+		this.signInProposal = undefined;
+		this.emit();
+	}
+
+	/**
+	 * A fresh connection to the proposal's server for its code, as the one
+	 * that proposed it closed: a short code works there with the proposal's
+	 * `state` (§4.11.2, §4.11.3). It is the proposal's connection from then
+	 * on, kept for a wrong code to be typed again.
+	 */
+	private reopenProposal(proposal: SignInProposal): Promise<SignInConnection> {
+		// A code typed again while one is opening waits for it.
+		proposal.reopening ??= this.openForProposal(proposal).finally(() => (proposal.reopening = undefined));
+		return proposal.reopening;
+	}
+
+	private async openForProposal(proposal: SignInProposal): Promise<SignInConnection> {
+		const connection = this.openSignInConnection(proposal.url);
+		proposal.connection = connection;
+		connection.onClose = () => this.proposalConnectionClosed(proposal, connection);
+		try {
+			await connection.ready;
+			if (!connection.offers(proposal.scheme)) throw new Error(NOT_OFFERED[proposal.scheme]);
+		} catch (cause) {
+			connection.close();
+			throw cause;
+		}
+		return connection;
 	}
 
 	/**
@@ -1240,24 +1282,27 @@ export class ChatClient {
 
 	/**
 	 * Signs in with the code for the open proposal (`requestEmailCode`,
-	 * §4.11), approving it on the
-	 * connection that proposed it. That connection, now signed in, becomes
+	 * §4.11), approving it with the proposal's `state` on the connection that
+	 * proposed it, or, once that closed, on a fresh one to the proposal's
+	 * server, where the `state` lets the code work (§4.11.2, §4.11.3). That
+	 * connection, now signed in, becomes
 	 * this client's connection, on the proposal's server; the identity the
 	 * result names replaces any before, and the bearer `token` in it resumes
 	 * the session on later connections (§3.2.1). `beforeSwitch` runs just
 	 * before, so a view held for the previous session can go first. A `name`
 	 * becomes the display name, and the `me` request sent for it is returned,
 	 * as with `usePasskey`. A wrong code leaves the proposal open to try
-	 * again, until the server gives up on it. Once that connection has closed
-	 * a code has nowhere to go (a short one works only there), though the
-	 * proposal's link still does.
+	 * again, until the server gives up on it.
 	 */
 	async signInWithCode(code: string, name?: string, beforeSwitch?: () => void): Promise<OperationHandle | undefined> {
 		const token = code.trim();
 		const proposal = this.signInProposal;
 		if (!token) throw new Error('Enter the code from the email');
-		if (!proposal?.proposed || proposal.connection.closed) throw new Error('The request for this code is no longer open. Send a new code.');
-		return this.approveSignIn(proposal.connection, { scheme: proposal.scheme, token }, { name, beforeSwitch, retryable: true, state: proposal.state });
+		if (!proposal?.proposed) throw new Error('The request for this code is no longer open. Send a new code.');
+		// Checked before a connection opens, and again (by approveSignIn) once it is ready.
+		this.checkApproval();
+		const connection = proposal.reopening || proposal.connection.closed ? await this.reopenProposal(proposal) : proposal.connection;
+		return this.approveSignIn(connection, { scheme: proposal.scheme, token, state: proposal.state }, { name, beforeSwitch, retryable: true, state: proposal.state });
 	}
 
 	/**
@@ -1386,9 +1431,9 @@ export class ChatClient {
 				this.closeSignInConnection(connection);
 				throw new Error('Connection stopped');
 			}
-			// Approval used the proposal up (§4.11.1).
+			// Approval used the proposal up (§4.11.1), by its code or its link.
 			if (options.state) forgetProposal(options.state, this.now());
-			if (this.signInProposal?.connection === connection) this.signInProposal = undefined;
+			if (this.signInProposal?.connection === connection || (options.state && this.signInProposal?.state === options.state)) this.signInProposal = undefined;
 			options.beforeSwitch?.();
 			if (options.name?.trim()) this.displayName = options.name.trim();
 			// A bearer token stays the one to resume with, unless the server sends another (§3.2.1).
@@ -1497,13 +1542,15 @@ export class ChatClient {
 		}
 		// Proposed by another account than this connection is now: it isn't this one's to approve.
 		if (connection !== this.connectionId || this.you?.user_id !== account) throw new Error('The connection or account changed meanwhile; try again');
-		this.addition = { scheme, state, account, connection };
+		this.addition = { scheme, state, account, url: this.serverUrl };
 	}
 
 	/**
 	 * Adds to the signed-in account with the code for the addition proposed
-	 * here (`requestEmailCodeToAdd`, §4.11.3), on the connection that
-	 * proposed it: a short code works only there. The identity is unchanged,
+	 * here (`requestEmailCodeToAdd`, §4.11.3), with the proposal's `state`, so
+	 * that it works on this connection whether or not it is the one that
+	 * proposed it (§4.11.2), as after a reconnect, while signed in to the
+	 * account that proposed it. The identity is unchanged,
 	 * and the address is one more way back into the account. Only an explicit action
 	 * does this; a link without the `state` of this browser's addition adds
 	 * only once the viewer says so (`addWithConfirmedLink`).
@@ -1513,8 +1560,8 @@ export class ChatClient {
 		const addition = this.addition;
 		this.checkAddition(addition?.scheme ?? 'email');
 		if (!token) throw new Error('Enter the code you were sent');
-		if (!addition || addition.connection !== this.connectionId) throw new Error('The connection or account changed since the code was sent. Send a new code.');
-		await this.approveAddition({ scheme: addition.scheme, token }, addition.state);
+		if (!addition || addition.account !== this.you?.user_id || addition.url !== this.serverUrl) throw new Error('The connection or account changed since the code was sent. Send a new code.');
+		await this.approveAddition({ scheme: addition.scheme, token, state: addition.state }, addition.state);
 		return addition.scheme;
 	}
 
@@ -3688,8 +3735,9 @@ export class ChatClient {
 	 */
 	private setYou(identity: Identity, complete: boolean): void {
 		const changed = this.you?.user_id !== identity.user_id;
-		// A pending addition belongs to the account that proposed it (§4.11.3): another identity needs a new code.
-		if (changed) this.addition = undefined;
+		// A pending addition belongs to the account that proposed it (§4.11.3): another identity needs a new code. The
+		// same account again, after a reconnect, keeps it: its code works there with its state (§4.11.2).
+		if (this.addition && this.addition.account !== identity.user_id) this.addition = undefined;
 		this.you = this.noteUser(identity, { own: true, complete });
 		// `mine` in every reaction summary depends on the viewer.
 		if (changed) for (const room of this.rooms.values()) room.dirty = true;
@@ -5273,15 +5321,22 @@ const EXTERNAL_NOT_OFFERED = 'This server does not support external sign-in';
 
 /** An email sign-in proposal on a connection of its own (§4.11.1). */
 interface SignInProposal {
+	/** The connection that proposed it, or the one opened since for its code. */
 	connection: SignInConnection;
 	scheme: ProposalScheme;
+	/** The server it was proposed to. */
+	url: string;
 	state: string;
 	email?: string;
 	proposed: boolean;
+	/** Epoch milliseconds after which its code is given up (`PROPOSAL_MS`). */
+	expires: number;
+	/** A fresh connection for its code is being opened (`reopenProposal`). */
+	reopening?: Promise<SignInConnection>;
 }
 
 function signInCodeOf(proposal: SignInProposal): NonNullable<ClientSnapshot['signInCode']> {
-	return { scheme: proposal.scheme, url: proposal.connection.url, ...(proposal.email !== undefined ? { email: proposal.email } : {}) };
+	return { scheme: proposal.scheme, url: proposal.url, ...(proposal.email !== undefined ? { email: proposal.email } : {}) };
 }
 
 /** A passkey challenge the server issued (`begin`, §4.10). */

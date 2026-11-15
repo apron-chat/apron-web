@@ -90,12 +90,13 @@ describe('sign-in', () => {
 		expect(snapshot.you?.user_id).toBe('guest_1');
 		expect(snapshot.passkeySession).toBe(false);
 
-		// The approval carries the code alone, on the proposing connection.
+		// The approval carries the code and the proposal's state (§4.11.3), on the proposing connection.
+		const state = side.request('auth').params.state;
 		const signedIn = client.signInWithCode(' 418092 ', 'Ada L', () => expect(snapshot.you?.user_id).toBe('guest_1'));
 		expect(snapshot.authBusy).toBe(true);
 		await settle();
 		const approval = side.request('auth');
-		expect(approval.params).toEqual({ scheme: 'email', token: '418092', agent: 'apron-web/0.4' });
+		expect(approval.params).toEqual({ scheme: 'email', token: '418092', state, agent: 'apron-web/0.4' });
 		expect(main.sent.filter((frame) => (frame.params as { token?: string } | undefined)?.token === '418092')).toEqual([]);
 		side.receive({ id: approval.id, result: { you: { user_id: 'ada', name: 'Ada' }, token: 'st_Hk41' } });
 		// Whatever the server sends right after the sign-in is taken in, in order.
@@ -151,17 +152,78 @@ describe('sign-in', () => {
 		expect(snapshot.you?.user_id).toBe('ada');
 	});
 
-	it('says when the proposal is gone, and a new one replaces the last', async () => {
+	it('says when there is no proposal, and a new one replaces the last', async () => {
 		await latest().greet([], { auth: ['email', 'token', 'guest'] });
 		await expect(client.signInWithCode('1')).rejects.toThrow('no longer open');
 		const first = await propose('ada@example.com', ['email', 'token', 'guest']);
 		const second = await propose('ada@example.com', ['email', 'token', 'guest']);
 		expect(first.readyState).toBe(FakeSocket.CLOSED);
+		expect(second.readyState).toBe(FakeSocket.OPEN);
 		expect(snapshot.signInCode).toBeDefined();
-		// The server closes it (an expired proposal, a restart): the code has nowhere to go.
-		second.drop();
+		client.cancelSignInCode();
 		expect(snapshot.signInCode).toBeUndefined();
 		await expect(client.signInWithCode('418092')).rejects.toThrow('no longer open');
+		expect(snapshot.you?.user_id).toBe('guest_1');
+	});
+
+	it('types the code on a fresh connection with the proposal’s state once the proposing one dropped', async () => {
+		await latest().greet([], { auth: ['email', 'token', 'guest'] });
+		const main = latest();
+		const side = await propose('ada@example.com', ['email', 'token', 'guest']);
+		const state = side.request('auth').params.state;
+		// The phone put the page to sleep while the email was read: the proposal stays, and so does its code field.
+		side.drop();
+		expect(snapshot.signInCode).toEqual({ scheme: 'email', email: 'ada@example.com', url: 'ws://fake.test/' });
+		const sockets = FakeSocket.instances.length;
+		const wrong = client.signInWithCode('000000');
+		// Typed again while that connection opens: it waits for the same one.
+		const again = client.signInWithCode('000001');
+		const fresh = await linkConnection(['email', 'token', 'guest']);
+		expect(FakeSocket.instances).toHaveLength(sockets + 1);
+		expect(fresh).not.toBe(side);
+		await expect(again).rejects.toThrow('Already signing in');
+		// A short code works elsewhere only with its proposal's state (§4.11.2), so it goes along.
+		expect(fresh.request('auth').params).toEqual({ scheme: 'email', token: '000000', state, agent: 'apron-web/0.4' });
+		fresh.receive({ id: fresh.request('auth').id, error: { code: -32001, message: 'Invalid or expired code' } });
+		await expect(wrong).rejects.toThrow('Invalid or expired code');
+		// A wrong code is typed again on that same connection.
+		expect(fresh.readyState).toBe(FakeSocket.OPEN);
+		expect(snapshot.signInCode).toBeDefined();
+		const signedIn = client.signInWithCode('418092');
+		await settle();
+		expect(FakeSocket.instances).toHaveLength(sockets + 1);
+		const approval = fresh.request('auth');
+		expect(approval.params).toEqual({ scheme: 'email', token: '418092', state, agent: 'apron-web/0.4' });
+		fresh.receive({ id: approval.id, result: { you: { user_id: 'ada' }, token: 'st_ada' } });
+		await signedIn;
+		expect(snapshot.you?.user_id).toBe('ada');
+		expect(latest()).toBe(fresh);
+		expect(main.readyState).toBe(FakeSocket.CLOSED);
+		expect(snapshot.signInCode).toBeUndefined();
+		expect(findProposal(state as string)).toBeUndefined();
+		expect(storage.get(TOKEN_KEY)).toBe('st_ada');
+	});
+
+	it('gives up a dropped proposal’s code once it has expired, and one its server no longer offers', async () => {
+		await latest().greet([], { auth: ['email', 'token', 'guest'] });
+		let side = await propose('ada@example.com', ['email', 'token', 'guest']);
+		side.drop();
+		expect(snapshot.signInCode).toBeDefined();
+		const sockets = FakeSocket.instances.length;
+		await vi.advanceTimersByTimeAsync(PROPOSAL_MS);
+		expect(snapshot.signInCode).toBeUndefined();
+		await expect(client.signInWithCode('418092')).rejects.toThrow('no longer open');
+		expect(FakeSocket.instances).toHaveLength(sockets);
+
+		// The server came back without email: the code can't go there, and the proposal stays for when it does.
+		side = await propose('ada@example.com', ['email', 'token', 'guest']);
+		side.drop();
+		const signIn = client.signInWithCode('418092');
+		const fresh = await linkConnection(['token', 'guest']);
+		await expect(signIn).rejects.toThrow('does not support email');
+		expect(fresh.sent).toEqual([]);
+		expect(fresh.readyState).toBe(FakeSocket.CLOSED);
+		expect(snapshot.signInCode).toBeDefined();
 		expect(snapshot.you?.user_id).toBe('guest_1');
 	});
 
@@ -248,6 +310,7 @@ describe('sign-in', () => {
 		const socket = latest();
 		const asked = client.requestEmailCodeToAdd('ada@example.com');
 		expect(socket.request('auth').params).toEqual({ scheme: 'email', email: 'ada@example.com', state: expect.any(String) });
+		const state = socket.request('auth').params.state;
 		await socket.reply('auth', {});
 		await asked;
 		const added = client.addWithCode(' 418092 ');
@@ -255,8 +318,8 @@ describe('sign-in', () => {
 		expect(latest()).toBe(socket);
 		expect(snapshot.passkeyBusy).toBe(false);
 		const approval = socket.request('auth');
-		// The approval carries the code alone; an addition's result is `{}`.
-		expect(approval.params).toEqual({ scheme: 'email', token: '418092' });
+		// The approval carries the code and the proposal's state; an addition's result is `{}`.
+		expect(approval.params).toEqual({ scheme: 'email', token: '418092', state });
 		socket.receive({ id: approval.id, result: {} });
 		await added;
 		expect(snapshot.you?.user_id).toBe('guest_1');
@@ -265,6 +328,30 @@ describe('sign-in', () => {
 		expect(snapshot.signInMethods).toEqual(['token', 'email']);
 		expect(storage.get(TOKEN_KEY)).toBe('st_guest');
 		expect(storage.get('apron.signin-added:ws://fake.test/')).toBe('email');
+	});
+
+	it('adds with the code after a reconnect to the same account, sending the proposal’s state', async () => {
+		await latest().greet([], { auth: ['email', 'token', 'guest'], token: 'st_guest' });
+		const socket = latest();
+		const asked = client.requestEmailCodeToAdd('ada@example.com');
+		const state = socket.request('auth').params.state;
+		await socket.reply('auth', {});
+		await asked;
+		// The connection drops while the email is read, and the session resumes as the same account.
+		socket.drop();
+		afterBackoff();
+		const next = latest();
+		await next.greet([], { auth: ['email', 'token', 'guest'], you: { user_id: 'guest_1' } });
+		expect(next.request('auth').params).toMatchObject({ scheme: 'token', token: 'st_guest' });
+		const added = client.addWithCode('418092');
+		await vi.advanceTimersByTimeAsync(0);
+		const approval = next.sent.filter((frame) => frame.method === 'auth').at(-1)!;
+		// On another connection than the one that proposed it, the state lets the code work (§4.11.2).
+		expect(approval.params).toEqual({ scheme: 'email', token: '418092', state });
+		next.receive({ id: approval.id, result: {} });
+		await added;
+		expect(snapshot.signInMethods).toEqual(['token', 'email']);
+		expect(findProposal(state as string)).toBeUndefined();
 	});
 
 	it('makes a guest without a token an email account once an address is added', async () => {
@@ -291,14 +378,15 @@ describe('sign-in', () => {
 		expect(snapshot.error).toMatch(/email/);
 	});
 
-	it('won’t approve an addition on another connection than the one that proposed it', async () => {
+	it('won’t approve an addition after a reconnect as another account than the one that proposed it', async () => {
 		await latest().greet([], { auth: ['email', 'token', 'guest'], token: 'st_guest' });
 		const asked = client.requestEmailCodeToAdd('ada@example.com');
 		await latest().reply('auth', {});
 		await asked;
 		latest().drop();
 		afterBackoff();
-		await latest().greet([], { auth: ['email', 'token', 'guest'] });
+		// The kept token no longer resumes: the server made a new guest.
+		await latest().greet([], { auth: ['email', 'token', 'guest'], you: { user_id: 'guest_2' } });
 		await expect(client.addWithCode('418092')).rejects.toThrow('Send a new code');
 		expect(auths()).toHaveLength(1);
 	});
@@ -411,9 +499,9 @@ describe('sign-in', () => {
 		const second = await propose('ada@example.com', ['email', 'token', 'guest']);
 		const secondState = second.request('auth').params.state as string;
 		expect(secondState).not.toBe(state);
-		// Its connection closes: a code has nowhere to go, but the proposal's link still signs in.
+		// Its connection closes: the code would go on a fresh connection, and the proposal's link still signs in.
 		second.drop();
-		expect(snapshot.signInCode).toBeUndefined();
+		expect(snapshot.signInCode).toBeDefined();
 		expect(findProposal(secondState)).toBeDefined();
 		const signedIn = client.signInWithLink('Hk41x9', 'ws://fake.test/', { scheme: 'email', state: secondState });
 		const link = await linkConnection(['email', 'token', 'guest']);
@@ -421,8 +509,9 @@ describe('sign-in', () => {
 		link.receive({ id: link.request('auth').id, result: { you: { user_id: 'ada' }, token: 'st_ada' } });
 		await signedIn;
 		expect(snapshot.you?.user_id).toBe('ada');
-		// Approval used it up.
+		// Approval used it up, its code too.
 		expect(findProposal(secondState)).toBeUndefined();
+		expect(snapshot.signInCode).toBeUndefined();
 		expect(findProposal(state)).toBeDefined();
 	});
 

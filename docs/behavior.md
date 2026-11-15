@@ -1884,11 +1884,13 @@ so adding one keeps your guest identity and message ownership; signing in
 restores the identity attached to your chosen passkey. **Add email** asks for
 an address, proposes adding it on this signed-in connection (`auth` with
 `scheme: "email"` and `email`), and approves the proposal with the emailed code
-on this same connection (`scheme: "email"` and `token`, no address), which
-adds the address to the account and answers `{}` (§4.11.3); a refused code says
-the address may belong to another account. A typed code works only on the
-connection that proposed it, so if this connection dropped in between, the
-form asks for a new code; the link in the email still adds the address (below).
+with the proposal's `state` (`scheme: "email"`, `token` and `state`, no
+address), which adds the address to the account and answers `{}` (§4.11.3); a
+refused code says the address may belong to another account. With the `state`
+a typed code works on a later connection too (§4.11.2), so if this connection
+dropped in between, the code still adds the address once the page has
+reconnected, signed in to the same account; signed in as another, the form
+asks for a new code. The link in the email also adds the address (below).
 **Add external sign-in** opens the server's sign-in page as the connect
 screen's **External** does (below) and redeems its code on this signed-in
 connection, which adds the identity to the account (§4.12.4); the Sign-in row
@@ -2061,10 +2063,14 @@ after 15 minutes, by when the proposal has expired). Nothing on screen changes
 meanwhile: this connection, its identity and its rooms carry on. On a server
 the connect screen isn't connected to yet, it proposes there the same way,
 without first signing in as a guest. The code field then approves the proposal
-on that same connection (`scheme: "email"` and `token`, no address). A wrong
-code can be typed again on the same proposal; if that connection closes (the
-proposal expired, the server went away), the code field goes and the form asks
-for a new code, though the link in the email may still work (below). The code belongs to the server that proposed it: changing the
+on that same connection (`scheme: "email"`, `token` and the proposal's `state`,
+no address). A wrong code can be typed again on the same proposal. If that
+connection drops before the code is typed (a phone that put the page to sleep
+while you read the email, the server restarting), the code field stays: the
+code goes on a fresh connection to the same server, where the proposal's
+`state` lets it work (§4.11.2). Once the proposal has expired (15 minutes), or
+an approval went unanswered, the code field goes and the form asks for a new
+code, though the link in the email may still work (below). The code belongs to the server that proposed it: changing the
 Server field drops it and closes that connection, as does "Use another
 address". Once the code works, that connection, now signed in, becomes the
 client's connection (on its server, if another): the previous one closes, the

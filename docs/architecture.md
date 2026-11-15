@@ -506,7 +506,8 @@ sign-in panel (`SignIn.svelte`, state machine in `$lib/ui/sign-in`) takes the
 user's tap from there.
 Email sign-in (§4.11) proposes on a connection of its own,
 since a proposal on a signed-in connection would add to its account, and a
-short code works only on the connection that proposed it: `requestEmailCode(email,
+short code works only on the connection that proposed it, or with the
+proposal's `state` (§4.11.2): `requestEmailCode(email,
 url?)` opens a `SignInConnection`
 (`signin-connection.ts`) to that server that never signs in until approved,
 waits for its `server` frame, and proposes (`auth` without `token`, with
@@ -520,8 +521,12 @@ for a code (pinging, and closed after `PROPOSAL_MS`) as the snapshot's
 `signInCode`, leaving this connection and its view untouched. A newer proposal,
 `cancelSignInCode()` and `stop()` close it, but the server keeps the proposal,
 and its link still works. `signInWithCode(code, name?, beforeSwitch?)`
-approves on it (`auth` with `token`, the proposal's scheme); a `denied` code
-leaves it open to try again. On success the client
+approves on it (`auth` with `token` and the proposal's `state`, in the
+proposal's scheme); a `denied` code leaves it open to try again. If that
+connection closed meanwhile (a drop, a server restart), the proposal stays
+until `PROPOSAL_MS` after it was made, and the code goes on a fresh
+connection to its server, where the `state` lets it work (§4.11.3); that
+connection is the proposal's from then on. On success the client
 adopts that connection as its own: `beforeSwitch` runs, it moves to that
 server if another (`switchServer`, as `setUrl` without connecting), closes its
 connection as `restart` would, attaches the socket (`Transport.adopt`, through

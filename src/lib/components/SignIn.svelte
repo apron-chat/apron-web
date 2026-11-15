@@ -84,8 +84,9 @@
 	/**
 	 * The code emailed to an address, and the server that will take it: the
 	 * code field shows while it is set, and the code only ever goes back to
-	 * the connection that proposed it, on that server (§4.11.2). Changing the
-	 * Server field drops it, and so does that connection closing.
+	 * that server, on the connection that proposed it or, once that closed,
+	 * on a fresh one with the proposal's `state` (§4.11.2). Changing the
+	 * Server field drops it, and so does the proposal ending.
 	 */
 	let codeSent = $state<SentCode | undefined>();
 	/** A proposal or a code is under way, or a sign-in page is open (a window, or this tab on its way there). */
@@ -221,14 +222,15 @@
 		greetings.cancel();
 	});
 
-	// A short code works only on the connection that asked for it (§4.11.2): once that closes (expired, dropped),
-	// there is nowhere to type it. The proposal outlives the connection, so an emailed link still works.
+	// A short code works on the connection that asked for it, or with the proposal's state on a fresh one (§4.11.2),
+	// so a dropped connection keeps it; once the proposal ends (expired, or an approval went unanswered) there is
+	// nowhere to type it. The server may keep the proposal longer, so an emailed link may still work.
 	$effect(() => {
 		if (!codeSent || codeBusy || snapshot.signInCode) return;
 		untrack(() => {
 			codeSent = undefined;
 			code = '';
-			error = 'The connection that asked for that code has closed (it expired, or dropped), so the code can’t be typed here now. The link in the email may still work, or send a new code.';
+			error = 'The request for that code has ended (it expired, or the server stopped answering), so the code can’t be typed here now. The link in the email may still work, or send a new code.';
 		});
 	});
 
