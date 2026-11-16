@@ -2188,12 +2188,15 @@ whether it signs in or adds (one proposed on another device could be either):
 when this page is signed in on the link's server (a guest too) and that server
 signs in with email, the dialog asks "Use this link on
 *server*?" and offers **Add it** to the signed-in account, as well as
-**Sign in**. Adding approves on this connection, which the server allows only
+**Sign in**. Either way, a link the viewer was asked about presents its token
+as `scheme: "token"` (§4.11.2), since it may not be an emailed link at all,
+such as an invite's; only a link of a proposal here goes with the proposal's
+`email`. Adding approves on this connection, which the server allows only
 if this account proposed it (§4.11.3); a refusal says it may have been for
 signing in, or for another account. On **Sign in** it
 is used as a sign-in, on the link's server (this one unless it names another;
-a `server` that isn't a WebSocket URL makes it unusable), with a scheme that
-server offers (§4.11.3). Such a sign-in is recorded as an email sign-in (a
+a `server` that isn't a WebSocket URL makes it unusable), if that server
+offers email or `token`. Such a sign-in is recorded as an email sign-in (a
 `link` kept from before links could only be email ones counts as one). A link
 never adds to an
 account without its addition's `state` or the viewer's **Add it**. Only once a sign-in has

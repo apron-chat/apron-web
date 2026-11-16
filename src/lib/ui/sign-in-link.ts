@@ -188,8 +188,9 @@ export interface SignInLinkClient {
 }
 
 /**
- * Uses a sign-in link (§4.11.3): this browser's own (`own`), or one the
- * viewer confirmed (`ask`). The client presents its token on a fresh
+ * Uses a sign-in link (§4.11.3): this browser's own (`own`), with its
+ * proposal's scheme, or one the viewer confirmed (`ask`), as
+ * `scheme: "token"` (§4.11.2). The client presents its token on a fresh
  * connection that is not signed in to the proposal's server, or else to the
  * server the link names (this one by default), and carries on with that
  * connection once signed in. `beforeSwitch` runs just before, so the page can

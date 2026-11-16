@@ -1311,13 +1311,15 @@ export class ChatClient {
 	 * `state` of a proposal this browser made, or one the viewer confirmed.
 	 * It is presented on a fresh connection to `url` (this client's server by
 	 * default) that is not signed in, which then becomes this client's
-	 * connection as with `signInWithCode`. The approval uses `scheme`, the
-	 * proposal's, or else a scheme that server offers: either works
-	 * (§4.11.3). How it signed in is recorded as the proposal's scheme, or
-	 * the only one the server offers; else as `link`, since the link doesn't
-	 * say which it was. On a server with neither, the token is a bearer token
-	 * of its own, such as an invite's (Appendix A.4), and goes as
-	 * `scheme: "token"`, like a pasted one. A refused link changes nothing here.
+	 * connection as with `signInWithCode`. A proposal's own link is approved
+	 * with `scheme`, the proposal's. A confirmed one, without the `state` of a
+	 * proposal here, may not be an emailed link at all, such as an invite's
+	 * (Appendix A.4): its token goes as `scheme: "token"` (§4.11.2), which a
+	 * server that offers email or `token` takes (§4.11.3). How it signed in is
+	 * recorded as the proposal's scheme, or the only one the server offers;
+	 * else as `link`, since the link doesn't say which it was; on a server
+	 * with neither, as `token`, like a pasted one. A refused link changes
+	 * nothing here.
 	 */
 	async signInWithLink(
 		token: string, url = this.serverUrl, options: { scheme?: ProposalScheme; state?: string; beforeSwitch?: () => void } = {}
@@ -1332,11 +1334,13 @@ export class ChatClient {
 		try {
 			await connection.ready;
 			const offered = PROPOSAL_SCHEMES.filter((candidate) => connection.offers(candidate));
-			if (offered.length) {
-				scheme = options.scheme && offered.includes(options.scheme) ? options.scheme : offered[0];
-				method = options.scheme ?? linkMethod(offered);
-			} else if (!options.scheme && connection.offers('token')) {
-				scheme = method = 'token';
+			if (options.scheme && offered.length) {
+				scheme = offered.includes(options.scheme) ? options.scheme : offered[0];
+				method = options.scheme;
+			} else if (!options.scheme && (offered.length || connection.offers('token'))) {
+				// Asked about, not this browser's own: presented as a token (§4.11.2).
+				scheme = 'token';
+				method = offered.length ? linkMethod(offered) : 'token';
 			} else {
 				throw new Error('This server does not support sign-in links');
 			}
@@ -1443,7 +1447,7 @@ export class ChatClient {
 			options.beforeSwitch?.();
 			if (options.name?.trim()) this.displayName = options.name.trim();
 			// A bearer token stays the one to resume with, unless the server sends another (§3.2.1).
-			if (params.scheme === 'token' && typeof params.token === 'string' && typeof result.token !== 'string') result = { ...result, token: params.token };
+			if (params.scheme === 'token' && connection.offers('token') && typeof params.token === 'string' && typeof result.token !== 'string') result = { ...result, token: params.token };
 			this.adoptSignedIn(connection, result, options.method ?? params.scheme);
 			return this.authNameRequest;
 		} finally {
@@ -1585,7 +1589,7 @@ export class ChatClient {
 		}
 		this.checkAddition(proposal.scheme);
 		if (!token.trim()) throw new Error('The link has no token');
-		await this.approveAddition({ scheme: proposal.scheme, token: token.trim() }, state);
+		await this.approveAddition({ scheme: proposal.scheme, token: token.trim() }, state, proposal.scheme);
 		return proposal.scheme;
 	}
 
@@ -1595,8 +1599,9 @@ export class ChatClient {
 	 * proposed on another device, or forgotten here (§4.11.2). Approval of an
 	 * addition works only on a connection signed in to the account that
 	 * proposed it, and a sign-in's token is refused on one (§4.11.3), so the
-	 * server refuses any other link. Either scheme the server offers
-	 * approves; what was added is recorded as with `signInWithLink`.
+	 * server refuses any other link. Asked about, the token goes as
+	 * `scheme: "token"` (§4.11.2); what was added is recorded as with
+	 * `signInWithLink`.
 	 */
 	async addWithConfirmedLink(token: string): Promise<ProposalScheme | 'link'> {
 		const offered = PROPOSAL_SCHEMES.filter((scheme) => this.server?.auth.includes(scheme));
@@ -1604,7 +1609,7 @@ export class ChatClient {
 		this.checkAddition(offered[0]);
 		if (!token.trim()) throw new Error('The link has no token');
 		const method = linkMethod(offered);
-		await this.approveAddition({ scheme: offered[0], token: token.trim() }, undefined, method);
+		await this.approveAddition({ scheme: 'token', token: token.trim() }, undefined, method);
 		return method;
 	}
 
@@ -1614,7 +1619,7 @@ export class ChatClient {
 	 * `proposedOn` is the connection a code's addition was proposed on.
 	 */
 	private async approveAddition(
-		params: JsonObject & { scheme: ProposalScheme | 'external' }, state: string | undefined, method: ProposalScheme | 'external' | 'link' = params.scheme, proposedOn?: number
+		params: JsonObject & { scheme: ProposalScheme | 'external' | 'token' }, state: string | undefined, method: ProposalScheme | 'external' | 'link', proposedOn?: number
 	): Promise<void> {
 		if (this.passkeyStarting) throw new Error('Already signing in; finish or cancel that first');
 		await this.readyToSignIn();

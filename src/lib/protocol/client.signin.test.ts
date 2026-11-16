@@ -485,7 +485,8 @@ describe('sign-in', () => {
 		bad.open();
 		bad.receive({ method: 'server', params: { apron: 10, auth: ['email', 'token'], capabilities: ['rooms'] } });
 		await settle();
-		expect(bad.request('auth').params).toEqual({ scheme: 'email', token: 'Hk41x9', agent: 'apron-web/0.4' });
+		// Asked about, not this browser's own: its token goes as a token, though the server signs in with email (§4.11.2).
+		expect(bad.request('auth').params).toEqual({ scheme: 'token', token: 'Hk41x9', agent: 'apron-web/0.4' });
 		bad.receive({ id: bad.request('auth').id, error: { code: -32001, message: 'Invalid or expired token' } });
 		await expect(refused).rejects.toThrow('Invalid or expired token');
 		expect(bad.readyState).toBe(FakeSocket.CLOSED);
@@ -501,6 +502,7 @@ describe('sign-in', () => {
 		await settle();
 		good.receive({ id: good.request('auth').id, result: { you: { user_id: 'ada' }, token: 'st_other' } });
 		await signedIn;
+		expect(good.request('auth').params).toMatchObject({ scheme: 'token', token: 'Hk41x9' });
 		expect(switched).toBe(true);
 		expect(client.url).toBe('ws://other.test/');
 		expect(main.readyState).toBe(FakeSocket.CLOSED);
@@ -536,6 +538,7 @@ describe('sign-in', () => {
 		expect(findProposal(secondState)).toBeDefined();
 		const signedIn = client.signInWithLink('Hk41x9', 'ws://fake.test/', { scheme: 'email', state: secondState });
 		const link = await linkConnection(['email', 'token', 'guest']);
+		// A proposal's own link goes with the proposal's scheme, as before.
 		expect(link.request('auth').params).toEqual({ scheme: 'email', token: 'Hk41x9', agent: 'apron-web/0.4' });
 		link.receive({ id: link.request('auth').id, result: { you: { user_id: 'ada' }, token: 'st_ada' } });
 		await signedIn;
@@ -546,7 +549,7 @@ describe('sign-in', () => {
 		expect(findProposal(state)).toBeDefined();
 	});
 
-	it('approves a link of no known proposal with a scheme its server offers', async () => {
+	it('approves a link of no known proposal as a token', async () => {
 		await latest().greet([], { auth: ['token', 'guest'] });
 		const signedIn = client.signInWithLink('Hk41x9', 'ws://other.test/');
 		const link = await linkConnection(['external', 'token'], 'ws://other.test/');
@@ -699,16 +702,36 @@ describe('sign-in', () => {
 		expect(findProposal(liveState)).toBeDefined();
 	});
 
-	it('records a link of no known proposal as email, the one scheme a link approves', async () => {
+	it('records a link of no known proposal as email, the one scheme a link approves, though it goes as a token', async () => {
 		await latest().greet([], { auth: ['token', 'guest'] });
 		const signedIn = client.signInWithLink('Hk41x9', 'ws://other.test/');
 		const link = await linkConnection(['email', 'external', 'token'], 'ws://other.test/');
-		expect(link.request('auth').params).toMatchObject({ scheme: 'email', token: 'Hk41x9' });
+		expect(link.request('auth').params).toMatchObject({ scheme: 'token', token: 'Hk41x9' });
 		link.receive({ id: link.request('auth').id, result: { you: { user_id: 'ada' }, token: 'st_ada' } });
 		await signedIn;
 		expect(snapshot.signedInWith).toBe('email');
 		expect(snapshot.signInMethods).toEqual(['email']);
 		expect(storage.get('apron.signin:ws://other.test/')).toBe('email');
+	});
+
+	it('presents a confirmed link as a token on an email-only server, and keeps no used token to resume with', async () => {
+		await latest().greet([], { auth: ['token', 'guest'] });
+		const signedIn = client.signInWithLink('Hk41x9', 'ws://other.test/');
+		const link = await linkConnection(['email'], 'ws://other.test/');
+		expect(link.request('auth').params).toEqual({ scheme: 'token', token: 'Hk41x9', agent: 'apron-web/0.4' });
+		link.receive({ id: link.request('auth').id, result: { you: { user_id: 'ada' } } });
+		await signedIn;
+		expect(snapshot.you?.user_id).toBe('ada');
+		expect(snapshot.signedInWith).toBe('email');
+		// The server resumes no token: the link's, used up, isn't kept as one, nor sent again after a drop.
+		expect(storage.has('apron.session:ws://other.test/')).toBe(false);
+		link.drop();
+		afterBackoff();
+		const next = latest();
+		next.open();
+		next.receive({ method: 'server', params: { apron: 10, auth: ['email', 'token'], capabilities: [] } });
+		await settle();
+		expect(JSON.stringify(next.sent)).not.toContain('Hk41x9');
 	});
 
 	it('reports a `link` session it cannot resume as signed out, naming neither scheme', async () => {
@@ -744,7 +767,8 @@ describe('sign-in', () => {
 		await vi.advanceTimersByTimeAsync(0);
 		// On this connection, not a fresh one: an addition approves only for the account that proposed it (§4.11.3).
 		expect(FakeSocket.instances).toHaveLength(sockets);
-		expect(socket.request('auth').params).toEqual({ scheme: 'email', token: 'Hk41x9' });
+		// Asked about, not this browser's own addition: its token goes as a token (§4.11.2).
+		expect(socket.request('auth').params).toEqual({ scheme: 'token', token: 'Hk41x9' });
 		socket.receive({ id: socket.request('auth').id, error: { code: -32001, message: 'Invalid token' } });
 		await expect(refused).rejects.toThrow('Invalid token');
 		expect(snapshot.you?.user_id).toBe('ada');
