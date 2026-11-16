@@ -6,14 +6,18 @@
  * Any link in the text is a candidate; the ones on a site in `SITES`
  * (`link-sites.ts`) get a preview, from that site's API, which allows
  * cross-origin reads, so the browser can describe a link without a server. A
- * preview is fetched when a link is pasted; a message sent before it arrives,
- * or for a link the API won't describe, gets a card built from the URL.
+ * preview is fetched when a link is pasted, or when typing pauses; a message
+ * sent before it arrives waits a moment for it (`settle`), and one sent
+ * without it, or for a link the API won't describe, gets a card built from
+ * the URL.
  */
 import type { Embed, OpenGraph } from '$lib/protocol/types';
 import { record, SITES, siteFor, type Lookup, type Site } from './link-sites';
 
 /** At most this many previews per message. */
 export const LINK_PREVIEWS_MAX = 3;
+/** The longest a sent message waits for previews not yet here (`settle`) before it goes with what it has. */
+export const PREVIEW_WAIT_MS = 1500;
 const CACHE_MAX = 100;
 
 /** A link a site can describe. */
@@ -146,6 +150,23 @@ export class LinkPreviews {
 	/** Starts fetching previews for the links in `text`; resolves when they have settled. */
 	prefetch(text: string): Promise<void> {
 		return Promise.all(this.links(text).map((link) => this.load(link))).then(() => undefined);
+	}
+
+	/**
+	 * Fetches the previews of the links in `text` not yet known (but those in `dismissed`, and those on a site
+	 * holding requests while limited) and resolves once they have settled, or after `ms` at most; undefined when
+	 * there are none to wait for.
+	 */
+	settle(text: string, dismissed: readonly string[], ms: number): Promise<void> | undefined {
+		const waiting = this.links(text, dismissed).filter((link) => !this.known.has(link.url) && this.now() >= (this.blockedUntil.get(link.site.name) ?? 0));
+		if (!waiting.length) return undefined;
+		return new Promise((resolve) => {
+			const timer = setTimeout(resolve, ms);
+			void Promise.all(waiting.map((link) => this.load(link))).then(() => {
+				clearTimeout(timer);
+				resolve();
+			});
+		});
 	}
 
 	/**

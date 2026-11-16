@@ -748,3 +748,55 @@ test.describe('the full panel on a small phone with its keyboard up', () => {
 		await expect(page.getByTestId('pane-description')).toBeVisible();
 	});
 });
+
+test.describe('link previews a message is sent with', () => {
+	test.use(DEVICES.desktop);
+
+	const VIDEO = 'https://www.youtube.com/watch?v=c8GIM-MJ7lM';
+	const THUMBNAIL = 'https://i.ytimg.com/vi/c8GIM-MJ7lM/hqdefault.jpg';
+	const OEMBED = /^https:\/\/www\.youtube\.com\/oembed\?/;
+	const oembed = { title: 'Music for Dark Legends', author_name: 'Secession Studios' };
+
+	test('a link sent at once goes with its preview: the draft clears, and Send holds in the room until the message goes', async ({ preview, page }) => {
+		await preview.open();
+		let answer!: () => void;
+		const answered = new Promise<void>((resolve) => (answer = resolve));
+		await page.route(OEMBED, async (route) => {
+			await answered;
+			await route.fulfill({ json: oembed, headers: { 'Access-Control-Allow-Origin': '*' } });
+		});
+		const text = `watch ${VIDEO}`;
+		await preview.composer().click();
+		await page.keyboard.insertText(text);
+		await page.keyboard.press('Enter');
+		await expect(preview.composer()).toHaveText('');
+
+		await test.step('what is typed meanwhile is a new draft, and Enter keeps it while the message waits', async () => {
+			await page.keyboard.type('next one');
+			await page.keyboard.press('Enter');
+			await expect(preview.composer()).toHaveText('next one');
+			expect(await sentWithText(preview, text)).toEqual([]);
+		});
+
+		await test.step('the preview arrives: the message goes with it, then the next one can', async () => {
+			answer();
+			const sent = await preview.waitForSent('message', (p) => p.body?.text === text);
+			expect(sent.body.embeds).toEqual([{ kind: 'link', url: VIDEO, og: { site_name: 'YouTube · Secession Studios', title: oembed.title, image: { url: THUMBNAIL, type: 'image/jpeg', width: 480, height: 360, alt: oembed.title } } }]);
+			await page.keyboard.press('Enter');
+			const next = await preview.waitForSent('message', (p) => p.body?.text === 'next one');
+			expect(next.body.embeds).toBeUndefined();
+			expect(await sentWithText(preview, text)).toHaveLength(1);
+		});
+	});
+
+	test('a preview that is slow to come is not waited for long: the message goes with the card its URL gives', async ({ preview, page }) => {
+		await preview.open();
+		await page.route(OEMBED, () => {});
+		const text = `watch ${VIDEO}`;
+		await preview.composer().click();
+		await page.keyboard.insertText(text);
+		await page.keyboard.press('Enter');
+		const sent = await preview.waitForSent('message', (p) => p.body?.text === text);
+		expect(sent.body.embeds).toEqual([{ kind: 'link', url: VIDEO, og: { site_name: 'YouTube', image: { url: THUMBNAIL, type: 'image/jpeg', width: 480, height: 360 } } }]);
+	});
+});

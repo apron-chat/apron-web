@@ -106,7 +106,7 @@
 	import { idMillis } from '$lib/ui/time';
 	import { tabTitle } from '$lib/ui/attention';
 	import { trackKeyboard } from '$lib/ui/viewport';
-	import { linkPreviews } from '$lib/ui/link-previews';
+	import { linkPreviews, PREVIEW_WAIT_MS } from '$lib/ui/link-previews';
 	import { carriesFiles, fileDrop, pastedFiles } from '$lib/ui/file-transfer';
 	import { PaneDrafts, pageDrafts, type StagedFile } from '$lib/ui/pane-drafts.svelte';
 	import { DraftKeeper, draftServer } from '$lib/ui/draft-keeper.svelte';
@@ -333,6 +333,11 @@
 	 * which goes only if it is still that draft.
 	 */
 	let mentionAdding = $state<{ roomId: string; userIds: string[]; text: string; files: string } | undefined>();
+	/**
+	 * A sent message waiting, at most PREVIEW_WAIT_MS, for its link previews not yet here (`afterPreviews`): Send
+	 * holds in its room meanwhile, so what is sent next there goes after it.
+	 */
+	let previewWait = $state.raw<{ roomId: string } | undefined>();
 	/**
 	 * A message held back at Send because it mentions people and holds a checklist: the ask whether they may edit its
 	 * text (`ext:editors`, EditorsPrompt), until it's answered, put away, the draft changes, or the pane does. `added`:
@@ -2290,6 +2295,14 @@
 		sendMessage(true, adding.userIds.filter((userId) => !refused.some((refusal) => refusal.userId === userId)));
 	}
 
+	/** `ready`, holding Send in `roomId` until it settles (`previewWait`). */
+	function afterPreviews<T>(roomId: string, ready: Promise<T>): Promise<T> {
+		const waiting = (previewWait = { roomId });
+		return ready.finally(() => {
+			if (previewWait === waiting) previewWait = undefined;
+		});
+	}
+
 	/** Escape: an ask whether they may edit the message goes away, the draft unsent. True when there was one. */
 	function dismissMentionAsk(): boolean {
 		if (!editorsAsk) return false;
@@ -2390,11 +2403,16 @@
 		const options = { ...(reply ? { replyTo: reply } : {}), ...(mentions.length ? { mentions } : {}) };
 		if (action.kind === 'message') {
 			if (!action.text.trim()) return;
-			const embeds = linkPreviews.embeds(action.text, dismissed);
-			const post = () => feedback.track(chat.send(roomId, action.text, 'markdown', { ...options, ...(embeds.length ? { embeds } : {}), ...(editors ? { ext: SHARED_TEXT } : {}) }), 'Sending…', restore);
+			// The draft goes now; the message, with its link previews: those not yet here get a moment to arrive.
+			const previews = linkPreviews.settle(action.text, dismissed, PREVIEW_WAIT_MS);
+			const post = () => {
+				const embeds = linkPreviews.embeds(action.text, dismissed);
+				feedback.track(chat.send(roomId, action.text, 'markdown', { ...options, ...(embeds.length ? { embeds } : {}), ...(editors ? { ext: SHARED_TEXT } : {}) }), 'Sending…', restore);
+			};
 			const joining = joinFirst(chat, paneRoom);
-			if (joining) {
-				joining.then(post, (cause: unknown) => {
+			const ready = previews ? afterPreviews(roomId, Promise.all([joining, previews])) : joining;
+			if (ready) {
+				ready.then(post, (cause: unknown) => {
 					feedback.error(cause, `Unable to join the ${paneRoom.parentRoomId === undefined ? 'room' : 'thread'}`);
 					restore();
 				});
@@ -3815,7 +3833,7 @@
 					bind:mentions={composerMentions}
 					bind:dismissed={drafts.dismissed}
 					placeholder={activeThread ? `Reply in ${threadTitle(activeThread)}` : `Message ${activeRoom.title}`}
-					holdSend={!canCompose || Boolean(paneMentionAdding)}
+					holdSend={!canCompose || Boolean(paneMentionAdding) || Boolean(previewWait && previewWait.roomId === paneRoom?.id)}
 					canUpload={session.capabilities['embed:upload'] && !composingLive}
 					live={composingLive}
 					uploadLimits={serverMedia(session.server).upload}

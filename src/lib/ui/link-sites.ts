@@ -159,7 +159,11 @@ function githubRepo(data: Json): OpenGraph | undefined {
 const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/;
 
 /**
- * YouTube videos, from its oEmbed endpoint: the title and channel. A video
+ * YouTube videos, from its oEmbed endpoint: the title and channel, and the
+ * video's thumbnail, addressed by its id on YouTube's image host rather than
+ * as the answer names it (the viewer's media settings decide whether it
+ * loads). `hqdefault` exists for every video, at 480×360, so the card
+ * built from the URL alone has it too. A video
  * that is private, removed, or not embeddable answers 401, 403, or 404, and a
  * malformed one 400.
  */
@@ -174,14 +178,16 @@ export const youtube: Site = {
 			: undefined;
 		if (!id || !YOUTUBE_ID.test(id)) return undefined;
 		const watch = `https://www.youtube.com/watch?v=${id}`;
+		const image = (alt?: string) => ({ url: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`, type: 'image/jpeg', width: 480, height: 360, ...(alt ? { alt } : {}) });
 		return {
 			url: watch,
 			api: `https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(watch)}`,
 			preview(data) {
 				const title = str(data.title);
 				const channel = str(data.author_name);
-				return title ? { site_name: channel ? `YouTube · ${channel}` : 'YouTube', title } : undefined;
-			}
+				return title ? { site_name: channel ? `YouTube · ${channel}` : 'YouTube', title, image: image(title) } : undefined;
+			},
+			fallback: { site_name: 'YouTube', image: image() }
 		};
 	}
 };
