@@ -1,0 +1,621 @@
+<script module lang="ts">
+	import type { ChatClient } from '$lib/protocol/client';
+	import type { SessionView } from '$lib/ui/session.svelte';
+	import type { NotificationPermissionState, NotificationTestResult } from '$lib/ui/notifications';
+	import type { WebPushPreference } from '$lib/ui/web-push';
+	import type { PausedUntil } from '$lib/ui/pause';
+	import type { SignOutHandler } from '$lib/ui/sign-in';
+	import type { KeptHistoryControls } from '$lib/history/history-keeper';
+
+	/** What ProfileBar hands on to Preferences. */
+	export interface PreferencesProps {
+		client: ChatClient;
+		session: SessionView;
+		backendLabel: string;
+		displayName: string;
+		passkeyUnavailable?: string;
+		notificationsEnabled: boolean;
+		notificationsSupported: boolean;
+		notificationPermission: NotificationPermissionState;
+		/** What to notify about (`NOTIFY_SCOPES`), for desktop notifications and push alike. */
+		notifyScopes: string[];
+		onnotifications: () => void;
+		onnotifyscopes: (scopes: string[]) => void;
+		ontestnotifications: () => Promise<NotificationTestResult>;
+		/** Push notifications (§4.9), when the server offers web push. */
+		webPush?: WebPushPreference;
+		onwebpush: () => void;
+		/** Chromium's install prompt, from the push setting. */
+		oninstallapp: () => void;
+		/** Pausing notifications (§4.5 `mute`), on a server with capability `status`. */
+		pause?: { until?: PausedUntil };
+		onpause: (until: PausedUntil) => Promise<void> | void;
+		onresume: () => Promise<void> | void;
+		/** Signing out starts a different session: the page drops what it held from this one. */
+		onsignout: SignOutHandler;
+		/** The history kept on this device: Sign out keeps this account's or deletes it, and Preferences clears it. */
+		keptHistory?: KeptHistoryControls;
+		/**
+		 * Opens the connect screen to sign in, with `scheme` or the way the server offers first, carrying a name typed
+		 * here; none where the page has no connect screen (an export read, the preview).
+		 */
+		onsignin?: (name?: string, scheme?: 'webauthn' | 'email' | 'external') => void;
+	}
+</script>
+
+<script lang="ts">
+	/*
+	 * Preferences, with Profile's form: your name, bio and avatar, and how you sign in. ProfileBar opens it and keeps
+	 * which section shows; this comes with the code that loads on demand (`lazy.ts`), mounted the first time it opens
+	 * and kept from then on, so a save under way goes on after it closes. It opens with the form as the server keeps it
+	 * (`resetProfile`, which ProfileBar calls each later time it opens).
+	 */
+
+	import { tick, untrack } from 'svelte';
+	import { exportArchive } from '$lib/archive/archive';
+	import { prepareAvatar } from '$lib/ui/images';
+	import { isJsonObject } from '$lib/protocol/types';
+	import { shownPerson } from '$lib/protocol/plain-text';
+	import { bioOf, cleanBio, keepsBio, MAX_BIO_CHARS, serverMedia, serverSettings, type OperationHandle } from '$lib/protocol/client';
+	import { receiptSettings } from '$lib/ui/receipt-settings.svelte';
+	import { impliedOrigins } from '$lib/ui/media-settings.svelte';
+	import { addError, passkeyMessage, wayBackNudge, wayBackWords } from '$lib/ui/connection';
+	import { PasskeyPageNeeded } from '$lib/protocol/passkey-route';
+	import { openSignInWindow, signInPageError } from '$lib/ui/sign-in-window';
+	import { directory } from '$lib/ui/directory.svelte';
+	import { saveDisplayName } from '$lib/ui/storage';
+	import { composing } from '$lib/design/components/compose';
+	import { schemeName, signOutThen } from '$lib/ui/sign-in';
+	import Avatar from '$lib/design/components/Avatar.svelte';
+	import { hueOf } from '$lib/ui/messages';
+	import TypingDots from '$lib/design/components/TypingDots.svelte';
+	import Plus from '@lucide/svelte/icons/plus';
+	import ProfileEditor from '$lib/design/components/ProfileEditor.svelte';
+	import PreferencesDialog from './PreferencesDialog.svelte';
+	import { historySettings } from '$lib/history/settings.svelte';
+
+	/** Asked before Sign out deletes this account's history, with Keep local history unchecked. */
+	const SIGN_OUT_DELETES_HISTORY = 'Signing out deletes local history. Continue?';
+
+	type Status = 'idle' | 'saving' | 'saved' | 'altered' | 'declined';
+
+	interface Props extends PreferencesProps {
+		/** Open now; bindable. */
+		open: boolean;
+		/** The section shown; bindable. */
+		section: string;
+		/** Once it has closed: focus goes back to the bar. */
+		onclosed: () => void;
+	}
+	let { client, session, backendLabel, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, onsignout, keptHistory, onsignin, open = $bindable(), section = $bindable(), onclosed }: Props = $props();
+
+	let draft = $state('');
+	let status = $state<Status>('idle');
+	let serverName = $state('');
+	let declinedReason = $state('');
+	/** The handle the editor opened with; a different draft is one the user chose. */
+	let openedWith = $state('');
+	let passkeyError = $state('');
+	let passkeyNotice = $state('');
+	/** Sign out's Keep local history: checked each time, so deleting is always chosen. */
+	let keepHistory = $state(true);
+	let bioDraft = $state('');
+	/** The bio the editor opened with; Save sends the bio only when the draft differs. */
+	let bioOpenedWith = $state('');
+	let bioError = $state('');
+	let avatarStatus = $state<'idle' | 'uploading' | 'removing'>('idle');
+	let avatarError = $state('');
+	let you = $derived(session.you);
+	/** The account whose history is kept here, for Sign out and Preferences' Clear current user: a session saved here. */
+	let keptUserId = $derived(session.passkeySession ? you?.user_id : undefined);
+	/** The same object while the account is (not each time `you` changes), so History doesn't read again for a new name. */
+	let keptAccount = $derived(keptUserId ? { server: client.url, userId: keptUserId } : undefined);
+	/** This account's history is kept here, so Sign out offers to keep it or delete it. */
+	let offersKeep = $derived(Boolean(keptHistory && keptAccount) && historySettings.retention !== 'off');
+	/** You as the bar shows you: your name without bidi embeddings and overrides (§3.5.2); the editor starts from it as written. */
+	let shownYou = $derived(shownPerson(you));
+	let avatar = $derived(directory.avatar(you));
+	/** The server's host, as Preferences' Media names it: none for the page's own stand-in (an export read, the preview), never a real site (`.invalid`). */
+	let serverHost = $derived(directory.origin && !new URL(directory.origin).hostname.endsWith('.invalid') ? new URL(directory.origin).host : undefined);
+	/** Choosing a status (§4.5): with capability `status`, signed in. */
+	let canSetStatus = $derived(session.snapshot.capabilities.status && session.snapshot.authenticated && you !== undefined);
+	/** Optional statuses this server answered something else for anyway (§4.5), per server: not offered again. */
+	let unsupportedStatuses = $state<{ server: string; values: string[] }>({ server: '', values: [] });
+	let unsupported = $derived(unsupportedStatuses.server === client.url ? unsupportedStatuses.values : []);
+
+	/**
+	 * Preferences' Export: what the client has stored, saved as a file, unless there is nothing yet. The threads
+	 * listed but never opened load their newest messages first, so none of them is saved empty: those in private
+	 * rooms only when private rooms go too.
+	 */
+	async function exportChats(options: { privateRooms: boolean }): Promise<{ name: string; rooms: number; messages: number; privateLeftOut: number } | undefined> {
+		const rooms = new Map(client.snapshot().rooms.map((room) => [room.id, room]));
+		const inPrivate = (id: string): boolean => {
+			for (let at: string | undefined = id, depth = 0; at !== undefined && depth < 64; at = rooms.get(at)?.parentRoomId, depth++) if (rooms.get(at)?.private === true) return true;
+			return false;
+		};
+		const unopened = [...rooms.values()].filter((room) => room.parentRoomId !== undefined && !room.loaded && !room.resumed && (options.privateRooms || !inPrivate(room.id)));
+		await Promise.allSettled(unopened.map((room) => client.loadRoom(room.id)));
+		const file = exportArchive(client.url, client.snapshot(), client.storedRecords(), client.roomSyncs(), options);
+		if (file.rooms === 0) return undefined;
+		const url = URL.createObjectURL(new Blob([file.text], { type: 'application/jsonl' }));
+		const link = Object.assign(document.createElement('a'), { href: url, download: file.name });
+		link.click();
+		// Kept a while: a browser may still be reading it after the click returns.
+		setTimeout(() => URL.revokeObjectURL(url), 60_000);
+		return file;
+	}
+
+	async function chooseStatus(status: string): Promise<string | undefined> {
+		const kept = await client.setStatus(status);
+		return kept.status;
+	}
+
+	function noteUnsupported(status: string): void {
+		unsupportedStatuses = { server: client.url, values: [...unsupported.filter((value) => value !== status), status] };
+	}
+	/** A bio (`ext:bio`) is set with `me`, signed in, on a server that keeps one. */
+	let canSetBio = $derived(keepsBio(session.server) && session.snapshot.authenticated && you !== undefined);
+	/** Avatars are uploaded with a `/avatar` command (§4.8.6), which needs capabilities `command` and `embed:upload`. */
+	let canUploadAvatar = $derived(session.snapshot.capabilities.command && session.snapshot.capabilities['embed:upload']);
+	let snapshot = $derived(session.snapshot);
+	let connected = $derived(snapshot.status === 'connected');
+	let canUsePasskey = $derived(!!session.server?.auth.includes('webauthn'));
+	/** Email sign-in (§4.11.4), where the server offers it. */
+	let canUseEmail = $derived(!!session.server?.auth.includes('email'));
+	/** External sign-in on the server's page (§4.12), where the server offers it. */
+	let canUseExternal = $derived(!!session.server?.auth.includes('external'));
+	/**
+	 * A way to sign in that can be added, by name: the server's label (§3.2), else this client's. Not by the host,
+	 * as the sign-in screen calls external: signed in here, "+ chat.example" would read as adding the server.
+	 */
+	const wayName = (scheme: 'webauthn' | 'email' | 'external') => schemeName(scheme, session.server?.labels);
+	/** Why the server declined the handle, and what happens to it now: a guest who can sign in gets it applied once signed in. */
+	let declinedNote = $derived(`The server declined this name${declinedReason ? ` (${declinedReason})` : ''}. ${(canUsePasskey || canUseEmail || canUseExternal) && !snapshot.passkeySession ? 'Sign in and it’s applied once you’re signed in.' : 'Your old one is still in use.'}`);
+	/**
+	 * No way back into the account that the server signs in with, as far as
+	 * this browser knows: only a kept token (pasted, or an invite, §3.2), or an
+	 * account made with a scheme only in `signup` (§3.1). A gentle nudge to add
+	 * another way in.
+	 */
+	let wayBack = $derived(session.passkeySession ? wayBackNudge(session.server, session.signInMethods) : undefined);
+	/**
+	 * Adding an email to this account (§4.11.3): an explicit action, proposed
+	 * on this signed-in connection, and approved there with the emailed code,
+	 * or by the link that comes back with this browser's `state`. A link of no
+	 * proposal here never adds; it signs in.
+	 */
+	let addEmail = $state<{ step: 'address' | 'code'; email: string; code: string; busy: boolean; error: string } | undefined>();
+	/**
+	 * A server's page open in a window to add to this account (§4.12.4): an
+	 * external sign-in, or a passkey this page can't create for the server's
+	 * RP ID (its passkey page). Cancel closes the window.
+	 */
+	let onPage = $state.raw<{ abort: AbortController; what: 'external' | 'passkey' } | undefined>();
+	/** The name or bio differs from what the server keeps: Save and Revert show. */
+	let dirty = $derived(draft.trim() !== openedWith.trim() || (canSetBio && bioDraft.trim() !== bioOpenedWith.trim()));
+	let savedTimer: ReturnType<typeof setTimeout> | undefined;
+	/** A guest's Sign in, which takes focus when Sign out goes. */
+	let signInButton = $state<HTMLButtonElement>();
+	// "Saved." says so a moment, then goes.
+	$effect(() => {
+		if (status !== 'saved') return;
+		clearTimeout(savedTimer);
+		savedTimer = setTimeout(() => {
+			if (status === 'saved') status = 'idle';
+		}, 2000);
+		return () => clearTimeout(savedTimer);
+	});
+
+	/** Revert: back to what the server keeps. */
+	function revert(): void {
+		draft = openedWith;
+		bioDraft = bioOpenedWith;
+		bioError = '';
+		status = 'idle';
+		declinedReason = '';
+	}
+
+	/**
+	 * Profile's form starts from what the server keeps: your name and bio, and no note from last time. A save
+	 * under way is the account's, not the last opening's: it goes on, Save waits for it, and the form then
+	 * shows what the server kept.
+	 */
+	export function resetProfile(): void {
+		if (status !== 'saving') {
+			draft = you?.name || displayName;
+			openedWith = draft;
+			bioDraft = bioOf(you) ?? '';
+			bioOpenedWith = bioDraft;
+			status = 'idle';
+			serverName = '';
+			declinedReason = '';
+		}
+		bioError = '';
+		passkeyError = '';
+		passkeyNotice = '';
+		avatarError = '';
+		addEmail = undefined;
+	}
+
+	/** The server sets `avatar` and sends `user` once the image is written; `you` then carries it. */
+	async function uploadAvatar(file: File): Promise<void> {
+		avatarStatus = 'uploading';
+		avatarError = '';
+		try {
+			// Cropped square, shrunk under the avatar limit (the server's, where it states one), and stripped of metadata.
+			const { file: avatar } = await prepareAvatar(file, { limits: serverMedia(session.server).avatar });
+			await client.uploadAvatar(avatar);
+		} catch (cause) {
+			avatarError = cause instanceof Error ? cause.message : 'The avatar could not be uploaded';
+		} finally {
+			avatarStatus = 'idle';
+		}
+	}
+
+	async function removeAvatar(): Promise<void> {
+		avatarStatus = 'removing';
+		avatarError = '';
+		try {
+			const kept = await client.updateProfile({ avatar: '' });
+			if (kept.avatar) avatarError = 'The server kept your previous avatar.';
+		} catch (cause) {
+			avatarError = cause instanceof Error ? cause.message : 'The avatar could not be removed';
+		} finally {
+			avatarStatus = 'idle';
+		}
+	}
+
+	/** A handle the user typed in the editor, as opposed to the one it opened with. */
+	function chosenName(): string | undefined {
+		const requested = draft.trim();
+		return requested && requested !== openedWith.trim() ? requested : undefined;
+	}
+
+	/**
+	 * Signing in happens on the connect screen, which carries a handle typed
+	 * here along so it is applied once the passkey or email signs in.
+	 */
+	function signIn(scheme?: 'webauthn' | 'email' | 'external'): void {
+		const chosen = chosenName();
+		open = false;
+		onsignin?.(chosen, scheme);
+	}
+
+	/** Account actions for a passkey session: another passkey for this identity, or signing out. */
+	async function passkey(action: 'register' | 'logout'): Promise<void> {
+		passkeyError = '';
+		passkeyNotice = '';
+		try {
+			if (action === 'logout') {
+				const forget = offersKeep && !keepHistory ? keptAccount : undefined;
+				if (forget && !confirm(SIGN_OUT_DELETES_HISTORY)) return;
+				await signOutThen(client, onsignout);
+				// Deleting is its own step, once signing out worked, and only of this account's.
+				if (forget) await keptHistory?.forget(forget.server, forget.userId);
+				keepHistory = true;
+				passkeyNotice = forget ? 'Signed out, and this account’s local history deleted.' : 'Signed out.';
+			} else {
+				// Labelled with the account's name, so the passkey manager shows whose it is.
+				try {
+					await client.usePasskey('register', you?.name);
+				} catch (cause) {
+					// This page can't create a passkey for the server's RP ID: its passkey page can.
+					if (!(cause instanceof PasskeyPageNeeded)) throw cause;
+					const popup = openSignInWindow();
+					const saved = await onServerPage('passkey', async (signal) => {
+						try {
+							const { passkeyOnPage } = await import('$lib/ui/sign-in-page');
+							await passkeyOnPage(client, cause, { popup, ...(you?.name ? { name: you.name } : {}), signal });
+						} catch (failure) {
+							popup?.close();
+							throw failure;
+						}
+					});
+					if (!saved) return;
+				}
+				passkeyNotice = 'Passkey saved. This server will ask your device next time.';
+			}
+			resetDraft();
+			if (action === 'logout') {
+				// Sign out went with the account: focus goes to the guest's Sign in that took its place.
+				await tick();
+				signInButton?.focus();
+			}
+		} catch (cause) {
+			passkeyError = passkeyMessage(cause);
+		}
+	}
+
+	/**
+	 * The Add email form's next step: propose adding the address on this
+	 * signed-in connection, then approve it with the code on the same one (§4.11).
+	 * Each step's reply is for the form that asked: one cancelled, or replaced by
+	 * another opening of Preferences, takes nothing from it.
+	 */
+	async function continueAddEmail(): Promise<void> {
+		const form = addEmail;
+		if (!form || form.busy) return;
+		form.error = '';
+		form.busy = true;
+		try {
+			if (form.step === 'address') {
+				await client.requestEmailCodeToAdd(form.email);
+				form.step = 'code';
+			} else {
+				await client.addWithCode(form.code);
+				if (addEmail !== form) return;
+				addEmail = undefined;
+				passkeyNotice = `Added ${form.email} · sign in with it anywhere`;
+				return;
+			}
+		} catch (cause) {
+			form.error = addError(cause, 'email');
+		}
+		form.busy = false;
+	}
+
+	/**
+	 * Add external sign-in (§4.12.4): the server's sign-in page opens in a
+	 * window, now, while the tap allows one (or in this tab, where the browser
+	 * blocks it, and the page's link controller adds on the way back), and the
+	 * code it sends back adds that sign-in on this signed-in connection.
+	 */
+	async function addExternal(): Promise<void> {
+		const account = you?.user_id;
+		if (!account) return;
+		const popup = openSignInWindow();
+		const added = await onServerPage('external', async (signal) => {
+			try {
+				const { externalOnPage } = await import('$lib/ui/sign-in-page');
+				await externalOnPage(client, client.url, { scheme: 'external', kind: 'addition', account }, { popup, signal });
+			} catch (cause) {
+				popup?.close();
+				throw cause;
+			}
+		});
+		if (added) passkeyNotice = 'Added · sign in with it anywhere';
+	}
+
+	/**
+	 * Runs `work` with a server's page open in a window (`onPage`), saying so
+	 * meanwhile. False when it was cancelled or failed, the error said.
+	 */
+	async function onServerPage(what: 'external' | 'passkey', work: (signal: AbortSignal) => Promise<void>): Promise<boolean> {
+		passkeyError = '';
+		passkeyNotice = '';
+		onPage?.abort.abort();
+		const job = { abort: new AbortController(), what };
+		onPage = job;
+		try {
+			await work(job.abort.signal);
+			return onPage === job;
+		} catch (cause) {
+			if (onPage === job && !job.abort.signal.aborted) passkeyError = what === 'external' ? addError(cause, 'external') : signInPageError(cause, 'Unable to save the passkey');
+			return false;
+		} finally {
+			if (onPage === job) onPage = undefined;
+		}
+	}
+
+	/** Enter in the Add email fields continues that form, not the profile's. */
+	function addEmailKeydown(event: KeyboardEvent): void {
+		if (event.key !== 'Enter' || composing(event)) return;
+		event.preventDefault();
+		void continueAddEmail();
+	}
+
+	/** Whose name and bio the form holds: another identity (signed out, signed in elsewhere) starts it afresh. */
+	let formFor: string | undefined;
+	$effect(() => {
+		const id = you?.user_id;
+		untrack(() => {
+			if (id === undefined || id === formFor) return;
+			const first = formFor === undefined;
+			formFor = id;
+			if (!first || !dirty) resetDraft();
+		});
+	});
+
+	/** Back to what the server keeps for whoever this session is now: the name and the bio. */
+	function resetDraft(): void {
+		draft = you?.name || displayName;
+		openedWith = draft;
+		bioDraft = bioOf(you) ?? '';
+		bioOpenedWith = bioDraft;
+		bioError = '';
+		if (status === 'declined') status = 'idle';
+	}
+
+	/** Shows what the server kept for a `me` request carrying `requested`. */
+	async function track(handle: OperationHandle, requested: string): Promise<void> {
+		status = 'saving';
+		declinedReason = '';
+		try {
+			const result = await handle.promise;
+			const kept = isJsonObject(result.you) && typeof result.you.name === 'string' ? result.you.name : requested;
+			if (kept === requested) {
+				status = 'saved';
+			} else {
+				serverName = kept;
+				status = 'altered';
+				// The client asks for the kept name from now on; so does the next visit.
+				displayName = kept;
+				saveDisplayName(kept);
+			}
+			draft = kept;
+			openedWith = kept;
+		} catch (cause) {
+			declinedReason = cause instanceof Error ? cause.message : '';
+			status = 'declined';
+		}
+	}
+
+	/**
+	 * Sends a changed bio as `me` `{ext: {bio}}`, `""` clearing it (`ext:bio`).
+	 * Returns whether the handle should follow: not when the server refused
+	 * the bio, which then says why and keeps the editor open.
+	 */
+	async function saveBio(): Promise<boolean> {
+		// Plain text without control or bidi formatting characters, as every client shows it.
+		const bio = cleanBio(bioDraft);
+		if (!canSetBio || bio === bioOpenedWith) return true;
+		status = 'saving';
+		bioError = '';
+		try {
+			const kept = await client.updateProfile({ ext: { bio } });
+			bioDraft = bioOf(kept) ?? '';
+			bioOpenedWith = bioDraft;
+			return true;
+		} catch (cause) {
+			// `too_large` (§1.1): the server's limit on `ext` is in bytes, which non-Latin text and emoji fill sooner.
+			bioError = (cause as { code?: number }).code === -32003 ? 'Your bio is too long for this server. Try a shorter one.' : cause instanceof Error ? cause.message : 'The server didn’t keep your bio';
+			status = 'idle';
+			return false;
+		}
+	}
+
+	/** Sends the bio, if it changed, then the handle with `name`; the editor then shows what the server actually kept. */
+	async function save(): Promise<void> {
+		const requested = draft.trim();
+		// Enter in the name with nothing changed submits too: nothing to send.
+		if (!requested || !dirty) return;
+		if (!(await saveBio())) return;
+		displayName = requested;
+		saveDisplayName(requested);
+		const handle = client.setDisplayName(requested);
+		if (!handle) {
+			// Not signed in yet: the name goes with the next `auth`, so it is what the form starts from now.
+			draft = requested;
+			openedWith = requested;
+			status = 'saved';
+			return;
+		}
+		void track(handle, requested);
+	}
+	// It opens with the form as the server keeps it.
+	resetProfile();
+</script>
+
+<!-- In Preferences' Profile, the design system's ProfileEditor draws the form; the app fills in your avatar, and the ways to sign in this server offers. -->
+{#snippet face()}
+	<!-- No status dot: the status is chosen just above it. -->
+	<Avatar name={draft || you?.user_id || '?'} hue={hueOf(you?.user_id)} src={avatar} size="lg" />
+{/snippet}
+{#snippet signinHint()}
+	{#if passkeyError}
+		<span class="ap-form-hint ap-tone-danger" role="alert">{passkeyError}</span>
+	{:else if passkeyNotice}
+		<span class="ap-form-hint ap-tone-ok" role="status">{passkeyNotice}</span>
+	{:else if passkeyUnavailable && canUsePasskey && !canUseEmail && !canUseExternal}
+		<span class="ap-form-hint">{passkeyUnavailable}</span>
+	{:else if wayBack}
+		<span class="ap-form-hint">{session.signedInWith === 'token' ? 'Only this browser’s saved session gets you back into this account.' : 'This server doesn’t sign in the way you joined.'} Add {wayBackWords(wayBack)} to sign in anywhere.</span>
+	{:else if session.passkeySession}
+		<span class="ap-form-hint">{canUseEmail || canUseExternal ? 'You can sign in to this account anywhere.' : 'You sign in to this account with a passkey.'}</span>
+	{:else}
+		<span class="ap-form-hint">You’re a guest here. Sign in to keep your name and rooms.</span>
+	{/if}
+{/snippet}
+{#snippet signin()}
+	{#if onPage}
+		<span class="ap-profedit-add" role="group" aria-label={onPage.what === 'external' ? 'Add external sign-in' : 'Add passkey'}>
+			<span class="ap-form-hint" role="status"><TypingDots /> {snapshot.authBusy ? 'Adding…' : 'Finish in the window that opened.'}</span>
+			<button class="ap-link" type="button" onclick={() => onPage?.abort.abort()}>Cancel</button>
+		</span>
+	{:else if snapshot.authBusy && !addEmail?.busy}
+		<span class="ap-form-hint" role="status"><TypingDots /> {snapshot.passkeyBusy ? 'Confirm on your device…' : 'Signing in…'}</span>
+	{:else}
+		<!-- How this session signs in comes first, then what you can do about it. -->
+		{#if session.passkeySession}
+			{@render signinHint()}
+			<!--
+				A registered account: a passkey registered or an email code presented here adds to it (§4.10, §4.11).
+				Each way is named on its own, as the sign-in screen's choices are (`schemeName`), never inside a phrase
+				of ours: a server's label (§3.2) may be long, a verb phrase, or in another language.
+			-->
+			<span class="ap-profedit-buttons ap-profedit-ways" role="group" aria-label="Add a way to sign in">
+				{#if canUsePasskey && you}
+					<button class="ap-btn ap-btn-sm" type="button" disabled={!!passkeyUnavailable || !connected || status === 'saving'} onclick={() => passkey('register')}><Plus size={14} aria-hidden="true" />{wayName('webauthn')}</button>
+				{/if}
+				{#if canUseEmail && you && !addEmail}
+					<button class="ap-btn ap-btn-sm" type="button" disabled={!connected || status === 'saving'} onclick={() => (addEmail = { step: 'address', email: '', code: '', busy: false, error: '' })}><Plus size={14} aria-hidden="true" />{wayName('email')}</button>
+				{/if}
+				{#if canUseExternal && you && !addEmail}
+					<button class="ap-btn ap-btn-sm" type="button" disabled={!connected || status === 'saving'} onclick={addExternal}><Plus size={14} aria-hidden="true" />{wayName('external')}</button>
+				{/if}
+			</span>
+		{:else}
+			<!-- A guest: signing in, as the composer offers it where guests can't post, at the row's end; the connect screen picks the way. -->
+			<span class="ap-profedit-inline">
+				{@render signinHint()}
+				<button class="ap-btn ap-btn-primary ap-btn-sm" type="button" bind:this={signInButton} disabled={status === 'saving'} onclick={() => signIn()}>Sign in</button>
+			</span>
+		{/if}
+		{#if addEmail}
+			<span class="ap-profedit-add" role="group" aria-label="Add email">
+				{#if addEmail.step === 'address'}
+					<input class="ap-field" type="email" aria-label="Email address to add" placeholder="you@example.com" autocomplete="email" bind:value={addEmail.email} disabled={addEmail.busy} onkeydown={addEmailKeydown} />
+					<button class="ap-btn ap-btn-sm" type="button" disabled={addEmail.busy || !addEmail.email.trim()} onclick={continueAddEmail}>Send code</button>
+				{:else}
+					<input class="ap-field ap-field-mono" aria-label="Code from the email" placeholder="Code" inputmode="numeric" autocomplete="one-time-code" autocapitalize="none" autocorrect="off" spellcheck="false" bind:value={addEmail.code} disabled={addEmail.busy} onkeydown={addEmailKeydown} />
+					<button class="ap-btn ap-btn-sm" type="button" disabled={addEmail.busy || !addEmail.code.trim()} onclick={continueAddEmail}>Add</button>
+				{/if}
+				<button class="ap-link" type="button" disabled={addEmail.busy} onclick={() => (addEmail = undefined)}>Cancel</button>
+			</span>
+			{#if addEmail.error}<span class="ap-form-hint ap-tone-danger" role="alert">{addEmail.error}</span>
+			{:else if addEmail.step === 'code'}<span class="ap-form-hint" role="status">If the server can send to {addEmail.email}, a code is on its way.</span>{/if}
+		{/if}
+	{/if}
+{/snippet}
+{#snippet signout()}
+	<p class="ap-form-hint">Signed in to <bdi>{backendLabel}</bdi> as <bdi>{shownYou?.name || you?.user_id}</bdi>.</p>
+	<span class="ap-profedit-buttons">
+		{#if offersKeep}<label class="ap-pref-check"><input class="ap-checklist-box" type="checkbox" bind:checked={keepHistory} data-testid="keep-history" /> Keep local history</label>{/if}
+		<button class="ap-btn ap-btn-sm" type="button" disabled={!connected || status === 'saving'} onclick={() => passkey('logout')}>Sign out</button>
+	</span>
+{/snippet}
+{#snippet profileForm()}
+	<ProfileEditor
+		dialog={false}
+		userId={you?.user_id ?? '—'}
+		bind:name={draft}
+		bind:bio={bioDraft}
+		maxBio={canSetBio ? MAX_BIO_CHARS : undefined}
+		{bioError}
+		{avatar}
+		hasAvatar={Boolean(you?.avatar)}
+		{face}
+		canUpload={canUploadAvatar}
+		onavatarfile={uploadAvatar}
+		onremoveavatar={removeAvatar}
+		avatarBusy={avatarStatus === 'idle' ? undefined : avatarStatus}
+		{avatarError}
+		offline={!connected}
+		{status}
+		{serverName}
+		{declinedNote}
+		onsave={save}
+		{dirty}
+		onrevert={revert}
+		signin={session.passkeySession ? (canUsePasskey || canUseEmail || canUseExternal ? signin : undefined) : onsignin ? signin : undefined}
+		signout={session.passkeySession && you ? signout : undefined}
+		changeAvatarTestid="change-avatar" removeAvatarTestid="remove-avatar" avatarFileTestid="avatar-input" nameTestid="display-name-input" bioTestid="bio-input"
+	/>
+{/snippet}
+
+<PreferencesDialog
+	bind:open
+	bind:section
+	profile={profileForm}
+	{notificationsEnabled} {notificationsSupported} {notificationPermission} {notifyScopes}
+	{onnotifications} {onnotifyscopes} {ontestnotifications} {webPush} {onwebpush} {oninstallapp} {pause} {onpause} {onresume}
+	status={canSetStatus ? { value: you?.status, accepted: session.server?.status ?? [], unsupported, onchoose: chooseStatus, onunsupported: noteUnsupported, disabled: !connected } : undefined}
+	onexport={exportChats}
+	readReceipts={serverSettings(session.server).read_receipts === 'private' && session.passkeySession ? { on: receiptSettings.on, onchange: (on: boolean) => receiptSettings.set(on) } : undefined}
+	{keptHistory}
+	{keptAccount}
+	mediaHosts={impliedOrigins(serverMedia(session.server).origins).map((origin) => new URL(origin).host)}
+	serverHost={serverHost}
+	{onclosed}
+/>

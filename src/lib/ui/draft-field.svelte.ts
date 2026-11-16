@@ -11,6 +11,7 @@ import type { EmojiMartData } from '@emoji-mart/data';
 import { loadEmojiData } from './emoji-picker.svelte';
 import { directory } from './directory.svelte';
 import { enterAction, handheld } from './handheld';
+import { draftFacts, sameFacts, type DraftFacts } from '$lib/design/components/compose';
 import type { TextEdit } from './text-edit';
 
 /**
@@ -104,11 +105,12 @@ export class DraftField {
 	/** Nothing is in the field: its placeholder shows. */
 	empty = $state(true);
 	/**
-	 * The draft has more than one line: set only as that changes, so what reads it (the composer's Expand) isn't asked
-	 * again on every key, as it would be reading the draft itself.
+	 * What the composer asks of the draft (blank, past one line, a command, with a link): replaced only as one of them
+	 * changes, so what reads them isn't asked again on every key, as it would be reading the draft itself.
 	 */
-	multiline = $state(false);
-	private wasMultiline = false;
+	facts = $state.raw<DraftFacts>(draftFacts(''));
+	/** `facts` as last set, a plain copy: reading the state itself would cost each key what it is here to save. */
+	private lastFacts = draftFacts('');
 		/** The text after `@` at the caret, or undefined when the picker is closed. */
 	query = $state<string | undefined>();
 	/** The `:shortcode` or `#room` at the caret, while its picker is open. */
@@ -159,6 +161,8 @@ export class DraftField {
 	constructor(host: DraftHost, pickerId: string) {
 		this.host = host;
 		this.pickerId = pickerId;
+		// The draft the field opens on (one kept, or written before a recording), before it is drawn and first committed.
+		this.facts = this.lastFacts = draftFacts(untrack(() => host.value));
 		this.roles = $derived(roomRoles(host.people));
 		this.roleIds = $derived(this.roles.map((suggestion) => suggestion.role));
 		this.outsideRoles = $derived(host.outsiders?.length ? outsideRoles(host.outsiders, this.roleIds) : []);
@@ -224,6 +228,7 @@ export class DraftField {
 		field.focus();
 		const selection = document.getSelection();
 		if (end || !selection || !field.contains(selection.anchorNode)) placeCaret(field, draftLength(readDraft(field).parts));
+		revealCaret(field);
 	}
 
 	/** Puts a mention chip for this user where the caret was (else at the end), as picking them would, and focuses the field. */
@@ -649,9 +654,8 @@ export class DraftField {
 		const text = draftText(parts);
 		this.shown = { field: root, text };
 		this.empty = parts.length === 0;
-		// Compared with a plain copy: reading the state itself would cost each key what this is here to save.
-		const multiline = text.includes('\n');
-		if (multiline !== this.wasMultiline) this.multiline = this.wasMultiline = multiline;
+		const facts = draftFacts(text);
+		if (!sameFacts(facts, this.lastFacts)) this.facts = this.lastFacts = facts;
 		const mentioned = draftMentions(parts, this.roleMembers);
 		if (mentioned.join('\u0000') !== this.host.mentions.join('\u0000')) this.host.mentions = mentioned;
 		if (this.empty && root.childNodes.length > 0) root.replaceChildren();
@@ -801,6 +805,45 @@ function readDraft(root: HTMLElement): { parts: DraftPart[]; caret: number | und
 /** The draft's text with each chip as it is written (`chipText`) and nothing added: one character per caret position. */
 function positionText(parts: DraftPart[]): string {
 	return parts.map((part) => (typeof part === 'string' ? part : chipText(part))).join('');
+}
+
+/**
+ * Scrolls the field, not the page, to show the caret's line. A browser follows the caret as you type, but not as the
+ * field changes size around it (the full panel opening or closing, a keyboard coming up), which can leave the line being
+ * written out of view. Reads the layout: for a focus, not a keystroke.
+ */
+function revealCaret(field: HTMLElement): void {
+	if (field.scrollHeight <= field.clientHeight) return;
+	const selection = document.getSelection();
+	const node = selection?.focusNode;
+	if (!selection || !node || !field.contains(node)) return;
+	const range = document.createRange();
+	range.setStart(node, selection.focusOffset);
+	let caret = range.getBoundingClientRect();
+	if (!caret.height) {
+		// A caret between elements (after a line break, beside a chip, on an empty line the browser made a block of) has no
+		// box of its own: what follows it stands in, on its line; else a chip before it, or the block it is in; else it is at
+		// the field's start or end.
+		const inside = node instanceof Element ? node : undefined;
+		const at = inside?.childNodes[selection.focusOffset];
+		const before = inside?.childNodes[selection.focusOffset - 1];
+		if (at instanceof Text) range.setStart(at, 0);
+		else if (at) range.selectNode(at);
+		const stand = at ? range.getBoundingClientRect()
+			: before instanceof Element && !(before instanceof HTMLBRElement) ? before.getBoundingClientRect()
+			: inside && inside !== field ? inside.getBoundingClientRect() : undefined;
+		if (!stand?.height) {
+			field.scrollTop = before ? field.scrollHeight : 0;
+			return;
+		}
+		caret = stand;
+	}
+	const box = field.getBoundingClientRect();
+	const style = getComputedStyle(field);
+	const top = box.top + parseFloat(style.paddingTop);
+	const bottom = box.bottom - parseFloat(style.paddingBottom);
+	if (caret.bottom > bottom) field.scrollTop += caret.bottom - bottom;
+	else if (caret.top < top) field.scrollTop -= top - caret.top;
 }
 
 /** Puts the caret at a draft-text position; a position inside a chip lands after it. */

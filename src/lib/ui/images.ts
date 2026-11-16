@@ -348,13 +348,6 @@ function kindOf(type: string): string {
 	return group === 'image' ? 'images' : group === 'audio' || group === 'video' ? group : 'files like this';
 }
 
-/** A file's size for people: bytes, whole KB, or MB to one decimal. */
-export function fileSize(bytes: number): string {
-	if (bytes < 1024) return `${bytes} B`;
-	if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-	return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 /** `createImageBitmap` and a canvas, or undefined where the platform has neither. */
 export function browserCodec(): ImageCodec | undefined {
 	if (typeof createImageBitmap === 'undefined') return undefined;

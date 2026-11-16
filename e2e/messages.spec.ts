@@ -162,7 +162,10 @@ for (const [device, wide] of [['desktop', true], ['tablet', false]] as const) {
 			// First, before any row has had it: rows at the top of the timeline, where one above would be cut off, partly or
 			// wholly, have it below. Moved once it's seen cut off (an IntersectionObserver, measuring nothing as the pointer arrives).
 			const list = page.getByTestId('message-list');
-			// Its images in first, whose sizes arriving would move the rows.
+			// All its history in first: the pane fills in a page at a time, drawing the latest and then, while it isn't a
+			// screen and more tall, the page before (here the rest, from the welcome on), which would move the rows.
+			await expect(list.locator('article[data-message-id="1710000000001"]')).toBeAttached();
+			// And its images, whose sizes arriving would move them too.
 			await expect.poll(() => page.evaluate(() => [...document.images].every((image) => image.complete))).toBe(true);
 			// Rows from the middle of the history, so that scrolling one to the top doesn't bring older ones in above it.
 			const ids = await list.evaluate((frame) => {
@@ -178,6 +181,10 @@ for (const [device, wide] of [['desktop', true], ['tablet', false]] as const) {
 				await row.evaluate((el, offset) => {
 					const frame = el.closest('[data-testid="message-list"]')!;
 					frame.scrollTop += el.getBoundingClientRect().top - frame.getBoundingClientRect().top - offset;
+					// Heard at once, as a browser's frame would have it heard before its animation frames run. Playwright's
+					// clock runs those as timers, which under load can come first: one the timeline queued to keep to the latest
+					// while still filling in would then put it back there, before it hears it was scrolled up.
+					frame.dispatchEvent(new Event('scroll'));
 				}, offset);
 				await page.mouse.move(0, 0);
 				await row.hover({ position: { x: 60, y: 24 } });

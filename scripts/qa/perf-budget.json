@@ -6,7 +6,7 @@
 	"probes": {
 		"load": {
 			"requests": 22,
-			"startupJsKB": 961.9,
+			"startupJsKB": 951.1,
 			"domNodes": 537,
 			"layouts": 10,
 			"styleRecalcs": 18,
@@ -15,7 +15,7 @@
 		},
 		"load-busy": {
 			"requests": 20,
-			"startupJsKB": 929.8,
+			"startupJsKB": 914.9,
 			"domNodes": 1149,
 			"layouts": 13,
 			"styleRecalcs": 16,
@@ -24,7 +24,7 @@
 		},
 		"load-phone": {
 			"requests": 22,
-			"startupJsKB": 961.9,
+			"startupJsKB": 951.1,
 			"domNodes": 538,
 			"layouts": 10,
 			"styleRecalcs": 16,
@@ -33,7 +33,7 @@
 		},
 		"load-phone-busy": {
 			"requests": 20,
-			"startupJsKB": 929.8,
+			"startupJsKB": 914.9,
 			"domNodes": 1150,
 			"layouts": 9,
 			"styleRecalcs": 15,
@@ -47,8 +47,8 @@
 		},
 		"send-message-busy": {
 			"layouts": 38,
-			"styleRecalcs": 16,
-			"calls": 278244
+			"styleRecalcs": 13,
+			"calls": 274559
 		},
 		"sidebar-collapse": {
 			"layouts": 3,
@@ -73,7 +73,7 @@
 		"open-preferences": {
 			"layouts": 3,
 			"styleRecalcs": 9,
-			"calls": 4309
+			"calls": 4633
 		},
 		"scroll-timeline": {
 			"layouts": 9,
@@ -83,12 +83,12 @@
 		"type-composer-role": {
 			"layouts": 46,
 			"styleRecalcs": 1,
-			"calls": 52561
+			"calls": 31773
 		},
 		"type-composer": {
 			"layouts": 36,
 			"styleRecalcs": 6,
-			"calls": 36772
+			"calls": 30315
 		},
 		"hover-messages": {
 			"layouts": 7,
@@ -107,12 +107,12 @@
 		}
 	},
 	"bundle": {
-		"jsGzipKB": 620.5,
+		"jsGzipKB": 614.3,
 		"cssGzipKB": 29.7
 	},
 	"production": {
 		"startupFiles": 13,
-		"startupJsKB": 871.3,
-		"startupJsBrotliKB": 244.8
+		"startupJsKB": 851.7,
+		"startupJsBrotliKB": 240.1
 	}
 }

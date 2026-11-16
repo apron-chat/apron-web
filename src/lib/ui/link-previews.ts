@@ -6,14 +6,18 @@
  * Any link in the text is a candidate; the ones on a site in `SITES`
  * (`link-sites.ts`) get a preview, from that site's API, which allows
  * cross-origin reads, so the browser can describe a link without a server. A
- * preview is fetched when a link is pasted; a message sent before it arrives,
- * or for a link the API won't describe, gets a card built from the URL.
+ * preview is fetched when a link is pasted, or when typing pauses; a message
+ * sent before it arrives waits a moment for it (`settle`), and one sent
+ * without it, or for a link the API won't describe, gets a card built from
+ * the URL.
  */
 import type { Embed, OpenGraph } from '$lib/protocol/types';
 import { record, SITES, siteFor, type Lookup, type Site } from './link-sites';
 
 /** At most this many previews per message. */
 export const LINK_PREVIEWS_MAX = 3;
+/** The longest a sent message waits for previews not yet here (`settle`) before it goes with what it has. */
+export const PREVIEW_WAIT_MS = 1500;
 const CACHE_MAX = 100;
 
 /** A link a site can describe. */
@@ -66,15 +70,45 @@ export function previewLink(value: string | URL, sites: Record<string, Site> = S
 	return site && lookup && { ...lookup, site };
 }
 
+/** At most this many URLs as written are remembered (`readLinks`), per set of sites. */
+const READ_MAX = 200;
+/**
+ * Each URL as written in a draft, as `previewLink` read it (null: no link a site describes), by the sites it was read
+ * for. A draft's links are found again on every key, but a key changes at most the URL it is typed into: the others
+ * are looked up here rather than trimmed, parsed and matched to a site again.
+ */
+const readLinks = new WeakMap<Record<string, Site>, Map<string, PreviewLink | null>>();
+
+/** The link a URL as written in text names on a site in `sites` (`previewLink` of it trimmed), or undefined. */
+function linkWritten(written: string, sites: Record<string, Site>): PreviewLink | undefined {
+	let read = readLinks.get(sites);
+	if (!read) readLinks.set(sites, (read = new Map()));
+	let link = read.get(written);
+	if (link === undefined) {
+		link = previewLink(trimUrl(written), sites) ?? null;
+		if (read.size >= READ_MAX) read.delete(read.keys().next().value as string);
+		read.set(written, link);
+	}
+	return link ?? undefined;
+}
+
 /** The distinct previewable links in a message's text, in order, up to `LINK_PREVIEWS_MAX`, leaving out links in `skip`. */
 export function findLinks(text: string, skip: readonly string[] = [], sites: Record<string, Site> = SITES): PreviewLink[] {
 	const found = new Map<string, PreviewLink>();
-	for (const url of findUrls(text)) {
-		const link = previewLink(url, sites);
+	for (const match of text.matchAll(URL_IN_TEXT)) {
+		const link = linkWritten(match[0], sites);
 		if (link && !found.has(link.url) && !skip.includes(link.url)) found.set(link.url, link);
 		if (found.size >= LINK_PREVIEWS_MAX) break;
 	}
 	return [...found.values()];
+}
+
+/**
+ * The same previews: for the same links, each with the same details (`og`, kept as found or fetched), in the same order.
+ * A draft typed on without touching its links finds the same ones again.
+ */
+export function samePreviews(a: readonly Embed[], b: readonly Embed[]): boolean {
+	return a === b || (a.length === b.length && a.every((embed, index) => embed.url === b[index].url && embed.og === b[index].og));
 }
 
 /** When a limited answer says to try again: its `Retry-After` seconds, or `X-RateLimit-Reset` time, else in a minute. */
@@ -116,6 +150,23 @@ export class LinkPreviews {
 	/** Starts fetching previews for the links in `text`; resolves when they have settled. */
 	prefetch(text: string): Promise<void> {
 		return Promise.all(this.links(text).map((link) => this.load(link))).then(() => undefined);
+	}
+
+	/**
+	 * Fetches the previews of the links in `text` not yet known (but those in `dismissed`, and those on a site
+	 * holding requests while limited) and resolves once they have settled, or after `ms` at most; undefined when
+	 * there are none to wait for.
+	 */
+	settle(text: string, dismissed: readonly string[], ms: number): Promise<void> | undefined {
+		const waiting = this.links(text, dismissed).filter((link) => !this.known.has(link.url) && this.now() >= (this.blockedUntil.get(link.site.name) ?? 0));
+		if (!waiting.length) return undefined;
+		return new Promise((resolve) => {
+			const timer = setTimeout(resolve, ms);
+			void Promise.all(waiting.map((link) => this.load(link))).then(() => {
+				clearTimeout(timer);
+				resolve();
+			});
+		});
 	}
 
 	/**

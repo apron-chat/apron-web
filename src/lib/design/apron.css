@@ -481,8 +481,14 @@ a.ap-embed-card:hover { background: var(--hover); }
 /* A mention that won't reach anyone as the draft would go (not in the room, and not to be added): greyed. */
 .ap-composer-editable .ap-mention.ap-mention-quiet { background: color-mix(in srgb, var(--ink-muted) 14%, transparent); color: var(--ink-muted); }
 .ap-composer-editable .ap-mention-role.ap-mention-quiet { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink-muted) 45%, transparent); }
-/* The autocomplete picker anchors to the composer's row and grows upward. */
-.ap-composer-wrap { position: relative; }
+/*
+ * The composer's row, which the autocomplete picker anchors to and grows upward from. A column that can shrink: where the
+ * pane is too short for a long draft at its full 200px (a small phone with its keyboard up), the composer gives way
+ * rather than run on under the keyboard, taking what is left, its field scrolled, so the line being written and Send
+ * stay in view.
+ */
+.ap-composer-wrap { position: relative; display: flex; flex-direction: column; }
+.ap-composer-wrap, .ap-composer-grown { min-height: 0; }
 /* Send counting down a wait on sending (`waitUntil`), after an hourglass: figures that don't shift as they count. */
 .ap-btn.ap-composer-wait { font-variant-numeric: tabular-nums; }
 /* Above the field: the message being replied to, with Cancel reply */
@@ -510,12 +516,13 @@ a.ap-embed-card:hover { background: var(--hover); }
 /*
  * The full panel, for writing at length: the composer takes three quarters of its pane, in the flow, and the timeline
  * the rest above it, at its latest, with the notices and asks between them as ever; at least a few lines of it, where
- * the pane is short (a phone's keyboard up). The same form, laid out on a grid: its head (formatting, Write and
- * Preview, Collapse) on top, the field filling the middle, and the attach, microphone and emoji buttons, the keys that
- * send and Send at its foot.
+ * the pane is short (a phone's keyboard up). The room's description makes way for it (the page leaves it out), and
+ * should the rest still not fit, it shrinks rather than run its foot off the pane. The same form, laid out on a grid:
+ * its head (formatting, Write and Preview, Collapse) on top, the field filling the middle, and the attach, microphone
+ * and emoji buttons, the keys that send and Send at its foot.
  */
-.ap-composer-full { flex: none; display: flex; flex-direction: column; height: 75%; max-height: calc(100% - var(--header-h) - 3 * var(--space-8)); }
-.ap-composer-full > .ap-composer-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.ap-composer-full { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; height: 75%; max-height: calc(100% - var(--header-h) - 3 * var(--space-8)); }
+.ap-composer-full > .ap-composer-wrap { flex: 1; }
 .ap-composer-full .ap-composer { flex: 1; min-height: 0; display: grid; grid-template: "head head head head" auto "body body body body" minmax(0, 1fr) "start end keys send" auto / auto auto minmax(0, 1fr) auto; align-items: center; gap: 0; padding: 0; overflow: hidden; }
 /* A Markdown field's head, on the full panel and a MarkdownEditor alike: its formatting, then Write and Preview at its end. */
 .ap-mdhead { grid-area: head; display: flex; align-items: center; gap: var(--space-0_5); padding: var(--space-1_5) var(--space-2); border-bottom: 1px solid var(--line); }
@@ -1588,7 +1595,7 @@ pre.ap-termviewer-text { width: 80ch; font-family: var(--font-mono); font-size: 
 /* The document has focus once it opens (to scroll it by keys): from the keyboard, a ring just inside the stage. */
 .ap-docviewer-stage:focus { outline: none; }
 .ap-docviewer-stage:focus-visible { outline: var(--focus-ring); outline-color: var(--viewer-ink); outline-offset: var(--focus-offset-inset); }
-.ap-docviewer-page { box-sizing: border-box; max-width: 46rem; margin: 0 auto; padding: var(--space-6) var(--space-8); border-radius: var(--radius-md); background: var(--bg-100); color: var(--ink); font-size: var(--text-body); line-height: var(--leading-body); }
+.ap-docviewer-page { box-sizing: border-box; max-width: 52rem; margin: 0 auto; padding: var(--space-6) var(--space-8); border-radius: var(--radius-md); background: var(--bg-100); color: var(--ink); font-size: var(--text-body); line-height: var(--leading-body); }
 .ap-docviewer-page .ap-msg-text :is(h1, h2, h3, h4, h5, h6) { margin: 1.4em 0 0.5em; text-wrap: balance; }
 /* A document's prose avoids a last line of one short word. */
 .ap-docviewer-page .ap-msg-text :is(p, li, blockquote) { text-wrap: pretty; }

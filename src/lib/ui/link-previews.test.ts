@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { findLinks, findUrls, LinkPreviews, previewLink, trimUrl } from './link-previews';
+import { findLinks, findUrls, LinkPreviews, previewLink, samePreviews, trimUrl } from './link-previews';
 import type { Site } from './link-sites';
 
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
@@ -38,6 +38,32 @@ describe('finding links', () => {
 		expect(findLinks('https://x.com/Jack/status/20 https://x.com/jack/status/20 https://github.com/a/b/commit/ABCDEF1 https://github.com/a/b/commit/abcdef1')).toHaveLength(2);
 		expect(findLinks('[https://github.com/a/b/pull/1](https://github.com/a/b/pull/1) (https://github.com/a/b/pull/2)and').map((link) => link.url)).toEqual(['https://github.com/a/b/pull/1', 'https://github.com/a/b/pull/2']);
 		expect(findLinks(text, ['https://github.com/a/b/issues/2']).map((link) => link.url)).toEqual(['https://github.com/a/b/pull/1', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'https://github.com/e/f']);
+	});
+
+	it('reads each URL as written once, as a draft is typed on: only the one being typed into is read again', () => {
+		const match = vi.fn((url: URL) => (url.pathname.startsWith('/p/') ? { url: url.href, api: url.href, preview: () => undefined } : undefined));
+		const sites: Record<string, Site> = { 'a.example': { name: 'A', match } };
+		const draft = 'see https://a.example/p/1 and https://a.example/q/2 then https://a.example/p/3';
+		expect(findLinks(draft, [], sites).map((link) => link.url)).toEqual(['https://a.example/p/1', 'https://a.example/p/3']);
+		expect(match).toHaveBeenCalledTimes(3);
+		// A key after the links: none of them is read again.
+		expect(findLinks(`${draft} ok`, [], sites)).toEqual(findLinks(draft, [], sites));
+		expect(match).toHaveBeenCalledTimes(3);
+		// A key in the last one: only it is.
+		expect(findLinks(draft.replace('/p/3', '/p/34'), [], sites).map((link) => link.url)).toEqual(['https://a.example/p/1', 'https://a.example/p/34']);
+		expect(match).toHaveBeenCalledTimes(4);
+		// Another set of sites reads it afresh.
+		expect(findLinks(draft, [], { 'a.example': { name: 'A', match: () => undefined } })).toEqual([]);
+	});
+
+	it('tells the same previews apart from new ones by link and details', () => {
+		const og = { title: 'One' };
+		const one = { kind: 'link' as const, url: 'https://a.example/1', og };
+		expect(samePreviews([one], [{ ...one }])).toBe(true);
+		expect(samePreviews([one], [{ ...one, og: { title: 'One' } }])).toBe(false);
+		expect(samePreviews([one], [{ ...one, url: 'https://a.example/2' }])).toBe(false);
+		expect(samePreviews([one], [])).toBe(false);
+		expect(samePreviews([], [])).toBe(true);
 	});
 });
 
@@ -116,5 +142,53 @@ describe('LinkPreviews', () => {
 		unsubscribe();
 		await previews.prefetch('https://github.com/a/b/pull/2');
 		expect(listener).toHaveBeenCalledTimes(1);
+	});
+
+	describe('settle', () => {
+		const issue = 'https://github.com/a/b/issues/60';
+		const answer = () => json({ title: 'Remove the Go server', state: 'open' });
+
+		it('fetches what is not yet known and resolves once it is', async () => {
+			const fetcher = vi.fn(async () => answer());
+			const previews = new LinkPreviews(fetcher as unknown as typeof fetch);
+			await previews.settle(`see ${issue}`, [], 1000);
+			expect(fetcher).toHaveBeenCalledTimes(1);
+			expect(previews.embeds(issue)[0].og?.title).toBe('Remove the Go server');
+		});
+
+		it('has nothing to wait for without links, once they are known, when dismissed, or while their site is limited', async () => {
+			let now = 1_000_000;
+			const fetcher = vi.fn(async () => answer());
+			const previews = new LinkPreviews(fetcher as unknown as typeof fetch, () => now);
+			expect(previews.settle('no links here https://example.com', [], 1000)).toBeUndefined();
+			expect(previews.settle(issue, [issue], 1000)).toBeUndefined();
+			await previews.prefetch(issue);
+			expect(previews.settle(issue, [], 1000)).toBeUndefined();
+			const limited = new LinkPreviews((async () => json({}, 429, { 'retry-after': '60' })) as unknown as typeof fetch, () => now);
+			await limited.prefetch(issue);
+			expect(limited.settle('https://github.com/a/b/pull/2', [], 1000)).toBeUndefined();
+			now += 61_000;
+			expect(limited.settle('https://github.com/a/b/pull/2', [], 1000)).toBeInstanceOf(Promise);
+		});
+
+		it('stops waiting after its time, and the answer still arrives for later', async () => {
+			vi.useFakeTimers();
+			try {
+				let reply!: (response: Response) => void;
+				const previews = new LinkPreviews((() => new Promise<Response>((resolve) => (reply = resolve))) as unknown as typeof fetch);
+				let settled = false;
+				void previews.settle(issue, [], 1500)?.then(() => (settled = true));
+				await vi.advanceTimersByTimeAsync(1499);
+				expect(settled).toBe(false);
+				await vi.advanceTimersByTimeAsync(1);
+				expect(settled).toBe(true);
+				expect(previews.embeds(issue)[0].og?.title).toBe('Issue #60');
+				reply(answer());
+				await vi.runAllTimersAsync();
+				expect(previews.embeds(issue)[0].og?.title).toBe('Remove the Go server');
+			} finally {
+				vi.useRealTimers();
+			}
+		});
 	});
 });

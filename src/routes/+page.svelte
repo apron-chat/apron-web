@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { docViewerHost, editorsNudge, installNudge, mentionAddLine, messageEditor, newPrivateDialog, newThreadDialog, profileCardHost, reactorsPopover, roomEditor, searchDialog, selectionBar, serverPaneHost, shortcutsDialog, signInLinkDialog } from '$lib/components/lazy';
+	import { docViewerHost, editorsNudge, fileUpload, installNudge, mentionAddLine, messageEditor, newPrivateDialog, newThreadDialog, profileCardHost, reactorsPopover, roomEditor, searchDialog, selectionBar, serverPaneHost, shortcutsDialog, signInLinkDialog } from '$lib/components/lazy';
 	import { onMount, tick, untrack } from 'svelte';
 	import { fromAction } from 'svelte/attachments';
 	import { pushState, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { passkeySupportError } from '$lib/protocol/webauthn';
-	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, editableTitle, findMessage, keepsBio, normalizeWebSocketUrl, serverArchive, serverLook, serverMedia, serverSettings, timelineMessages, webPushKey, yourPermissions, type ClientSnapshot, type EmbedEdits, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
+	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, editableTitle, findMessage, keepsBio, normalizeWebSocketUrl, serverArchive, serverLook, serverMedia, serverSettings, timelineMessages, webPushKey, yourPermissions, type ClientSnapshot, type EmbedEdits, type MediaTypes, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
 	import { embedsLabel, serverOrigin } from '$lib/protocol/embeds';
 	import { withoutBidiOverrides } from '$lib/protocol/plain-text';
 	import { compareLogIds } from '$lib/protocol/reducer';
@@ -59,7 +59,7 @@
 	import { directory } from '$lib/ui/directory.svelte';
 	import { FeedbackState, type Feedback } from '$lib/ui/feedback.svelte';
 	import type { LiveComposer } from '$lib/ui/live-composer.svelte';
-	import { prepareUpload } from '$lib/ui/images';
+	import type { Attachment } from '$lib/ui/images';
 	import { MentionTracker } from '$lib/ui/mentions.svelte';
 	import { IncomingMessageTracker } from '$lib/ui/incoming-messages';
 	import { UnreadTracker, countElsewhere, mutedMentions } from '$lib/ui/unread.svelte';
@@ -107,7 +107,7 @@
 	import { idMillis } from '$lib/ui/time';
 	import { tabTitle } from '$lib/ui/attention';
 	import { trackKeyboard } from '$lib/ui/viewport';
-	import { linkPreviews } from '$lib/ui/link-previews';
+	import { linkPreviews, PREVIEW_WAIT_MS } from '$lib/ui/link-previews';
 	import { carriesFiles, fileDrop, pastedFiles } from '$lib/ui/file-transfer';
 	import { PaneDrafts, pageDrafts, type StagedFile } from '$lib/ui/pane-drafts.svelte';
 	import { DraftKeeper, draftServer } from '$lib/ui/draft-keeper.svelte';
@@ -150,6 +150,12 @@
 	const THREADS_WAIT_MS = 3000;
 	/** The shortest gap between listings made because the pane has no members. */
 	const MEMBERS_RETRY_MS = 10_000;
+	/**
+	 * A window shorter than this has no room for the header, a room's description at its five and a half lines, a draft
+	 * at the composer's 200px and three lines of the timeline (about 44 + 150 + 270 + 96): the description makes way for
+	 * the draft. An iPhone SE's with its keyboard up is 330px, a large phone's 590px or so, and a tablet's more.
+	 */
+	const SHORT_PANE_PX = 560;
 
 	const session = new SessionView();
 	const feedback = new FeedbackState();
@@ -296,6 +302,8 @@
 	const linkedParents = new Map<string, string | null | undefined>();
 	/** The connect screen is up for a link's server: it can be cancelled even before this server is ready. */
 	let offeringLink = $state(false);
+	/** The page opened on a link's server, offered, and hasn't connected anywhere yet: staying connects to its own. */
+	let awaitingOffer = false;
 	/** How far back a linked message is looked for, in pages of history. */
 	const LINKED_MESSAGE_PAGES = 20;
 	/** How long a pushed room waits for its account and rooms before it is dropped. */
@@ -326,6 +334,11 @@
 	 * which goes only if it is still that draft.
 	 */
 	let mentionAdding = $state<{ roomId: string; userIds: string[]; text: string; files: string } | undefined>();
+	/**
+	 * A sent message waiting, at most PREVIEW_WAIT_MS, for its link previews not yet here (`afterPreviews`): Send
+	 * holds in its room meanwhile, so what is sent next there goes after it.
+	 */
+	let previewWait = $state.raw<{ roomId: string } | undefined>();
 	/**
 	 * A message held back at Send because it mentions people and holds a checklist: the ask whether they may edit its
 	 * text (`ext:editors`, EditorsPrompt), until it's answered, put away, the draft changes, or the pane does. `added`:
@@ -438,6 +451,8 @@
 	let memberRowsKept = false;
 	let memberRowsDrawn = $derived(firstScreenDrawn || (memberRowsKept ||= memberListOpen));
 	let composer = $state<Composer | undefined>();
+	/** The height the app takes (`trackKeyboard`): the window's, or what an on-screen keyboard leaves of it. */
+	let appHeight = $state(Infinity);
 	let memberListToggle = $state<PanelToggle | undefined>();
 	/** The room your typing indicator shows in, and the timer that ends it there 5 s after the last keystroke. */
 	let typingIn: { room: string; timer: ReturnType<typeof setTimeout> } | undefined;
@@ -789,6 +804,13 @@
 	let descriptionPutAway = $derived(Boolean(editTarget?.description && descriptionHidden(hiddenDescriptions, draftKey(editTarget.id), editTarget.description)));
 	/** The open room's or thread's description, pinned under the header until its × puts it away (and again once it's edited). */
 	let pinnedDescription = $derived(editTarget?.description && !descriptionPutAway ? { id: editTarget.id, description: editTarget.description } : undefined);
+	/**
+	 * The pinned description makes way, for now (not put away), while the composer needs its room: as the full panel, whose
+	 * timeline keeps its few lines and its foot in view, or past one line in a short window (a phone's, its keyboard up).
+	 * Whether it is past one line is asked only in a short window, as it is asked again with every key. With no composer
+	 * (a selection, a read-only pane), it stays.
+	 */
+	let descriptionMakesWay = $derived(Boolean(composer?.isExpanded() || (appHeight < SHORT_PANE_PX && composer?.isGrown())));
 	/** Adding and removing other members of the open pane's room (§4.2.2), until the server says it can't. */
 	let canChangeMembers = $derived(session.canManageRooms && !session.readOnly && paneSteady);
 	/**
@@ -1186,7 +1208,7 @@
 	// At the latest while pinned there, anchored at the pane's bottom edge, and watching whether the latest shows.
 	viewport.watchLatest();
 
-	onMount(() => trackKeyboard());
+	onMount(() => trackKeyboard((height) => (appHeight = height)));
 
 	onMount(() => {
 		passkeyUnavailable = passkeySupportError();
@@ -1343,7 +1365,12 @@
 		});
 		// Each session the client begins goes on from what this device kept for its server.
 		keeper?.watch(chat);
-		chat.start();
+		// A link to a server not used here asks first (the connect screen, below). Until the viewer stays, this window
+		// doesn't connect to the one it was on, nor take it from the window using it (`ServerClaim`): disconnected, as
+		// the server pane's Disconnect leaves it, so connecting to either starts it (`stayAfterOffer`, `setUrl`).
+		if (offeredServer) chat.disconnect();
+		else chat.start();
+		awaitingOffer = Boolean(offeredServer);
 		client = chat;
 		if (signInLink) links.follow(signInLink);
 		void returning?.then((signInPage) => {
@@ -1431,6 +1458,22 @@
 		client.listMembers(room.id, maxAge).catch(() => undefined);
 	}
 
+	/**
+	 * The connect screen was cancelled: this window stays on its server. Opened on a link's server, offered, it hasn't
+	 * connected to it yet (`awaitingOffer`), and does now.
+	 */
+	function stayAfterOffer(): void {
+		connectOpen = false;
+		offeringLink = false;
+		if (!client) return;
+		serverInput = client.url;
+		// Not while another window has the server: Use here takes it back.
+		if (awaitingOffer && !elsewhere) {
+			awaitingOffer = false;
+			client.start();
+		}
+	}
+
 	/** Use here: this window takes its server back from the one that took it, and connects again. */
 	function useHere(): void {
 		if (!client || !elsewhere) return;
@@ -1457,6 +1500,7 @@
 
 	/** The connect form was submitted: whatever belonged to the previous backend goes. */
 	function leaveBackend(): void {
+		awaitingOffer = false;
 		drafts.open(undefined);
 		selectedRoomId = undefined;
 		activeThread = undefined;
@@ -1717,6 +1761,8 @@
 		connectOpen = false;
 		offeringLink = false;
 		disconnected = false;
+		// Signed in here, however (a token or a code to its own server starts the client itself): nothing waits on the offer.
+		awaitingOffer = false;
 	}
 
 	// --- Navigation and drafts ---
@@ -2259,6 +2305,14 @@
 		sendMessage(true, adding.userIds.filter((userId) => !refused.some((refusal) => refusal.userId === userId)));
 	}
 
+	/** `ready`, holding Send in `roomId` until it settles (`previewWait`). */
+	function afterPreviews<T>(roomId: string, ready: Promise<T>): Promise<T> {
+		const waiting = (previewWait = { roomId });
+		return ready.finally(() => {
+			if (previewWait === waiting) previewWait = undefined;
+		});
+	}
+
 	/** Escape: an ask whether they may edit the message goes away, the draft unsent. True when there was one. */
 	function dismissMentionAsk(): boolean {
 		if (!editorsAsk) return false;
@@ -2359,11 +2413,16 @@
 		const options = { ...(reply ? { replyTo: reply } : {}), ...(mentions.length ? { mentions } : {}) };
 		if (action.kind === 'message') {
 			if (!action.text.trim()) return;
-			const embeds = linkPreviews.embeds(action.text, dismissed);
-			const post = () => feedback.track(chat.send(roomId, action.text, 'markdown', { ...options, ...(embeds.length ? { embeds } : {}), ...(editors ? { ext: SHARED_TEXT } : {}) }), 'Sending…', restore);
+			// The draft goes now; the message, with its link previews: those not yet here get a moment to arrive.
+			const previews = linkPreviews.settle(action.text, dismissed, PREVIEW_WAIT_MS);
+			const post = () => {
+				const embeds = linkPreviews.embeds(action.text, dismissed);
+				feedback.track(chat.send(roomId, action.text, 'markdown', { ...options, ...(embeds.length ? { embeds } : {}), ...(editors ? { ext: SHARED_TEXT } : {}) }), 'Sending…', restore);
+			};
 			const joining = joinFirst(chat, paneRoom);
-			if (joining) {
-				joining.then(post, (cause: unknown) => {
+			const ready = previews ? afterPreviews(roomId, Promise.all([joining, previews])) : joining;
+			if (ready) {
+				ready.then(post, (cause: unknown) => {
 					feedback.error(cause, `Unable to join the ${paneRoom.parentRoomId === undefined ? 'room' : 'thread'}`);
 					restore();
 				});
@@ -2459,11 +2518,22 @@
 	 * where it states them (`ext:media`); one that can't be readied, or that
 	 * the server said it doesn't take, is taken back off with the reason.
 	 */
+	/**
+	 * Readies a file for upload (`prepareUpload`), with the code that loads on demand: a staged file waits for it as it
+	 * waits to be readied. Code that couldn't be fetched says so plainly, not in the browser's words for a failed import.
+	 */
+	async function readyUpload(file: File, limits: MediaTypes | undefined): Promise<Attachment> {
+		const prepareUpload = await fileUpload.load().catch(() => {
+			throw new Error('The file couldn’t be readied, as part of the app didn’t load: check your connection and attach it again');
+		});
+		return prepareUpload(file, { limits });
+	}
+
 	function stageFiles(picked: File[]): void {
 		// Staging is local: it goes on whatever the connection, as typing does, and sending waits for it.
 		if (session.readOnly || !session.capabilities['embed:upload']) return;
 		const limits = serverMedia(session.server).upload;
-		const staged = picked.map((file): StagedFile => ({ id: `staged-${++stagedCount}`, file, prepared: prepareUpload(file, { limits }) }));
+		const staged = picked.map((file): StagedFile => ({ id: `staged-${++stagedCount}`, file, prepared: readyUpload(file, limits) }));
 		for (const { id, prepared } of staged) {
 			prepared.catch((cause: unknown) => {
 				drafts.unstage(id);
@@ -2501,7 +2571,7 @@
 		// `/emoji add` takes its image to the server's emoji limits (`ext.media.emoji`), not those it was staged to.
 		const media = serverMedia(session.server);
 		const limits = attachmentLimits(action, media);
-		const refit = limits !== media.upload ? staged.map(({ file }) => prepareUpload(file, { limits })) : undefined;
+		const refit = limits !== media.upload ? staged.map(({ file }) => readyUpload(file, limits)) : undefined;
 		const text = action.kind === 'message' ? action.text : draft;
 		const mentions = [...new Set([...composerMentions, ...added])];
 		const dismissed = drafts.dismissed;
@@ -3548,7 +3618,7 @@
 		{client} {session} bind:serverInput bind:displayName {passkeyUnavailable} bind:recentServers
 		canCancel={!disconnected && (session.rooms.length > 0 || session.ready || offeringLink)} initialScheme={connectScheme}
 		initialError={links.failure?.error} initialChoosing={connectChoosing} linked={offeringLink && linked ? { server: linked.server, room: linked.room } : undefined}
-		onconnect={leaveBackend} onconnected={connected} oncancel={() => { connectOpen = false; offeringLink = false; if (client) serverInput = client.url; }} onsignout={signedOut}
+		onconnect={leaveBackend} onconnected={connected} oncancel={stayAfterOffer} onsignout={signedOut}
 	/>
 {:else}
 <!-- A message row's embed, through the app's media gates; and the row being edited, in the editor loaded for it. -->
@@ -3654,7 +3724,7 @@
 				/>
 			{/if}
 
-			{#if pinnedDescription}
+			{#if pinnedDescription && !descriptionMakesWay}
 				{@const pinned = pinnedDescription}
 				{#key pinned.id}
 					<ThreadDescription description={pinned.description} thread={Boolean(activeThread)} onopenroom={openMentionedRoom} ondismiss={() => (hiddenDescriptions = hideDescription(hiddenDescriptions, draftKey(pinned.id), pinned.description))} />
@@ -3773,7 +3843,7 @@
 					bind:mentions={composerMentions}
 					bind:dismissed={drafts.dismissed}
 					placeholder={activeThread ? `Reply in ${threadTitle(activeThread)}` : `Message ${activeRoom.title}`}
-					holdSend={!canCompose || Boolean(paneMentionAdding)}
+					holdSend={!canCompose || Boolean(paneMentionAdding) || Boolean(previewWait && previewWait.roomId === paneRoom?.id)}
 					canUpload={session.capabilities['embed:upload'] && !composingLive}
 					live={composingLive}
 					uploadLimits={serverMedia(session.server).upload}

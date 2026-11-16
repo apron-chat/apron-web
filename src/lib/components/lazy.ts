@@ -7,12 +7,12 @@ export const messageEditor = part((m) => m.MessageEditor);
 export const newPrivateDialog = part((m) => m.NewPrivateDialog);
 export const newRoomDialog = part((m) => m.NewRoomDialog);
 export const newThreadDialog = part((m) => m.NewThreadDialog);
-export const preferencesDialog = part((m) => m.PreferencesDialog);
 export const roomEditor = part((m) => m.RoomEditor);
 export const searchDialog = part((m) => m.SearchDialog);
 export const shortcutsDialog = part((m) => m.ShortcutsDialog);
 export const signInLinkDialog = part((m) => m.SignInLinkDialog);
-export const profileEditor = part((m) => m.ProfileEditor);
+/** Preferences, with Profile's form (ProfileBar's), which mounts the first time it opens. */
+export const profilePreferences = part((m) => m.ProfilePreferences);
 export const addMembersDialog = part((m) => m.AddMembersDialog);
 export const autocompletePicker = part((m) => m.AutocompletePicker);
 export const installNudge = part((m) => m.InstallPrompt);
@@ -29,8 +29,11 @@ export const serverPaneHost = part((m) => m.ServerPane);
 /** The composer's full panel: its formatting buttons and its Preview. */
 export const formatToolbar = part((m) => m.FormatToolbar);
 export const draftPreview = part((m) => m.DraftPreview);
-/** Not a component: `archiveExport.load()` gives `exportArchive`. */
-export const archiveExport = part((m) => m.exportArchive);
+/**
+ * Not a component: `fileUpload.load()` gives `prepareUpload`, which readies a file attached to a draft. Readying one is
+ * already a wait (a staged file says Preparing…, and Send waits for it), which this joins.
+ */
+export const fileUpload = part((m) => m.prepareUpload);
 /** Not a component: `dragRooms`, for dragging rooms; `roomDrag.whenLoaded()` waits for it without fetching it (Sidebar's `reorderable`). */
 export const roomDrag = part((m) => m.dragRooms);
 

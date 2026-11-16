@@ -1,5 +1,5 @@
 import type { Page, Route } from '@playwright/test';
-import { DEVICES, expect, test } from './fixtures';
+import { DEVICES, expect, test, type Preview } from './fixtures';
 
 /**
  * Startup, as users meet it: what the first frame draws, and what the page does while code it loads on demand is
@@ -39,6 +39,45 @@ async function holdOnDemand(page: Page): Promise<{ release: () => Promise<void>;
 
 test.describe('startup, with the code that loads on demand held back', { tag: '@full' }, () => {
 	test.use({ ...DEVICES.desktop, serviceWorkers: 'block' });
+
+	test.describe('readying a file', () => {
+		test.use({ knobs: { capabilities: ['embed:upload'] } });
+		const DOC = ['# Rollout plan', '', '1. Promote the next slice of hosts.'].join('\n');
+
+		/** Stages the draft as a file (Embed as attachment), which readies it with the code that loads on demand. */
+		async function stageDraft(preview: Preview): Promise<void> {
+			await preview.composer().click();
+			await preview.page.keyboard.insertText(DOC);
+			await preview.page.getByRole('button', { name: 'Embed as attachment' }).click();
+		}
+
+		test('says Preparing… while its code is on its way, as for any file, and is ready once it comes', async ({ preview, page }) => {
+			const chunks = await holdOnDemand(page);
+			await preview.open();
+			await stageDraft(preview);
+			await expect.poll(chunks.held).toBeGreaterThan(0);
+			const files = page.getByTestId('staged-files');
+			await expect(files).toContainText('Preparing…');
+			await chunks.release();
+			await expect(files).not.toContainText('Preparing…');
+			await expect(files).toContainText('message.md');
+		});
+
+		test('comes off with a plain reason when its code can’t be fetched', async ({ preview, page }) => {
+			// The code that loads on demand fails to arrive, as offline before the service worker has it.
+			await page.route('**/_app/immutable/**/*.js', async (route: Route) => {
+				const response = await route.fetch();
+				const body = await response.text();
+				if (HELD.test(body)) await route.abort();
+				else await route.fulfill({ response, body });
+			});
+			await preview.open();
+			await stageDraft(preview);
+			await expect(page.getByRole('alert')).toContainText('part of the app didn’t load: check your connection and attach it again');
+			await expect(page.getByRole('alert')).not.toContainText('dynamically imported');
+			await expect(page.getByTestId('staged-files')).toHaveCount(0);
+		});
+	});
 
 	test('Enter sends while the mention picker’s code is on its way, as nothing on screen says otherwise; once it comes, the picker shows', async ({ preview, page }) => {
 		const chunks = await holdOnDemand(page);

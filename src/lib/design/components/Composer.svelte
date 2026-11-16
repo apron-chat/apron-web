@@ -19,7 +19,7 @@
 	import EmbedRemove from './EmbedRemove.svelte';
 	import WritePreview from './WritePreview.svelte';
 	import { secondNow } from './clock.svelte';
-	import { isCommand } from './compose';
+	import { draftFacts, type DraftFacts } from './compose';
 	import type { ComposerField, EmbedProps } from './types';
 	import { LONG_WAIT_MS, roomName, waitLabel, waitWords } from './util';
 
@@ -135,11 +135,11 @@
 		/** The keys that send from the full panel, shown at its foot, such as `['Ctrl', 'Enter']`. */
 		sendKeys?: string[];
 		/**
-		 * The draft has a line break, where your field can tell it more cheaply than `value`, which is read on every key
-		 * otherwise. Past one line, by a break or by wrapping, the field takes the box's whole width and the buttons drop
-		 * to a row under it.
+		 * What the draft is (blank, past one line by a break, a command, with a link), where your field can tell it more cheaply than
+		 * `value`, which is read again on every key otherwise (`DraftField.facts`). Past one line, by a break or by
+		 * wrapping, the field takes the box's whole width and the buttons drop to a row under it.
 		 */
-		multiline?: boolean;
+		facts?: DraftFacts;
 		/** `data-testid` on the Expand button. */
 		expandTestid?: string;
 		/** `data-testid` on the full panel. */
@@ -149,11 +149,13 @@
 		room, placeholder, value = $bindable(''), oninput, onsend, canSend, waitUntil, canUpload, onfiles, accept, onattachdraft, disabled, canRecord, onrecord, onstoprecording, recording, recordingTime, thread, canCommand, live,
 		field, onemoji, emojiOpen, emojiButton = $bindable(), reply, replyText, oncancelreply, attachments, previews, preview, onremovepreview, picker,
 		replyTestid, attachmentsTestid, previewsTestid, fileInputTestid, commandTestid, liveTestid, emojiTestid, sendTestid, class: className,
-		onexpand, expanded = false, oncollapse, toolbar, rendered, previewing = false, onpreview, sendKeys, multiline, expandTestid, panelTestid
+		onexpand, expanded = false, oncollapse, toolbar, rendered, previewing = false, onpreview, sendKeys, facts, expandTestid, panelTestid
 	}: Props = $props();
 
 	const ph = $derived(placeholder || (thread ? `Reply in ${roomName(thread.name, thread.thread, { thread: true })}` : `Message ${room || ''}`));
-	const cmd = $derived(!!canCommand && isCommand(value) && !live);
+	/** `facts`, else the draft's own, read on every key. */
+	const draft = $derived(facts ?? draftFacts(value));
+	const cmd = $derived(!!canCommand && draft.command && !live);
 	/** Expand, where it's offered: not while recording, nor for a command or live text, which have no full panel. */
 	const expandable = $derived(Boolean(onexpand) && !recording && !cmd && !live);
 	/**
@@ -161,7 +163,7 @@
 	 * afresh at every use, and the field reads `disabled` several times a key.
 	 */
 	const fieldArgs = $derived({ placeholder: ph, disabled: !!disabled, command: cmd });
-	const sendable = $derived(canSend ?? (!!value.trim() || !!attachments || !!live));
+	const sendable = $derived(canSend ?? (!draft.blank || !!attachments || !!live));
 	/** What's left of a wait on sending, while there is one. */
 	const waitLeft = $derived(waitUntil === undefined ? 0 : Math.max(0, waitUntil - secondNow()));
 	let fileInput = $state<HTMLInputElement>();
@@ -176,12 +178,17 @@
 	/** The last `wrapAt`, once the draft got shorter than it: a wrap seen again below it means the guess was too long. */
 	let lastWrapAt = 0;
 	const wrapped = $derived(wrapAt > 0 && value.length >= wrapAt);
-	const breaks = $derived(multiline ?? value.includes('\n'));
+	const breaks = $derived(draft.multiline);
 	/**
 	 * Past one line, by a line break or by wrapping: the field takes the box's whole width and the buttons sit in a row
 	 * under it (ap-composer-grown), as at the full panel's foot. Not while recording, whose line takes no typing.
 	 */
 	const grown = $derived(!expanded && !recording && (breaks || wrapped));
+	/** The draft is past one line (`ap-composer-grown`), to make room for it. Reactive, as it changes with every key: read it only where that matters. */
+	export function isGrown(): boolean {
+		return grown;
+	}
+
 	$effect(() => {
 		if (!wrapAt || wrapped) return;
 		// Emptied (sent): the next wrap is a fresh one.
@@ -302,7 +309,7 @@
 					{/if}
 					{#if (expanded || expandable) && onattachdraft}
 						<!-- The keyboard stays in the field, for a caption. -->
-						<button type="button" class="ap-iconbtn" onmousedown={(e) => e.preventDefault()} onclick={onattachdraft} disabled={disabled || recording || !value.trim()} aria-label="Embed as attachment" title="Embed as attachment">
+						<button type="button" class="ap-iconbtn" onmousedown={(e) => e.preventDefault()} onclick={onattachdraft} disabled={disabled || recording || draft.blank} aria-label="Embed as attachment" title="Embed as attachment">
 							<FileDown size={18} aria-hidden="true" />
 						</button>
 					{/if}
