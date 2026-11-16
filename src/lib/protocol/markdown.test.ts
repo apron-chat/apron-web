@@ -95,7 +95,7 @@ describe('mentions (Appendix A.3)', () => {
 		expect(renderMarkdown('`@alice` stays', resolve)).not.toContain('ap-mention');
 		expect(renderMarkdown('```\n@alice\n```', resolve)).not.toContain('ap-mention');
 		const html = renderMarkdown('[@alice](https://example.com/@alice)', resolve);
-		expect(html).toContain('<a href="https://example.com/@alice" rel="noreferrer noopener" target="_blank">');
+		expect(html).toContain('<a href="https://example.com/@alice" rel="noreferrer noopener" target="_blank" class="ap-linkhost" data-link-host="example.com">');
 		expect(html).not.toContain('ap-mention');
 		// A plain body is escaped around its mentions, and without a resolver there are none.
 		expect(renderPlain('<b>@alice</b>', resolve)).toBe('&lt;b&gt;<button type="button" class="ap-chip ap-mention" data-user-id="alice" title="@alice">@Alice Chen</button>&lt;/b&gt;');
@@ -186,15 +186,31 @@ describe('bare links', () => {
 	});
 
 	it('leaves links, code, other schemes and bare schemes alone', () => {
-		expect(renderMarkdown('[docs](https://example.com)')).toBe('<p><a href="https://example.com" rel="noreferrer noopener" target="_blank">docs</a></p>\n');
+		expect(renderMarkdown('[docs](https://example.com)')).toBe('<p><a href="https://example.com" rel="noreferrer noopener" target="_blank" class="ap-linkhost" data-link-host="example.com">docs</a></p>\n');
 		expect(renderMarkdown('`https://example.com`')).toBe('<p><code>https://example.com</code></p>\n');
 		expect(renderMarkdown('```\nhttps://example.com\n```')).not.toContain('<a ');
 		expect(renderPlain('javascript:alert(1) ftp://example.com https://')).not.toContain('<a ');
 	});
 
 	it('opens markdown links and autolinks in a new tab too', () => {
-		expect(renderMarkdown('[docs](https://example.com "Docs")')).toBe('<p><a href="https://example.com" title="Docs" rel="noreferrer noopener" target="_blank">docs</a></p>\n');
+		expect(renderMarkdown('[docs](https://example.com "Docs")')).toBe('<p><a href="https://example.com" title="Docs" rel="noreferrer noopener" target="_blank" class="ap-linkhost" data-link-host="example.com">docs</a></p>\n');
 		expect(renderMarkdown('<https://example.com>')).toBe(`<p>${link('https://example.com')}</p>\n`);
+	});
+
+	it('says where a link goes where its text does not (link-host.ts)', () => {
+		const tag = (host: string, warn = false) => ` class="ap-linkhost${warn ? ' ap-linkhost-warn' : ''}" data-link-host="${host}"`;
+		expect(renderMarkdown('[my website](https://shazow.net)')).toBe(`<p><a href="https://shazow.net" rel="noreferrer noopener" target="_blank"${tag('shazow.net')}>my website</a></p>\n`);
+		// Text that names another site, even through markup, is warned of.
+		expect(renderMarkdown('[**youtube.com**](https://evil.example/)')).toContain(`target="_blank"${tag('evil.example', true)}><strong>youtube.com</strong></a>`);
+		// Text that is its own site isn't tagged.
+		expect(renderMarkdown('[shazow.net](https://shazow.net)')).toBe('<p><a href="https://shazow.net" rel="noreferrer noopener" target="_blank">shazow.net</a></p>\n');
+		// A site whose name passes for another's: an autolink shows its punycode as written, not in Unicode, and is warned of.
+		expect(renderMarkdown('<https://www.xn--yutube-i0e.com/watch?v=1>'))
+			.toBe(`<p><a href="https://www.xn--yutube-i0e.com/watch?v=1" rel="noreferrer noopener" target="_blank"${tag('xn--yutube-i0e.com', true)}>https://www.xn--yutube-i0e.com/watch?v=1</a></p>\n`);
+		expect(renderPlain('https://www.yοutube.com/watch')).toBe(`<a href="https://www.yοutube.com/watch" rel="noreferrer noopener" target="_blank"${tag('xn--yutube-i0e.com', true)}>https://www.yοutube.com/watch</a>`);
+		expect(renderPlain('https://youtube.com@evil.example/')).toContain(tag('evil.example', true));
+		// No one can write the tag: raw HTML stays text.
+		expect(renderMarkdown('<a href="https://evil.example" data-link-host="youtube.com">x</a>')).not.toMatch(/<a [^>]*data-link-host="youtube\.com"/);
 	});
 
 	it('does not turn an @ inside a URL into a mention', () => {
@@ -250,7 +266,7 @@ describe('images (§5.5)', () => {
 			'<p><a href="https://tracker.example/p.gif" target="_blank" rel="noreferrer noopener" title="Hi">pixel</a> and <a href="https://tracker.example/q.gif" target="_blank" rel="noreferrer noopener">https://tracker.example/q.gif</a></p>\n'
 		);
 		// Linked, as a reference, or in a link: never a link in a link.
-		expect(shown('[![badge](https://tracker.example/b.svg)](https://example.com)')).toBe('<p><a href="https://example.com" rel="noreferrer noopener" target="_blank">badge</a></p>\n');
+		expect(shown('[![badge](https://tracker.example/b.svg)](https://example.com)')).toBe('<p><a href="https://example.com" rel="noreferrer noopener" target="_blank" class="ap-linkhost" data-link-host="example.com">badge</a></p>\n');
 		expect(shown('![ref][r]\n\n[r]: https://tracker.example/r.png')).not.toContain('<img');
 	});
 

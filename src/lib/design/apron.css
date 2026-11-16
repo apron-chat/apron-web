@@ -302,6 +302,12 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
    on one line clears the next's. */
 :where(.ap-msg-text, .ap-servcard-description) :is(li + li, li > :is(ul, ol)) { margin-top: var(--space-1); }
 .ap-msg-text a { color: var(--denim); }
+/* The site a link goes to, after a link whose text doesn't say (markdown.ts, link-host.ts): a small pill in the link,
+   drawn from its attribute so it is no text of the message (nothing copies it, nothing written can pass for it), an
+   inline block so the link's underline leaves it. A link whose text names another site, or whose site's name could
+   pass for another's, says so in the warning tone. */
+.ap-linkhost::after { content: attr(data-link-host); display: inline-block; margin-inline-start: .3em; padding: 0 .4em; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--ink) 9%, transparent); color: var(--ink-muted); font-size: var(--text-sm); font-weight: 400; font-style: normal; line-height: var(--leading-sm); white-space: nowrap; }
+.ap-linkhost-warn::after { content: "\26A0\FE0E\00a0" attr(data-link-host); color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warn) 50%, transparent); }
 /* Who else saved a message's text (`ext:editors`): a quiet line under it. */
 .ap-msg-edited { font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
 /* A message whose text is still arriving (an `append` embed, §4.8.5): a quiet line under what has come so far. */

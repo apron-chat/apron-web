@@ -1,5 +1,6 @@
 import MarkdownIt from 'markdown-it';
 import { emojiKeySegments } from './custom-emoji';
+import { linkHost } from './link-host';
 import { withoutBidiOverrides } from './plain-text';
 import { canSanitize, NOWHERE, sanitizeHtml, type MediaCheck } from './sanitize';
 
@@ -15,6 +16,11 @@ import { canSanitize, NOWHERE, sanitizeHtml, type MediaCheck } from './sanitize'
 const TASK_TEXT = /^\[([ xX])\](?:[ \t]+|$)/;
 
 const md = new MarkdownIt({ html: false, breaks: true, linkify: false, typographer: false });
+
+// An autolink's text as written where its site is in punycode: markdown-it would show `<https://www.xn--yutube-i0e.com>`
+// in Unicode, `https://www.yοutube.com`, a site's name passing for another's.
+const showLink = md.normalizeLinkText;
+md.normalizeLinkText = (url) => (/xn--/i.test(url) ? url : showLink(url));
 
 // Table alignment as a class, so no `style` attribute has to be let through.
 md.core.ruler.push('align_class', (state) => {
@@ -360,8 +366,14 @@ function linkText(html: string, resolve?: MentionResolver, resolveRoom?: RoomMen
 			}
 		}
 		let tag = html.slice(tagStart, tagEnd + 1);
-		// A link in chat opens in a new tab, leaving the conversation where it was.
-		if (/^<a\s/i.test(tag)) tag = `${tag.slice(0, -1)}${LINK_ATTRS}>`;
+		// A link in chat opens in a new tab, leaving the conversation where it was, and says where it goes where its
+		// text doesn't. markdown-it never puts one link inside another, so its text runs to the next `</a>`.
+		if (/^<a\s/i.test(tag)) {
+			const href = /^<a href="([^"]*)"/.exec(tag)?.[1];
+			const close = html.indexOf('</a>', tagEnd);
+			const text = close === -1 ? '' : unescapeHtml(html.slice(tagEnd + 1, close).replace(/<[^>]*>/g, ''));
+			tag = `${tag.slice(0, -1)}${LINK_ATTRS}${href === undefined ? '' : hostAttrs(unescapeHtml(href), text)}>`;
+		}
 		if (/^<(code|pre|a)[\s>]/i.test(tag)) codeDepth += 1;
 		else if (/^<\/(code|pre|a)\s*>$/i.test(tag) && codeDepth > 0) codeDepth -= 1;
 		out += tag;
@@ -389,10 +401,19 @@ function linkifyText(text: string, resolve?: MentionResolver, resolveRoom?: Room
 		}
 		if (!(webOnly ? /^https?:\/\/[^/?#]/i : /^(?:https?:\/\/[^/?#]|apron:\?.)/i).test(url)) continue;
 		out += chipText(emojiText(text.slice(index, match.index)), resolve, resolveRoom, resolveEmoji);
-		out += (resolveLink && linkChip(url, resolveLink)) || `<a href="${url}"${LINK_ATTRS}>${url}</a>`;
+		out += (resolveLink && linkChip(url, resolveLink)) || `<a href="${url}"${LINK_ATTRS}${hostAttrs(unescapeHtml(url), unescapeHtml(url))}>${url}</a>`;
 		index = match.index + url.length;
 	}
 	return out + chipText(emojiText(text.slice(index)), resolve, resolveRoom, resolveEmoji);
+}
+
+/**
+ * The attributes that show a link's site after it (`link-host.ts`), its tag drawn by CSS (apron.css: .ap-linkhost)
+ * so it is no text of the message: copying the message leaves it out, and no one can write it.
+ */
+function hostAttrs(href: string, text: string): string {
+	const tag = linkHost(href, text);
+	return tag ? ` class="ap-linkhost${tag.warn ? ' ap-linkhost-warn' : ''}" data-link-host="${escapeHtml(tag.host)}"` : '';
 }
 
 /**
