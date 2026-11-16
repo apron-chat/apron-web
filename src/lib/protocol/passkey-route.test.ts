@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ForeignRpIdError, passkeyRoute, usesPage } from './passkey-route';
 
-/** Choosing where a passkey ceremony runs: in this page, or on the server's passkey page (PLAN_WEBAUTHN_EXTERNAL.md). */
+/** Choosing where a passkey ceremony runs: in this page, or on the server's passkey page (§4.10.1). */
 describe('passkey route', () => {
 	const external = { url: 'https://chat.example/passkey?action=login' };
 	const publicKey = { challenge: 'x', rpId: 'chat.example' };

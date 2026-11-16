@@ -2,8 +2,8 @@ import { parseExternal, type External } from './external';
 import { isJsonObject, type JsonObject } from './types';
 
 /**
- * Where a passkey ceremony runs (§4.10, and the passkey page of
- * PLAN_WEBAUTHN_EXTERNAL.md), from its begin result:
+ * Where a passkey ceremony runs (§4.10, and the passkey page,
+ * §4.10.1), from its begin result:
  *
  * - `local`: in this page, with `public_key`. The RP ID check (§4.10) runs
  *   with the ceremony (`requestPasskey`); if it fails, or the browser

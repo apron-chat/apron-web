@@ -1976,7 +1976,8 @@ every server shares, so without this check a server could relay another
 server's challenge, under an RP ID that this page can use, and sign in there
 as the user.
 
-**The server's passkey page** (PLAN_WEBAUTHN_EXTERNAL.md, shazow/apron#116): a
+**The server's passkey page**
+([PROTOCOL.md §4.10.1](https://github.com/shazow/apron/blob/main/PROTOCOL.md#4101-passkey-page)): a
 passkey works only on its RP ID's domain and the origins that domain lists as
 related, so on most servers other than `apron.chat`'s this page can't use one.
 A begin result may name the server's passkey page, `external.url`. The client

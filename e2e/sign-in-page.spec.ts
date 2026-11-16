@@ -3,7 +3,7 @@ import { DEVICES, expect, test } from './fixtures';
 import type { MockOptions } from './mock-server';
 
 /**
- * Signing in on a server's page (§4.12, and the passkey page of PLAN_WEBAUTHN_EXTERNAL.md): the page opens in a
+ * Signing in on a server's page (§4.12, and the passkey page, §4.10.1): the page opens in a
  * popup, or in this tab where the browser blocks one, and sends the viewer back to `/signed-in/` with a code, which
  * the app redeems on its connection. The server's page is scripted here: it reads the request and answers at once.
  */

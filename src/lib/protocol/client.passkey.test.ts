@@ -368,7 +368,7 @@ describe('a failed session resume never prompts on its own', () => {
 	});
 });
 
-/** The server's passkey page (PLAN_WEBAUTHN_EXTERNAL.md): where this page can't use the RP ID, the ceremony goes there. */
+/** The server's passkey page (§4.10.1): where this page can't use the RP ID, the ceremony goes there. */
 describe('the passkey page', () => {
 	const page = { url: 'https://chat.example/passkey?action=login' };
 	const redeem = { code: 'Hk41x9', code_verifier: 'dBjftJ', redirect_uri: 'https://web.example/signed-in/', client_id: 'apron-web' };

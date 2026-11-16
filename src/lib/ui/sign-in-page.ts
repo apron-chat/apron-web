@@ -9,8 +9,8 @@ export { CHANNEL, PENDING_KEY, RETURNED_KEY, openSignInWindow, returnedWaiting, 
 export { redemption };
 
 /**
- * Signing in on a server's page (PROTOCOL.md §4.12, and the passkey page of
- * PLAN_WEBAUTHN_EXTERNAL.md), as this app does it in a browser: the page
+ * Signing in on a server's page (PROTOCOL.md §4.12, and the passkey page,
+ * §4.10.1), as this app does it in a browser: the page
  * opens in a popup, or in this tab where the browser blocks one; it sends the
  * user back to this app's `CALLBACK_PATH` with `?code=…&state=…`; and the
  * code is redeemed on the connection. External sign-in, adding an external

@@ -20,7 +20,7 @@ export type MockOptions = {
 	/** The account a passkey signs in to (`auth` with `scheme: "webauthn"`, §4.10): its `you`. Without it, the mock has no passkeys. */
 	passkey?: Record<string, unknown>;
 	/**
-	 * Passkeys only on the server's passkey page (PLAN_WEBAUTHN_EXTERNAL.md): a `webauthn` begin answers with `external`
+	 * Passkeys only on the server's passkey page (§4.10.1): a `webauthn` begin answers with `external`
 	 * at this `url` and no `public_key`, and a finish with a `code` signs in as `passkey`.
 	 */
 	passkeyPage?: string;
