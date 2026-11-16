@@ -818,19 +818,37 @@ test.describe('link previews a message is sent with', () => {
 		await preview.openRoom('engineering');
 		await preview.composer().click();
 		await page.keyboard.insertText(second);
+		// The wait in general holds Send there only.
+		await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeEnabled();
 		await page.keyboard.press('Enter');
 		await expect(preview.composer()).toHaveText('');
 		await preview.openRoom('general');
+		await expect(page.getByRole('button', { name: 'Sending…', exact: true })).toBeDisabled();
 		await preview.composer().click();
 		await page.keyboard.type('after');
 		await page.keyboard.press('Enter');
 		await expect(preview.composer()).toHaveText('after');
 		expect(await sentWithText(preview, first)).toEqual([]);
+		expect(await sentWithText(preview, 'after')).toEqual([]);
 		await page.clock.runFor(PREVIEW_WAIT_MS);
 		await preview.waitForSent('message', (p) => p.body?.text === first);
 		await preview.waitForSent('message', (p) => p.body?.text === second);
 		await page.keyboard.press('Enter');
 		await preview.waitForSent('message', (p) => p.body?.text === 'after');
+	});
+
+	test('a message waiting for its previews goes at once when the page is hidden', async ({ preview, page }) => {
+		await openStopped(preview);
+		await page.route(OEMBED, () => {});
+		const text = `watch ${VIDEO}`;
+		await preview.composer().click();
+		await page.keyboard.insertText(text);
+		await page.keyboard.press('Enter');
+		await page.evaluate(() => {
+			Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+			document.dispatchEvent(new Event('visibilitychange'));
+		});
+		await preview.waitForSent('message', (p) => p.body?.text === text);
 	});
 
 	test('a message waiting for its previews goes at once when the page is put away', async ({ preview, page }) => {

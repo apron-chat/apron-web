@@ -337,7 +337,7 @@
 	/**
 	 * Sent messages waiting, at most PREVIEW_WAIT_MS, for their link previews not yet here (`awaitPreviews`), by
 	 * room, each with what lets it go at once: Send holds in its room meanwhile, so what is sent next there goes
-	 * after it, and leaving the page lets them all go (`leavePage`), as if sent just before.
+	 * after it, and hiding or leaving the page lets them all go (`releasePreviewWaits`), as if sent just before.
 	 */
 	let previewWaits = $state.raw<ReadonlyMap<string, () => void>>(new Map());
 	/**
@@ -2321,10 +2321,12 @@
 		});
 	}
 
-	/** The page is put away: what it keeps is saved, and messages waiting for their link previews go now. */
-	function leavePage(): void {
+	/**
+	 * Messages waiting for their link previews go now, with what they have: the page is being put away, or hidden
+	 * (a phone may freeze and discard a hidden tab without a pagehide), and their drafts are already cleared.
+	 */
+	function releasePreviewWaits(): void {
 		for (const release of previewWaits.values()) release();
-		draftKeeper.flush();
 	}
 
 	/** Escape: an ask whether they may edit the message goes away, the draft unsent. True when there was one. */
@@ -3599,8 +3601,8 @@
 	}
 </script>
 
-<svelte:window onpagehide={leavePage} onkeydown={windowKeydown} onpointerdowncapture={() => (tabbing = false)} onpaste={windowPaste} ondragover={refuseDrop} ondrop={refuseDrop} onfocus={() => { presence.focus(); refreshNotificationPermission(); }} onblur={() => presence.blur()} />
-<svelte:document onclick={mediaAskClick} onvisibilitychange={() => { presence.visibilityChanged(); refreshNotificationPermission(); if (document.visibilityState === 'hidden') { keepView(); void historyKeeper?.flush(); draftKeeper.flush(); } }} />
+<svelte:window onpagehide={() => { releasePreviewWaits(); draftKeeper.flush(); }} onkeydown={windowKeydown} onpointerdowncapture={() => (tabbing = false)} onpaste={windowPaste} ondragover={refuseDrop} ondrop={refuseDrop} onfocus={() => { presence.focus(); refreshNotificationPermission(); }} onblur={() => presence.blur()} />
+<svelte:document onclick={mediaAskClick} onvisibilitychange={() => { presence.visibilityChanged(); refreshNotificationPermission(); if (document.visibilityState === 'hidden') { keepView(); releasePreviewWaits(); void historyKeeper?.flush(); draftKeeper.flush(); } }} />
 
 <svelte:head>
 	<title>{tabTitle(unreadAlerting, presence.titleFlash)}</title>
