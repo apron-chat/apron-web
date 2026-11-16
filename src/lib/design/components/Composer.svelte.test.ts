@@ -29,6 +29,20 @@ describe('Composer', () => {
 		expect(send().disabled).toBe(true);
 	});
 
+	it('holds Send while a message is on its way, spinning in place of its label, then gives it back', () => {
+		render({ value: 'next', sending: true });
+		const sending = dom.queryByRole<HTMLButtonElement>('button', 'Sending…')!;
+		expect(sending.disabled).toBe(true);
+		expect(sending.classList.contains('ap-composer-sending')).toBe(true);
+		// The label stays, hidden once the spinner shows, so the button keeps its width.
+		expect(sending.querySelector('.ap-composer-send-label')?.textContent).toBe('Send');
+		expect(sending.querySelector('.ap-composer-spin')?.getAttribute('aria-hidden')).toBe('true');
+		dom.unmount();
+		render({ value: 'next' });
+		expect(send().disabled).toBe(false);
+		expect(send().querySelector('.ap-composer-spin')).toBeNull();
+	});
+
 	it('reads a draft starting with one "/" as a command, where the server takes commands', () => {
 		render({ value: '/kick ada', canCommand: true });
 		expect(commandTag()).not.toBeNull();

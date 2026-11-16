@@ -491,6 +491,15 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-composer-wrap, .ap-composer-grown { min-height: 0; }
 /* Send counting down a wait on sending (`waitUntil`), after an hourglass: figures that don't shift as they count. */
 .ap-btn.ap-composer-wait { font-variant-numeric: tabular-nums; }
+/*
+ * Send while a message is on its way (`sending`): after a moment, so a quick one doesn't flash, a spinner takes its
+ * label's place, the label keeping the button's width. Without motion, the ring stands still.
+ */
+.ap-composer-sending { position: relative; }
+.ap-composer-send-label { animation: ap-hide 0s 300ms both; }
+.ap-composer-spin { position: absolute; inset: 0; margin: auto; width: 10px; height: 10px; border-radius: var(--radius-full); border: 2px solid color-mix(in srgb, currentColor 30%, transparent); border-top-color: currentColor; animation: ap-hide 0s 300ms reverse both, ap-spin .8s linear infinite; }
+@keyframes ap-hide { to { visibility: hidden; } }
+@media (prefers-reduced-motion: reduce) { .ap-composer-spin { animation: ap-hide 0s 300ms reverse both; } }
 /* Above the field: the message being replied to, with Cancel reply */
 .ap-composer-reply { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2) var(--space-4); font-size: var(--text-ui); line-height: var(--leading-ui); color: var(--ink-muted); }
 .ap-composer-reply-text { min-width: 0; overflow-wrap: anywhere; }

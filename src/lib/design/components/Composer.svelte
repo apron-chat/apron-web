@@ -38,6 +38,11 @@
 		 * hourglass and the time left in place of its label, and comes back at zero. The draft stays; nothing is sent by itself.
 		 */
 		waitUntil?: number;
+		/**
+		 * A message sent from here is still on its way (waiting for its link previews): Send is off and, after a moment
+		 * so a quick one doesn't flash, spins in place of its label. Its accessible name says Sending….
+		 */
+		sending?: boolean;
 		/** Cap `embed:upload`: the attach and microphone buttons. Attachments go out as `upload` embeds (§4.8.3). */
 		canUpload?: boolean;
 		/** Picked files: Attach opens the browser's file picker (a hidden file input) and hands them over. */
@@ -146,7 +151,7 @@
 		panelTestid?: string;
 	}
 	let {
-		room, placeholder, value = $bindable(''), oninput, onsend, canSend, waitUntil, canUpload, onfiles, accept, onattachdraft, disabled, canRecord, onrecord, onstoprecording, recording, recordingTime, thread, canCommand, live,
+		room, placeholder, value = $bindable(''), oninput, onsend, canSend, waitUntil, sending = false, canUpload, onfiles, accept, onattachdraft, disabled, canRecord, onrecord, onstoprecording, recording, recordingTime, thread, canCommand, live,
 		field, onemoji, emojiOpen, emojiButton = $bindable(), reply, replyText, oncancelreply, attachments, previews, preview, onremovepreview, picker,
 		replyTestid, attachmentsTestid, previewsTestid, fileInputTestid, commandTestid, liveTestid, emojiTestid, sendTestid, class: className,
 		onexpand, expanded = false, oncollapse, toolbar, rendered, previewing = false, onpreview, sendKeys, facts, expandTestid, panelTestid
@@ -343,8 +348,8 @@
 			{/if}
 			{#if expanded && sendKeys?.length && !recording}<span class="ap-composer-keys">{#each sendKeys as key, index (index)}<kbd>{key}</kbd>{/each} to send</span>{/if}
 			<!-- Pressing Send leaves the focus in the field, so a phone's keyboard stays up between messages rather than dropping and coming back. -->
-			<Button type="submit" size="sm" variant="primary" class={waitLeft > 0 ? 'ap-composer-wait' : undefined} data-testid={sendTestid} onmousedown={(e) => e.preventDefault()} aria-label={waitLeft > 0 ? `Send again in ${waitWords(waitLeft, waitLeft >= LONG_WAIT_MS)}` : cmd ? 'Run command' : 'Send message'} disabled={disabled || recording || !sendable || waitLeft > 0}>
-				{#snippet children()}{#if waitLeft > 0}<Hourglass size={14} aria-hidden="true" />{waitLabel(waitLeft, waitLeft >= LONG_WAIT_MS)}{:else}{cmd ? 'Run' : 'Send'}{/if}{/snippet}
+			<Button type="submit" size="sm" variant="primary" class={waitLeft > 0 ? 'ap-composer-wait' : sending ? 'ap-composer-sending' : undefined} data-testid={sendTestid} onmousedown={(e) => e.preventDefault()} aria-label={waitLeft > 0 ? `Send again in ${waitWords(waitLeft, waitLeft >= LONG_WAIT_MS)}` : sending ? 'Sending…' : cmd ? 'Run command' : 'Send message'} disabled={disabled || recording || !sendable || waitLeft > 0 || sending}>
+				{#snippet children()}{#if waitLeft > 0}<Hourglass size={14} aria-hidden="true" />{waitLabel(waitLeft, waitLeft >= LONG_WAIT_MS)}{:else if sending}<span class="ap-composer-send-label">{cmd ? 'Run' : 'Send'}</span><span class="ap-composer-spin" aria-hidden="true"></span>{:else}{cmd ? 'Run' : 'Send'}{/if}{/snippet}
 			</Button>
 		</form>
 	</div>

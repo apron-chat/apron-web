@@ -783,8 +783,10 @@ test.describe('link previews a message is sent with', () => {
 		await page.keyboard.insertText(text);
 		await page.keyboard.press('Enter');
 		await expect(preview.composer()).toHaveText('');
+		// Send spins and holds, its name saying so; no toast, which is for a slow server.
+		await expect(page.getByRole('button', { name: 'Sending…', exact: true })).toBeDisabled();
 		await page.clock.runFor(700);
-		await expect(page.getByRole('status').filter({ hasText: 'Sending…' })).toBeVisible();
+		await expect(page.getByRole('status').filter({ hasText: 'Sending…' })).toHaveCount(0);
 
 		await test.step('what is typed meanwhile is a new draft, and Enter keeps it while the message waits', async () => {
 			await page.keyboard.type('next one');
@@ -796,6 +798,7 @@ test.describe('link previews a message is sent with', () => {
 		await test.step('the preview arrives: the message goes with it, then the next one can', async () => {
 			answer();
 			const sent = await preview.waitForSent('message', (p) => p.body?.text === text);
+			await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeEnabled();
 			expect(sent.body.embeds).toEqual([{ kind: 'link', url: VIDEO, og: { site_name: 'YouTube · Secession Studios', title: oembed.title, image: { url: THUMBNAIL, type: 'image/jpeg', width: 480, height: 360, alt: oembed.title } } }]);
 			await page.keyboard.press('Enter');
 			const next = await preview.waitForSent('message', (p) => p.body?.text === 'next one');

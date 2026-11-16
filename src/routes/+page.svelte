@@ -747,6 +747,8 @@
 	});
 	/** Send adding whom the line names, in the open pane. */
 	let paneMentionAdding = $derived(mentionAdding && mentionAdding.roomId === paneRoom?.id ? mentionAdding : undefined);
+	/** This pane's room has a message waiting for its link previews: Send spins. It reads the pane only while one waits. */
+	let paneAwaitsPreviews = $derived(previewWaits.size > 0 && paneRoom !== undefined && previewWaits.has(paneRoom.id));
 	/** The line's names: "Margaret Hamilton (moderator)" for one a role names. */
 	let lineNames = $derived(paneMentionAdding ? paneMentionAdding.userIds.map((id) => directory.name({ user_id: id })) : mentionedOutside === NO_ONE_OUTSIDE ? NO_NAMES : mentionedOutside.map(({ id, role }) => (role ? `${directory.name({ user_id: id })} (${role})` : directory.name({ user_id: id }))));
 	let roomSuggestions = $derived.by(() => {
@@ -2426,16 +2428,23 @@
 		if (action.kind === 'message') {
 			if (!action.text.trim()) return;
 			// The draft goes now; the message once the room is joined, with its link previews: those not yet here get a
-			// moment to arrive. It is one request to the toast from here, so Sending… shows if all of that takes long.
+			// moment to arrive, while Send spins (`awaitPreviews`).
 			const where = paneRoom.parentRoomId === undefined ? 'room' : 'thread';
-			const joining = joinFirst(chat, paneRoom)?.catch((cause: unknown) => Promise.reject(cause instanceof Error ? cause : new Error(`Unable to join the ${where}`)));
+			const joining = joinFirst(chat, paneRoom);
 			const previews = linkPreviews.settle(action.text, dismissed, PREVIEW_WAIT_MS);
 			const ready = previews ? awaitPreviews(roomId, previews, joining) : joining;
 			const send = () => {
 				const embeds = linkPreviews.embeds(action.text, dismissed);
-				return chat.send(roomId, action.text, 'markdown', { ...options, ...(embeds.length ? { embeds } : {}), ...(editors ? { ext: SHARED_TEXT } : {}) }).promise;
+				feedback.track(chat.send(roomId, action.text, 'markdown', { ...options, ...(embeds.length ? { embeds } : {}), ...(editors ? { ext: SHARED_TEXT } : {}) }), 'Sending…', restore);
 			};
-			feedback.track({ promise: ready ? ready.then(send) : send() }, 'Sending…', restore);
+			if (ready) {
+				ready.then(send, (cause: unknown) => {
+					feedback.error(cause, `Unable to join the ${where}`);
+					restore();
+				});
+			} else {
+				send();
+			}
 			viewport.pin();
 		} else {
 			const failed = (cause: unknown) => {
@@ -3861,7 +3870,8 @@
 					bind:mentions={composerMentions}
 					bind:dismissed={drafts.dismissed}
 					placeholder={activeThread ? `Reply in ${threadTitle(activeThread)}` : `Message ${activeRoom.title}`}
-					holdSend={!canCompose || Boolean(paneMentionAdding) || Boolean(previewWaits.size && paneRoom && previewWaits.has(paneRoom.id))}
+					holdSend={!canCompose || Boolean(paneMentionAdding)}
+					sending={paneAwaitsPreviews}
 					canUpload={session.capabilities['embed:upload'] && !composingLive}
 					live={composingLive}
 					uploadLimits={serverMedia(session.server).upload}
