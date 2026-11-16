@@ -17,14 +17,15 @@
 	 * server-wide notice for a room you haven't joined), it is not stored, and
 	 * it is gone on reload. The design system's Message draws it as a scoped
 	 * notice: a card titled by its sender, dashed when it was only for you; code
-	 * blocks in it get a Copy button.
+	 * blocks in it get a Copy button, and its × puts it away (`ondismiss`).
 	 */
-	let { notice, onopenroom }: { notice: Notice; onopenroom: (roomId: string) => void } = $props();
+	let { notice, onopenroom, ondismiss }: { notice: Notice; onopenroom: (roomId: string) => void; ondismiss: (notice: Notice) => void } = $props();
 
 	const on: MessageHandlers = {
 		openRoom: (roomId) => onopenroom(roomId),
 		openProfile: openProfileFrom,
-		code: decorateCode
+		code: decorateCode,
+		dismiss: () => ondismiss(notice)
 	};
 </script>
 

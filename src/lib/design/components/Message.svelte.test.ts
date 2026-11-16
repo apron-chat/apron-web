@@ -646,6 +646,17 @@ describe('system messages', () => {
 		const row = render({ system: true, scope: 'private', sender: { user_id: '~private', name: 'System message to you (~private)' }, body: { html: '<pre><code>t</code></pre>', code: true } }, { code });
 		expect([row.dataset.scope, byText('System message to you (~private)') !== null]).toEqual(['private', true]);
 		expect(code).toHaveBeenCalledWith(expect.any(HTMLElement), true);
+		// Only a notice that can be put away has a ×.
+		expect(dom.queryByRole('button', 'Dismiss notice')).toBeNull();
+	});
+
+	it('puts a transient notice away from its ×, the time beside its title', () => {
+		const dismiss = vi.fn();
+		const row = render({ system: true, scope: 'private', timestamp: Date.UTC(2026, 10, 16, 14, 28), sender: { user_id: '~private', name: 'System message to you (~private)' }, body: { html: 'Unknown command' } }, { dismiss });
+		const head = row.querySelector('.ap-notice-head')!;
+		expect([...head.children].map((child) => child.getAttribute('class'))).toEqual(['ap-icon ap-notice-glyph', 'ap-notice-title', 'ap-notice-time', 'ap-iconbtn ap-notice-dismiss']);
+		dom.button('Dismiss notice').click();
+		expect(dismiss).toHaveBeenCalledWith(expect.objectContaining({ scope: 'private' }));
 	});
 });
 

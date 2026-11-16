@@ -5,7 +5,7 @@
 	import { pushState, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { passkeySupportError } from '$lib/protocol/webauthn';
-	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, editableTitle, findMessage, keepsBio, normalizeWebSocketUrl, serverArchive, serverLook, serverMedia, serverSettings, timelineMessages, webPushKey, yourPermissions, type ClientSnapshot, type EmbedEdits, type MediaTypes, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
+	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, editableTitle, findMessage, keepsBio, normalizeWebSocketUrl, serverArchive, serverLook, serverMedia, serverSettings, timelineMessages, webPushKey, yourPermissions, type ClientSnapshot, type EmbedEdits, type MediaTypes, type Notice, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
 	import { embedsLabel, serverOrigin } from '$lib/protocol/embeds';
 	import { withoutBidiOverrides } from '$lib/protocol/plain-text';
 	import { compareLogIds } from '$lib/protocol/reducer';
@@ -3002,6 +3002,17 @@
 		row.scrollIntoView({ block: list && row.offsetHeight > list.clientHeight ? 'start' : 'nearest' });
 	}
 
+	/**
+	 * A transient notice's ×: it goes for the rest of the session. A keyboard that was on it goes to the composer
+	 * rather than the page; a tap leaves focus be, so a phone's keyboard doesn't open.
+	 */
+	function dismissNotice(notice: Notice): void {
+		const active = document.activeElement;
+		const keyboard = active instanceof HTMLElement && active.matches(':focus-visible') && active.closest('.ap-notice');
+		client?.dismissNotice(notice.room_id, notice.key);
+		if (keyboard) composer?.focus();
+	}
+
 	/** ↑ in the empty composer: the keyboard goes to the newest message. False with none to go to. */
 	function focusNewestMessage(): boolean {
 		const list = viewport.messageScroll;
@@ -3755,7 +3766,7 @@
 						{:else if item.kind === 'thread'}
 							<ThreadCard entry={item.entry} unread={unread.byRoom[item.entry.id]} mentions={mentions.byRoom[item.entry.id]} onopen={() => openThreadCard(item.entry.id)} />
 						{:else if item.kind === 'notice'}
-							<NoticeLine notice={item.notice} onopenroom={openMentionedRoom} />
+							<NoticeLine notice={item.notice} onopenroom={openMentionedRoom} ondismiss={dismissNotice} />
 						{:else if item.kind === 'members'}
 							<MembershipLine joined={item.joined} left={item.left} logId={item.logId} />
 						{:else if item.kind === 'renamed'}

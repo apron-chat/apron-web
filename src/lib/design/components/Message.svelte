@@ -364,10 +364,15 @@
 
 <!-- Every row marks itself a timeline item, for whoever scrolls the timeline. -->
 {#if view.system && view.scope}
-	<!-- A scoped notice: a left-aligned card titled by its sender as the server names it (§3.3). -->
+	<!-- A scoped notice: a card in the text column, titled by its sender as the server names it (§3.3), the time beside
+	     the name as on a message; a transient one has a × that puts it away. -->
 	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
 	<article class={['ap-notice', view.scope === 'private' && 'ap-notice-private']} data-message-id={view.id} data-scope={view.scope} data-timeline-item="" data-testid={testids?.row} tabindex="-1" onclick={click}>
-		<div class="ap-notice-head"><span class="ap-notice-title">{view.sender.name}</span>{#if t.short}<time class="ap-notice-time" datetime={t.iso} title={t.exact}>{t.short}</time>{/if}</div>
+		<div class="ap-notice-head">
+			{#if view.scope === 'private'}<svg class="ap-icon ap-notice-glyph" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>{/if}
+			<span class="ap-notice-title">{view.sender.name}</span>{#if t.short}<time class="ap-notice-time" datetime={t.iso} title={t.exact}>{t.short}</time>{/if}
+			{#if on.dismiss}<button type="button" class="ap-iconbtn ap-notice-dismiss" aria-label="Dismiss notice" title="Dismiss" onclick={() => on.dismiss?.(view)}><svg class="ap-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg></button>{/if}
+		</div>
 		<div class="ap-notice-body">{#if view.deleted}<span class="ap-msg-tomb">Message deleted</span>{:else}<div class={['ap-msg-text', !view.body?.markdown && 'ap-msg-plain']} {@attach view.body?.code && code}>{@html view.body?.html ?? ''}</div>{/if}</div>
 	</article>
 {:else if view.system}
