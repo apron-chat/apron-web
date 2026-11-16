@@ -36,7 +36,15 @@ describe('SignInForm', () => {
 		expect(fields()).toEqual(['Sign in', 'Create account']);
 	});
 
-	it('says where a code went: an email keeps its address, an external page is linked, each with a way to start again', () => {
+	it('calls each scheme by the name given (a server’s label, §3.2), as text, and the Token field by the token’s', () => {
+		render({ schemes: ['guest', 'external', 'token'], scheme: 'token', lastUsed: 'external', askName: false, names: { external: '<b>Acme</b> SSO', token: 'Invite code' } });
+		expect([...document.querySelectorAll('[role="radio"]')].map((tab) => tab.textContent)).toEqual(['Guest', '<b>Acme</b> SSO', 'Invite code']);
+		expect(document.querySelector('b')).toBeNull();
+		expect(document.querySelector('.ap-fieldlabel-hint')?.textContent).toBe('· last used: <b>Acme</b> SSO');
+		expect(fields()).toEqual(['Invite code']);
+	});
+
+	it('says where a code went: an email keeps its address, with a way to start again', () => {
 		const onrestart = vi.fn();
 		render({ scheme: 'email', email: 'ada@example.com', sent: { scheme: 'email', email: 'ada@example.com' }, onrestart });
 		expect([byLabel('Email').value, byLabel('Email').disabled]).toEqual(['ada@example.com', true]);
@@ -44,12 +52,6 @@ describe('SignInForm', () => {
 		expect(dom.byRole('status').textContent).toContain('If ada@example.com can sign in here');
 		dom.button('Use another address, or send a new code').click();
 		expect(onrestart).toHaveBeenCalledOnce();
-		dom.unmount();
-		render({ scheme: 'external', sent: { scheme: 'external', page: 'https://sso.example/' }, onrestart });
-		expect(dom.byRole('link', 'Open the sign-in page').getAttribute('href')).toBe('https://sso.example/');
-		expect(byLabel('Code').placeholder).toBe('From the sign-in page');
-		dom.button('Start again').click();
-		expect(onrestart).toHaveBeenCalledTimes(2);
 	});
 
 	it('says the hint as a status only when asked, and waits while busy', () => {

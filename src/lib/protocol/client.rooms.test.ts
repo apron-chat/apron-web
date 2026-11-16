@@ -261,6 +261,23 @@ describe('transient notices', () => {
 		await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General' }] });
 		expect(texts()).toEqual(['A command reply', 'Guests can read along, again.']);
 	});
+
+	it('puts a notice away for the session when dismissed, sending nothing', async () => {
+		await authenticate(['rooms']);
+		await socket.reply('room_list', { joined: [{ room_id: 'general', title: 'General', latest_log_id: '30' }] });
+		client.notify('general', 'First');
+		client.notify('general', 'Second');
+		const [first] = room('general')!.notices;
+		const sent = socket.sent.length;
+		client.dismissNotice('general', first.key);
+		expect(room('general')?.notices.map((notice) => notice.body?.text)).toEqual(['Second']);
+		// Again, or in another room, it changes nothing.
+		const before = snapshot;
+		client.dismissNotice('general', first.key);
+		client.dismissNotice('elsewhere', first.key);
+		expect(snapshot).toBe(before);
+		expect(socket.sent).toHaveLength(sent);
+	});
 });
 
 describe('threads read without joining', () => {

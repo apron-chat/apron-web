@@ -511,6 +511,8 @@ export interface MessageHandlers {
 	openProfile?: (target: EventTarget | null) => boolean;
 	/** The reply's quote: go to the message it quotes. */
 	jump?: (messageId: string) => void;
+	/** A transient notice's ×: put it away. Offered only for notices that were never stored, which are gone on reload anyway. */
+	dismiss?: (view: MessageView) => void;
 	/** Decorate the code blocks in a body (highlighting; `copy` adds Copy buttons, on a notice). Runs again when the body changes. */
 	code?: (body: HTMLElement, copy: boolean) => void | (() => void);
 	/**

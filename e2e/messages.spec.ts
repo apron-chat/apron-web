@@ -472,3 +472,33 @@ test.describe('the timeline at its latest, dragged back slowly', () => {
 		await expect(page.getByTestId('jump-button')).toBeVisible();
 	});
 });
+
+test.describe('a transient notice', () => {
+	test.use(DEVICES.desktop);
+
+	test('its × puts it away for the session, and a keyboard on it goes to the composer', async ({ preview, page }) => {
+		await preview.open();
+		const notices = page.getByTestId('notice');
+		const composer = preview.composer();
+		for (const command of ['/shrug hi', '/help']) {
+			await composer.click();
+			await page.keyboard.press('ControlOrMeta+a');
+			await page.keyboard.press('Backspace');
+			await page.keyboard.type(command);
+			await page.keyboard.press('Enter');
+			await preview.waitForSent('command', (p) => p.body?.text === command);
+		}
+		await expect(notices).toHaveCount(2);
+		// The time sits beside its sender, as on a message.
+		await expect(notices.first().locator('.ap-notice-head')).toContainText(/System message to you \(~private\)\s*\d/);
+
+		await notices.first().getByRole('button', { name: 'Dismiss notice', exact: true }).click();
+		await expect(notices).toHaveCount(1);
+		await expect(notices).toContainText('Preview commands');
+
+		await notices.getByRole('button', { name: 'Dismiss notice', exact: true }).focus();
+		await page.keyboard.press('Enter');
+		await expect(notices).toHaveCount(0);
+		await expect(composer).toBeFocused();
+	});
+});

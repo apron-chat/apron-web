@@ -16,9 +16,8 @@ import type { ServerParams } from '$lib/protocol/types';
  *   and where the browser won't show its sheet that long after the tap, the
  *   panel is `ready` for a second one.
  * - `email-send` / `email-code`: ask for an emailed code, then sign in with it.
- * - `external-start` / `external-code`: open the server's sign-in page,
- *   which brings the viewer back signed in or, where the server won't
- *   return here, shows a code to sign in with.
+ * - `external-start`: open the server's sign-in page (§4.12), in a window
+ *   or in place of this one, which sends the viewer back here signed in.
  * - `token`: sign in with a pasted token.
  * - `done`, `sign-out`: leave the panel, or leave the registered session.
  *
@@ -55,7 +54,6 @@ export type SignInAction =
 	| 'email-send'
 	| 'email-code'
 	| 'external-start'
-	| 'external-code'
 	| 'token';
 
 /**
@@ -87,7 +85,7 @@ export interface SignInInput {
 	pending: boolean;
 	/** A ceremony, a code, a sign-in page, or a token is under way. */
 	busy: boolean;
-	/** A code was asked for (emailed, or shown by the sign-in page) and the code field shows. */
+	/** An emailed code was asked for, and the code field shows. */
 	codeSent: boolean;
 }
 
@@ -152,7 +150,6 @@ const LABELS: Record<SignInAction, string> = {
 	'email-send': 'Email me a code',
 	'email-code': 'Sign in',
 	'external-start': 'Continue to sign-in page',
-	'external-code': 'Sign in',
 	token: 'Sign in'
 };
 
@@ -172,6 +169,27 @@ export const UNUSABLE_VIEW: SignInView = { phase: 'idle', primary: { action: 'ch
 /** Every scheme this client can drive, in the order a server's own order doesn't decide. */
 export const KNOWN_SCHEMES: readonly Scheme[] = ['guest', 'webauthn', 'email', 'external', 'token'];
 
+/** This client's own name for each scheme, as one choice among others: `external` goes by the server's host (`schemeName`). */
+const OWN_NAMES: Record<string, string> = { guest: 'Guest', webauthn: 'Passkey', email: 'Email', token: 'Token' };
+
+/**
+ * What a scheme is called where the user picks one: the server's label for
+ * it (§3.2, `parseLabels`), else this client's own name. `external` without
+ * a label goes by `host`, the server whose sign-in page it opens, since
+ * "External" says nothing about where the user goes; without a host, it is
+ * "External sign-in". An unknown scheme without a label goes by its name as sent.
+ */
+export function schemeName(scheme: string, labels: Readonly<Record<string, string>> | undefined, host?: string): string {
+	if (labels && Object.hasOwn(labels, scheme)) return labels[scheme];
+	if (scheme === 'external') return host || 'External sign-in';
+	return Object.hasOwn(OWN_NAMES, scheme) ? OWN_NAMES[scheme] : scheme;
+}
+
+/** `schemeName` for each of `schemes`, as SignInForm takes them. */
+export function schemeNames(schemes: readonly string[], labels: Readonly<Record<string, string>> | undefined, host?: string): Record<string, string> {
+	return Object.fromEntries(schemes.map((scheme) => [scheme, schemeName(scheme, labels, host)]));
+}
+
 /**
  * Of the schemes a server offers (`offeredSchemes`: `auth`, then the rest of
  * `signup`, in its order), the ones this client can drive here: passkeys
@@ -183,15 +201,15 @@ export function usableSchemes(offered: readonly string[], passkeyUnavailable?: s
 
 /**
  * Why there is no way in to a server (`usableSchemes` came out empty),
- * naming it (`name`) and what it asks for, rather than drawing a control
- * that can't work.
+ * naming it (`name`) and what it asks for, each by its label where the
+ * server gives one (§3.2), rather than drawing a control that can't work.
  */
-export function unusableMessage(name: string, offered: readonly string[], passkeyUnavailable?: string): string {
+export function unusableMessage(name: string, offered: readonly string[], passkeyUnavailable?: string, labels?: Readonly<Record<string, string>>): string {
 	if (passkeyUnavailable && offered.includes('webauthn') && usableSchemes(offered).every((candidate) => candidate === 'webauthn')) {
 		return `${name} signs in only with a passkey, and this browser can’t use one here. ${passkeyUnavailable}`;
 	}
 	const unknown = offered.filter((candidate) => !(KNOWN_SCHEMES as readonly string[]).includes(candidate));
-	return `${name} signs in with ${listed(unknown.length ? unknown : offered)}, which this app doesn’t support.`;
+	return `${name} signs in with ${listed((unknown.length ? unknown : offered).map((scheme) => schemeName(scheme, labels)))}, which this app doesn’t support.`;
 }
 
 function listed(names: readonly string[]): string {
@@ -259,7 +277,7 @@ function primaryAction(input: SignInInput): Exclude<SignInAction, 'continue' | '
 		case 'email':
 			return input.codeSent ? 'email-code' : 'email-send';
 		case 'external':
-			return input.codeSent ? 'external-code' : 'external-start';
+			return 'external-start';
 		case 'webauthn':
 			if (here && input.registered) return 'done';
 			return passkeyMode(input.use, input.passkey) === 'login' ? 'passkey-login' : 'passkey-register';
@@ -276,10 +294,14 @@ function primaryAction(input: SignInInput): Exclude<SignInAction, 'continue' | '
  */
 export const CANCELLED_TRY_CREATE = 'Cancelled. No passkey for this server? Choose Create account.';
 
-/** What the panel says about the chosen scheme. `host` names the server in the form, shown as code (`…`). */
-export function signInHint(input: Pick<SignInInput, 'scheme' | 'use' | 'registered' | 'passkey'> & { phase: SignInPhase; here: boolean; guest: boolean; guestReadOnly: boolean; host?: string }): string {
+/**
+ * What the panel says about the chosen scheme. `host` names the server in the form, shown as code (`…`), and
+ * `guestName` the Guest choice as the panel shows it (`schemeName`), which may be the server's label.
+ */
+export function signInHint(input: Pick<SignInInput, 'scheme' | 'use' | 'registered' | 'passkey'> & { phase: SignInPhase; here: boolean; guest: boolean; guestReadOnly: boolean; host?: string; guestName?: string }): string {
 	if (input.scheme === 'webauthn') {
-		if (input.here && input.registered) return 'Signed in. Choose Guest to sign out.';
+		// A label is text: a backtick in it mustn't start code.
+		if (input.here && input.registered) return `Signed in. Choose ${(input.guestName ?? 'Guest').replaceAll('`', '')} to sign out.`;
 		const asGuest = input.phase === 'ready' && input.guest;
 		if (passkeyMode(input.use, input.passkey) === 'register') {
 			if (asGuest) return 'Connected as a guest. Creating an account keeps this identity and saves a new passkey for it on this device.';

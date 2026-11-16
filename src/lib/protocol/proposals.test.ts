@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { findProposal, forgetProposal, newProposalState, rememberProposal, signInPageUrl, type Proposal } from './proposals';
+import { findProposal, forgetProposal, newProposalState, rememberProposal, type Proposal } from './proposals';
 import { memoryStorage } from '$lib/test/storage';
 
-/** The proposals this browser made (§4.11.1), and the external pages it may open (§4.11.5). */
+/** The email proposals this browser made (§4.11.1). */
 describe('proposals', () => {
 	const storage = new Map<string, string>();
 
@@ -39,15 +39,5 @@ describe('proposals', () => {
 		expect(findProposal('x', 0)).toBeUndefined();
 		storage.set('apron.proposals', 'not json');
 		expect(findProposal('x', 0)).toBeUndefined();
-	});
-
-	it('opens only an absolute https page, or http on a loopback host', () => {
-		expect(signInPageUrl('https://chat.example/sso?p=1')).toBe('https://chat.example/sso?p=1');
-		for (const loopback of ['http://localhost:8080/sso', 'http://127.0.0.1/sso', 'http://[::1]:3000/', 'http://app.localhost/']) {
-			expect(signInPageUrl(loopback)).toBe(new URL(loopback).toString());
-		}
-		for (const refused of ['javascript:alert(1)', 'data:text/html,hi', 'http://chat.example/sso', 'http://128.0.0.1/', '/sso', 'sso', 'wss://chat.example/', '', undefined, 3]) {
-			expect(signInPageUrl(refused)).toBeUndefined();
-		}
 	});
 });

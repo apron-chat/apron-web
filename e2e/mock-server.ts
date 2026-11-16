@@ -19,6 +19,16 @@ export type MockOptions = {
 	token?: string;
 	/** The account a passkey signs in to (`auth` with `scheme: "webauthn"`, §4.10): its `you`. Without it, the mock has no passkeys. */
 	passkey?: Record<string, unknown>;
+	/**
+	 * Passkeys only on the server's passkey page (§4.10.1): a `webauthn` begin answers with `external`
+	 * at this `url` and no `public_key`, and a finish with a `code` signs in as `passkey`.
+	 */
+	passkeyPage?: string;
+	/**
+	 * External sign-in (§4.12): a begin answers with `external` at this `url`, and an `external` request with a `code`
+	 * signs in as `you`, with `token`. Add `external` to the server's `auth` with `server` too.
+	 */
+	external?: { url: string; you: Record<string, unknown>; token?: string };
 	sent?: Record<string, any>[];
 	/** The same, each with the address it went to: the page may be talking to more than one server at once. */
 	sentTo?: { url: string; frame: Record<string, any> }[];
@@ -59,6 +69,16 @@ export async function mockServer(page: Page, options: MockOptions = {}): Promise
 			switch (frame.method) {
 				case 'ping': return ws.send(JSON.stringify({ method: 'pong' }));
 				case 'auth': {
+					if (options.external && frame.params?.scheme === 'external') {
+						if (frame.params.code === undefined) return reply({ external: { url: options.external.url } });
+						you = { status: 'online', ...options.external.you };
+						return reply({ you, ...(options.external.token ? { token: options.external.token } : {}) });
+					}
+					if (options.passkeyPage && options.passkey && frame.params?.scheme === 'webauthn') {
+						if (frame.params.step === 'begin') return reply({ challenge_id: 'challenge_1', external: { url: options.passkeyPage } });
+						you = { status: 'online', ...options.passkey };
+						return reply({ you });
+					}
 					if (options.passkey && frame.params?.scheme === 'webauthn') {
 						// Nothing is verified: `begin` gives a challenge for this server's host, and `finish` signs in as the account.
 						if (frame.params.step === 'begin') return reply({ challenge_id: 'challenge_1', public_key: { challenge: 'AAAA', rpId: new URL(ws.url()).hostname } });

@@ -1379,6 +1379,9 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-profedit-row { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); }
 /* The ways in on offer, as a row of buttons; adding an email or external sign-in, a field and its button. */
 .ap-profedit-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+/* Ways to add, each by a name the server may give (§3.2): up to 64 characters, so a long one wraps within its button. */
+.ap-profedit-ways .ap-btn { white-space: normal; height: auto; min-height: var(--control-md); padding-block: var(--space-0_5); max-width: 100%; text-align: start; overflow-wrap: break-word; }
+.ap-profedit-ways .ap-btn svg { flex: none; }
 .ap-profedit-add { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-1); }
 .ap-profedit-add .ap-field { flex: 1; min-width: 0; height: var(--control-md); font-size: var(--text-ui); }
 .ap-profedit-signin .ap-typing-dots { vertical-align: middle; margin-inline-end: var(--space-1); }
@@ -1430,6 +1433,11 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-seg { display: flex; gap: var(--space-0_5); padding: var(--space-0_5); margin-top: var(--space-0_5); background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-md); }
 .ap-seg-item { font: inherit; flex: 1; height: var(--control-md); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink-muted); font-size: var(--text-ui); font-weight: 600; cursor: pointer; }
 .ap-seg-item:hover:not(:disabled) { color: var(--ink); }
+/* Sign-in choices, by names a server may give (§3.2, up to 64 characters): on one line while they all fit there whole, else one to a row
+   (`ap-seg-stacked`, which `segFit` sets from their measured widths), where a long one wraps. Both keep a choice's font and inline padding, which it measures. */
+.ap-seg-names .ap-seg-item { flex: 1 1 auto; padding-inline: var(--space-2); white-space: nowrap; }
+.ap-seg-stacked { flex-direction: column; }
+.ap-seg-stacked .ap-seg-item { height: auto; min-height: var(--control-md); padding-block: var(--space-1); text-align: start; white-space: normal; overflow-wrap: anywhere; }
 .ap-seg-on, .ap-seg-on:hover { background: var(--chosen); color: var(--ink); box-shadow: var(--shadow-chosen); }
 /* Choice — two paths of equal weight, each a title and a line saying what it does (Sign in · Create account) */
 .ap-choice { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
@@ -1863,11 +1871,19 @@ button.ap-mention, a.ap-linkchip { max-width: 100%; white-space: normal; overflo
 /* Scoped system messages (Appendix A.1): ~private, ~room, ~server. A left-aligned card titled by its sender as the
    server names it, "Name (~user_id)"; never centered, since they run to paragraphs and code.
    Private ones are dashed: never stored, gone on reload. A code block in one wraps, with a Copy button clear of the text. */
-.ap-notice { margin: var(--space-3) var(--space-4) 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--bg-200); font-size: var(--text-field); line-height: var(--leading-field); color: var(--ink); text-align: start; }
+/* A scoped notice (Appendix A.1): a card in the text column, where thread cards sit. */
+.ap-notice { margin: var(--space-3) var(--space-4) 0 calc(var(--space-4) + var(--avatar-md) + var(--space-3)); padding: var(--space-2) var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--bg-200); font-size: var(--text-field); line-height: var(--leading-field); color: var(--ink); text-align: start; }
+@media (max-width: 719px) { .ap-notice { margin-inline-start: var(--space-4); } }
+/* Only you got it: a ghost of a card, dashed and without a ground, titled in private's plum beside its lock. */
 .ap-notice-private { border: 1px dashed var(--line-strong); background: transparent; }
-.ap-notice-head { display: flex; align-items: baseline; gap: var(--space-2); margin-bottom: var(--space-1); font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
-.ap-notice-title { font-weight: 600; }
-.ap-notice-time { margin-inline-start: auto; font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
+.ap-notice-head { display: flex; align-items: center; gap: var(--space-2); min-width: 0; margin-bottom: var(--space-1); font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
+.ap-notice-glyph { --ap-icon-size: 12px; width: 12px; height: 12px; margin-inline-end: calc(-1 * var(--space-1)); color: var(--private); }
+.ap-notice-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.ap-notice-private .ap-notice-title { color: var(--private); }
+.ap-notice-time { flex: none; white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* The ×: a row's own action, kept from adding to the head's height. */
+.ap-notice-dismiss { flex: none; width: var(--control-sm); height: var(--control-sm); margin: calc((var(--leading-sm) - var(--control-sm)) / 2) calc(-1 * var(--space-2)) calc((var(--leading-sm) - var(--control-sm)) / 2) auto; }
+.ap-notice-dismiss .ap-icon { width: 14px; height: 14px; }
 .ap-notice-body { min-width: 0; }
 .ap-notice pre { position: relative; padding-inline-end: 96px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .ap-notice-copy { position: absolute; top: var(--space-1); inset-inline-end: var(--space-1); font-family: var(--font-sans); }

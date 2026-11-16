@@ -16,7 +16,8 @@ export type RpcFailure = Error & { code?: number };
  * A connection of its own for an email or external sign-in (§4.11), never
  * signed in until the approval: it waits for the `server` frame, proposes
  * signing in, and stays open while the user types the code, because a short
- * code works only on the connection that made the proposal (§4.11.2). A
+ * code works only on the connection that made the proposal, or with the
+ * proposal's `state` (§4.11.2), for which another is opened once it closes. A
  * link's token works on any connection that is not signed in, so one of
  * these is opened for a link too. The approval (`auth` with the token) signs
  * it in; `detach` then hands the open socket, its `server` frame, and

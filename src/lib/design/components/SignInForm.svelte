@@ -3,6 +3,7 @@
 	import type { ClassValue } from 'svelte/elements';
 	import Button from './Button.svelte';
 	import TypingDots from './TypingDots.svelte';
+	import { segFit } from './seg-fit';
 
 	const LABELS: Record<string, string> = { guest: 'Guest', webauthn: 'Passkey', email: 'Email', external: 'External', token: 'Token' };
 	/** On Passkey, the two paths: each a title and what it does. */
@@ -23,6 +24,8 @@
 		header?: Snippet;
 		/** The sign-in schemes to offer (§3.1 `auth`, then the rest of `signup`), in order; an unknown one shows by its name. With one, there is nothing to choose and no Sign in with row. */
 		schemes: string[];
+		/** What to call each scheme, over this form's own names (Guest, Passkey, Email, External, Token): the server's labels (§3.2), as plain text. The Token field takes the token's name as its label. */
+		names?: Record<string, string>;
 		/** Shows the chosen scheme's fields; off before the server has said which schemes it offers, when the card is its address alone. */
 		fields?: boolean;
 		/** The scheme last used to sign in to this server on this device: marked among the schemes as Last used. */
@@ -43,12 +46,9 @@
 		name?: string;
 		/** Asks a display name; not where it isn't used, such as signing in with a passkey. Under Token it asks an optional name, for an invite. */
 		askName?: boolean;
-		/**
-		 * The code asked for (§4.11): its field shows, and the hint says where it went: emailed to `email`,
-		 * or shown on the external sign-in `page` (§4.11.5), linked here to open in a new tab.
-		 */
-		sent?: { scheme: 'email' | 'external'; email?: string; page?: string };
-		/** Gives up the code asked for: Use another address (email), or Start again. */
+		/** The code asked for (§4.11): its field shows, and the hint says where it went, emailed to `email`. */
+		sent?: { scheme: 'email'; email?: string };
+		/** Gives up the code asked for: Use another address, or send a new code. */
 		onrestart?: () => void;
 		/** What the chosen scheme does, or what to do next. Text between backticks shows as code, such as a server's host. */
 		hint?: string;
@@ -71,26 +71,27 @@
 		nameTestid?: string;
 		/** `data-testid` on the passkey choice; each of its two options takes it with `-login` or `-register` after. */
 		passkeyChoiceTestid?: string;
-		/** `data-testid` on the link to the external sign-in page. */
-		pageLinkTestid?: string;
 		/** Classes for the form, added to its own. */
 		class?: ClassValue;
 	}
 	let {
-		header, schemes, fields = true, lastUsed, scheme, onscheme, passkeyChoice = false, passkeyMode = 'login', onpasskeymode, passkeyNudge, token = $bindable(''), email = $bindable(''), code = $bindable(''), name = $bindable(''),
+		header, schemes, names, fields = true, lastUsed, scheme, onscheme, passkeyChoice = false, passkeyMode = 'login', onpasskeymode, passkeyNudge, token = $bindable(''), email = $bindable(''), code = $bindable(''), name = $bindable(''),
 		askName = true, sent, onrestart, hint, hintStatus = false, error, busy = false, submit, secondary,
-		submitTestid, tokenTestid, emailTestid, codeTestid, nameTestid, passkeyChoiceTestid, pageLinkTestid, onsubmit, label, phase, class: className
+		submitTestid, tokenTestid, emailTestid, codeTestid, nameTestid, passkeyChoiceTestid, onsubmit, label, phase, class: className
 	}: Props = $props();
+	const nameOf = (candidate: string) => names?.[candidate] ?? LABELS[candidate] ?? candidate;
+	/** The choices' names, as one string: the picker fits them again only when one changes. */
+	const shownNames = $derived(JSON.stringify(schemes.map(nameOf)));
 </script>
 
 <form aria-label={label} data-phase={phase} class={['ap-connect-card', className]} {onsubmit}>
 	{@render header?.()}
 	{#if fields && schemes.length > 1}
 		<div class="ap-fieldlabel">
-			<span>Sign in with{#if lastUsed && schemes.includes(lastUsed)}{' '}<span class="ap-fieldlabel-hint">· last used: {LABELS[lastUsed] ?? lastUsed}</span>{/if}</span>
-			<div class="ap-seg" role="radiogroup" aria-label="Sign in with">
+			<span>Sign in with{#if lastUsed && schemes.includes(lastUsed)}{' '}<span class="ap-fieldlabel-hint">· last used: {nameOf(lastUsed)}</span>{/if}</span>
+			<div class="ap-seg ap-seg-names" role="radiogroup" aria-label="Sign in with" {@attach segFit(JSON.parse(shownNames))}>
 				{#each schemes as candidate (candidate)}
-					<button class="ap-seg-item" class:ap-seg-on={scheme === candidate} type="button" role="radio" aria-checked={scheme === candidate} disabled={busy} onclick={() => onscheme?.(candidate)}>{LABELS[candidate] ?? candidate}</button>
+					<button class="ap-seg-item" class:ap-seg-on={scheme === candidate} type="button" role="radio" aria-checked={scheme === candidate} disabled={busy} onclick={() => onscheme?.(candidate)}>{nameOf(candidate)}</button>
 				{/each}
 			</div>
 		</div>
@@ -107,7 +108,7 @@
 			</div>
 		{/if}
 		{#if scheme === 'token'}
-			<label class="ap-fieldlabel">Token
+			<label class="ap-fieldlabel">{nameOf('token')}
 				<input class="ap-field ap-field-mono" data-testid={tokenTestid} type="password" bind:value={token} placeholder="From the server" disabled={busy} autocomplete="off" spellcheck="false" />
 			</label>
 			{#if askName}
@@ -122,7 +123,7 @@
 			{#if sent}
 				<label class="ap-fieldlabel">Code
 					<!-- svelte-ignore a11y_autofocus -->
-					<input class="ap-field ap-field-mono" data-testid={codeTestid} bind:value={code} placeholder={sent.scheme === 'email' ? 'From the email' : 'From the sign-in page'} disabled={busy} inputmode={sent.scheme === 'email' ? 'numeric' : 'text'} autocomplete="one-time-code" autocapitalize="none" autocorrect="off" spellcheck="false" autofocus />
+					<input class="ap-field ap-field-mono" data-testid={codeTestid} bind:value={code} placeholder="From the email" disabled={busy} inputmode="numeric" autocomplete="one-time-code" autocapitalize="none" autocorrect="off" spellcheck="false" autofocus />
 				</label>
 			{/if}
 			{#if askName}
@@ -133,12 +134,6 @@
 	{#if sent?.scheme === 'email'}
 		<p class="ap-form-hint" role="status">If {sent.email} can sign in here, a code is on its way. Enter it, or open the link in the email.</p>
 		<button class="ap-link ap-connect-other" type="button" disabled={busy} onclick={onrestart}>Use another address, or send a new code</button>
-	{:else if sent?.page}
-		<!-- The server won't send the viewer back here (§4.11.5): its page shows a code to type here instead. -->
-		<p class="ap-form-hint" role="status">
-			<a href={sent.page} target="_blank" rel="noopener noreferrer" data-testid={pageLinkTestid}>Open the sign-in page</a>, sign in there, then enter the code it shows you.
-		</p>
-		<button class="ap-link ap-connect-other" type="button" disabled={busy} onclick={onrestart}>Start again</button>
 	{:else if hint}
 		<p class="ap-form-hint" role={hintStatus ? 'status' : undefined}>{#each hint?.split('`') ?? [] as part, index (index)}{#if index % 2}<code>{part}</code>{:else}{part}{/if}{/each}</p>
 	{/if}

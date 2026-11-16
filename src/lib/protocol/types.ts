@@ -159,6 +159,12 @@ export interface ServerParams {
 	signup?: string[];
 	/** CommonMark for the sign-in screen (§3.2): how this server's schemes fit together. */
 	welcome?: string;
+	/**
+	 * What the user signs in with, by scheme (§3.2), such as `{"external":
+	 * "Acme SSO"}`: plain text, one line, at most `MAX_LABEL_CHARS`, as
+	 * `parseLabels` keeps them. Only schemes with a label are here.
+	 */
+	labels?: Record<string, string>;
 	/** A plain display name (§3.1); without it, clients show the server's address. Never what a server is known by. */
 	title?: string;
 	/** CommonMark (§3.1): in a few words, what the server is about. */

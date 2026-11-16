@@ -5,7 +5,7 @@
 	import { pushState, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { passkeySupportError } from '$lib/protocol/webauthn';
-	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, editableTitle, findMessage, keepsBio, normalizeWebSocketUrl, serverArchive, serverLook, serverMedia, serverSettings, timelineMessages, webPushKey, yourPermissions, type ClientSnapshot, type EmbedEdits, type MediaTypes, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
+	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, editableTitle, findMessage, keepsBio, normalizeWebSocketUrl, serverArchive, serverLook, serverMedia, serverSettings, timelineMessages, webPushKey, yourPermissions, type ClientSnapshot, type EmbedEdits, type MediaTypes, type Notice, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
 	import { embedsLabel, serverOrigin } from '$lib/protocol/embeds';
 	import { withoutBidiOverrides } from '$lib/protocol/plain-text';
 	import { compareLogIds } from '$lib/protocol/reducer';
@@ -101,6 +101,7 @@
 	import { articleOf, isMessageRow, MESSAGE_STEPS, messageRows, rowControls, stepMessage, tabbableOutside, timelineItems } from '$lib/ui/message-focus';
 	import { buildRoomTimeline, steady, threadEntries, threadStartedFrom, threadDescriptionFor, threadTitleFor, type ThreadEntry, type TimelineItem } from '$lib/ui/timeline';
 	import { takeSignInLink } from '$lib/ui/sign-in-link';
+	import { returnedWaiting } from '$lib/ui/sign-in-window';
 	import { SignInLinks } from '$lib/ui/link-controller.svelte';
 	import { findProposal } from '$lib/protocol/proposals';
 	import { idMillis } from '$lib/ui/time';
@@ -369,6 +370,8 @@
 	/**
 	 * Sign-in links (§4.11.2): one of no proposal this browser made waits for the viewer's answer (`asked`), one
 	 * for an addition proposed here for its account's session (`addition`), and why one didn't sign in (`failure`).
+	 * And a server's sign-in page that sent this tab back (§4.12): an addition or a passkey waits for the session
+	 * whose connection takes its code (`returned`).
 	 */
 	const links = new SignInLinks({
 		client: () => client,
@@ -1147,7 +1150,7 @@
 	let promptedSignIn = false;
 	$effect(() => {
 		const server = snapshot.server;
-		if (previewMode || promptedSignIn || connectOpen || links.asked || links.busy || links.addition || snapshot.authBusy || !server || snapshot.authenticated || snapshot.status !== 'connected') return;
+		if (previewMode || promptedSignIn || connectOpen || links.asked || links.busy || links.addition || links.returned || snapshot.authBusy || !server || snapshot.authenticated || snapshot.status !== 'connected') return;
 		const needed = snapshot.signInNeeded && session.rooms.length === 0 ? snapshot.signInNeeded : undefined;
 		if (!needed && (server.auth.includes('guest') || server.signup?.includes('guest') || !snapshot.error)) return;
 		promptedSignIn = true;
@@ -1226,12 +1229,15 @@
 		const stopFirstScreen = watchFirstScreen();
 		narrowMedia.addEventListener('change', narrowMediaChange);
 		// Taken, and scrubbed from the address bar, before anything else can read or keep the URL.
-		const signInLink = previewMode ? undefined : takeSignInLink(window.location, scrubUrl);
+		const signInLink = previewMode ? undefined : takeSignInLink(window.location, scrubUrl, findProposal);
+		// A server's sign-in page that this tab left the app for sent it back (`/signed-in/` brought the answer here):
+		// what finishes it loads only then.
+		const returning = !previewMode && returnedWaiting() ? import('$lib/ui/sign-in-page') : undefined;
 		// A link pasted into this tab later is a same-document fragment change: take (and scrub) it too.
 		const hashChanged = (event: HashChangeEvent) => {
 			// Preferences opening, closing or changing section (`ProfileBar`) doesn't move the page.
 			if (onlyPreferencesDiffer(event.oldURL, event.newURL)) return;
-			const link = previewMode ? undefined : takeSignInLink(window.location, scrubUrl);
+			const link = previewMode ? undefined : takeSignInLink(window.location, scrubUrl, findProposal);
 			if (link) {
 				links.follow(link);
 				return;
@@ -1367,6 +1373,10 @@
 		awaitingOffer = Boolean(offeredServer);
 		client = chat;
 		if (signInLink) links.follow(signInLink);
+		void returning?.then((signInPage) => {
+			const returned = signInPage.takeReturned();
+			if (returned && client === chat) links.followReturn(returned, signInPage);
+		});
 		if (pushed) void followPush(chat, pushed);
 		if (link.room) linked = { ...link, server: offeredServer ?? chat.url, room: link.room };
 		if (offeredServer) {
@@ -2992,6 +3002,17 @@
 		row.scrollIntoView({ block: list && row.offsetHeight > list.clientHeight ? 'start' : 'nearest' });
 	}
 
+	/**
+	 * A transient notice's ×: it goes for the rest of the session. A keyboard that was on it goes to the composer
+	 * rather than the page; a tap leaves focus be, so a phone's keyboard doesn't open.
+	 */
+	function dismissNotice(notice: Notice): void {
+		const active = document.activeElement;
+		const keyboard = active instanceof HTMLElement && active.matches(':focus-visible') && active.closest('.ap-notice');
+		client?.dismissNotice(notice.room_id, notice.key);
+		if (keyboard) composer?.focus();
+	}
+
 	/** ↑ in the empty composer: the keyboard goes to the newest message. False with none to go to. */
 	function focusNewestMessage(): boolean {
 		const list = viewport.messageScroll;
@@ -3590,7 +3611,7 @@
 			url: client.url, keptSession: Boolean(snapshot.keptSession),
 			...(links.asked.server && links.asked.server !== client.url ? { targetKeptSession: client.keptSessionFor(links.asked.server) } : {}),
 			...(snapshot.passkeySession && session.you ? { signedInAs: session.you.name ? `${withoutBidiOverrides(session.you.name)} (@${session.you.user_id})` : `@${session.you.user_id}` } : {}),
-			...(snapshot.authenticated && snapshot.you && snapshot.server?.auth.some((scheme) => scheme === 'email' || scheme === 'external') ? { addAs: snapshot.you.name ? `${withoutBidiOverrides(snapshot.you.name)} (@${snapshot.you.user_id})` : `@${snapshot.you.user_id}` } : {})
+			...(snapshot.authenticated && snapshot.you && snapshot.server?.auth.includes('email') ? { addAs: snapshot.you.name ? `${withoutBidiOverrides(snapshot.you.name)} (@${snapshot.you.user_id})` : `@${snapshot.you.user_id}` } : {})
 		}}
 		onconfirm={() => links.confirm()} onadd={() => links.addAsked()} oncancel={() => links.cancel()}
 	/>
@@ -3745,7 +3766,7 @@
 						{:else if item.kind === 'thread'}
 							<ThreadCard entry={item.entry} unread={unread.byRoom[item.entry.id]} mentions={mentions.byRoom[item.entry.id]} onopen={() => openThreadCard(item.entry.id)} />
 						{:else if item.kind === 'notice'}
-							<NoticeLine notice={item.notice} onopenroom={openMentionedRoom} />
+							<NoticeLine notice={item.notice} onopenroom={openMentionedRoom} ondismiss={dismissNotice} />
 						{:else if item.kind === 'members'}
 							<MembershipLine joined={item.joined} left={item.left} logId={item.logId} />
 						{:else if item.kind === 'renamed'}
