@@ -31,6 +31,12 @@ export const formatToolbar = part((m) => m.FormatToolbar);
 export const draftPreview = part((m) => m.DraftPreview);
 /** Not a component: `archiveExport.load()` gives `exportArchive`. */
 export const archiveExport = part((m) => m.exportArchive);
+/**
+ * Not components: `fileUpload.load()` gives `prepareUpload`, and `avatarUpload.load()` `prepareAvatar`, which ready a file
+ * attached to a draft and an avatar. Readying a file is already a wait (a staged file says Preparing…), which this joins.
+ */
+export const fileUpload = part((m) => m.prepareUpload);
+export const avatarUpload = part((m) => m.prepareAvatar);
 /** Not a component: `dragRooms`, for dragging rooms; `roomDrag.whenLoaded()` waits for it without fetching it (Sidebar's `reorderable`). */
 export const roomDrag = part((m) => m.dragRooms);
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { docViewerHost, editorsNudge, installNudge, mentionAddLine, messageEditor, newPrivateDialog, newThreadDialog, profileCardHost, reactorsPopover, roomEditor, searchDialog, selectionBar, serverPaneHost, shortcutsDialog, signInLinkDialog } from '$lib/components/lazy';
+	import { docViewerHost, editorsNudge, fileUpload, installNudge, mentionAddLine, messageEditor, newPrivateDialog, newThreadDialog, profileCardHost, reactorsPopover, roomEditor, searchDialog, selectionBar, serverPaneHost, shortcutsDialog, signInLinkDialog } from '$lib/components/lazy';
 	import { onMount, tick, untrack } from 'svelte';
 	import { fromAction } from 'svelte/attachments';
 	import { pushState, replaceState } from '$app/navigation';
@@ -59,7 +59,6 @@
 	import { directory } from '$lib/ui/directory.svelte';
 	import { FeedbackState, type Feedback } from '$lib/ui/feedback.svelte';
 	import type { LiveComposer } from '$lib/ui/live-composer.svelte';
-	import { prepareUpload } from '$lib/ui/images';
 	import { MentionTracker } from '$lib/ui/mentions.svelte';
 	import { IncomingMessageTracker } from '$lib/ui/incoming-messages';
 	import { UnreadTracker, countElsewhere, mutedMentions } from '$lib/ui/unread.svelte';
@@ -2491,7 +2490,7 @@
 		// Staging is local: it goes on whatever the connection, as typing does, and sending waits for it.
 		if (session.readOnly || !session.capabilities['embed:upload']) return;
 		const limits = serverMedia(session.server).upload;
-		const staged = picked.map((file): StagedFile => ({ id: `staged-${++stagedCount}`, file, prepared: prepareUpload(file, { limits }) }));
+		const staged = picked.map((file): StagedFile => ({ id: `staged-${++stagedCount}`, file, prepared: fileUpload.load().then((prepareUpload) => prepareUpload(file, { limits })) }));
 		for (const { id, prepared } of staged) {
 			prepared.catch((cause: unknown) => {
 				drafts.unstage(id);
@@ -2529,7 +2528,7 @@
 		// `/emoji add` takes its image to the server's emoji limits (`ext.media.emoji`), not those it was staged to.
 		const media = serverMedia(session.server);
 		const limits = attachmentLimits(action, media);
-		const refit = limits !== media.upload ? staged.map(({ file }) => prepareUpload(file, { limits })) : undefined;
+		const refit = limits !== media.upload ? staged.map(({ file }) => fileUpload.load().then((prepareUpload) => prepareUpload(file, { limits }))) : undefined;
 		const text = action.kind === 'message' ? action.text : draft;
 		const mentions = [...new Set([...composerMentions, ...added])];
 		const dismissed = drafts.dismissed;

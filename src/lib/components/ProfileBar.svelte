@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { tick, untrack } from 'svelte';
-	import { archiveExport, preferencesDialog, profileEditor } from './lazy';
+	import { archiveExport, avatarUpload, preferencesDialog, profileEditor } from './lazy';
 	import { pushState, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { preferencesOpener, preferencesUrl, readPreferences } from '$lib/ui/preferences.svelte';
@@ -13,7 +13,6 @@
 	import { addError, passkeyMessage, statusLabel, wayBackNudge, wayBackWords } from '$lib/ui/connection';
 	import { returnUrl } from '$lib/ui/sign-in-link';
 	import { directory } from '$lib/ui/directory.svelte';
-	import { prepareAvatar } from '$lib/ui/images';
 	import type { SessionView } from '$lib/ui/session.svelte';
 	import { saveDisplayName } from '$lib/ui/storage';
 	import type { NotificationPermissionState, NotificationTestResult } from '$lib/ui/notifications';
@@ -232,6 +231,7 @@
 		avatarError = '';
 		try {
 			// Cropped square, shrunk under the avatar limit (the server's, where it states one), and stripped of metadata.
+			const prepareAvatar = await avatarUpload.load();
 			const { file: avatar } = await prepareAvatar(file, { limits: serverMedia(session.server).avatar });
 			await client.uploadAvatar(avatar);
 		} catch (cause) {

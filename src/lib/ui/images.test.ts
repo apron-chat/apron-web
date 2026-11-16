@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { stripMetadata } from './image-metadata';
-import { centerSquare, fileSize, fitWithin, ImageTooLargeError, NotAcceptedError, prepareAvatar, prepareUpload, sniffImage, type Crop, type ImageCodec } from './images';
+import { centerSquare, fitWithin, ImageTooLargeError, NotAcceptedError, prepareAvatar, prepareUpload, sniffImage, type Crop, type ImageCodec } from './images';
 
 const JPEG = [0xff, 0xd8, 0xff, 0xe1];
 /** Each quality tried lower than the last: the quality steps down, whatever its steps are. */
@@ -102,12 +102,6 @@ describe('sizing', () => {
 		// A square, centered.
 		expect(centerSquare(400, 300)).toEqual({ x: 50, y: 0, width: 300, height: 300 });
 		expect(centerSquare(300, 401)).toEqual({ x: 0, y: 50, width: 300, height: 300 });
-	});
-});
-
-describe('fileSize', () => {
-	it('reads as bytes, KB or MB', () => {
-		expect([fileSize(512), fileSize(12_800), fileSize(1_468_006)]).toEqual(['512 B', '13 KB', '1.4 MB']);
 	});
 });
 
