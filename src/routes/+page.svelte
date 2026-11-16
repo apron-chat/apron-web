@@ -3861,7 +3861,7 @@
 					bind:mentions={composerMentions}
 					bind:dismissed={drafts.dismissed}
 					placeholder={activeThread ? `Reply in ${threadTitle(activeThread)}` : `Message ${activeRoom.title}`}
-					holdSend={!canCompose || Boolean(paneMentionAdding) || Boolean(paneRoom && previewWaits.has(paneRoom.id))}
+					holdSend={!canCompose || Boolean(paneMentionAdding) || Boolean(previewWaits.size && paneRoom && previewWaits.has(paneRoom.id))}
 					canUpload={session.capabilities['embed:upload'] && !composingLive}
 					live={composingLive}
 					uploadLimits={serverMedia(session.server).upload}
