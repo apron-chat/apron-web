@@ -780,6 +780,24 @@ describe('sign-in', () => {
 		expect(snapshot.signInMethods).toEqual(['token', 'email']);
 	});
 
+	it('adds nothing when a confirmed link’s token signs the connection in as another account, and connects again', async () => {
+		await latest().greet([], { auth: ['email', 'token', 'guest'], token: 'st_ada', you: { user_id: 'ada' } });
+		const socket = latest();
+		const added = client.addWithConfirmedLink('apron_invite_x');
+		await vi.advanceTimersByTimeAsync(0);
+		expect(socket.request('auth').params).toEqual({ scheme: 'token', token: 'apron_invite_x' });
+		// An invite's token, say: the server takes it as a sign-in (§3.2.2), not as an addition.
+		await socket.reply('auth', { you: { user_id: 'bob' } });
+		await expect(added).rejects.toThrow('signed in to another account');
+		expect(socket.readyState).toBe(FakeSocket.CLOSED);
+		// A new connection resumes this page's own session.
+		const next = afterBackoff(socket);
+		next.open();
+		next.receive({ method: 'server', params: { apron: 10, auth: ['email', 'token', 'guest'], capabilities: [] } });
+		await settle();
+		expect(next.request('auth').params).toMatchObject({ scheme: 'token', token: 'st_ada' });
+	});
+
 	it('adds with a link of its own addition on any connection of the proposing account, and only there', async () => {
 		await latest().greet([], { auth: ['email', 'external', 'token', 'guest'], token: 'st_ada', you: { user_id: 'ada' } });
 		const asked = client.requestEmailCodeToAdd('ada@example.com');

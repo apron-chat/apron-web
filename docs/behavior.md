@@ -2193,7 +2193,9 @@ as `scheme: "token"` (§4.11.2), since it may not be an emailed link at all,
 such as an invite's; only a link of a proposal here goes with the proposal's
 `email`. Adding approves on this connection, which the server allows only
 if this account proposed it (§4.11.3); a refusal says it may have been for
-signing in, or for another account. On **Sign in** it
+signing in, or for another account. A token that the server takes as a
+sign-in to another account instead (§3.2.2), such as an invite's, adds
+nothing: the page says so and connects again, resuming its own session. On **Sign in** it
 is used as a sign-in, on the link's server (this one unless it names another;
 a `server` that isn't a WebSocket URL makes it unusable), if that server
 offers email or `token`. Such a sign-in is recorded as an email sign-in (a

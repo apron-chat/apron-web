@@ -109,7 +109,9 @@ export function linkUse(link: SignInLink, find: (state: string | undefined) => P
  * current server, guests included; on that server the prompt then offers to
  * add the link to it as well (`adds`). That is safe to offer: an addition
  * approves only on a connection signed in to the account that proposed it,
- * and a sign-in's token is refused on one (§4.11.3).
+ * and a sign-in's token is refused on one (§4.11.3). A bearer token that
+ * signs the connection in as another account instead adds nothing, and the
+ * page connects again (`addWithConfirmedLink`).
  */
 export function signInLinkPrompt(
 	link: SignInLink, current: { url: string; label?: string; signedInAs?: string; addAs?: string; keptSession?: boolean; targetKeptSession?: boolean }

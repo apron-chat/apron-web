@@ -1599,9 +1599,11 @@ export class ChatClient {
 	 * proposed on another device, or forgotten here (§4.11.2). Approval of an
 	 * addition works only on a connection signed in to the account that
 	 * proposed it, and a sign-in's token is refused on one (§4.11.3), so the
-	 * server refuses any other link. Asked about, the token goes as
+	 * server refuses any other emailed link. Asked about, the token goes as
 	 * `scheme: "token"` (§4.11.2); what was added is recorded as with
-	 * `signInWithLink`.
+	 * `signInWithLink`. A bearer token, such as an invite's, may sign the
+	 * connection in as another account instead (§3.2.2): that adds nothing,
+	 * and the page connects again (`approveAddition`).
 	 */
 	async addWithConfirmedLink(token: string): Promise<ProposalScheme | 'link'> {
 		const offered = PROPOSAL_SCHEMES.filter((scheme) => this.server?.auth.includes(scheme));
@@ -1631,10 +1633,16 @@ export class ChatClient {
 		const connection = this.connectionId;
 		this.emit();
 		try {
-			await this.passkeyRequest(params).catch((cause: unknown) => {
+			const result = await this.passkeyRequest(params).catch((cause: unknown) => {
 				// Refused on another connection than the one that proposed it, as after a reconnect: some servers refuse a code there whatever its `state`.
 				throw proposedOn !== undefined && proposedOn !== this.connectionId ? refusedElsewhere(cause) : cause;
 			});
+			// A bearer token signs the connection in as its own account (§3.2.2), adding nothing: this page's view is not
+			// that account's, so it connects again, resuming its own session where it keeps one.
+			if (isIdentity(result.you) && connection === this.connectionId && result.you.user_id !== account) {
+				this.restart();
+				throw new Error('The link signed in to another account instead of adding to this one, so nothing was added. Connecting again.');
+			}
 			if (controller.signal.aborted || connection !== this.connectionId || this.you?.user_id !== account) throw new Error('Connection changed; try again');
 			if (state) forgetProposal(state, this.now());
 			if (state && this.addition?.state === state) this.addition = undefined;
