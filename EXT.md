@@ -93,7 +93,7 @@ Some features have no capability:
 
 ## 3. `ext:settings`
 
-Defined in [EXTENSIONS.md](https://github.com/shazow/apron/blob/main/EXTENSIONS.md#extsettings):
+Defined in [EXTENSIONS.md](https://github.com/shazow/apron/blob/main/extensions/ext_settings.md):
 `server.ext.settings`, `{read_cursors?, read_receipts?, private_rooms?}`.
 
 ### 3.1 apron-web
@@ -115,7 +115,7 @@ Defined in [EXTENSIONS.md](https://github.com/shazow/apron/blob/main/EXTENSIONS.
 
 ## 4. `ext:limits`
 
-Defined in [EXTENSIONS.md](https://github.com/shazow/apron/blob/main/EXTENSIONS.md#extlimits):
+Defined in [EXTENSIONS.md](https://github.com/shazow/apron/blob/main/extensions/ext_limits.md):
 a category of limit, `data.ext.limits`, on `retry_after` errors.
 
 ### 4.1 apron-web
@@ -190,7 +190,7 @@ Access-Control-Expose-Headers: Apron-Connection-Status, Retry-After
 
 ## 6. `ext:media`
 
-Defined in [EXTENSIONS.md](https://github.com/shazow/apron/blob/main/EXTENSIONS.md#extmedia):
+Defined in [EXTENSIONS.md](https://github.com/shazow/apron/blob/main/extensions/ext_media.md):
 `server.ext.media`, the server's media origins and its file limits.
 
 ### 6.1 apron-web
@@ -227,7 +227,7 @@ Defined in [EXTENSIONS.md](https://github.com/shazow/apron/blob/main/EXTENSIONS.
 
 ## 7. `ext:permissions`
 
-Defined in [EXTENSIONS.md](https://github.com/shazow/apron/blob/main/EXTENSIONS.md#extpermissions):
+Defined in [EXTENSIONS.md](https://github.com/shazow/apron/blob/main/extensions/ext_permissions.md):
 `you.ext.permissions`, an object `{write?, add_members?, move_any?}`.
 
 ### 7.1 apron-web
@@ -260,7 +260,7 @@ Defined in [EXTENSIONS.md](https://github.com/shazow/apron/blob/main/EXTENSIONS.
 
 ## 8. `ext:bio`
 
-Defined in [EXTENSIONS.md](https://github.com/shazow/apron/blob/main/EXTENSIONS.md#extbio):
+Defined in [EXTENSIONS.md](https://github.com/shazow/apron/blob/main/extensions/ext_bio.md):
 `ext.bio` on user objects, set with `me`.
 
 ### 8.1 apron-web
@@ -279,7 +279,7 @@ Defined in [EXTENSIONS.md](https://github.com/shazow/apron/blob/main/EXTENSIONS.
 
 ## 9. `ext:emoji`
 
-Defined in [EXTENSIONS.md](https://github.com/shazow/apron/blob/main/EXTENSIONS.md#extemoji):
+Defined in [EXTENSIONS.md](https://github.com/shazow/apron/blob/main/extensions/ext_emoji.md):
 `server.ext.emoji.catalog_url`, a catalog of custom emoji keyed by `:name:`.
 
 ### 9.1 apron-web
@@ -325,7 +325,7 @@ and whose archive it is.
 
 A message's sender shares the editing of its text with the users that it
 mentions.
-[EXTENSIONS.md](https://github.com/shazow/apron/blob/main/EXTENSIONS.md#exteditors)
+[EXTENSIONS.md](https://github.com/shazow/apron/blob/main/extensions/ext_editors.md)
 defines it.
 
 ### 11.1 apron-web

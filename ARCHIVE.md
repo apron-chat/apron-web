@@ -126,7 +126,7 @@ archive with does this.
   `history`, `rooms`, `reactions`, `ext:permissions`, and `ext:settings` with
   `read_cursors: false` (EXT.md §3), since nothing can be saved there.
 - `auth` signs in with `write: false` in `you.ext.permissions`
-  ([EXTENSIONS.md](https://github.com/shazow/apron/blob/main/EXTENSIONS.md#extpermissions)).
+  ([EXTENSIONS.md](https://github.com/shazow/apron/blob/main/extensions/ext_permissions.md)).
   Without a scheme besides `guest`, nothing lifts it: a client knows that no
   one can write here ([EXT.md §7.1](EXT.md#71-apron-web)).
 - It advertises `ext:media` with the archive's `media` only when the reader
