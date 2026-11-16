@@ -1702,6 +1702,17 @@ export class ChatClient {
 	}
 
 	/**
+	 * Puts away a transient notice (§3.5) for the rest of the session. It was
+	 * never stored, so nothing is sent: it is only gone from this client.
+	 */
+	dismissNotice(room: string, key: string): void {
+		const notices = this.notices.get(room);
+		if (!notices?.some((notice) => notice.key === key)) return;
+		this.notices.set(room, notices.filter((notice) => notice.key !== key));
+		this.emit();
+	}
+
+	/**
 	 * Saves a message (capability `edit`, §4.4) from its latest stored snapshot:
 	 * every client field (`room_id`, `body`, bare `reply_to`) is resubmitted
 	 * unless the patch changes it. `ext` is not: a save merges it (§4.12), so
