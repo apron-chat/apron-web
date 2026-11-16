@@ -335,10 +335,11 @@
 	 */
 	let mentionAdding = $state<{ roomId: string; userIds: string[]; text: string; files: string } | undefined>();
 	/**
-	 * A sent message waiting, at most PREVIEW_WAIT_MS, for its link previews not yet here (`afterPreviews`): Send
-	 * holds in its room meanwhile, so what is sent next there goes after it.
+	 * Sent messages waiting, at most PREVIEW_WAIT_MS, for their link previews not yet here (`awaitPreviews`), by
+	 * room, each with what lets it go at once: Send holds in its room meanwhile, so what is sent next there goes
+	 * after it, and leaving the page lets them all go (`leavePage`), as if sent just before.
 	 */
-	let previewWait = $state.raw<{ roomId: string } | undefined>();
+	let previewWaits = $state.raw<ReadonlyMap<string, () => void>>(new Map());
 	/**
 	 * A message held back at Send because it mentions people and holds a checklist: the ask whether they may edit its
 	 * text (`ext:editors`, EditorsPrompt), until it's answered, put away, the draft changes, or the pane does. `added`:
@@ -2305,12 +2306,23 @@
 		sendMessage(true, adding.userIds.filter((userId) => !refused.some((refusal) => refusal.userId === userId)));
 	}
 
-	/** `ready`, holding Send in `roomId` until it settles (`previewWait`). */
-	function afterPreviews<T>(roomId: string, ready: Promise<T>): Promise<T> {
-		const waiting = (previewWait = { roomId });
-		return ready.finally(() => {
-			if (previewWait === waiting) previewWait = undefined;
+	/** Settles once `previews` have (or the page is left) and `joining` has, holding Send in `roomId` meanwhile (`previewWaits`). */
+	function awaitPreviews(roomId: string, previews: Promise<void>, joining: Promise<unknown> | undefined): Promise<unknown> {
+		let release!: () => void;
+		const released = new Promise<void>((resolve) => (release = resolve));
+		previewWaits = new Map(previewWaits).set(roomId, release);
+		return Promise.all([joining, Promise.race([previews, released])]).finally(() => {
+			if (previewWaits.get(roomId) !== release) return;
+			const rest = new Map(previewWaits);
+			rest.delete(roomId);
+			previewWaits = rest;
 		});
+	}
+
+	/** The page is put away: what it keeps is saved, and messages waiting for their link previews go now. */
+	function leavePage(): void {
+		for (const release of previewWaits.values()) release();
+		draftKeeper.flush();
 	}
 
 	/** Escape: an ask whether they may edit the message goes away, the draft unsent. True when there was one. */
@@ -2413,22 +2425,17 @@
 		const options = { ...(reply ? { replyTo: reply } : {}), ...(mentions.length ? { mentions } : {}) };
 		if (action.kind === 'message') {
 			if (!action.text.trim()) return;
-			// The draft goes now; the message, with its link previews: those not yet here get a moment to arrive.
+			// The draft goes now; the message once the room is joined, with its link previews: those not yet here get a
+			// moment to arrive. It is one request to the toast from here, so Sending… shows if all of that takes long.
+			const where = paneRoom.parentRoomId === undefined ? 'room' : 'thread';
+			const joining = joinFirst(chat, paneRoom)?.catch((cause: unknown) => Promise.reject(cause instanceof Error ? cause : new Error(`Unable to join the ${where}`)));
 			const previews = linkPreviews.settle(action.text, dismissed, PREVIEW_WAIT_MS);
-			const post = () => {
+			const ready = previews ? awaitPreviews(roomId, previews, joining) : joining;
+			const send = () => {
 				const embeds = linkPreviews.embeds(action.text, dismissed);
-				feedback.track(chat.send(roomId, action.text, 'markdown', { ...options, ...(embeds.length ? { embeds } : {}), ...(editors ? { ext: SHARED_TEXT } : {}) }), 'Sending…', restore);
+				return chat.send(roomId, action.text, 'markdown', { ...options, ...(embeds.length ? { embeds } : {}), ...(editors ? { ext: SHARED_TEXT } : {}) }).promise;
 			};
-			const joining = joinFirst(chat, paneRoom);
-			const ready = previews ? afterPreviews(roomId, Promise.all([joining, previews])) : joining;
-			if (ready) {
-				ready.then(post, (cause: unknown) => {
-					feedback.error(cause, `Unable to join the ${paneRoom.parentRoomId === undefined ? 'room' : 'thread'}`);
-					restore();
-				});
-			} else {
-				post();
-			}
+			feedback.track({ promise: ready ? ready.then(send) : send() }, 'Sending…', restore);
 			viewport.pin();
 		} else {
 			const failed = (cause: unknown) => {
@@ -3583,7 +3590,7 @@
 	}
 </script>
 
-<svelte:window onpagehide={() => draftKeeper.flush()} onkeydown={windowKeydown} onpointerdowncapture={() => (tabbing = false)} onpaste={windowPaste} ondragover={refuseDrop} ondrop={refuseDrop} onfocus={() => { presence.focus(); refreshNotificationPermission(); }} onblur={() => presence.blur()} />
+<svelte:window onpagehide={leavePage} onkeydown={windowKeydown} onpointerdowncapture={() => (tabbing = false)} onpaste={windowPaste} ondragover={refuseDrop} ondrop={refuseDrop} onfocus={() => { presence.focus(); refreshNotificationPermission(); }} onblur={() => presence.blur()} />
 <svelte:document onclick={mediaAskClick} onvisibilitychange={() => { presence.visibilityChanged(); refreshNotificationPermission(); if (document.visibilityState === 'hidden') { keepView(); void historyKeeper?.flush(); draftKeeper.flush(); } }} />
 
 <svelte:head>
@@ -3854,7 +3861,7 @@
 					bind:mentions={composerMentions}
 					bind:dismissed={drafts.dismissed}
 					placeholder={activeThread ? `Reply in ${threadTitle(activeThread)}` : `Message ${activeRoom.title}`}
-					holdSend={!canCompose || Boolean(paneMentionAdding) || Boolean(previewWait && previewWait.roomId === paneRoom?.id)}
+					holdSend={!canCompose || Boolean(paneMentionAdding) || Boolean(paneRoom && previewWaits.has(paneRoom.id))}
 					canUpload={session.capabilities['embed:upload'] && !composingLive}
 					live={composingLive}
 					uploadLimits={serverMedia(session.server).upload}

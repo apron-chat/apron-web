@@ -1,3 +1,5 @@
+import { NOW } from '../scripts/qa/lib/helpers.js';
+import { PREVIEW_WAIT_MS } from '../src/lib/ui/link-previews';
 import { DEVICES, expect, test, type Preview } from './fixtures';
 
 /**
@@ -757,8 +759,19 @@ test.describe('link previews a message is sent with', () => {
 	const OEMBED = /^https:\/\/www\.youtube\.com\/oembed\?/;
 	const oembed = { title: 'Music for Dark Legends', author_name: 'Secession Studios' };
 
-	test('a link sent at once goes with its preview: the draft clears, and Send holds in the room until the message goes', async ({ preview, page }) => {
+	/**
+	 * Opens the preview with the page's timers stopped once it is up, so a message's wait for its previews ends only
+	 * when the test lets time pass (`page.clock.runFor`), however slow the machine. The date stays the preview's.
+	 */
+	async function openStopped(preview: Preview): Promise<void> {
+		await preview.page.clock.install();
 		await preview.open();
+		await preview.page.clock.pauseAt(NOW);
+		await preview.page.clock.setFixedTime(NOW);
+	}
+
+	test('a link sent at once goes with its preview: the draft clears, and Send holds in the room until the message goes', async ({ preview, page }) => {
+		await openStopped(preview);
 		let answer!: () => void;
 		const answered = new Promise<void>((resolve) => (answer = resolve));
 		await page.route(OEMBED, async (route) => {
@@ -770,6 +783,8 @@ test.describe('link previews a message is sent with', () => {
 		await page.keyboard.insertText(text);
 		await page.keyboard.press('Enter');
 		await expect(preview.composer()).toHaveText('');
+		await page.clock.runFor(700);
+		await expect(page.getByRole('status').filter({ hasText: 'Sending…' })).toBeVisible();
 
 		await test.step('what is typed meanwhile is a new draft, and Enter keeps it while the message waits', async () => {
 			await page.keyboard.type('next one');
@@ -789,13 +804,52 @@ test.describe('link previews a message is sent with', () => {
 		});
 	});
 
-	test('a preview that is slow to come is not waited for long: the message goes with the card its URL gives', async ({ preview, page }) => {
-		await preview.open();
+	test('messages wait in more than one room at once, each holding Send only in its own', async ({ preview, page }) => {
+		await openStopped(preview);
+		await page.route(OEMBED, () => {});
+		const first = `watch ${VIDEO}`;
+		const second = 'and https://youtu.be/dQw4w9WgXcQ';
+		await preview.composer().click();
+		await page.keyboard.insertText(first);
+		await page.keyboard.press('Enter');
+		await preview.openRoom('engineering');
+		await preview.composer().click();
+		await page.keyboard.insertText(second);
+		await page.keyboard.press('Enter');
+		await expect(preview.composer()).toHaveText('');
+		await preview.openRoom('general');
+		await preview.composer().click();
+		await page.keyboard.type('after');
+		await page.keyboard.press('Enter');
+		await expect(preview.composer()).toHaveText('after');
+		expect(await sentWithText(preview, first)).toEqual([]);
+		await page.clock.runFor(PREVIEW_WAIT_MS);
+		await preview.waitForSent('message', (p) => p.body?.text === first);
+		await preview.waitForSent('message', (p) => p.body?.text === second);
+		await page.keyboard.press('Enter');
+		await preview.waitForSent('message', (p) => p.body?.text === 'after');
+	});
+
+	test('a message waiting for its previews goes at once when the page is put away', async ({ preview, page }) => {
+		await openStopped(preview);
 		await page.route(OEMBED, () => {});
 		const text = `watch ${VIDEO}`;
 		await preview.composer().click();
 		await page.keyboard.insertText(text);
 		await page.keyboard.press('Enter');
+		await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: false })));
+		const sent = await preview.waitForSent('message', (p) => p.body?.text === text);
+		expect(sent.body.embeds[0].og).toEqual({ site_name: 'YouTube', image: { url: THUMBNAIL, type: 'image/jpeg', width: 480, height: 360 } });
+	});
+
+	test('a preview that is slow to come is not waited for long: the message goes with the card its URL gives', async ({ preview, page }) => {
+		await openStopped(preview);
+		await page.route(OEMBED, () => {});
+		const text = `watch ${VIDEO}`;
+		await preview.composer().click();
+		await page.keyboard.insertText(text);
+		await page.keyboard.press('Enter');
+		await page.clock.runFor(PREVIEW_WAIT_MS);
 		const sent = await preview.waitForSent('message', (p) => p.body?.text === text);
 		expect(sent.body.embeds).toEqual([{ kind: 'link', url: VIDEO, og: { site_name: 'YouTube', image: { url: THUMBNAIL, type: 'image/jpeg', width: 480, height: 360 } } }]);
 	});

@@ -49,7 +49,7 @@ export class FeedbackState {
 	 * Shows the pending copy only when a request takes noticeably long, and its error until the next request:
 	 * while the toast is still this request's. `onError` runs on a failure either way.
 	 */
-	track(handle: OperationHandle, pendingText: string, onError?: () => void): void {
+	track(handle: Pick<OperationHandle, 'promise'>, pendingText: string, onError?: () => void): void {
 		this.clear();
 		const turn = this.turn;
 		this.timer = setTimeout(() => (this.current = { kind: 'pending', text: pendingText }), QUIET_MS);
