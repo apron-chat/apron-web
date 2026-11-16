@@ -1,8 +1,44 @@
 import { describe, expect, it } from 'vitest';
-import { bioOf, cleanBio, keepsBio, MAX_BIO_CHARS, mediaLimit, peopleTitle, serverLook, serverMedia, serverSettings, yourPermissions } from './client-views';
+import { bioOf, cleanBio, keepsBio, MAX_BIO_CHARS, MAX_LABEL_CHARS, mediaLimit, parseLabels, parseServerParams, peopleTitle, serverLook, serverMedia, serverSettings, yourPermissions } from './client-views';
 import type { ServerParams } from './types';
 
 const server = (capabilities: string[], ext?: ServerParams['ext']): ServerParams => ({ apron: 10, capabilities, auth: ['guest'], ...(ext ? { ext } : {}) });
+
+describe('labels (§3.2)', () => {
+	it('keeps a label for each scheme that has a string, known or not, and drops the rest', () => {
+		expect(parseLabels({ external: 'Acme SSO', token: 'Invite code', 'ext:smartcard': 'Smartcard', email: 3, guest: null, webauthn: ['Passkey'] })).toEqual({ external: 'Acme SSO', token: 'Invite code', 'ext:smartcard': 'Smartcard' });
+		for (const value of [undefined, null, 'Acme SSO', ['Acme SSO'], 64, {}, { external: 1 }, { external: '   ' }]) expect(parseLabels(value)).toBeUndefined();
+	});
+
+	it('keeps a label as plain text on one line: trimmed, line breaks as spaces, no control or bidi characters', () => {
+		expect(parseLabels({ external: '  Acme\n\tSSO \r\n' })).toEqual({ external: 'Acme SSO' });
+		expect(parseLabels({ external: 'Acme\u202E OSS\u0007' })).toEqual({ external: 'Acme OSS' });
+		// Markup is text: shown as written, never rendered.
+		expect(parseLabels({ external: '<b>Acme</b> *SSO*' })).toEqual({ external: '<b>Acme</b> *SSO*' });
+	});
+
+	it('cuts a label to 64 characters, counting an emoji as one', () => {
+		const at = 'a'.repeat(MAX_LABEL_CHARS);
+		expect(parseLabels({ external: at })?.external).toBe(at);
+		expect(parseLabels({ external: `${at}b` })?.external).toBe(at);
+		const emoji = `${'a'.repeat(MAX_LABEL_CHARS - 1)}🔑🔑`;
+		expect(parseLabels({ external: emoji })?.external).toBe(`${'a'.repeat(MAX_LABEL_CHARS - 1)}🔑`);
+	});
+
+	it('keeps a key such as __proto__ as a key, and lends no inherited one', () => {
+		const labels = parseLabels(JSON.parse('{"__proto__": "Odd", "external": "Acme SSO"}'))!;
+		expect(Object.getPrototypeOf(labels)).toBeNull();
+		expect(Object.hasOwn(labels, '__proto__')).toBe(true);
+		expect(labels.__proto__).toBe('Odd');
+		expect(labels.constructor).toBeUndefined();
+	});
+
+	it('comes with the server frame, only where it has a label', () => {
+		expect(parseServerParams({ apron: 10, auth: ['external'], labels: { external: ' Acme SSO ' } })?.labels).toEqual({ external: 'Acme SSO' });
+		expect(parseServerParams({ apron: 10, auth: ['external'], labels: { external: 7 } })).not.toHaveProperty('labels');
+		expect(parseServerParams({ apron: 10, auth: ['external'] })).not.toHaveProperty('labels');
+	});
+});
 
 describe('serverMedia (ext:media)', () => {
 	const media = {

@@ -569,7 +569,9 @@ passkey accept a scheme listed in `auth` or `signup`, and adding an email or an 
 token resume need it in `auth`. The `server` frame ([PROTOCOL.md §3.1](https://github.com/shazow/apron/blob/main/PROTOCOL.md#31-server-frame))
 is kept on the snapshot's `server` as sent: `apron` (the version), `capabilities`,
 `agent` (the implementation, for debugging; the UI labels a server by its
-`title` or else its host, never by `agent`), `welcome`, `title`,
+`title` or else its host, never by `agent`), `welcome`, `labels` (each a
+string, cleaned to one line of plain text and cut to 64 characters by
+`parseLabels`, the only field not kept as sent), `title`,
 `description`, `avatar` (which `serverLook` reads, the avatar only where a
 user's would load), `signup`, `ping`, `push`, `status` and `ext`. A server is
 known by its address, `serverAddress` (RFC 3986 §6.2.2–6.2.3, without a
