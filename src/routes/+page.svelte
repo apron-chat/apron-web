@@ -301,6 +301,8 @@
 	const linkedParents = new Map<string, string | null | undefined>();
 	/** The connect screen is up for a link's server: it can be cancelled even before this server is ready. */
 	let offeringLink = $state(false);
+	/** The page opened on a link's server, offered, and hasn't connected anywhere yet: staying connects to its own. */
+	let awaitingOffer = false;
 	/** How far back a linked message is looked for, in pages of history. */
 	const LINKED_MESSAGE_PAGES = 20;
 	/** How long a pushed room waits for its account and rooms before it is dropped. */
@@ -1352,7 +1354,12 @@
 		});
 		// Each session the client begins goes on from what this device kept for its server.
 		keeper?.watch(chat);
-		chat.start();
+		// A link to a server not used here asks first (the connect screen, below). Until the viewer stays, this window
+		// doesn't connect to the one it was on, nor take it from the window using it (`ServerClaim`): disconnected, as
+		// the server pane's Disconnect leaves it, so connecting to either starts it (`stayAfterOffer`, `setUrl`).
+		if (offeredServer) chat.disconnect();
+		else chat.start();
+		awaitingOffer = Boolean(offeredServer);
 		client = chat;
 		if (signInLink) links.follow(signInLink);
 		if (pushed) void followPush(chat, pushed);
@@ -1436,6 +1443,21 @@
 		client.listMembers(room.id, maxAge).catch(() => undefined);
 	}
 
+	/**
+	 * The connect screen was cancelled: this window stays on its server. Opened on a link's server, offered, it hasn't
+	 * connected to it yet (`awaitingOffer`), and does now.
+	 */
+	function stayAfterOffer(): void {
+		connectOpen = false;
+		offeringLink = false;
+		if (!client) return;
+		serverInput = client.url;
+		if (awaitingOffer) {
+			awaitingOffer = false;
+			client.start();
+		}
+	}
+
 	/** Use here: this window takes its server back from the one that took it, and connects again. */
 	function useHere(): void {
 		if (!client || !elsewhere) return;
@@ -1462,6 +1484,7 @@
 
 	/** The connect form was submitted: whatever belonged to the previous backend goes. */
 	function leaveBackend(): void {
+		awaitingOffer = false;
 		drafts.open(undefined);
 		selectedRoomId = undefined;
 		activeThread = undefined;
@@ -3553,7 +3576,7 @@
 		{client} {session} bind:serverInput bind:displayName {passkeyUnavailable} bind:recentServers
 		canCancel={!disconnected && (session.rooms.length > 0 || session.ready || offeringLink)} initialScheme={connectScheme}
 		initialError={links.failure?.error} initialChoosing={connectChoosing} linked={offeringLink && linked ? { server: linked.server, room: linked.room } : undefined}
-		onconnect={leaveBackend} onconnected={connected} oncancel={() => { connectOpen = false; offeringLink = false; if (client) serverInput = client.url; }} onsignout={signedOut}
+		onconnect={leaveBackend} onconnected={connected} oncancel={stayAfterOffer} onsignout={signedOut}
 	/>
 {:else}
 <!-- A message row's embed, through the app's media gates; and the row being edited, in the editor loaded for it. -->
