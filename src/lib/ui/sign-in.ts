@@ -177,11 +177,11 @@ const OWN_NAMES: Record<string, string> = { guest: 'Guest', webauthn: 'Passkey',
  * it (§3.2, `parseLabels`), else this client's own name. `external` without
  * a label goes by `host`, the server whose sign-in page it opens, since
  * "External" says nothing about where the user goes; without a host, it is
- * "Sign-in page". An unknown scheme without a label goes by its name as sent.
+ * "External sign-in". An unknown scheme without a label goes by its name as sent.
  */
 export function schemeName(scheme: string, labels: Readonly<Record<string, string>> | undefined, host?: string): string {
 	if (labels && Object.hasOwn(labels, scheme)) return labels[scheme];
-	if (scheme === 'external') return host || 'Sign-in page';
+	if (scheme === 'external') return host || 'External sign-in';
 	return Object.hasOwn(OWN_NAMES, scheme) ? OWN_NAMES[scheme] : scheme;
 }
 
@@ -294,10 +294,14 @@ function primaryAction(input: SignInInput): Exclude<SignInAction, 'continue' | '
  */
 export const CANCELLED_TRY_CREATE = 'Cancelled. No passkey for this server? Choose Create account.';
 
-/** What the panel says about the chosen scheme. `host` names the server in the form, shown as code (`…`). */
-export function signInHint(input: Pick<SignInInput, 'scheme' | 'use' | 'registered' | 'passkey'> & { phase: SignInPhase; here: boolean; guest: boolean; guestReadOnly: boolean; host?: string }): string {
+/**
+ * What the panel says about the chosen scheme. `host` names the server in the form, shown as code (`…`), and
+ * `guestName` the Guest choice as the panel shows it (`schemeName`), which may be the server's label.
+ */
+export function signInHint(input: Pick<SignInInput, 'scheme' | 'use' | 'registered' | 'passkey'> & { phase: SignInPhase; here: boolean; guest: boolean; guestReadOnly: boolean; host?: string; guestName?: string }): string {
 	if (input.scheme === 'webauthn') {
-		if (input.here && input.registered) return 'Signed in. Choose Guest to sign out.';
+		// A label is text: a backtick in it mustn't start code.
+		if (input.here && input.registered) return `Signed in. Choose ${(input.guestName ?? 'Guest').replaceAll('`', '')} to sign out.`;
 		const asGuest = input.phase === 'ready' && input.guest;
 		if (passkeyMode(input.use, input.passkey) === 'register') {
 			if (asGuest) return 'Connected as a guest. Creating an account keeps this identity and saves a new passkey for it on this device.';

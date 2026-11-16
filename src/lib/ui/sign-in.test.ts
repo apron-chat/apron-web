@@ -112,6 +112,8 @@ describe('hints', () => {
 		expect(hint({ host: 'server.apron.chat' })).toBe('Each server has its own accounts: sign in with a passkey you saved for `server.apron.chat`.');
 		expect(hint({ passkey: 'register' })).toMatch(/^Connected as a guest. Creating an account keeps this identity/);
 		expect(hint({ registered: true })).toBe('Signed in. Choose Guest to sign out.');
+		// The Guest choice by the name the panel shows it by, a server's label (§3.2), as text.
+		expect(hint({ registered: true, guestName: 'Look `around`' })).toBe('Signed in. Choose Look around to sign out.');
 		// Where passkeys only sign in, or only sign up, it says so.
 		expect(hint({ phase: 'idle', here: false, guest: false, use: { signIn: true, signUp: false }, passkey: 'register' })).toMatch(/pick one to sign in to its account. New here\? Create an account another way first.$/);
 		expect(hint({ phase: 'idle', here: false, guest: false, use: { signIn: false, signUp: true } })).toMatch(/^Creates an account and saves a new passkey/);
@@ -171,7 +173,7 @@ describe('what a server offers', () => {
 		expect(schemeName('webauthn', labels)).toBe('Passkey');
 		expect(schemeName('guest', undefined)).toBe('Guest');
 		expect(schemeName('external', undefined, 'chat.example')).toBe('chat.example');
-		expect(schemeName('external', {}, '')).toBe('Sign-in page');
+		expect(schemeName('external', {}, '')).toBe('External sign-in');
 		expect(schemeName('ext:smartcard', undefined)).toBe('ext:smartcard');
 		// Only the labels' own keys, and only this client's own names: nothing inherited.
 		expect(schemeName('constructor', {})).toBe('constructor');

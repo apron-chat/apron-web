@@ -1874,10 +1874,11 @@ row is **Sign in** alone, at the end of its hint's line, as the composer offers 
 connect screen, at the way the server signs in first, whatever the server's
 `auth` lists (as the composer's). An account's offers, where the server's `auth` lists them,
 **Add passkey**, **Add email** and **Add external sign-in**, each a button
-with a plus and the scheme's name alone, as the connect screen calls it
-(**+ Passkey**, **+ Email**, **+ Acme SSO** or **+ chat.example**), in a group
-named "Add a way to sign in", and the row after
-it **Sign out**. Add email proposes and approves on the account's connection,
+with a plus and the scheme's name alone: the server's label where it gives
+one, else **+ Passkey**, **+ Email** and **+ External sign-in** (not the host,
+as the connect screen has it: signed in there, that would read as adding the
+server), in a group named "Add a way to sign in". Below, these go by their
+actions' names. The row after has **Sign out**. Add email proposes and approves on the account's connection,
 which adds the address to the account (§4.11). Adding needs the
 scheme in `auth`, since adding is a way back in and a scheme listed only in
 `signup` doesn't sign in (the spec doesn't say whether servers may allow
@@ -1900,7 +1901,7 @@ asks for a new code. A code refused on another connection than the one that
 proposed it adds the same words as the connect screen's (below), since a server from
 before the `state` takes it only there. The link in the email also adds the address (below).
 **Add external sign-in** opens the server's sign-in page as the connect
-screen's **External** does (below) and redeems its code on this signed-in
+screen's external choice does (below) and redeems its code on this signed-in
 connection, which adds the identity to the account (§4.12.4); the Sign-in row
 says "Finish in the window that opened." meanwhile, with **Cancel**. **Add
 passkey** goes to the server's passkey page the same way where this page can't
@@ -1978,7 +1979,7 @@ as the user.
 passkey works only on its RP ID's domain and the origins that domain lists as
 related, so on most servers other than `apron.chat`'s this page can't use one.
 A begin result may name the server's passkey page, `external.url`. The client
-goes there, as **External** does (above, with the same window, `state`, PKCE,
+goes there, as the external choice does (above, with the same window, `state`, PKCE,
 `/signed-in/` and fallback to this tab), when the RP ID fails the check, when
 the browser refuses it (`SecurityError`, which it does at once, before any
 sheet), or when the begin result has no `public_key` (the server requires its
@@ -2098,7 +2099,8 @@ in (a passkey that only signs in is never registered from there).
 
 With `external` in the server's `auth` or `signup`
 ([PROTOCOL.md §4.12](https://github.com/shazow/apron/blob/main/PROTOCOL.md#412-external-sign-in)),
-the connect screen's **External** (**Continue to sign-in page**) signs in on
+the connect screen's external choice (the server's label for it, else the
+server's host; **Continue to sign-in page**) signs in on
 the server's own page, through OAuth 2.1's authorization code flow with PKCE
 (`$lib/protocol/authorization`, `$lib/ui/sign-in-page`):
 

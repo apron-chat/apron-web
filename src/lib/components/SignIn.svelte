@@ -19,7 +19,7 @@
 	import { openSignInWindow, signInPageError } from '$lib/ui/sign-in-window';
 	import type { SessionView } from '$lib/ui/session.svelte';
 	import {
-		CANCELLED_TRY_CREATE, UNUSABLE_VIEW, chooseView, firstScheme, passkeyChoice, readsOnly, passkeyMode, schemeNames, signInHint, signInView, signOutThen, unusableMessage, usableSchemes,
+		CANCELLED_TRY_CREATE, UNUSABLE_VIEW, chooseView, firstScheme, passkeyChoice, readsOnly, passkeyMode, schemeName, schemeNames, signInHint, signInView, signOutThen, unusableMessage, usableSchemes,
 		type ConnectStep, type PasskeyMode, type SignOutHandler, type Scheme
 	} from '$lib/ui/sign-in';
 	import { loadLastSignIn, saveDisplayName, saveServerUrl } from '$lib/ui/storage';
@@ -187,7 +187,7 @@
 		if (step === 'choose') return greeting?.status === 'contacting' ? `Connecting to ${host ?? 'the server'}…` : '';
 		if (unusable) return '';
 		if (reader && chosen === 'guest') return 'Read-only: everyone reads here as the same guest, and nothing can be posted.';
-		return signInHint({ scheme: chosen, use, passkey: passkeyChosen, registered, phase: view.phase, here, guest: here && !registered, guestReadOnly, host });
+		return signInHint({ scheme: chosen, use, passkey: passkeyChosen, registered, phase: view.phase, here, guest: here && !registered, guestReadOnly, host, guestName: schemeName('guest', known?.labels) });
 	});
 	$effect(() => {
 		busy = view.phase === 'busy' || view.phase === 'connecting';

@@ -165,8 +165,11 @@
 	let canUseEmail = $derived(!!session.server?.auth.includes('email'));
 	/** External sign-in on the server's page (§4.12), where the server offers it. */
 	let canUseExternal = $derived(!!session.server?.auth.includes('external'));
-	/** A way to sign in that can be added, by name: the server's label (§3.2), else this client's, `external` by the host. */
-	const wayName = (scheme: 'webauthn' | 'email' | 'external') => schemeName(scheme, session.server?.labels, serverHost);
+	/**
+	 * A way to sign in that can be added, by name: the server's label (§3.2), else this client's. Not by the host,
+	 * as the sign-in screen calls external: signed in here, "+ chat.example" would read as adding the server.
+	 */
+	const wayName = (scheme: 'webauthn' | 'email' | 'external') => schemeName(scheme, session.server?.labels);
 	/** Why the server declined the handle, and what happens to it now: a guest who can sign in gets it applied once signed in. */
 	let declinedNote = $derived(`The server declined this name${declinedReason ? ` (${declinedReason})` : ''}. ${(canUsePasskey || canUseEmail || canUseExternal) && !snapshot.passkeySession ? 'Sign in and it’s applied once you’re signed in.' : 'Your old one is still in use.'}`);
 	/**
