@@ -334,10 +334,10 @@
 	 */
 	let mentionAdding = $state<{ roomId: string; userIds: string[]; text: string; files: string } | undefined>();
 	/**
-	 * A message Send holds back a moment, at most PREVIEW_WAIT_MS, for its link previews not yet here
-	 * (`sendAfterPreviews`). `text`: the draft as it was sent, which goes only if it is still that draft.
+	 * A sent message waiting, at most PREVIEW_WAIT_MS, for its link previews not yet here (`afterPreviews`): Send
+	 * holds in its room meanwhile, so what is sent next there goes after it.
 	 */
-	let previewWait = $state.raw<{ roomId: string; text: string } | undefined>();
+	let previewWait = $state.raw<{ roomId: string } | undefined>();
 	/**
 	 * A message held back at Send because it mentions people and holds a checklist: the ask whether they may edit its
 	 * text (`ext:editors`, EditorsPrompt), until it's answered, put away, the draft changes, or the pane does. `added`:
@@ -2295,17 +2295,11 @@
 		sendMessage(true, adding.userIds.filter((userId) => !refused.some((refusal) => refusal.userId === userId)));
 	}
 
-	/**
-	 * Sends (`send`) once `previews` settle, so a message sent right after its link was pasted goes with its preview.
-	 * Send waits meanwhile in that pane (`holdSend`). The draft goes only if its pane is open and it is still `text`;
-	 * else it waits there to be sent again, its previews by then known.
-	 */
-	function sendAfterPreviews(previews: Promise<void>, roomId: string, text: string, send: () => void): void {
-		const waiting = (previewWait = { roomId, text });
-		void previews.then(() => {
-			if (previewWait !== waiting) return;
-			previewWait = undefined;
-			if (paneRoom?.id === roomId && drafts.text === text) send();
+	/** `ready`, holding Send in `roomId` until it settles (`previewWait`). */
+	function afterPreviews<T>(roomId: string, ready: Promise<T>): Promise<T> {
+		const waiting = (previewWait = { roomId });
+		return ready.finally(() => {
+			if (previewWait === waiting) previewWait = undefined;
 		});
 	}
 
@@ -2352,9 +2346,8 @@
 	 * is; `added`, whom that added, which it mentions besides its chips, such as the holders of a role no one here held
 	 * when it was written.
 	 * `editors`: the ask whether they may edit it was answered (EditorsPrompt), and how.
-	 * `previewsWaited`: it already waited for its link previews (`sendAfterPreviews`), and goes with what came.
 	 */
-	function sendMessage(asked = false, added: readonly string[] = [], editors?: boolean, previewsWaited = false): void {
+	function sendMessage(asked = false, added: readonly string[] = [], editors?: boolean): void {
 		if (!client || !paneRoom || !canCompose) return;
 		// Adding who it mentions: it goes once they're in (`addMentionedAndSend`).
 		if (mentionAdding && mentionAdding.roomId === paneRoom.id) return;
@@ -2410,16 +2403,16 @@
 		const options = { ...(reply ? { replyTo: reply } : {}), ...(mentions.length ? { mentions } : {}) };
 		if (action.kind === 'message') {
 			if (!action.text.trim()) return;
-			const previews = previewsWaited ? undefined : linkPreviews.settle(action.text, dismissed, PREVIEW_WAIT_MS);
-			if (previews) {
-				sendAfterPreviews(previews, roomId, draft, () => sendMessage(true, added, editors, true));
-				return;
-			}
-			const embeds = linkPreviews.embeds(action.text, dismissed);
-			const post = () => feedback.track(chat.send(roomId, action.text, 'markdown', { ...options, ...(embeds.length ? { embeds } : {}), ...(editors ? { ext: SHARED_TEXT } : {}) }), 'Sending…', restore);
+			// The draft goes now; the message, with its link previews: those not yet here get a moment to arrive.
+			const previews = linkPreviews.settle(action.text, dismissed, PREVIEW_WAIT_MS);
+			const post = () => {
+				const embeds = linkPreviews.embeds(action.text, dismissed);
+				feedback.track(chat.send(roomId, action.text, 'markdown', { ...options, ...(embeds.length ? { embeds } : {}), ...(editors ? { ext: SHARED_TEXT } : {}) }), 'Sending…', restore);
+			};
 			const joining = joinFirst(chat, paneRoom);
-			if (joining) {
-				joining.then(post, (cause: unknown) => {
+			const ready = previews ? afterPreviews(roomId, Promise.all([joining, previews])) : joining;
+			if (ready) {
+				ready.then(post, (cause: unknown) => {
 					feedback.error(cause, `Unable to join the ${paneRoom.parentRoomId === undefined ? 'room' : 'thread'}`);
 					restore();
 				});
