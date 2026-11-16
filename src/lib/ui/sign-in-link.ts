@@ -1,20 +1,23 @@
 import type { ClientSnapshot } from '$lib/protocol/client';
+import { sameServer } from '$lib/protocol/client-views';
 import type { Proposal, ProposalScheme } from '$lib/protocol/proposals';
 
 /**
  * A sign-in link (PROTOCOL.md §4.11.2), as an email has it. The server puts the temporary token, the `state` of
- * the proposal it answers when that carried one, and, when the link opens a
- * client that isn't tied to one server, the WebSocket URL of the server that
- * sent it in the URL fragment, `application/x-www-form-urlencoded`, so they
- * stay out of server logs:
+ * the proposal it answers when that carried one, and the WebSocket URL of the
+ * server that sent it in the URL fragment, `application/x-www-form-urlencoded`,
+ * so they stay out of server logs:
  *
  *     #token=Hk41x9…&state=q8Rz…&server=wss%3A%2F%2Fchat.example%2F
  *
  * With the `state` of a proposal this browser made, the link is that
- * proposal's, for the server it went to, and `server` is ignored. Any other
- * link is a credential someone else may have crafted or forwarded (login
- * CSRF): it is never used silently, and the page asks first, naming the
- * server.
+ * proposal's only if its `server` is the server the proposal went to,
+ * compared as addresses (§1): one that names another server, or none, is
+ * dropped, and its token goes nowhere. Otherwise a server could pass this
+ * browser's `state` on to another server, and receive the token that one
+ * sends (mix-up, §5.2). Any other link is a credential someone else may have
+ * crafted or forwarded (login CSRF): it is never used silently, and the page
+ * asks first, naming the server.
  *
  * Opened through link.apron.chat, the link's keys come in the fragment as
  * they do for any link to this app (Appendix A.4), among the place's keys:
@@ -26,7 +29,7 @@ export interface SignInLink {
 	state?: string;
 	/** The server the link names, a `ws:` or `wss:` URL; without it, the server this client is set to. */
 	server?: string;
-	/** The link named a `server` that isn't a WebSocket URL: unusable unless its `state` is this browser's own. */
+	/** The link named a `server` that isn't a WebSocket URL: unusable, whatever its `state`. */
 	badServer?: true;
 }
 
@@ -67,17 +70,20 @@ export function parseSignInLink(hash: string): SignInLink | undefined {
  * What a link is for (§4.11.2): `own`, a sign-in this browser proposed,
  * used at once on the server it went to; `addition`, an addition this
  * browser proposed, for the account that proposed it; `ask`, any other link,
- * used only once the viewer has confirmed. Undefined for a link that can't
- * be used: one of no proposal here that names a server that isn't one,
- * which is never silently swapped for another.
+ * used only once the viewer has confirmed. A link with the `state` of a
+ * proposal here that names another server than the one it went to, or no
+ * server, is `elsewhere` (with the server it was proposed to), and is used
+ * neither way. Undefined for a link of no proposal here that names a server
+ * that isn't one, which is never silently swapped for another.
  */
 export type LinkUse =
 	| { kind: 'own'; token: string; server: string; scheme: ProposalScheme; state: string }
 	| { kind: 'addition'; token: string; server: string; account: string; state: string }
 	| { kind: 'ask'; link: SignInLink };
 
-export function linkUse(link: SignInLink, find: (state: string | undefined) => Proposal | undefined): LinkUse | undefined {
+export function linkUse(link: SignInLink, find: (state: string | undefined) => Proposal | undefined): LinkUse | { kind: 'elsewhere'; server: string } | undefined {
 	const proposal = find(link.state);
+	if (proposal && !sameServer(link.server, proposal.url)) return { kind: 'elsewhere', server: proposal.url };
 	if (proposal?.kind === 'addition' && proposal.account) {
 		return { kind: 'addition', token: link.token, server: proposal.url, account: proposal.account, state: proposal.state };
 	}

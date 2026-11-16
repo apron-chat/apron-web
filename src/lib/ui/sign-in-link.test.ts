@@ -35,13 +35,21 @@ describe('sign-in links (§4.11.2)', () => {
 
 	const proposal = (fields: Partial<Proposal>): Proposal => ({ scheme: 'email', kind: 'sign-in', url: 'wss://home.example/', state: 's', expires: Infinity, ...fields });
 
-	it('uses its own proposal’s server, ignoring the link’s, and asks about any other link', () => {
+	it('uses its own proposal’s link only when it names the server proposed to, and asks about any other link', () => {
 		const find = (proposals: Proposal[]) => (state: string | undefined) => proposals.find((entry) => entry.state === state);
 		const ours = [proposal({}), proposal({ state: 'add', kind: 'addition', account: 'ada' })];
-		expect(linkUse({ token: 't', state: 's', server: 'wss://evil.example/' }, find(ours))).toEqual({ kind: 'own', token: 't', server: 'wss://home.example/', scheme: 'email', state: 's' });
-		// Even a server that isn't one: it is ignored.
-		expect(linkUse({ token: 't', state: 's', badServer: true }, find(ours))).toMatchObject({ kind: 'own', server: 'wss://home.example/' });
-		expect(linkUse({ token: 't', state: 'add' }, find(ours))).toEqual({ kind: 'addition', token: 't', server: 'wss://home.example/', account: 'ada', state: 'add' });
+		expect(linkUse({ token: 't', state: 's', server: 'wss://home.example/' }, find(ours))).toEqual({ kind: 'own', token: 't', server: 'wss://home.example/', scheme: 'email', state: 's' });
+		// Compared as addresses (§1): case and a default port don't make it another server.
+		expect(linkUse({ token: 't', state: 's', server: 'wss://HOME.example:443' }, find(ours))).toMatchObject({ kind: 'own', server: 'wss://home.example/' });
+		expect(linkUse({ token: 't', state: 'add', server: 'wss://home.example/' }, find(ours))).toEqual({ kind: 'addition', token: 't', server: 'wss://home.example/', account: 'ada', state: 'add' });
+		// Naming another server, none, or one that isn't one, it is dropped (§4.11.2): never used there, here, or asked about.
+		const elsewhere = { kind: 'elsewhere', server: 'wss://home.example/' };
+		expect(linkUse({ token: 't', state: 's', server: 'wss://evil.example/' }, find(ours))).toEqual(elsewhere);
+		expect(linkUse({ token: 't', state: 's', server: 'wss://home.example/other' }, find(ours))).toEqual(elsewhere);
+		expect(linkUse({ token: 't', state: 's' }, find(ours))).toEqual(elsewhere);
+		expect(linkUse({ token: 't', state: 's', badServer: true }, find(ours))).toEqual(elsewhere);
+		expect(linkUse({ token: 't', state: 'add', server: 'wss://evil.example/' }, find(ours))).toEqual(elsewhere);
+		expect(linkUse({ token: 't', state: 'add' }, find(ours))).toEqual(elsewhere);
 		// Without the state of a proposal made here, the viewer is asked; and a bad server is never swapped for another.
 		const stranger = { token: 't', state: 'theirs', server: 'wss://other.example/' };
 		expect(linkUse(stranger, find(ours))).toEqual({ kind: 'ask', link: stranger });

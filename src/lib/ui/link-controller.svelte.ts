@@ -96,12 +96,18 @@ export class SignInLinks {
 	 * A link taken from the URL. One with the `state` of a sign-in this
 	 * browser proposed is used at once, on the server it was proposed to; one
 	 * for an addition waits for the session of the account that proposed it;
-	 * any other is a credential someone else may have crafted or forwarded,
-	 * and the viewer is asked first. One that can't be used is dropped.
+	 * either is dropped, saying so, when it names another server than that one
+	 * (§4.11.2). Any other is a credential someone else may have crafted or
+	 * forwarded, and the viewer is asked first. One that can't be used is
+	 * dropped.
 	 */
 	follow(link: SignInLink): void {
 		const use = linkUse(link, (state) => this.host.findProposal(state));
 		if (!use) return;
+		if (use.kind === 'elsewhere') {
+			this.host.feedback.error(`That sign-in link is for another server, not ${serverLabel(use.server) || use.server}, where you asked for it, so it wasn’t used.`);
+			return;
+		}
 		if (use.kind === 'addition') this.addition = use;
 		else if (use.kind === 'own') this.use(use);
 		else this.asked = use.link;

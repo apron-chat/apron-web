@@ -51,7 +51,7 @@ const settled = () => new Promise((resolve) => setTimeout(resolve, 0));
 describe('a sign-in link this browser proposed', () => {
 	it('signs in at once on the server it was proposed to, and only then remembers the switch', async () => {
 		const { links, chat, host, said, answer } = page();
-		links.follow({ token: 'tok', state: 'mail', server: 'wss://ignored.example/' });
+		links.follow({ token: 'tok', state: 'mail', server: THERE });
 		expect(chat.signInWithLink).toHaveBeenCalledWith('tok', THERE, expect.objectContaining({ scheme: 'email', state: 'mail' }));
 		expect([links.busy, links.asked, said]).toEqual([true, undefined, ['… Signing in…']]);
 		expect(host.signedIn).not.toHaveBeenCalled();
@@ -62,7 +62,7 @@ describe('a sign-in link this browser proposed', () => {
 		expect(host.failed).not.toHaveBeenCalled();
 		expect([links.busy, links.failure, said]).toEqual([false, undefined, ['… Signing in…', 'clear']]);
 		// One proposed to the server this page is on switches nothing.
-		links.follow({ token: 'tok2', state: 'here' });
+		links.follow({ token: 'tok2', state: 'here', server: HERE });
 		await settled();
 		expect(host.beforeSwitch).toHaveBeenLastCalledWith(false);
 		expect(host.signedIn).toHaveBeenLastCalledWith(HERE, false);
@@ -70,12 +70,27 @@ describe('a sign-in link this browser proposed', () => {
 
 	it('changes nothing when refused, and opens the connect screen on its server and scheme, saying how to start again for that scheme', async () => {
 		const { links, host, answer } = page();
-		links.follow({ token: 'tok', state: 'mail' });
+		links.follow({ token: 'tok', state: 'mail', server: THERE });
 		answer.signIn.reject(new Error('expired'));
 		await settled();
 		const error = 'The sign-in link didn’t work (expired). Send a new code to try again, or pick another server.';
 		expect(host.failed).toHaveBeenCalledWith({ error, server: THERE, scheme: 'email' });
 		expect([host.signedIn.mock.calls, host.beforeSwitch.mock.calls, links.failure, links.busy]).toEqual([[], [], { error }, false]);
+	});
+
+	it('is dropped, saying so, when it names another server than the one proposed to, or none, and never asked about', async () => {
+		const { links, chat, host, said } = page();
+		links.follow({ token: 'tok', state: 'mail', server: HERE });
+		links.follow({ token: 'tok', state: 'mail' });
+		links.follow({ token: 'tok', state: 'add', server: THERE });
+		await settled();
+		expect([chat.signInWithLink.mock.calls, chat.addWithLink.mock.calls, host.beforeSwitch.mock.calls, host.failed.mock.calls]).toEqual([[], [], [], []]);
+		expect([links.asked, links.addition, links.busy, links.failure]).toEqual([undefined, undefined, false, undefined]);
+		expect(said).toEqual([
+			'! That sign-in link is for another server, not there.example, where you asked for it, so it wasn’t used.',
+			'! That sign-in link is for another server, not there.example, where you asked for it, so it wasn’t used.',
+			'! That sign-in link is for another server, not here.example, where you asked for it, so it wasn’t used.'
+		]);
 	});
 });
 
@@ -125,7 +140,7 @@ describe('a link for an addition this browser proposed', () => {
 
 	it('waits for the session to settle, then adds on the account that proposed it', () => {
 		const { links, chat, said } = page();
-		links.follow({ token: 'tok', state: 'add' });
+		links.follow({ token: 'tok', state: 'add', server: HERE });
 		expect(links.addition).toMatchObject({ account: 'ada', server: HERE });
 		links.settle(snapshot({ status: 'connecting' }));
 		links.settle(snapshot({ authBusy: true }));
@@ -137,7 +152,7 @@ describe('a link for an addition this browser proposed', () => {
 
 	it('says it can’t, and adds nothing, when the page is signed in as someone else', () => {
 		const { links, chat, said } = page();
-		links.follow({ token: 'tok', state: 'add' });
+		links.follow({ token: 'tok', state: 'add', server: HERE });
 		links.settle(snapshot({ you: { user_id: 'bob' } }));
 		expect(chat.addWithLink).not.toHaveBeenCalled();
 		expect(said).toEqual(['! The link adds a sign-in to @ada on here.example, which this page isn’t signed in as now. Sign in as @ada there, and add it again.']);
@@ -148,8 +163,8 @@ describe('a link for an addition this browser proposed', () => {
 describe('one link at a time', () => {
 	it('uses no second link while one signs in, so the first is never marked done by another', async () => {
 		const { links, chat, answer } = page();
-		links.follow({ token: 'tok', state: 'mail' });
-		links.follow({ token: 'tok2', state: 'here' });
+		links.follow({ token: 'tok', state: 'mail', server: THERE });
+		links.follow({ token: 'tok2', state: 'here', server: HERE });
 		expect(chat.signInWithLink).toHaveBeenCalledOnce();
 		expect(links.working).toBe('signing-in');
 		answer.signIn.resolve();
@@ -160,8 +175,8 @@ describe('one link at a time', () => {
 	it('keeps an addition waiting until the link under way is done', async () => {
 		const { links, chat, answer } = page();
 		const snapshot = { status: 'connected', authBusy: false, authenticated: true, you: { user_id: 'ada' }, server: { apron: 10, auth: ['email'], capabilities: [] } } as unknown as ClientSnapshot;
-		links.follow({ token: 'tok', state: 'mail' });
-		links.follow({ token: 'add-tok', state: 'add' });
+		links.follow({ token: 'tok', state: 'mail', server: THERE });
+		links.follow({ token: 'add-tok', state: 'add', server: HERE });
 		links.settle(snapshot);
 		expect(chat.addWithLink).not.toHaveBeenCalled();
 		expect(links.addition).toBeDefined();
