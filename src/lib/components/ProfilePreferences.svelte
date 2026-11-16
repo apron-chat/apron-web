@@ -44,6 +44,13 @@
 </script>
 
 <script lang="ts">
+	/*
+	 * Preferences, with Profile's form: your name, bio and avatar, and how you sign in. ProfileBar opens it and keeps
+	 * which section shows; this comes with the code that loads on demand (`lazy.ts`), mounted the first time it opens
+	 * and kept from then on, so a save under way goes on after it closes. It opens with the form as the server keeps it
+	 * (`resetProfile`, which ProfileBar calls each later time it opens).
+	 */
+
 	import { tick, untrack } from 'svelte';
 	import { exportArchive } from '$lib/archive/archive';
 	import { prepareAvatar } from '$lib/ui/images';
@@ -64,13 +71,6 @@
 	import ProfileEditor from '$lib/design/components/ProfileEditor.svelte';
 	import PreferencesDialog from './PreferencesDialog.svelte';
 	import { historySettings } from '$lib/history/settings.svelte';
-
-	/**
-	 * Preferences, with Profile's form: your name, bio and avatar, and how you sign in. ProfileBar opens it and keeps
-	 * which section shows; this comes with the code that loads on demand (`lazy.ts`), mounted the first time it opens
-	 * and kept from then on, so a save under way goes on after it closes. It opens with the form as the server keeps it
-	 * (`resetProfile`, which ProfileBar calls each later time it opens).
-	 */
 
 	/** Asked before Sign out deletes this account's history, with Keep local history unchecked. */
 	const SIGN_OUT_DELETES_HISTORY = 'Signing out deletes local history. Continue?';

@@ -135,7 +135,7 @@
 		/** The keys that send from the full panel, shown at its foot, such as `['Ctrl', 'Enter']`. */
 		sendKeys?: string[];
 		/**
-		 * What the draft is (blank, past one line by a break, a command), where your field can tell it more cheaply than
+		 * What the draft is (blank, past one line by a break, a command, with a link), where your field can tell it more cheaply than
 		 * `value`, which is read again on every key otherwise (`DraftField.facts`). Past one line, by a break or by
 		 * wrapping, the field takes the box's whole width and the buttons drop to a row under it.
 		 */

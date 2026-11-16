@@ -5,7 +5,7 @@
 	import { pushState, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { passkeySupportError } from '$lib/protocol/webauthn';
-	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, editableTitle, findMessage, keepsBio, normalizeWebSocketUrl, serverArchive, serverLook, serverMedia, serverSettings, timelineMessages, webPushKey, yourPermissions, type ClientSnapshot, type EmbedEdits, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
+	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, editableTitle, findMessage, keepsBio, normalizeWebSocketUrl, serverArchive, serverLook, serverMedia, serverSettings, timelineMessages, webPushKey, yourPermissions, type ClientSnapshot, type EmbedEdits, type MediaTypes, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
 	import { embedsLabel, serverOrigin } from '$lib/protocol/embeds';
 	import { withoutBidiOverrides } from '$lib/protocol/plain-text';
 	import { compareLogIds } from '$lib/protocol/reducer';
@@ -59,6 +59,7 @@
 	import { directory } from '$lib/ui/directory.svelte';
 	import { FeedbackState, type Feedback } from '$lib/ui/feedback.svelte';
 	import type { LiveComposer } from '$lib/ui/live-composer.svelte';
+	import type { Attachment } from '$lib/ui/images';
 	import { MentionTracker } from '$lib/ui/mentions.svelte';
 	import { IncomingMessageTracker } from '$lib/ui/incoming-messages';
 	import { UnreadTracker, countElsewhere, mutedMentions } from '$lib/ui/unread.svelte';
@@ -1451,7 +1452,8 @@
 		offeringLink = false;
 		if (!client) return;
 		serverInput = client.url;
-		if (awaitingOffer) {
+		// Not while another window has the server: Use here takes it back.
+		if (awaitingOffer && !elsewhere) {
 			awaitingOffer = false;
 			client.start();
 		}
@@ -1744,6 +1746,8 @@
 		connectOpen = false;
 		offeringLink = false;
 		disconnected = false;
+		// Signed in here, however (a token or a code to its own server starts the client itself): nothing waits on the offer.
+		awaitingOffer = false;
 	}
 
 	// --- Navigation and drafts ---
@@ -2486,11 +2490,22 @@
 	 * where it states them (`ext:media`); one that can't be readied, or that
 	 * the server said it doesn't take, is taken back off with the reason.
 	 */
+	/**
+	 * Readies a file for upload (`prepareUpload`), with the code that loads on demand: a staged file waits for it as it
+	 * waits to be readied. Code that couldn't be fetched says so plainly, not in the browser's words for a failed import.
+	 */
+	async function readyUpload(file: File, limits: MediaTypes | undefined): Promise<Attachment> {
+		const prepareUpload = await fileUpload.load().catch(() => {
+			throw new Error('The file couldn’t be readied, as part of the app didn’t load: check your connection and attach it again');
+		});
+		return prepareUpload(file, { limits });
+	}
+
 	function stageFiles(picked: File[]): void {
 		// Staging is local: it goes on whatever the connection, as typing does, and sending waits for it.
 		if (session.readOnly || !session.capabilities['embed:upload']) return;
 		const limits = serverMedia(session.server).upload;
-		const staged = picked.map((file): StagedFile => ({ id: `staged-${++stagedCount}`, file, prepared: fileUpload.load().then((prepareUpload) => prepareUpload(file, { limits })) }));
+		const staged = picked.map((file): StagedFile => ({ id: `staged-${++stagedCount}`, file, prepared: readyUpload(file, limits) }));
 		for (const { id, prepared } of staged) {
 			prepared.catch((cause: unknown) => {
 				drafts.unstage(id);
@@ -2528,7 +2543,7 @@
 		// `/emoji add` takes its image to the server's emoji limits (`ext.media.emoji`), not those it was staged to.
 		const media = serverMedia(session.server);
 		const limits = attachmentLimits(action, media);
-		const refit = limits !== media.upload ? staged.map(({ file }) => fileUpload.load().then((prepareUpload) => prepareUpload(file, { limits }))) : undefined;
+		const refit = limits !== media.upload ? staged.map(({ file }) => readyUpload(file, limits)) : undefined;
 		const text = action.kind === 'message' ? action.text : draft;
 		const mentions = [...new Set([...composerMentions, ...added])];
 		const dismissed = drafts.dismissed;

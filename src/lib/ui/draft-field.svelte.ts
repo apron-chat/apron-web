@@ -161,6 +161,8 @@ export class DraftField {
 	constructor(host: DraftHost, pickerId: string) {
 		this.host = host;
 		this.pickerId = pickerId;
+		// The draft the field opens on (one kept, or written before a recording), before it is drawn and first committed.
+		this.facts = this.lastFacts = draftFacts(untrack(() => host.value));
 		this.roles = $derived(roomRoles(host.people));
 		this.roleIds = $derived(this.roles.map((suggestion) => suggestion.role));
 		this.outsideRoles = $derived(host.outsiders?.length ? outsideRoles(host.outsiders, this.roleIds) : []);
