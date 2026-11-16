@@ -89,7 +89,7 @@ describe('YouTube', () => {
 		const watch = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
 		for (const url of [watch, 'https://youtu.be/dQw4w9WgXcQ?t=42', 'https://m.youtube.com/watch?v=dQw4w9WgXcQ&list=x', 'https://www.youtube.com/shorts/dQw4w9WgXcQ', 'https://www.youtube.com/live/dQw4w9WgXcQ', 'https://www.youtube.com/embed/dQw4w9WgXcQ']) {
 			expect(lookup(youtube, url)).toMatchObject({ url: watch, api: `https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(watch)}` });
-			expect(lookup(youtube, url)?.fallback).toBeUndefined();
+			expect(lookup(youtube, url)?.fallback).toEqual({ site_name: 'YouTube', image: { url: 'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg', type: 'image/jpeg', width: 480, height: 360 } });
 		}
 		expect(lookup(youtube, 'https://www.youtube.com/@RickAstleyYT')).toBeUndefined();
 		expect(lookup(youtube, 'https://www.youtube.com/watch?v=short')).toBeUndefined();

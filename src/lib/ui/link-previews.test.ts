@@ -143,4 +143,52 @@ describe('LinkPreviews', () => {
 		await previews.prefetch('https://github.com/a/b/pull/2');
 		expect(listener).toHaveBeenCalledTimes(1);
 	});
+
+	describe('settle', () => {
+		const issue = 'https://github.com/a/b/issues/60';
+		const answer = () => json({ title: 'Remove the Go server', state: 'open' });
+
+		it('fetches what is not yet known and resolves once it is', async () => {
+			const fetcher = vi.fn(async () => answer());
+			const previews = new LinkPreviews(fetcher as unknown as typeof fetch);
+			await previews.settle(`see ${issue}`, [], 1000);
+			expect(fetcher).toHaveBeenCalledTimes(1);
+			expect(previews.embeds(issue)[0].og?.title).toBe('Remove the Go server');
+		});
+
+		it('has nothing to wait for without links, once they are known, when dismissed, or while their site is limited', async () => {
+			let now = 1_000_000;
+			const fetcher = vi.fn(async () => answer());
+			const previews = new LinkPreviews(fetcher as unknown as typeof fetch, () => now);
+			expect(previews.settle('no links here https://example.com', [], 1000)).toBeUndefined();
+			expect(previews.settle(issue, [issue], 1000)).toBeUndefined();
+			await previews.prefetch(issue);
+			expect(previews.settle(issue, [], 1000)).toBeUndefined();
+			const limited = new LinkPreviews((async () => json({}, 429, { 'retry-after': '60' })) as unknown as typeof fetch, () => now);
+			await limited.prefetch(issue);
+			expect(limited.settle('https://github.com/a/b/pull/2', [], 1000)).toBeUndefined();
+			now += 61_000;
+			expect(limited.settle('https://github.com/a/b/pull/2', [], 1000)).toBeInstanceOf(Promise);
+		});
+
+		it('stops waiting after its time, and the answer still arrives for later', async () => {
+			vi.useFakeTimers();
+			try {
+				let reply!: (response: Response) => void;
+				const previews = new LinkPreviews((() => new Promise<Response>((resolve) => (reply = resolve))) as unknown as typeof fetch);
+				let settled = false;
+				void previews.settle(issue, [], 1500)?.then(() => (settled = true));
+				await vi.advanceTimersByTimeAsync(1499);
+				expect(settled).toBe(false);
+				await vi.advanceTimersByTimeAsync(1);
+				expect(settled).toBe(true);
+				expect(previews.embeds(issue)[0].og?.title).toBe('Issue #60');
+				reply(answer());
+				await vi.runAllTimersAsync();
+				expect(previews.embeds(issue)[0].og?.title).toBe('Remove the Go server');
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+	});
 });
