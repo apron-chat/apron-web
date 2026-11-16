@@ -107,8 +107,10 @@
 		outsideLabel?: string;
 		/** Sending waits until then, as the server asked (`retry_after`, epoch milliseconds): Send counts down, and the draft stays. */
 		waitUntil?: number;
+		/** A message sent from here is still on its way (waiting for its link previews): Send spins, and holds. */
+		sending?: boolean;
 	}
-	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled = false, holdSend = false, canUpload, files = [], uploadLimits, canCommand = false, live, people, outsiders, quiet, rooms = [], reply, oninput, onsend, onfiles, onunstage, onrename, oncancelreply, onescape, onup, onmention, outsideLabel, waitUntil }: Props = $props();
+	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled = false, holdSend = false, canUpload, files = [], uploadLimits, canCommand = false, live, people, outsiders, quiet, rooms = [], reply, oninput, onsend, onfiles, onunstage, onrename, oncancelreply, onescape, onup, onmention, outsideLabel, waitUntil, sending = false }: Props = $props();
 
 	/** The field: chips and autocomplete, as in the message editor. */
 	let field = $state<MessageField | undefined>();
@@ -236,7 +238,7 @@
 
 	function send(): void {
 		// Enter while sending waits: the draft stays as it is.
-		if (holdSend || (waitUntil !== undefined && waitUntil > Date.now())) return;
+		if (holdSend || sending || (waitUntil !== undefined && waitUntil > Date.now())) return;
 		field?.finish();
 		onsend();
 	}
@@ -336,6 +338,7 @@
 	recordingTime={clockLabel(recorder.seconds)}
 	onsend={send}
 	{waitUntil}
+	{sending}
 	field={editable}
 	onemoji={openEmoji}
 	{emojiOpen}

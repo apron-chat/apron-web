@@ -108,7 +108,7 @@
 	},
 	"bundle": {
 		"jsGzipKB": 623.1,
-		"cssGzipKB": 29.7
+		"cssGzipKB": 30.5
 	},
 	"production": {
 		"startupFiles": 13,
