@@ -178,6 +178,10 @@ for (const [device, wide] of [['desktop', true], ['tablet', false]] as const) {
 				await row.evaluate((el, offset) => {
 					const frame = el.closest('[data-testid="message-list"]')!;
 					frame.scrollTop += el.getBoundingClientRect().top - frame.getBoundingClientRect().top - offset;
+					// Heard at once, as a browser's frame would have it heard before its animation frames run. Playwright's
+					// clock runs those as timers, which under load can come first: one the timeline queued to keep to the latest
+					// while still filling in would then put it back there, before it hears it was scrolled up.
+					frame.dispatchEvent(new Event('scroll'));
 				}, offset);
 				await page.mouse.move(0, 0);
 				await row.hover({ position: { x: 60, y: 24 } });
