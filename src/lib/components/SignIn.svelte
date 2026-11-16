@@ -19,7 +19,7 @@
 	import { openSignInWindow, signInPageError } from '$lib/ui/sign-in-window';
 	import type { SessionView } from '$lib/ui/session.svelte';
 	import {
-		CANCELLED_TRY_CREATE, UNUSABLE_VIEW, chooseView, firstScheme, passkeyChoice, readsOnly, passkeyMode, signInHint, signInView, signOutThen, unusableMessage, usableSchemes,
+		CANCELLED_TRY_CREATE, UNUSABLE_VIEW, chooseView, firstScheme, passkeyChoice, readsOnly, passkeyMode, schemeNames, signInHint, signInView, signOutThen, unusableMessage, usableSchemes,
 		type ConnectStep, type PasskeyMode, type SignOutHandler, type Scheme
 	} from '$lib/ui/sign-in';
 	import { loadLastSignIn, saveDisplayName, saveServerUrl } from '$lib/ui/storage';
@@ -181,6 +181,8 @@
 			return undefined;
 		}
 	});
+	/** What each scheme is called: the server's label (§3.2), else this client's name, `external` by the host. */
+	let names = $derived(schemeNames(schemes, known?.labels, host));
 	let hint = $derived.by(() => {
 		if (step === 'choose') return greeting?.status === 'contacting' ? `Connecting to ${host ?? 'the server'}…` : '';
 		if (unusable) return '';
@@ -193,7 +195,7 @@
 	let errorText = $derived.by(() => {
 		if (error) return error;
 		if (step === 'choose' && greeting?.status === 'failed') return greeting.error;
-		if (unusable && known) return unusableMessage(serverName(known), offered, passkeyUnavailable);
+		if (unusable && known) return unusableMessage(serverName(known), offered, passkeyUnavailable, known.labels);
 		if (!pending || !snapshot.error) return '';
 		return snapshot.error === 'WebSocket connection error' ? 'Can’t reach the server. Check the address and try again.' : snapshot.error;
 	});
@@ -623,7 +625,7 @@
 <!-- The design system's SignInForm draws the panel; this runs it. -->
 <SignInForm
 	label="Sign in" phase={view.phase} onsubmit={submit}
-	header={top} {schemes} {lastUsed} fields={step === 'sign-in' && !unusable} scheme={chosen} onscheme={(candidate) => { scheme = candidate as Scheme; schemeFor = normalizedInput; }}
+	header={top} {schemes} {names} {lastUsed} fields={step === 'sign-in' && !unusable} scheme={chosen} onscheme={(candidate) => { scheme = candidate as Scheme; schemeFor = normalizedInput; }}
 	passkeyChoice={chosen === 'webauthn' && passkeyChoice(use) && !(here && registered)} passkeyMode={passkeyChosen} onpasskeymode={(value) => { passkeyChosen = value; error = ''; notice = ''; }} passkeyNudge={error === CANCELLED_TRY_CREATE ? 'register' : undefined}
 	bind:token bind:email bind:code bind:name={() => (chosen === 'token' ? tokenName : displayName), (value) => (chosen === 'token' ? (tokenName = value) : (displayName = value))} askName={!passkeyLogin && !reader}
 	sent={codeSentTo} onrestart={() => { codeSent = undefined; code = ''; error = ''; client.cancelSignInCode(); }}

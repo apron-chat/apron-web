@@ -23,6 +23,8 @@
 		header?: Snippet;
 		/** The sign-in schemes to offer (§3.1 `auth`, then the rest of `signup`), in order; an unknown one shows by its name. With one, there is nothing to choose and no Sign in with row. */
 		schemes: string[];
+		/** What to call each scheme, over this form's own names (Guest, Passkey, Email, External, Token): the server's labels (§3.2), as plain text. The Token field takes the token's name as its label. */
+		names?: Record<string, string>;
 		/** Shows the chosen scheme's fields; off before the server has said which schemes it offers, when the card is its address alone. */
 		fields?: boolean;
 		/** The scheme last used to sign in to this server on this device: marked among the schemes as Last used. */
@@ -72,20 +74,21 @@
 		class?: ClassValue;
 	}
 	let {
-		header, schemes, fields = true, lastUsed, scheme, onscheme, passkeyChoice = false, passkeyMode = 'login', onpasskeymode, passkeyNudge, token = $bindable(''), email = $bindable(''), code = $bindable(''), name = $bindable(''),
+		header, schemes, names, fields = true, lastUsed, scheme, onscheme, passkeyChoice = false, passkeyMode = 'login', onpasskeymode, passkeyNudge, token = $bindable(''), email = $bindable(''), code = $bindable(''), name = $bindable(''),
 		askName = true, sent, onrestart, hint, hintStatus = false, error, busy = false, submit, secondary,
 		submitTestid, tokenTestid, emailTestid, codeTestid, nameTestid, passkeyChoiceTestid, onsubmit, label, phase, class: className
 	}: Props = $props();
+	const nameOf = (candidate: string) => names?.[candidate] ?? LABELS[candidate] ?? candidate;
 </script>
 
 <form aria-label={label} data-phase={phase} class={['ap-connect-card', className]} {onsubmit}>
 	{@render header?.()}
 	{#if fields && schemes.length > 1}
 		<div class="ap-fieldlabel">
-			<span>Sign in with{#if lastUsed && schemes.includes(lastUsed)}{' '}<span class="ap-fieldlabel-hint">· last used: {LABELS[lastUsed] ?? lastUsed}</span>{/if}</span>
-			<div class="ap-seg" role="radiogroup" aria-label="Sign in with">
+			<span>Sign in with{#if lastUsed && schemes.includes(lastUsed)}{' '}<span class="ap-fieldlabel-hint">· last used: {nameOf(lastUsed)}</span>{/if}</span>
+			<div class="ap-seg ap-seg-names" role="radiogroup" aria-label="Sign in with">
 				{#each schemes as candidate (candidate)}
-					<button class="ap-seg-item" class:ap-seg-on={scheme === candidate} type="button" role="radio" aria-checked={scheme === candidate} disabled={busy} onclick={() => onscheme?.(candidate)}>{LABELS[candidate] ?? candidate}</button>
+					<button class="ap-seg-item" class:ap-seg-on={scheme === candidate} type="button" role="radio" aria-checked={scheme === candidate} disabled={busy} onclick={() => onscheme?.(candidate)}>{nameOf(candidate)}</button>
 				{/each}
 			</div>
 		</div>
@@ -102,7 +105,7 @@
 			</div>
 		{/if}
 		{#if scheme === 'token'}
-			<label class="ap-fieldlabel">Token
+			<label class="ap-fieldlabel">{nameOf('token')}
 				<input class="ap-field ap-field-mono" data-testid={tokenTestid} type="password" bind:value={token} placeholder="From the server" disabled={busy} autocomplete="off" spellcheck="false" />
 			</label>
 			{#if askName}

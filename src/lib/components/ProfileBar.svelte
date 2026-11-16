@@ -23,10 +23,11 @@
 	import DesignProfileBar from '$lib/design/components/ProfileBar.svelte';
 	import { composing } from '$lib/design/components/compose';
 	import { ownStatusLabel } from '$lib/ui/user-status';
-	import { signOutThen, type SignOutHandler } from '$lib/ui/sign-in';
+	import { schemeName, signOutThen, type SignOutHandler } from '$lib/ui/sign-in';
 	import Avatar from '$lib/design/components/Avatar.svelte';
 	import { hueOf } from '$lib/ui/messages';
 	import TypingDots from '$lib/design/components/TypingDots.svelte';
+	import Plus from '@lucide/svelte/icons/plus';
 	import { historySettings } from '$lib/history/settings.svelte';
 	import type { KeptHistoryControls } from '$lib/history/history-keeper';
 
@@ -164,6 +165,8 @@
 	let canUseEmail = $derived(!!session.server?.auth.includes('email'));
 	/** External sign-in on the server's page (§4.12), where the server offers it. */
 	let canUseExternal = $derived(!!session.server?.auth.includes('external'));
+	/** A way to sign in that can be added, by name: the server's label (§3.2), else this client's, `external` by the host. */
+	const wayName = (scheme: 'webauthn' | 'email' | 'external') => schemeName(scheme, session.server?.labels, serverHost);
 	/** Why the server declined the handle, and what happens to it now: a guest who can sign in gets it applied once signed in. */
 	let declinedNote = $derived(`The server declined this name${declinedReason ? ` (${declinedReason})` : ''}. ${(canUsePasskey || canUseEmail || canUseExternal) && !snapshot.passkeySession ? 'Sign in and it’s applied once you’re signed in.' : 'Your old one is still in use.'}`);
 	/**
@@ -586,16 +589,20 @@
 		<!-- How this session signs in comes first, then what you can do about it. -->
 		{#if session.passkeySession}
 			{@render signinHint()}
-			<!-- A registered account: a passkey registered or an email code presented here adds to it (§4.10, §4.11). -->
-			<span class="ap-profedit-buttons">
+			<!--
+				A registered account: a passkey registered or an email code presented here adds to it (§4.10, §4.11).
+				Each way is named on its own, as the sign-in screen's choices are (`schemeName`), never inside a phrase
+				of ours: a server's label (§3.2) may be long, a verb phrase, or in another language.
+			-->
+			<span class="ap-profedit-buttons ap-profedit-ways" role="group" aria-label="Add a way to sign in">
 				{#if canUsePasskey && you}
-					<button class="ap-btn ap-btn-sm" type="button" disabled={!!passkeyUnavailable || !connected || status === 'saving'} onclick={() => passkey('register')}>Add passkey</button>
+					<button class="ap-btn ap-btn-sm" type="button" disabled={!!passkeyUnavailable || !connected || status === 'saving'} onclick={() => passkey('register')}><Plus size={14} aria-hidden="true" />{wayName('webauthn')}</button>
 				{/if}
 				{#if canUseEmail && you && !addEmail}
-					<button class="ap-btn ap-btn-sm" type="button" disabled={!connected || status === 'saving'} onclick={() => (addEmail = { step: 'address', email: '', code: '', busy: false, error: '' })}>Add email</button>
+					<button class="ap-btn ap-btn-sm" type="button" disabled={!connected || status === 'saving'} onclick={() => (addEmail = { step: 'address', email: '', code: '', busy: false, error: '' })}><Plus size={14} aria-hidden="true" />{wayName('email')}</button>
 				{/if}
 				{#if canUseExternal && you && !addEmail}
-					<button class="ap-btn ap-btn-sm" type="button" disabled={!connected || status === 'saving'} onclick={addExternal}>Add external sign-in</button>
+					<button class="ap-btn ap-btn-sm" type="button" disabled={!connected || status === 'saving'} onclick={addExternal}><Plus size={14} aria-hidden="true" />{wayName('external')}</button>
 				{/if}
 			</span>
 		{:else}

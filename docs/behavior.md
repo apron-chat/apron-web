@@ -1816,7 +1816,10 @@ again, and the connected server's own frame stands in for it. Then the form offe
 choice among the schemes the server advertises (`auth`, then the rest of `signup`, in its order; chosen first is the
 way this device last signed in to that server, guest included and kept through signing out, marked "last used",
 else the server's first;
-Passkey, below; Email, External and Token, further down) that this app can use here: with one there is no
+Passkey, below; Email, External and Token, further down) that this app can use here, each called by the server's
+label for it where `server.labels` gives one
+([PROTOCOL.md §3.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#32-authentication)), else by this app's
+name, and External without a label by the server's host, where its sign-in begins: with one there is no
 **Sign in with** row, and with none (only passkeys in a browser without them, or schemes this app doesn't know) it
 says which the server asks for and offers **Change server**. A server whose greeting says it only reads, a served
 archive (`ext:archive` with `guest`, [ARCHIVE.md §4](../ARCHIVE.md#4-serving)), which signs every guest in as its own
@@ -1870,7 +1873,10 @@ to … as …" with **Sign out** at the end, in the danger tone. A guest's Sign-
 row is **Sign in** alone, at the end of its hint's line, as the composer offers it where guests can't post: the
 connect screen, at the way the server signs in first, whatever the server's
 `auth` lists (as the composer's). An account's offers, where the server's `auth` lists them,
-**Add passkey**, **Add email** and **Add external sign-in**, and the row after
+**Add passkey**, **Add email** and **Add external sign-in**, each a button
+with a plus and the scheme's name alone, as the connect screen calls it
+(**+ Passkey**, **+ Email**, **+ Acme SSO** or **+ chat.example**), in a group
+named "Add a way to sign in", and the row after
 it **Sign out**. Add email proposes and approves on the account's connection,
 which adds the address to the account (§4.11). Adding needs the
 scheme in `auth`, since adding is a way back in and a scheme listed only in

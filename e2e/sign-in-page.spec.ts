@@ -29,11 +29,15 @@ async function signInPage(target: BrowserContext | Page, requests: URLSearchPara
 	});
 }
 
-/** The connect screen, on the server the page is on, at `scheme`. */
-async function connectAt(page: Page, preview: { openConnect(options: { signIn?: boolean }): Promise<void> }, scheme: string): Promise<void> {
+/**
+ * The connect screen, on the server the page is on, at external sign-in: by `name`, the server's label for it (§3.2),
+ * else by the server's host, as it goes without one.
+ */
+async function connectAt(page: Page, preview: { openConnect(options: { signIn?: boolean }): Promise<void> }, name?: string): Promise<void> {
 	await preview.openConnect({ signIn: true });
 	const form = page.getByRole('form', { name: 'Sign in' });
-	await form.getByRole('radiogroup', { name: 'Sign in with' }).getByRole('radio', { name: scheme }).click();
+	const host = new URL((await page.getByTestId('connect-server').locator('.ap-connect-address').textContent())!).host;
+	await form.getByRole('radiogroup', { name: 'Sign in with' }).getByRole('radio', { name: name ?? host, exact: true }).click();
 }
 
 const auths = (options: MockOptions) => options.sent!.filter((frame) => frame.method === 'auth').map((frame) => frame.params);
@@ -45,10 +49,11 @@ test.describe('external sign-in', () => {
 		const requests: URLSearchParams[] = [];
 		await signInPage(page.context(), requests);
 		const options: MockOptions = {
-			server: { auth: ['guest', 'external', 'token'] }, external: { url: `${SSO}?scope=chat`, you: { user_id: 'ada', name: 'Ada' }, token: 'st_ada' }, sent: []
+			server: { auth: ['guest', 'external', 'token'], labels: { external: 'Acme SSO' } }, external: { url: `${SSO}?scope=chat`, you: { user_id: 'ada', name: 'Ada' }, token: 'st_ada' }, sent: []
 		};
 		await preview.openRoot(options);
-		await connectAt(page, preview, 'External');
+		// The server's label for external sign-in (§3.2) names the choice.
+		await connectAt(page, preview, 'Acme SSO');
 		const popup = page.waitForEvent('popup');
 		await page.getByTestId('external-start').click();
 		// The popup sends its answer back, and closes itself.
@@ -76,7 +81,7 @@ test.describe('external sign-in', () => {
 		await signInPage(page.context(), requests, true);
 		const options: MockOptions = { server: { auth: ['guest', 'external', 'token'] }, external: { url: SSO, you: { user_id: 'ada', name: 'Ada' } }, sent: [] };
 		await preview.openRoot(options);
-		await connectAt(page, preview, 'External');
+		await connectAt(page, preview);
 		await page.getByTestId('external-start').click();
 		const form = page.getByRole('form', { name: 'Sign in' });
 		await expect(form.getByRole('alert')).toHaveText('Sign-in was cancelled.');
@@ -93,7 +98,7 @@ test.describe('external sign-in', () => {
 		await preview.openRoot(options);
 		// After the scripted server's routes, which refuse every other site.
 		await signInPage(page, requests);
-		await connectAt(page, preview, 'External');
+		await connectAt(page, preview);
 		await page.getByTestId('external-start').click();
 		await expect.poll(() => requests.length).toBe(1);
 		// Back on the app, without the code in its address.
@@ -102,7 +107,8 @@ test.describe('external sign-in', () => {
 		await expect.poll(() => auths(options).some((params) => params.scheme === 'external' && params.code === 'code_1')).toBe(true);
 		await expect(page.getByRole('form', { name: 'Sign in' })).toHaveCount(0);
 		await preview.openConnect({ signIn: true });
-		await expect(page.getByRole('form', { name: 'Sign in' }).getByText('last used: External')).toBeVisible();
+		const host = new URL((await page.getByTestId('connect-server').locator('.ap-connect-address').textContent())!).host;
+		await expect(page.getByRole('form', { name: 'Sign in' }).getByText(`last used: ${host}`)).toBeVisible();
 	});
 });
 

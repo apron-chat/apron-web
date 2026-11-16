@@ -169,6 +169,27 @@ export const UNUSABLE_VIEW: SignInView = { phase: 'idle', primary: { action: 'ch
 /** Every scheme this client can drive, in the order a server's own order doesn't decide. */
 export const KNOWN_SCHEMES: readonly Scheme[] = ['guest', 'webauthn', 'email', 'external', 'token'];
 
+/** This client's own name for each scheme, as one choice among others: `external` goes by the server's host (`schemeName`). */
+const OWN_NAMES: Record<string, string> = { guest: 'Guest', webauthn: 'Passkey', email: 'Email', token: 'Token' };
+
+/**
+ * What a scheme is called where the user picks one: the server's label for
+ * it (§3.2, `parseLabels`), else this client's own name. `external` without
+ * a label goes by `host`, the server whose sign-in page it opens, since
+ * "External" says nothing about where the user goes; without a host, it is
+ * "Sign-in page". An unknown scheme without a label goes by its name as sent.
+ */
+export function schemeName(scheme: string, labels: Readonly<Record<string, string>> | undefined, host?: string): string {
+	if (labels && Object.hasOwn(labels, scheme)) return labels[scheme];
+	if (scheme === 'external') return host || 'Sign-in page';
+	return Object.hasOwn(OWN_NAMES, scheme) ? OWN_NAMES[scheme] : scheme;
+}
+
+/** `schemeName` for each of `schemes`, as SignInForm takes them. */
+export function schemeNames(schemes: readonly string[], labels: Readonly<Record<string, string>> | undefined, host?: string): Record<string, string> {
+	return Object.fromEntries(schemes.map((scheme) => [scheme, schemeName(scheme, labels, host)]));
+}
+
 /**
  * Of the schemes a server offers (`offeredSchemes`: `auth`, then the rest of
  * `signup`, in its order), the ones this client can drive here: passkeys
@@ -180,15 +201,15 @@ export function usableSchemes(offered: readonly string[], passkeyUnavailable?: s
 
 /**
  * Why there is no way in to a server (`usableSchemes` came out empty),
- * naming it (`name`) and what it asks for, rather than drawing a control
- * that can't work.
+ * naming it (`name`) and what it asks for, each by its label where the
+ * server gives one (§3.2), rather than drawing a control that can't work.
  */
-export function unusableMessage(name: string, offered: readonly string[], passkeyUnavailable?: string): string {
+export function unusableMessage(name: string, offered: readonly string[], passkeyUnavailable?: string, labels?: Readonly<Record<string, string>>): string {
 	if (passkeyUnavailable && offered.includes('webauthn') && usableSchemes(offered).every((candidate) => candidate === 'webauthn')) {
 		return `${name} signs in only with a passkey, and this browser can’t use one here. ${passkeyUnavailable}`;
 	}
 	const unknown = offered.filter((candidate) => !(KNOWN_SCHEMES as readonly string[]).includes(candidate));
-	return `${name} signs in with ${listed(unknown.length ? unknown : offered)}, which this app doesn’t support.`;
+	return `${name} signs in with ${listed((unknown.length ? unknown : offered).map((scheme) => schemeName(scheme, labels)))}, which this app doesn’t support.`;
 }
 
 function listed(names: readonly string[]): string {
