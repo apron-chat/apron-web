@@ -260,7 +260,7 @@ in an `auth` or `me` result, and the `users` of `room_list` and `room_update`
 field by field: a present field replaces (`null` too, as an ordinary value), an
 empty one (`""`, `[]`, `{}`) clears it and is kept as cleared, and a missing
 one changes nothing. `ext` merges the same way one level down
-([PROTOCOL.md §4.12](https://github.com/shazow/apron/blob/main/PROTOCOL.md#412-ext)): each key replaces the kept value, an empty value
+([PROTOCOL.md §4.13](https://github.com/shazow/apron/blob/main/PROTOCOL.md#413-ext)): each key replaces the kept value, an empty value
 clears that key (kept as cleared), and `"ext": {}` changes nothing. Your own `status` comes only
 from `you`, never from your entry in `users` or `members`. Recorded objects, a message's or reaction's `from` and a
 membership's `user`, describe the user as of their record and never merge. A
@@ -2038,7 +2038,7 @@ the capability the client reads none of them. `read_cursors: false` says the
 server keeps no read cursors, so the client doesn't send `read_message_id`.
 A guest who only reads (`write: false`, above) sees it in the connect screen's
 Guest hint too. Other
-extension data (`ext`, [PROTOCOL.md §4.12](https://github.com/shazow/apron/blob/main/PROTOCOL.md#412-ext))
+extension data (`ext`, [PROTOCOL.md §4.13](https://github.com/shazow/apron/blob/main/PROTOCOL.md#413-ext))
 on users, messages and rooms is kept as the server sends it, and the client
 writes `ext` (with `me`, a message, or `room_set`) only to a server with the
 capability `ext`, which keeps it; the app itself writes none.

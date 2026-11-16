@@ -67,10 +67,10 @@ Some features have no capability:
 - apron-web uses an extension only while the latest `server` frame lists that
   name in `capabilities`. An extension that only keeps data in a user's `ext`,
   such as `ext:bio`, also works with capability `ext`, which keeps any key
-  ([§4.12](https://github.com/shazow/apron/blob/main/PROTOCOL.md#412-ext)).
+  ([§4.13](https://github.com/shazow/apron/blob/main/PROTOCOL.md#413-ext)).
 - apron-web reads the data of an extension only from `ext.<name>`, without the
   `ext:` prefix, on the object that the extension defines
-  ([§4.12](https://github.com/shazow/apron/blob/main/PROTOCOL.md#412-ext)).
+  ([§4.13](https://github.com/shazow/apron/blob/main/PROTOCOL.md#413-ext)).
 - apron-web ignores a field of an extension whose value has the wrong type,
   and uses its default.
 - Without the extension, apron-web behaves as PROTOCOL.md specifies.
