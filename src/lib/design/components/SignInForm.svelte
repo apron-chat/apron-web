@@ -3,6 +3,7 @@
 	import type { ClassValue } from 'svelte/elements';
 	import Button from './Button.svelte';
 	import TypingDots from './TypingDots.svelte';
+	import { segFit } from './seg-fit';
 
 	const LABELS: Record<string, string> = { guest: 'Guest', webauthn: 'Passkey', email: 'Email', external: 'External', token: 'Token' };
 	/** On Passkey, the two paths: each a title and what it does. */
@@ -79,6 +80,8 @@
 		submitTestid, tokenTestid, emailTestid, codeTestid, nameTestid, passkeyChoiceTestid, onsubmit, label, phase, class: className
 	}: Props = $props();
 	const nameOf = (candidate: string) => names?.[candidate] ?? LABELS[candidate] ?? candidate;
+	/** The choices' names, as one string: the picker fits them again only when one changes. */
+	const shownNames = $derived(JSON.stringify(schemes.map(nameOf)));
 </script>
 
 <form aria-label={label} data-phase={phase} class={['ap-connect-card', className]} {onsubmit}>
@@ -86,7 +89,7 @@
 	{#if fields && schemes.length > 1}
 		<div class="ap-fieldlabel">
 			<span>Sign in with{#if lastUsed && schemes.includes(lastUsed)}{' '}<span class="ap-fieldlabel-hint">· last used: {nameOf(lastUsed)}</span>{/if}</span>
-			<div class="ap-seg ap-seg-names" role="radiogroup" aria-label="Sign in with">
+			<div class="ap-seg ap-seg-names" role="radiogroup" aria-label="Sign in with" {@attach segFit(JSON.parse(shownNames))}>
 				{#each schemes as candidate (candidate)}
 					<button class="ap-seg-item" class:ap-seg-on={scheme === candidate} type="button" role="radio" aria-checked={scheme === candidate} disabled={busy} onclick={() => onscheme?.(candidate)}>{nameOf(candidate)}</button>
 				{/each}

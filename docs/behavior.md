@@ -1821,7 +1821,8 @@ label for it where `server.labels` gives one
 ([PROTOCOL.md §3.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#32-authentication)), else by this app's
 name, and External without a label by the server's host, where its sign-in begins: with one there is no
 **Sign in with** row, and with none (only passkeys in a browser without them, or schemes this app doesn't know) it
-says which the server asks for and offers **Change server**. A server whose greeting says it only reads, a served
+says which the server asks for and offers **Change server**. The choices sit side by side while every one fits on
+that line whole, else one to a row in the same order, where a long name wraps. A server whose greeting says it only reads, a served
 archive (`ext:archive` with `guest`, [ARCHIVE.md §4](../ARCHIVE.md#4-serving)), which signs every guest in as its own
 `you`, asks nothing more: **Continue** joins it as a guest, with no display name and no `me` after. Whether any other
 server lets a guest write is only known once signed in (`you.ext.permissions`), so the name is asked there as usual. A server speaking another protocol version gets a
