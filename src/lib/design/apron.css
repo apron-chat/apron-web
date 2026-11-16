@@ -1373,6 +1373,9 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-profedit-row { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); }
 /* The ways in on offer, as a row of buttons; adding an email or external sign-in, a field and its button. */
 .ap-profedit-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+/* Ways to add, each by a name the server may give (§3.2): up to 64 characters, so a long one wraps within its button. */
+.ap-profedit-ways .ap-btn { white-space: normal; height: auto; min-height: var(--control-md); padding-block: var(--space-0_5); max-width: 100%; text-align: start; overflow-wrap: break-word; }
+.ap-profedit-ways .ap-btn svg { flex: none; }
 .ap-profedit-add { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-1); }
 .ap-profedit-add .ap-field { flex: 1; min-width: 0; height: var(--control-md); font-size: var(--text-ui); }
 .ap-profedit-signin .ap-typing-dots { vertical-align: middle; margin-inline-end: var(--space-1); }
@@ -1424,6 +1427,11 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-seg { display: flex; gap: var(--space-0_5); padding: var(--space-0_5); margin-top: var(--space-0_5); background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-md); }
 .ap-seg-item { font: inherit; flex: 1; height: var(--control-md); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink-muted); font-size: var(--text-ui); font-weight: 600; cursor: pointer; }
 .ap-seg-item:hover:not(:disabled) { color: var(--ink); }
+/* Sign-in choices, by names a server may give (§3.2, up to 64 characters): on one line while they all fit there whole, else one to a row
+   (`ap-seg-stacked`, which `segFit` sets from their measured widths), where a long one wraps. Both keep a choice's font and inline padding, which it measures. */
+.ap-seg-names .ap-seg-item { flex: 1 1 auto; padding-inline: var(--space-2); white-space: nowrap; }
+.ap-seg-stacked { flex-direction: column; }
+.ap-seg-stacked .ap-seg-item { height: auto; min-height: var(--control-md); padding-block: var(--space-1); text-align: start; white-space: normal; overflow-wrap: anywhere; }
 .ap-seg-on, .ap-seg-on:hover { background: var(--chosen); color: var(--ink); box-shadow: var(--shadow-chosen); }
 /* Choice — two paths of equal weight, each a title and a line saying what it does (Sign in · Create account) */
 .ap-choice { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }

@@ -92,6 +92,16 @@ npm run build
 wrangler deploy
 ```
 
+Signing in on a server's page (external sign-in, and a server's passkey page,
+PROTOCOL.md §4.12) sends the viewer back to this app's `/signed-in/` on the
+origin it is served from. On `https://web.apron.chat` the app names itself with
+`static/client-metadata.json` (a client ID metadata document listing that one
+redirect); keep the two in step if the production origin changes. Other origins
+(`npm run dev`, Previews, a copy another host serves) send the plain `client_id`
+`apron-web`. Servers accept `https` redirects and `http` ones on loopback
+addresses only, so a copy served over `http` from another address can't use a
+sign-in page.
+
 The backend deploys separately, from
 [apron-chat/apron-server-cloudflare](https://github.com/apron-chat/apron-server-cloudflare).
 The apex `apron.chat` is reserved for docs.

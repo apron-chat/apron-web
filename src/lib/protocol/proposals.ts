@@ -1,13 +1,12 @@
 /**
- * The email and external sign-in proposals this browser made (PROTOCOL.md
- * §4.11), remembered by their `state` so that a link coming back, in this
- * tab or another one (an email opens a new tab, an external page returns to
- * a fresh page load), is known for one of ours: which server it went to, and
- * whether it signs in or adds to an account.
+ * The email sign-in proposals this browser made (PROTOCOL.md §4.11),
+ * remembered by their `state` so that a link coming back, in this tab or
+ * another one (an email opens a new tab), is known for one of ours: which
+ * server it went to, and whether it signs in or adds to an account.
  */
 
-/** A proposed way in that finishes outside the connection. */
-export type ProposalScheme = 'email' | 'external';
+/** A proposed way in that finishes outside the connection: only email proposes (§4.11). */
+export type ProposalScheme = 'email';
 
 export interface Proposal {
 	scheme: ProposalScheme;
@@ -96,31 +95,8 @@ function writeProposals(proposals: Proposal[]): void {
 function isProposal(value: unknown): value is Proposal {
 	if (typeof value !== 'object' || value === null) return false;
 	const entry = value as Record<string, unknown>;
-	return (entry.scheme === 'email' || entry.scheme === 'external')
+	return entry.scheme === 'email'
 		&& (entry.kind === 'sign-in' || entry.kind === 'addition')
 		&& typeof entry.url === 'string' && typeof entry.state === 'string' && typeof entry.expires === 'number'
 		&& (entry.kind !== 'addition' || typeof entry.account === 'string');
-}
-
-/**
- * The `url` of an external proposal's result (§4.11.5) if a client may open
- * it: an absolute `https` URL, or `http` on a loopback host. Anything else,
- * such as `javascript:…`, is rejected.
- */
-export function signInPageUrl(value: unknown): string | undefined {
-	if (typeof value !== 'string') return undefined;
-	let url: URL;
-	try {
-		url = new URL(value);
-	} catch {
-		return undefined;
-	}
-	if (url.protocol === 'https:' && url.hostname) return url.toString();
-	if (url.protocol === 'http:' && loopback(url.hostname)) return url.toString();
-	return undefined;
-}
-
-function loopback(hostname: string): boolean {
-	const host = hostname.toLowerCase();
-	return host === 'localhost' || host.endsWith('.localhost') || host === '[::1]' || /^127(\.\d{1,3}){3}$/.test(host);
 }

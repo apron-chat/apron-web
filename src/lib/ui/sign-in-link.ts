@@ -1,21 +1,23 @@
 import type { ClientSnapshot } from '$lib/protocol/client';
+import { sameServer } from '$lib/protocol/client-views';
 import type { Proposal, ProposalScheme } from '$lib/protocol/proposals';
 
 /**
- * A sign-in link (PROTOCOL.md §4.11.2), emailed or the return from an
- * external sign-in page. The server puts the temporary token, the `state` of
- * the proposal it answers when that carried one, and, when the link opens a
- * client that isn't tied to one server, the WebSocket URL of the server that
- * sent it in the URL fragment, `application/x-www-form-urlencoded`, so they
- * stay out of server logs:
+ * A sign-in link (PROTOCOL.md §4.11.2), as an email has it. The server puts the temporary token, the `state` of
+ * the proposal it answers when that carried one, and the WebSocket URL of the
+ * server that sent it in the URL fragment, `application/x-www-form-urlencoded`,
+ * so they stay out of server logs:
  *
  *     #token=Hk41x9…&state=q8Rz…&server=wss%3A%2F%2Fchat.example%2F
  *
  * With the `state` of a proposal this browser made, the link is that
- * proposal's, for the server it went to, and `server` is ignored. Any other
- * link is a credential someone else may have crafted or forwarded (login
- * CSRF): it is never used silently, and the page asks first, naming the
- * server.
+ * proposal's only if its `server` is the server the proposal went to,
+ * compared as addresses (§1): one that names another server, or none, is
+ * dropped, and its token goes nowhere. Otherwise a server could pass this
+ * browser's `state` on to another server, and receive the token that one
+ * sends (mix-up, §5.2). Any other link is a credential someone else may have
+ * crafted or forwarded (login CSRF): it is never used silently, and the page
+ * asks first, naming the server.
  *
  * Opened through link.apron.chat, the link's keys come in the fragment as
  * they do for any link to this app (Appendix A.4), among the place's keys:
@@ -27,7 +29,7 @@ export interface SignInLink {
 	state?: string;
 	/** The server the link names, a `ws:` or `wss:` URL; without it, the server this client is set to. */
 	server?: string;
-	/** The link named a `server` that isn't a WebSocket URL: unusable unless its `state` is this browser's own. */
+	/** The link named a `server` that isn't a WebSocket URL: unusable, whatever its `state`. */
 	badServer?: true;
 }
 
@@ -36,9 +38,14 @@ export interface SignInLink {
  * `state` from the address bar (and so from history and bookmarks) at once,
  * keeping the rest of the URL, the fragment's other keys included. Any
  * fragment carrying `token` is scrubbed, even one that isn't a usable link.
- * Returns undefined, touching nothing else, when the fragment is not such a link.
+ * One of a proposal here (`find`) that names another server is dropped
+ * (`linkUse`), and its whole fragment goes: the server it names isn't
+ * offered either. Returns undefined, touching nothing else, when the
+ * fragment is not such a link.
  */
-export function takeSignInLink(location: Pick<Location, 'hash' | 'pathname' | 'search'>, replace: (url: string) => void): SignInLink | undefined {
+export function takeSignInLink(
+	location: Pick<Location, 'hash' | 'pathname' | 'search'>, replace: (url: string) => void, find?: (state: string | undefined) => Proposal | undefined
+): SignInLink | undefined {
 	const hash = location.hash;
 	const params = fragmentParams(hash);
 	if (!params?.has('token')) return undefined;
@@ -46,7 +53,7 @@ export function takeSignInLink(location: Pick<Location, 'hash' | 'pathname' | 's
 	const link = parseSignInLink(hash);
 	params.delete('token');
 	params.delete('state');
-	const rest = params.toString();
+	const rest = link && find && linkUse(link, find)?.kind === 'elsewhere' ? '' : params.toString();
 	replace(`${location.pathname}${location.search}${rest ? `#${rest}` : ''}`);
 	return link;
 }
@@ -68,17 +75,20 @@ export function parseSignInLink(hash: string): SignInLink | undefined {
  * What a link is for (§4.11.2): `own`, a sign-in this browser proposed,
  * used at once on the server it went to; `addition`, an addition this
  * browser proposed, for the account that proposed it; `ask`, any other link,
- * used only once the viewer has confirmed. Undefined for a link that can't
- * be used: one of no proposal here that names a server that isn't one,
- * which is never silently swapped for another.
+ * used only once the viewer has confirmed. A link with the `state` of a
+ * proposal here that names another server than the one it went to, or no
+ * server, is `elsewhere` (with the server it was proposed to), and is used
+ * neither way. Undefined for a link of no proposal here that names a server
+ * that isn't one, which is never silently swapped for another.
  */
 export type LinkUse =
 	| { kind: 'own'; token: string; server: string; scheme: ProposalScheme; state: string }
 	| { kind: 'addition'; token: string; server: string; account: string; state: string }
 	| { kind: 'ask'; link: SignInLink };
 
-export function linkUse(link: SignInLink, find: (state: string | undefined) => Proposal | undefined): LinkUse | undefined {
+export function linkUse(link: SignInLink, find: (state: string | undefined) => Proposal | undefined): LinkUse | { kind: 'elsewhere'; server: string } | undefined {
 	const proposal = find(link.state);
+	if (proposal && !sameServer(link.server, proposal.url)) return { kind: 'elsewhere', server: proposal.url };
 	if (proposal?.kind === 'addition' && proposal.account) {
 		return { kind: 'addition', token: link.token, server: proposal.url, account: proposal.account, state: proposal.state };
 	}
@@ -99,7 +109,9 @@ export function linkUse(link: SignInLink, find: (state: string | undefined) => P
  * current server, guests included; on that server the prompt then offers to
  * add the link to it as well (`adds`). That is safe to offer: an addition
  * approves only on a connection signed in to the account that proposed it,
- * and a sign-in's token is refused on one (§4.11.3).
+ * and a sign-in's token is refused on one (§4.11.3). A bearer token that
+ * signs the connection in as another account instead adds nothing, and the
+ * page connects again (`addWithConfirmedLink`).
  */
 export function signInLinkPrompt(
 	link: SignInLink, current: { url: string; label?: string; signedInAs?: string; addAs?: string; keptSession?: boolean; targetKeptSession?: boolean }
@@ -150,16 +162,6 @@ export function sessionSettled(snapshot: Pick<ClientSnapshot, 'status' | 'authBu
 	return Boolean(snapshot.error) && !resuming;
 }
 
-/**
- * Where an external sign-in page sends the user back (`return_url`,
- * §4.11.5): this app, at its own path, without the query or fragment. A
- * server accepts it only on an origin it trusts, and the link's fragment
- * replaces any fragment it had.
- */
-export function returnUrl(location: Pick<Location, 'origin' | 'pathname'>): string {
-	return `${location.origin}${location.pathname}`;
-}
-
 function fragmentParams(hash: string): URLSearchParams | undefined {
 	return hash.startsWith('#') && hash.length > 1 ? new URLSearchParams(hash.slice(1)) : undefined;
 }
@@ -188,8 +190,9 @@ export interface SignInLinkClient {
 }
 
 /**
- * Uses a sign-in link (§4.11.3): this browser's own (`own`), or one the
- * viewer confirmed (`ask`). The client presents its token on a fresh
+ * Uses a sign-in link (§4.11.3): this browser's own (`own`), with its
+ * proposal's scheme, or one the viewer confirmed (`ask`), as
+ * `scheme: "token"` (§4.11.2). The client presents its token on a fresh
  * connection that is not signed in to the proposal's server, or else to the
  * server the link names (this one by default), and carries on with that
  * connection once signed in. `beforeSwitch` runs just before, so the page can
@@ -216,12 +219,11 @@ export async function runSignInLink(
 	hooks.onSignedIn(server, switched);
 }
 
-/** A code the connect screen asked for (§4.11): the scheme, the address or page, and the server that will take it. */
+/** A code the connect screen asked for (§4.11): the scheme, the address, and the server that will take it. */
 export interface SentCode {
 	scheme: ProposalScheme;
 	url: string;
 	email?: string;
-	page?: string;
 }
 
 /**

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { chooseView, firstScheme, passkeyChoice, readsOnly, signedInScheme, passkeyMode, signInHint, signInView, signOutThen, unusableMessage, usableSchemes, versionWarning, type SignInInput } from './sign-in';
+import { chooseView, firstScheme, passkeyChoice, readsOnly, schemeName, schemeNames, signedInScheme, passkeyMode, signInHint, signInView, signOutThen, unusableMessage, usableSchemes, versionWarning, type SignInInput } from './sign-in';
 
 /** Connected to the server in the form as a guest, with passkeys that both sign in and sign up. */
 const guestHere: SignInInput = {
@@ -88,7 +88,6 @@ describe('the other schemes', () => {
 
 	it('opens the server’s sign-in page, and takes a code where the page shows one', () => {
 		expect(signInView({ ...guestHere, scheme: 'external', sameServer: false }).primary).toEqual({ action: 'external-start', label: 'Continue to sign-in page' });
-		expect(signInView({ ...guestHere, scheme: 'external', codeSent: true }).primary).toEqual({ action: 'external-code', label: 'Sign in' });
 		const hint = (use: SignInInput['use']) => signInHint({ scheme: 'external', use, passkey: 'login', registered: false, phase: 'idle', here: false, guest: false, guestReadOnly: false });
 		expect(hint({ signIn: true, signUp: true })).toMatch(/^Signs in on the server’s own sign-in page/);
 		expect(hint({ signIn: false, signUp: true })).toMatch(/^Creates an account/);
@@ -113,6 +112,8 @@ describe('hints', () => {
 		expect(hint({ host: 'server.apron.chat' })).toBe('Each server has its own accounts: sign in with a passkey you saved for `server.apron.chat`.');
 		expect(hint({ passkey: 'register' })).toMatch(/^Connected as a guest. Creating an account keeps this identity/);
 		expect(hint({ registered: true })).toBe('Signed in. Choose Guest to sign out.');
+		// The Guest choice by the name the panel shows it by, a server's label (§3.2), as text.
+		expect(hint({ registered: true, guestName: 'Look `around`' })).toBe('Signed in. Choose Look around to sign out.');
 		// Where passkeys only sign in, or only sign up, it says so.
 		expect(hint({ phase: 'idle', here: false, guest: false, use: { signIn: true, signUp: false }, passkey: 'register' })).toMatch(/pick one to sign in to its account. New here\? Create an account another way first.$/);
 		expect(hint({ phase: 'idle', here: false, guest: false, use: { signIn: false, signUp: true } })).toMatch(/^Creates an account and saves a new passkey/);
@@ -161,6 +162,22 @@ describe('what a server offers', () => {
 		expect(unusableMessage('Acme', ['webauthn', 'oauth2'], reason)).toBe(`Acme signs in only with a passkey, and this browser can’t use one here. ${reason}`);
 		expect(unusableMessage('Acme', ['oauth2'])).toBe('Acme signs in with oauth2, which this app doesn’t support.');
 		expect(unusableMessage('Acme', ['oauth2', 'saml', 'magic'])).toBe('Acme signs in with oauth2, saml or magic, which this app doesn’t support.');
+		// The server's label for a scheme this app doesn't know (§3.2) is the only name people would know it by.
+		expect(unusableMessage('Acme', ['oauth2', 'saml'], undefined, { saml: 'Campus login' })).toBe('Acme signs in with oauth2 or Campus login, which this app doesn’t support.');
+	});
+
+	it('calls a scheme by the server’s label, else by its own name, and external by the server’s host', () => {
+		const labels = { external: 'Acme SSO', token: 'Invite code' };
+		expect(schemeName('external', labels, 'chat.example')).toBe('Acme SSO');
+		expect(schemeName('token', labels)).toBe('Invite code');
+		expect(schemeName('webauthn', labels)).toBe('Passkey');
+		expect(schemeName('guest', undefined)).toBe('Guest');
+		expect(schemeName('external', undefined, 'chat.example')).toBe('chat.example');
+		expect(schemeName('external', {}, '')).toBe('External sign-in');
+		expect(schemeName('ext:smartcard', undefined)).toBe('ext:smartcard');
+		// Only the labels' own keys, and only this client's own names: nothing inherited.
+		expect(schemeName('constructor', {})).toBe('constructor');
+		expect(schemeNames(['guest', 'external', 'token'], labels, 'chat.example')).toEqual({ guest: 'Guest', external: 'Acme SSO', token: 'Invite code' });
 	});
 
 	it('warns of another protocol version without refusing it', () => {

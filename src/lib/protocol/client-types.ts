@@ -262,8 +262,8 @@ export interface ClientSnapshot {
 	/**
 	 * How this browser signed in to that account: `token` means a kept token
 	 * is its only way back in here, worth adding another way to (§3.2.1);
-	 * `link`, an email or an external sign-in, not known which (a link of no
-	 * proposal made here, on a server that offers both).
+	 * `link`, a sign-in link of no proposal made here, kept from before links
+	 * could only be email ones (§4.11).
 	 */
 	signedInWith?: 'webauthn' | 'email' | 'external' | 'link' | 'token';
 	/** How this browser can get back into the account: how it signed in, then what it added (§4.10, §4.11). */
@@ -276,13 +276,13 @@ export interface ClientSnapshot {
 	/** The sign-in guard is held by a passkey ceremony (true) or an addition's approval (false). */
 	passkeyBusy?: boolean;
 	/**
-	 * A sign-in proposal waiting for its code (§4.11): its scheme, the server
+	 * An email sign-in proposal waiting for its code (§4.11): the server
 	 * whose connection proposed it and alone takes the code, and the address
-	 * an email went to, or the page of an external sign-in that shows the
-	 * code. Gone once used, replaced, or once that connection closes (by the
-	 * server, or on expiry); the proposal's link may still work after that.
+	 * the email went to. Gone once used, replaced, or once that connection
+	 * closes (by the server, or on expiry); the proposal's link may still work
+	 * after that.
 	 */
-	signInCode?: { scheme: 'email' | 'external'; url: string; email?: string; page?: string };
+	signInCode?: { scheme: 'email'; url: string; email?: string };
 	/**
 	 * Signed in as someone who only reads (`ext:permissions` with
 	 * `write: false`, as a server may keep its guests): posting, reacting,

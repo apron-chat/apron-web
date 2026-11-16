@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Proposal } from '$lib/protocol/proposals';
-import { askedLinkFailure, codeStillFor, linkUse, parseSignInLink, returnUrl, sessionSettled, signInLinkPrompt, takeSignInLink } from './sign-in-link';
+import { askedLinkFailure, codeStillFor, linkUse, parseSignInLink, sessionSettled, signInLinkPrompt, takeSignInLink } from './sign-in-link';
 
 describe('sign-in links (§4.11.2)', () => {
 	it('reads the token, and the optional state and server, from the fragment, refusing one without a token and marking a server that isn’t a WebSocket URL', () => {
@@ -28,6 +28,17 @@ describe('sign-in links (§4.11.2)', () => {
 		// A place link.apron.chat passed with the token stays (Appendix A.4).
 		expect(takeSignInLink({ hash: '#server=wss://chat.example/ws&room=general&token=apron_invite_x', pathname: '/', search: '' }, (url: string) => replaced.push(url))).toEqual({ token: 'apron_invite_x', server: 'wss://chat.example/ws' });
 		expect(replaced.at(-1)).toBe('/#server=wss%3A%2F%2Fchat.example%2Fws&room=general');
+		// One of a proposal here that names another server, or none, leaves nothing for the page to offer.
+		const ours = (state: string | undefined) => (state === 's' ? proposal({}) : undefined);
+		expect(takeSignInLink({ hash: '#token=1&state=s&server=wss%3A%2F%2Fevil.example%2F', pathname: '/', search: '?x=1' }, (url: string) => replaced.push(url), ours)).toEqual({ token: '1', state: 's', server: 'wss://evil.example/' });
+		expect(replaced.at(-1)).toBe('/?x=1');
+		expect(takeSignInLink({ hash: '#token=1&state=s&room=general', pathname: '/', search: '' }, (url: string) => replaced.push(url), ours)).toEqual({ token: '1', state: 's' });
+		expect(replaced.at(-1)).toBe('/');
+		// One naming the server proposed to, or of no proposal here, keeps the rest as before.
+		takeSignInLink({ hash: '#token=1&state=s&server=wss%3A%2F%2Fhome.example%2F', pathname: '/', search: '' }, (url: string) => replaced.push(url), ours);
+		expect(replaced.at(-1)).toBe('/#server=wss%3A%2F%2Fhome.example%2F');
+		takeSignInLink({ hash: '#token=1&state=theirs&server=wss%3A%2F%2Fevil.example%2F', pathname: '/', search: '' }, (url: string) => replaced.push(url), ours);
+		expect(replaced.at(-1)).toBe('/#server=wss%3A%2F%2Fevil.example%2F');
 		// Read before a live location is scrubbed.
 		const location = { hash: '#token=9', pathname: '/', search: '' };
 		expect(takeSignInLink(location, () => (location.hash = ''))).toEqual({ token: '9' });
@@ -35,13 +46,21 @@ describe('sign-in links (§4.11.2)', () => {
 
 	const proposal = (fields: Partial<Proposal>): Proposal => ({ scheme: 'email', kind: 'sign-in', url: 'wss://home.example/', state: 's', expires: Infinity, ...fields });
 
-	it('uses its own proposal’s server, ignoring the link’s, and asks about any other link', () => {
+	it('uses its own proposal’s link only when it names the server proposed to, and asks about any other link', () => {
 		const find = (proposals: Proposal[]) => (state: string | undefined) => proposals.find((entry) => entry.state === state);
-		const ours = [proposal({ scheme: 'external' }), proposal({ state: 'add', kind: 'addition', account: 'ada' })];
-		expect(linkUse({ token: 't', state: 's', server: 'wss://evil.example/' }, find(ours))).toEqual({ kind: 'own', token: 't', server: 'wss://home.example/', scheme: 'external', state: 's' });
-		// Even a server that isn't one: it is ignored.
-		expect(linkUse({ token: 't', state: 's', badServer: true }, find(ours))).toMatchObject({ kind: 'own', server: 'wss://home.example/' });
-		expect(linkUse({ token: 't', state: 'add' }, find(ours))).toEqual({ kind: 'addition', token: 't', server: 'wss://home.example/', account: 'ada', state: 'add' });
+		const ours = [proposal({}), proposal({ state: 'add', kind: 'addition', account: 'ada' })];
+		expect(linkUse({ token: 't', state: 's', server: 'wss://home.example/' }, find(ours))).toEqual({ kind: 'own', token: 't', server: 'wss://home.example/', scheme: 'email', state: 's' });
+		// Compared as addresses (§1): case and a default port don't make it another server.
+		expect(linkUse({ token: 't', state: 's', server: 'wss://HOME.example:443' }, find(ours))).toMatchObject({ kind: 'own', server: 'wss://home.example/' });
+		expect(linkUse({ token: 't', state: 'add', server: 'wss://home.example/' }, find(ours))).toEqual({ kind: 'addition', token: 't', server: 'wss://home.example/', account: 'ada', state: 'add' });
+		// Naming another server, none, or one that isn't one, it is dropped (§4.11.2): never used there, here, or asked about.
+		const elsewhere = { kind: 'elsewhere', server: 'wss://home.example/' };
+		expect(linkUse({ token: 't', state: 's', server: 'wss://evil.example/' }, find(ours))).toEqual(elsewhere);
+		expect(linkUse({ token: 't', state: 's', server: 'wss://home.example/other' }, find(ours))).toEqual(elsewhere);
+		expect(linkUse({ token: 't', state: 's' }, find(ours))).toEqual(elsewhere);
+		expect(linkUse({ token: 't', state: 's', badServer: true }, find(ours))).toEqual(elsewhere);
+		expect(linkUse({ token: 't', state: 'add', server: 'wss://evil.example/' }, find(ours))).toEqual(elsewhere);
+		expect(linkUse({ token: 't', state: 'add' }, find(ours))).toEqual(elsewhere);
 		// Without the state of a proposal made here, the viewer is asked; and a bad server is never swapped for another.
 		const stranger = { token: 't', state: 'theirs', server: 'wss://other.example/' };
 		expect(linkUse(stranger, find(ours))).toEqual({ kind: 'ask', link: stranger });
@@ -96,11 +115,6 @@ describe('sign-in links (§4.11.2)', () => {
 		expect(sessionSettled({ ...base, error: 'Sign in with your email from the connect screen.' })).toBe(true);
 		expect(sessionSettled({ ...base, server: { ...server, auth: ['email'] }, keptSession: true, error: 'No token resume' })).toBe(true);
 		expect(sessionSettled(base)).toBe(false);
-	});
-
-	it('returns an external sign-in to this app’s own path', () => {
-		expect(returnUrl({ origin: 'https://web.apron.chat', pathname: '/' })).toBe('https://web.apron.chat/');
-		expect(returnUrl({ origin: 'http://localhost:5173', pathname: '/app/' })).toBe('http://localhost:5173/app/');
 	});
 
 	it('keeps a connect-screen code only for the server that sent it', () => {

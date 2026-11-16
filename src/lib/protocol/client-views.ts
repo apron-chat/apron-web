@@ -24,6 +24,7 @@ export function parseServerParams(params: JsonObject | undefined): ServerParams 
 	if (!params || typeof params.apron !== 'number' || !Array.isArray(params.auth)) return undefined;
 	const auth = params.auth.filter(isString);
 	if (!auth.length) return undefined;
+	const labels = parseLabels(params.labels);
 	return {
 		apron: params.apron,
 		...(typeof params.agent === 'string' ? { agent: params.agent } : {}),
@@ -31,6 +32,7 @@ export function parseServerParams(params: JsonObject | undefined): ServerParams 
 		auth,
 		...(Array.isArray(params.signup) ? { signup: params.signup.filter(isString) } : {}),
 		...(typeof params.welcome === 'string' && params.welcome.trim() ? { welcome: params.welcome } : {}),
+		...(labels ? { labels } : {}),
 		// How it shows itself (§3.1): never what it is known by, its address (§1).
 		...(typeof params.title === 'string' ? { title: params.title } : {}),
 		...(typeof params.description === 'string' ? { description: params.description } : {}),
@@ -40,6 +42,31 @@ export function parseServerParams(params: JsonObject | undefined): ServerParams 
 		...(Array.isArray(params.status) ? { status: params.status.filter(isString) } : {}),
 		...(typeof params.ping === 'number' && Number.isFinite(params.ping) && params.ping > 0 ? { ping: params.ping } : {})
 	};
+}
+
+/** The longest label a server may give a scheme (§3.2), in characters (code points, so an emoji is one). */
+export const MAX_LABEL_CHARS = 64;
+
+/**
+ * A `server` frame's `labels` (§3.2) as this client shows them: each a
+ * string, as plain text on one line (`cleanPlainText`, line breaks as
+ * spaces), cut to `MAX_LABEL_CHARS`. A value that isn't a string, or is
+ * empty once cleaned, is dropped, and so is `labels` when it isn't an object
+ * or none is left. Keys are kept as sent, for any scheme, known or not; the
+ * object has no prototype, so a key such as `__proto__` is only a key.
+ */
+export function parseLabels(value: unknown): Record<string, string> | undefined {
+	if (!isJsonObject(value)) return undefined;
+	const labels: Record<string, string> = Object.create(null);
+	let any = false;
+	for (const [scheme, label] of Object.entries(value)) {
+		if (typeof label !== 'string') continue;
+		const clean = cleanPlainText(label.replace(/\s+/g, ' '), MAX_LABEL_CHARS);
+		if (!clean) continue;
+		labels[scheme] = clean;
+		any = true;
+	}
+	return any ? labels : undefined;
 }
 
 /**

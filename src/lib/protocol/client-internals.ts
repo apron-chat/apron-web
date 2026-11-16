@@ -91,9 +91,9 @@ export type LiveRecord = { kind: 'message'; record: MessageRecord; embedded?: bo
 
 /**
  * How a kept session signed in (see `ChatClient.signedInWith`), or what was
- * added to it. `link` is an email or an external sign-in, by a link of no
- * proposal this browser made, on a server that offers both: either scheme
- * approves it (§4.11.3), so which one it was isn't known.
+ * added to it. `link` is a sign-in link of no proposal this browser made,
+ * recorded before links could only be email ones (§4.11.3): kept, and read
+ * as email.
  */
 export type SignInMethod = 'webauthn' | 'email' | 'external' | 'link' | 'token';
 

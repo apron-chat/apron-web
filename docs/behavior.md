@@ -260,7 +260,7 @@ in an `auth` or `me` result, and the `users` of `room_list` and `room_update`
 field by field: a present field replaces (`null` too, as an ordinary value), an
 empty one (`""`, `[]`, `{}`) clears it and is kept as cleared, and a missing
 one changes nothing. `ext` merges the same way one level down
-([PROTOCOL.md §4.12](https://github.com/shazow/apron/blob/main/PROTOCOL.md#412-ext)): each key replaces the kept value, an empty value
+([PROTOCOL.md §4.13](https://github.com/shazow/apron/blob/main/PROTOCOL.md#413-ext)): each key replaces the kept value, an empty value
 clears that key (kept as cleared), and `"ext": {}` changes nothing. Your own `status` comes only
 from `you`, never from your entry in `users` or `members`. Recorded objects, a message's or reaction's `from` and a
 membership's `user`, describe the user as of their record and never merge. A
@@ -1816,9 +1816,13 @@ again, and the connected server's own frame stands in for it. Then the form offe
 choice among the schemes the server advertises (`auth`, then the rest of `signup`, in its order; chosen first is the
 way this device last signed in to that server, guest included and kept through signing out, marked "last used",
 else the server's first;
-Passkey, below; Email, External and Token, further down) that this app can use here: with one there is no
+Passkey, below; Email, External and Token, further down) that this app can use here, each called by the server's
+label for it where `server.labels` gives one
+([PROTOCOL.md §3.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#32-authentication)), else by this app's
+name, and External without a label by the server's host, where its sign-in begins: with one there is no
 **Sign in with** row, and with none (only passkeys in a browser without them, or schemes this app doesn't know) it
-says which the server asks for and offers **Change server**. A server whose greeting says it only reads, a served
+says which the server asks for and offers **Change server**. The choices sit side by side while every one fits on
+that line whole, else one to a row in the same order, where a long name wraps. A server whose greeting says it only reads, a served
 archive (`ext:archive` with `guest`, [ARCHIVE.md §4](../ARCHIVE.md#4-serving)), which signs every guest in as its own
 `you`, asks nothing more: **Continue** joins it as a guest, with no display name and no `me` after. Whether any other
 server lets a guest write is only known once signed in (`you.ext.permissions`), so the name is asked there as usual. A server speaking another protocol version gets a
@@ -1870,8 +1874,12 @@ to … as …" with **Sign out** at the end, in the danger tone. A guest's Sign-
 row is **Sign in** alone, at the end of its hint's line, as the composer offers it where guests can't post: the
 connect screen, at the way the server signs in first, whatever the server's
 `auth` lists (as the composer's). An account's offers, where the server's `auth` lists them,
-**Add passkey**, **Add email** and **Add external sign-in**, and the row after
-it **Sign out**. Add email proposes and approves on the account's connection,
+**Add passkey**, **Add email** and **Add external sign-in**, each a button
+with a plus and the scheme's name alone: the server's label where it gives
+one, else **+ Passkey**, **+ Email** and **+ External sign-in** (not the host,
+as the connect screen has it: signed in there, that would read as adding the
+server), in a group named "Add a way to sign in". Below, these go by their
+actions' names. The row after has **Sign out**. Add email proposes and approves on the account's connection,
 which adds the address to the account (§4.11). Adding needs the
 scheme in `auth`, since adding is a way back in and a scheme listed only in
 `signup` doesn't sign in (the spec doesn't say whether servers may allow
@@ -1884,15 +1892,21 @@ so adding one keeps your guest identity and message ownership; signing in
 restores the identity attached to your chosen passkey. **Add email** asks for
 an address, proposes adding it on this signed-in connection (`auth` with
 `scheme: "email"` and `email`), and approves the proposal with the emailed code
-on this same connection (`scheme: "email"` and `token`, no address), which
-adds the address to the account and answers `{}` (§4.11.3); a refused code says
-the address may belong to another account. A typed code works only on the
-connection that proposed it, so if this connection dropped in between, the
-form asks for a new code; the link in the email still adds the address (below).
-**Add external sign-in** proposes on this connection (`scheme: "external"`,
-`return_url` and `state`) and opens the server's page in place of this one; the
-page comes back with a link that adds the identity, or, where the server won't
-return here, shows a code for the form. Adding doesn't change how
+with the proposal's `state` (`scheme: "email"`, `token` and `state`, no
+address), which adds the address to the account and answers `{}` (§4.11.3); a
+refused code says the address may belong to another account. With the `state`
+a typed code works on a later connection too (§4.11.2), so if this connection
+dropped in between, the code still adds the address once the page has
+reconnected, signed in to the same account; signed in as another, the form
+asks for a new code. A code refused on another connection than the one that
+proposed it adds the same words as the connect screen's (below), since a server from
+before the `state` takes it only there. The link in the email also adds the address (below).
+**Add external sign-in** opens the server's sign-in page as the connect
+screen's external choice does (below) and redeems its code on this signed-in
+connection, which adds the identity to the account (§4.12.4); the Sign-in row
+says "Finish in the window that opened." meanwhile, with **Cancel**. **Add
+passkey** goes to the server's passkey page the same way where this page can't
+create a passkey for the server's RP ID (below). Adding doesn't change how
 the session signed in: it is remembered beside it, as another way back in.
 When, as far as this browser knows, the account has no way back in that the
 server signs in with (only a kept token, pasted or an invite, or an account
@@ -1957,11 +1971,29 @@ sheet only ever opens for a tap:
 The client runs a ceremony only when its RP ID (`rp.id` when creating,
 `rpId` when signing in, else the page's host) is the server's host or a
 domain that the host is under, such as `apron.chat` for `server.apron.chat`.
-Otherwise it says "This server (<host>) asked for a passkey for <RP ID>,
-which is not its own." and opens no sheet. The browser binds a passkey to
-the page, which every server shares, so without this check a server could
-relay another server's challenge, under an RP ID that this page can use, and
-sign in there as the user.
+Otherwise it opens no sheet. The browser binds a passkey to the page, which
+every server shares, so without this check a server could relay another
+server's challenge, under an RP ID that this page can use, and sign in there
+as the user.
+
+**The server's passkey page**
+([PROTOCOL.md §4.10.1](https://github.com/shazow/apron/blob/main/PROTOCOL.md#4101-passkey-page)): a
+passkey works only on its RP ID's domain and the origins that domain lists as
+related, so on most servers other than `apron.chat`'s this page can't use one.
+A begin result may name the server's passkey page, `external.url`. The client
+goes there, as the external choice does (above, with the same window, `state`, PKCE,
+`/signed-in/` and fallback to this tab), when the RP ID fails the check, when
+the browser refuses it (`SecurityError`, which it does at once, before any
+sheet), or when the begin result has no `public_key` (the server requires its
+page this time); a dismissed sheet stays a cancel. The page runs the passkey on
+the server's own domain and sends back a code, which finishes the ceremony on
+this connection: a `webauthn` finish step with the begin's `action`, `code`,
+`code_verifier`, `redirect_uri` and `client_id`, and no `challenge_id` or
+`credential`. This works for signing in, creating an account and **Add passkey**.
+A registration begun on a signed-in connection (a guest's included) adds to that
+account, so it finishes only on a connection still signed in as it. Without a
+passkey page the client says "<server>’s passkeys work only in its own apps and
+website." under the server's welcome.
 
 The client makes no WebAuthn request of its own: no conditional (autofill)
 or `immediate` mediation and no capability probes, which password-manager
@@ -2006,7 +2038,7 @@ the capability the client reads none of them. `read_cursors: false` says the
 server keeps no read cursors, so the client doesn't send `read_message_id`.
 A guest who only reads (`write: false`, above) sees it in the connect screen's
 Guest hint too. Other
-extension data (`ext`, [PROTOCOL.md §4.12](https://github.com/shazow/apron/blob/main/PROTOCOL.md#412-ext))
+extension data (`ext`, [PROTOCOL.md §4.13](https://github.com/shazow/apron/blob/main/PROTOCOL.md#413-ext))
 on users, messages and rooms is kept as the server sends it, and the client
 writes `ext` (with `me`, a message, or `room_set`) only to a server with the
 capability `ext`, which keeps it; the app itself writes none.
@@ -2030,7 +2062,7 @@ connection change cancels the active ceremony. Chat requests pause while a
 ceremony is active, preventing edits from crossing an identity change.
 
 With `email` in the server's `auth` or `signup`
-([PROTOCOL.md §4.11](https://github.com/shazow/apron/blob/main/PROTOCOL.md#411-email-and-external-sign-in)),
+([PROTOCOL.md §4.11](https://github.com/shazow/apron/blob/main/PROTOCOL.md#411-email-sign-in)),
 the connect screen's **Email** asks for an address and proposes signing in
 with it: `auth` with `scheme: "email"` and `email`, which authenticates nothing
 and answers `{}` whether or not the address has an account. A proposal on a
@@ -2042,10 +2074,17 @@ after 15 minutes, by when the proposal has expired). Nothing on screen changes
 meanwhile: this connection, its identity and its rooms carry on. On a server
 the connect screen isn't connected to yet, it proposes there the same way,
 without first signing in as a guest. The code field then approves the proposal
-on that same connection (`scheme: "email"` and `token`, no address). A wrong
-code can be typed again on the same proposal; if that connection closes (the
-proposal expired, the server went away), the code field goes and the form asks
-for a new code, though the link in the email may still work (below). The code belongs to the server that proposed it: changing the
+on that same connection (`scheme: "email"`, `token` and the proposal's `state`,
+no address). A wrong code can be typed again on the same proposal. If that
+connection drops before the code is typed (a phone that put the page to sleep
+while you read the email, the server restarting), the code field stays: the
+code goes on a fresh connection to the same server, where the proposal's
+`state` lets it work (§4.11.2). A server from before the `state` refuses a
+code there, so a code refused on such a connection adds "On some servers a
+code works only in the window that asked for it: use the link in the email,
+or send a new code." to what the server said. Once the proposal has expired (15 minutes), or
+an approval went unanswered, the code field goes and the form asks for a new
+code, though the link in the email may still work (below). The code belongs to the server that proposed it: changing the
 Server field drops it and closes that connection, as does "Use another
 address". Once the code works, that connection, now signed in, becomes the
 client's connection (on its server, if another): the previous one closes, the
@@ -2060,20 +2099,67 @@ which each does. A scheme listed only in `signup` works end to end for joining
 (an email code, or registering a passkey); one listed only in `auth` only signs
 in (a passkey that only signs in is never registered from there).
 
-With `external` in the server's `auth` or `signup` (§4.11.5), the connect
-screen's **External** proposes on a connection of its own, as Email does
-(`scheme: "external"`, with `return_url`, this app's origin and path, and
-`state`), and opens the page the server answers with in place of this one,
-but only an `https` page, or `http` on a loopback host; any other `url`, such
-as `javascript:`, is refused. The page signs you in however the server
-chooses, and comes back with a link. A server that refuses the `return_url`
-(`invalid_params`: an origin it doesn't trust) is asked again without it: its
-page then shows a code, the connect screen offers the page as a link to open in a new tab, and
-the code field approves on the proposing connection, as an emailed code does.
-Any other refusal, `denied` included, is shown as the server words it, without
-asking again.
+With `external` in the server's `auth` or `signup`
+([PROTOCOL.md §4.12](https://github.com/shazow/apron/blob/main/PROTOCOL.md#412-external-sign-in)),
+the connect screen's external choice (the server's label for it, else the
+server's host; **Continue to sign-in page**) signs in on
+the server's own page, through OAuth 2.1's authorization code flow with PKCE
+(`$lib/protocol/authorization`, `$lib/ui/sign-in-page`):
 
-Every proposal, email or external, sign-in or addition, carries a new random
+1. **Begin.** The tap opens a small window at once (a browser lets a page
+   open one only during a tap), then begins on a connection of its own:
+   `auth` with `scheme: "external"` and nothing else, whose result names the
+   page, `external.url`. That connection closes. Only an `https` page, or
+   `http` on a loopback host, is opened; any other `url`, such as
+   `javascript:`, is refused. A server with the older, proposal-based
+   `external` answers with a top-level `url` and no `external` instead, which
+   this app can't use: the connect screen and **Add external sign-in** say the
+   server uses an older external sign-in this app doesn't support, to sign in
+   another way or ask its admin to update it.
+2. **Open.** The window goes to `url` with its own query kept and this
+   client's parameters added: `response_type=code`, this app's own
+   `client_id` (in place of any `url` has), `redirect_uri`, an S256
+   `code_challenge`, a random `state`, and `resource`, the server's origin
+   worked out from its WebSocket address
+   (`https://` plus host and port; `http://` for a `ws:` address on a loopback
+   host, as in development), never from anything the server said. The window
+   can't reach this one (`opener` is cleared). Where the browser blocks the
+   window, this tab goes to the page instead. Either way the request's PKCE
+   verifier, `state` and purpose are kept in session storage, one request per
+   server, for 30 minutes.
+3. **Return.** The page sends the viewer back to this app's `/signed-in/` with
+   `?code=…&state=…` (or `?error=access_denied`). In the window, that page
+   hands the answer to the tab that opened it (a `BroadcastChannel`, by
+   `state`) and closes; in this tab, it keeps the answer for the app and goes
+   back to `/`, so the code never stays in the address or history. An answer
+   is used only with the `state` of a request this tab made.
+4. **Redeem.** The code goes as `auth` with `scheme: "external"`, `code`,
+   `code_verifier`, `redirect_uri` and `client_id`, on a fresh connection that
+   is not signed in (on a signed-in one, a guest's included, it would add to
+   that account instead, §4.12.4), which then becomes the client's connection
+   as an emailed code's does, keeping the bearer `token` it gets. `iss` isn't
+   checked: the code goes only to the server it was begun on, which redeems it
+   at its own issuer.
+
+Meanwhile the hint says "Finish signing in in the window that opened." and
+**Cancel** closes the window. A decline on the page says "Sign-in was
+cancelled."; a window closed before it answered says "The sign-in window was
+closed before signing in finished."; another error from the page says what the
+page said. A tab that went to the page finishes when it comes back: an external
+sign-in at once, an addition or a passkey once the page's session has settled
+on the account it was for (the page's link controller), and a failure opens
+the connect screen with the reason. The `client_id` is
+`https://web.apron.chat/client-metadata.json`, this app's client ID metadata
+document (`static/client-metadata.json`: its name and its one `redirect_uri`),
+on that origin, which a server may read or ignore; on any other origin
+(development, Previews, another host) it is `apron-web`, since the document
+names production's `redirect_uri`. `redirect_uri` is this origin's
+`/signed-in/`: `http://localhost:5173/signed-in/` in development (a loopback
+address, which servers accept on any port), `https://` on Previews and in
+production. A copy served over `http` from a non-loopback address can't use a
+sign-in page: servers refuse that `redirect_uri`.
+
+Every email proposal, sign-in or addition, carries a new random
 `state` (§4.11.1), remembered in local storage for an hour with the server it
 went to and whether it signs in or adds, for the account that proposed it. A
 proposal outlives its connection (a disconnect doesn't cancel it, and a newer
@@ -2100,16 +2186,21 @@ that a link someone sent you can sign you in to their account, which matters
 all the more as the link can't say which account it is for. Nor can it say
 whether it signs in or adds (one proposed on another device could be either):
 when this page is signed in on the link's server (a guest too) and that server
-signs in with email or an external page, the dialog asks "Use this link on
+signs in with email, the dialog asks "Use this link on
 *server*?" and offers **Add it** to the signed-in account, as well as
-**Sign in**. Adding approves on this connection, which the server allows only
+**Sign in**. Either way, a link the viewer was asked about presents its token
+as `scheme: "token"` (§4.11.2), since it may not be an emailed link at all,
+such as an invite's; only a link of a proposal here goes with the proposal's
+`email`. Adding approves on this connection, which the server allows only
 if this account proposed it (§4.11.3); a refusal says it may have been for
-signing in, or for another account. On **Sign in** it
+signing in, or for another account. A token that the server takes as a
+sign-in to another account instead (§3.2.2), such as an invite's, adds
+nothing: the page says so and connects again, resuming its own session. On **Sign in** it
 is used as a sign-in, on the link's server (this one unless it names another;
-a `server` that isn't a WebSocket URL makes it unusable), with a scheme that
-server offers, since approval takes either (§4.11.3). Such a sign-in is
-recorded as the only scheme the server offers, or as an email or external
-sign-in, not saying which, when it offers both. A link never adds to an
+a `server` that isn't a WebSocket URL makes it unusable), if that server
+offers email or `token`. Such a sign-in is recorded as an email sign-in (a
+`link` kept from before links could only be email ones counts as one). A link
+never adds to an
 account without its addition's `state` or the viewer's **Add it**. Only once a sign-in has
 worked is a switch to another server remembered, and the server listed under
 Recent; on the same server the account signed in before is signed out of as

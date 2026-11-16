@@ -244,7 +244,8 @@ places and themes the emoji picker (`emoji-picker.svelte.ts` keeps the one open
 picker and loads emoji-mart), `draft.ts` edits the composer's draft, `draft-field.svelte.ts` (`DraftField`) is the field both the composer and the message editor write in (chips, caret and autocomplete), `role-mentions.ts` finds the roles an `@` can name (`@&role`) and who each one mentions, `link-previews.ts` finds a draft's links and fetches previews for those on a site `link-sites.ts` maps (GitHub, YouTube, X, Bluesky, Wikipedia), `messages.ts`
 and `time.ts` read messages, `connection.ts` words the connection state, and
 `commands.ts` maps the composer's `/` commands to requests (and picks the `ext:media` category a send's files fit: `emoji` for `/emoji add`),
-`sign-in-link.ts` reads and scrubs a sign-in link (emailed, or the return from an external sign-in page) from the URL, tells this browser's own proposals' links from others, and words the question asked before using another's,
+`sign-in-link.ts` reads and scrubs an emailed sign-in link from the URL, tells this browser's own proposals' links from others, and words the question asked before using another's,
+`sign-in-page.ts` signs in on a server's page (external sign-in, and a server's passkey page), loaded on demand: it builds the request (`protocol/authorization.ts`), keeps it in session storage, waits for the answer by `state`, and redeems it for its purpose (`finishAuthorization`); `sign-in-window.ts`, which loads with the app, opens the window during the tap and tells whether a page sent this tab back; `sign-in-callback.ts` is the `/signed-in/` page's own (`src/routes/signed-in`), sharing no module with the app's page so it adds no chunk to its start; `link-controller.svelte.ts` finishes an answer that came back to this tab,
 `members.ts` reads the `user_id` typed to add a member, adds people to a room in turn (`addMembers`, whose refusals `couldNotAdd` words) and splits the member list into Online and Offline (`memberSections`), `people.ts` sorts people by name (`byName`) and narrows who could be picked by what's typed (`pickable`, `matching`) for both people pickers, and
 `room-order.svelte.ts` keeps the sidebar's top-level rooms in an order of your own (`RoomOrder`, by account under `apron.roomOrder`), which the sidebar drags rooms in (`room-drag.ts`, on demand) and moves with Alt+↑/↓,
 `storage.ts` keeps everything remembered between visits under `apron.*` keys,
@@ -333,8 +334,15 @@ the one wait to hear from a socket opening or probed and the standby that
 races it, reconnecting with backoff, waiting for the page to be
 shown and online), which reaches the session only through its hooks,
 `signin-connection.ts`
-the connection an email or external sign-in proposes and approves on, and
-`proposals.ts` the proposals this browser made, kept by their `state`.
+the connection an email sign-in proposes and approves on (and an external
+sign-in begins and redeems on), `proposals.ts` the email proposals this
+browser made, kept by their `state`, `external.ts` what a begin result says
+about a sign-in page (`parseExternal`, which loads with the app),
+`authorization.ts` the OAuth 2.1
+authorization request that external sign-in and a passkey page share (the
+URL, PKCE, `resource` from the WebSocket address, reading the answer, checking
+`state`), and `passkey-route.ts` where a passkey ceremony runs: in this page,
+or on the server's passkey page.
 `plain-text.ts` cleans text that people write and others see as plain text,
 such as a bio (`ext:bio`): `cleanPlainText` drops control characters and the
 bidi overrides and isolates that could make the text around it read
@@ -482,7 +490,7 @@ remove someone else; an `unsupported` reply sets the snapshot's
 
 Every successful `auth` result is handled alike: its `you` becomes the
 connection's identity and a `token` in it replaces the saved one, whether it
-answers a guest sign-in, a token resume (rotation), a passkey, or an email or external sign-in.
+answers a guest sign-in, a token resume (rotation), a passkey (in this page or on the server's passkey page), or an email or external sign-in.
 A passkey ceremony is `usePasskey(action, name?)`, one per tap: `login` or
 `register` (§4.10), modal mediation only, on the connection to this server
 whether or not it is signed in. It is busy (`authBusy`, `passkeyBusy`) from
@@ -496,28 +504,29 @@ sign-in never runs one: where only a passkey brings a registered session back
 connection (`held`) and says how to sign in (`signInNeeded`), and the page's
 sign-in panel (`SignIn.svelte`, state machine in `$lib/ui/sign-in`) takes the
 user's tap from there.
-Email and external sign-in (§4.11) propose on a connection of their own,
+Email sign-in (§4.11) proposes on a connection of its own,
 since a proposal on a signed-in connection would add to its account, and a
-short code works only on the connection that proposed it: `requestEmailCode(email,
-url?)` and `proposeExternal(returnUrl, url?)` open a `SignInConnection`
+short code works only on the connection that proposed it, or with the
+proposal's `state` (§4.11.2): `requestEmailCode(email,
+url?)` opens a `SignInConnection`
 (`signin-connection.ts`) to that server that never signs in until approved,
-wait for its `server` frame, and propose (`auth` without `token`, with
-`email` or `return_url`). Each proposal carries a new random `state`,
+waits for its `server` frame, and proposes (`auth` without `token`, with
+`email`). Each proposal carries a new random `state`,
 remembered first in local storage (`proposals.ts`, for an hour) with its
 server and whether it signs in or adds, for the link that comes back with it,
-in this tab or another. An external proposal's `url` is opened only when it is
-`https`, or `http` on a loopback host (`signInPageUrl`); a `return_url` the
-server refuses (`invalid_params`, a rejected value) is dropped and the proposal
-sent again without it, so the page shows a code instead. Any other refusal,
+in this tab or another. A refusal,
 `denied` included, is shown as it is, not retried. A proposal that fails is
 forgotten from local storage, so failures don't push out a live one. The connection stays open
 for a code (pinging, and closed after `PROPOSAL_MS`) as the snapshot's
-`signInCode`, leaving this connection and its view untouched; with a return,
-it closes, since a link works on any connection. A newer proposal,
+`signInCode`, leaving this connection and its view untouched. A newer proposal,
 `cancelSignInCode()` and `stop()` close it, but the server keeps the proposal,
 and its link still works. `signInWithCode(code, name?, beforeSwitch?)`
-approves on it (`auth` with `token`, the proposal's scheme); a `denied` code
-leaves it open to try again. On success the client
+approves on it (`auth` with `token` and the proposal's `state`, in the
+proposal's scheme); a `denied` code leaves it open to try again. If that
+connection closed meanwhile (a drop, a server restart), the proposal stays
+until `PROPOSAL_MS` after it was made, and the code goes on a fresh
+connection to its server, where the `state` lets it work (§4.11.3); that
+connection is the proposal's from then on. On success the client
 adopts that connection as its own: `beforeSwitch` runs, it moves to that
 server if another (`switchServer`, as `setUrl` without connecting), closes its
 connection as `restart` would, attaches the socket (`Transport.adopt`, through
@@ -527,15 +536,30 @@ result. `signInWithLink(token, url?, { scheme?, state?, beforeSwitch? })` does
 the same with a link's token on a fresh connection, with the proposal's
 scheme or else one the server offers (approval takes either); a refused link
 changes nothing. Approval forgets the proposal's `state`. It is recorded as
-signed in with the proposal's scheme, or the only one the server offers, or
-else `link` (email or external, not known which), never a guess.
-`requestEmailCodeToAdd` and `proposeExternalToAdd(returnUrl?)` propose on the
+signed in with email (a `link` kept from before counts as email).
+External sign-in (§4.12) is OAuth 2.1's authorization code flow with PKCE,
+redeemed on the connection: `beginExternal(url?)` sends a begin (`auth` with
+`scheme: "external"` alone) on a `SignInConnection` that closes once answered,
+and resolves with `external.url` once it is an `https` page (or loopback
+`http`); `signInWithExternalCode(redeem, url?, { name?, beforeSwitch? })`
+sends `code`, `code_verifier`, `redirect_uri` and `client_id` on a fresh one
+and adopts it as `signInWithCode` does; `addExternalWithCode(redeem, account)`
+sends them on the signed-in connection, which adds the identity. A passkey
+begin whose result names the server's passkey page (`external`) and whose RP
+ID this page can't use (the check fails, the browser throws `SecurityError`,
+or there is no `public_key`) makes `usePasskey` throw `PasskeyPageNeeded`
+(`passkey-route.ts`); the page then runs the authorization flow
+(`$lib/ui/sign-in-page`) and `finishPasskeyWithCode(action, redeem, { server,
+account?, name? })` sends the `webauthn` finish step with the code on this
+connection, handled as a ceremony's finish (`passkeyFinished`). Without a page,
+`usePasskey` says the server's passkeys work only in its own apps and website.
+`requestEmailCodeToAdd` proposes on the
 signed-in connection, for its account; `addWithCode(code)` approves on that
 same connection (refused if it has reconnected since), and
 `addWithLink(token, state)` on any connection signed in to the account that
 proposed it; `addWithConfirmedLink(token)`, on this connection, for a link of
 no addition this browser proposed that the viewer said is one (the server
-refuses it unless this account proposed it). Their `{}` result adds the address or identity: another way back
+refuses it unless this account proposed it). Their result adds the address or identity: another way back
 in for a registered session, or, for a guest without a token, what makes it an
 account. How the kept
 session signed in (`webauthn`, `email`, `external`, `link`, `token`) is remembered beside its token
@@ -545,7 +569,9 @@ passkey accept a scheme listed in `auth` or `signup`, and adding an email or an 
 token resume need it in `auth`. The `server` frame ([PROTOCOL.md §3.1](https://github.com/shazow/apron/blob/main/PROTOCOL.md#31-server-frame))
 is kept on the snapshot's `server` as sent: `apron` (the version), `capabilities`,
 `agent` (the implementation, for debugging; the UI labels a server by its
-`title` or else its host, never by `agent`), `welcome`, `title`,
+`title` or else its host, never by `agent`), `welcome`, `labels` (each a
+string, cleaned to one line of plain text and cut to 64 characters by
+`parseLabels`, the only field not kept as sent), `title`,
 `description`, `avatar` (which `serverLook` reads, the avatar only where a
 user's would load), `signup`, `ping`, `push`, `status` and `ext`. A server is
 known by its address, `serverAddress` (RFC 3986 §6.2.2–6.2.3, without a

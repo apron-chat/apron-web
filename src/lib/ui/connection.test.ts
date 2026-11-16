@@ -82,8 +82,9 @@ describe('ways back into an account', () => {
 		expect(wayBackNudge({ auth: ['email'] }, ['email'])).toBeUndefined();
 		expect(wayBackNudge({ auth: ['external', 'token'] }, ['token'])).toEqual(['external']);
 		expect(wayBackNudge({ auth: ['email', 'external'] }, ['external'])).toBeUndefined();
-		// `link`: an email or an external sign-in, not known which; either one the server signs in with counts.
-		expect(wayBackNudge({ auth: ['webauthn', 'external'] }, ['link'])).toBeUndefined();
+		// `link`: an email link, kept from before links could only be email ones.
+		expect(wayBackNudge({ auth: ['webauthn', 'email'] }, ['link'])).toBeUndefined();
+		expect(wayBackNudge({ auth: ['webauthn', 'external'] }, ['link'])).toEqual(['webauthn', 'external']);
 		expect(wayBackNudge({ auth: ['webauthn'] }, ['link'])).toEqual(['webauthn']);
 		// Nothing to suggest, or nothing known.
 		expect(wayBackNudge({ auth: ['token'] }, ['token'])).toBeUndefined();
@@ -99,5 +100,8 @@ describe('ways back into an account', () => {
 		expect(addError(Object.assign(new Error('denied'), { code: -32001 }), 'external')).toMatch(/belong to another account/);
 		expect(addError(new Error('Rate limited'))).toBe('Rate limited');
 		expect(addError(Object.assign(new Error('denied'), { code: -32001 }), 'link')).toMatch(/for signing in rather than adding/);
+		// A code refused off the connection that asked for it says so after the usual words.
+		const hint = 'On some servers a code works only in the window that asked for it: use the link in the email, or send a new code.';
+		expect(addError(Object.assign(new Error('denied'), { code: -32001, hint }))).toBe(`That code was refused: it may be wrong or expired, or the address may belong to another account. Ask for a new code, or sign in with that address instead. ${hint}`);
 	});
 });

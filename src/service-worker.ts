@@ -29,10 +29,14 @@ const ARCHIVE_PAGE = `${base}/archive`;
 /** A font a theme carries (fonts.css), which loads only for a theme that uses it. */
 const isFont = (path: string) => path.endsWith('.woff2');
 /**
- * Static files the app itself never loads: the link preview's image (`og.png`, for other sites' crawlers) and
- * `robots.txt`. And the preview's page (`/__preview`), which only a preview build has, for its tests.
+ * Static files the app itself never loads: the link preview's image (`og.png`, for other sites' crawlers),
+ * `robots.txt`, and the client ID metadata document (for servers, `$lib/ui/sign-in-page`). The page a sign-in page
+ * sends the user back to (`/signed-in/`), which is only of use online. And the preview's page (`/__preview`), which
+ * only a preview build has, for its tests.
  */
-const NOT_THE_APPS = new Set([`${base}/og.png`, `${base}/robots.txt`, `${base}/__preview`]);
+const NOT_THE_APPS = new Set([
+	`${base}/og.png`, `${base}/robots.txt`, `${base}/client-metadata.json`, `${base}/signed-in`, `${base}/signed-in/`, `${base}/__preview`
+]);
 /**
  * `version.json` is left out: it must always come from the network to tell a deploy happened. So are the fonts:
  * installing each for everyone would download the themes' fonts whatever the theme. One is kept once a theme loads it.

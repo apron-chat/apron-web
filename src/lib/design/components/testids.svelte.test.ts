@@ -146,9 +146,6 @@ const rows: Row[] = [
 		email: () => byLabel('Email'), code: () => byLabel('Code'), name: () => byLabel('Display name'), submit: () => dom.button('Connect')
 	}],
 	['SignInForm, token', SignInForm, { schemes: ['token'], scheme: 'token', submit: 'Connect', tokenTestid: 'token', emailTestid: 'email' }, { token: () => byLabel('Token') }],
-	['SignInForm, external', SignInForm, { schemes: ['external'], scheme: 'external', submit: 'Connect', sent: { scheme: 'external', page: 'https://sso.example/' }, pageLinkTestid: 'page', codeTestid: 'code' }, {
-		page: () => dom.byRole('link', 'Open the sign-in page'), code: () => byLabel('Code')
-	}],
 	['SignInForm, passkey', SignInForm, { schemes: ['webauthn'], scheme: 'webauthn', submit: 'Continue', passkeyChoice: true, passkeyChoiceTestid: 'passkey' }, {
 		passkey: () => dom.byRole('radiogroup', 'Passkey'), 'passkey-login': () => dom.byRole('radio', /^Sign in/), 'passkey-register': () => dom.byRole('radio', /^Create account/)
 	}],
