@@ -1,5 +1,5 @@
 import { DEVICES, Preview, expect, test } from './fixtures';
-import type { MockOptions } from './mock-server';
+import { mockServer, type MockOptions } from './mock-server';
 
 /**
  * The rooms list's head, which shows the server you're on and opens the server pane: what is known of it, New
@@ -271,6 +271,39 @@ test.describe('a link to a server not used here', () => {
 		const after = sentTo.filter((sent) => sent.url === PIPER).map((sent) => sent.frame);
 		expect(after.filter((frame) => frame.method === 'auth').map((frame) => frame.params.scheme)).toEqual(['guest']);
 		expect(after.filter((frame) => frame.method === 'me')).toEqual([]);
+	});
+
+	test('connects nowhere while it asks, taking no other window’s server, and Cancel connects to its own', async ({ preview, page, context }) => {
+		const opened: string[] = [];
+		await preview.openRoot({ opened });
+		const own = opened[0];
+		// The link opens in a new tab, as a link to another server does: what it asks of the browser is recorded from its first script.
+		await context.addInitScript(() => {
+			const locks: string[] = [];
+			(window as unknown as { locksAsked: string[] }).locksAsked = locks;
+			const request = navigator.locks.request.bind(navigator.locks) as (...args: unknown[]) => Promise<unknown>;
+			navigator.locks.request = ((...args: unknown[]) => {
+				// A server's, as a window connecting to it takes it (`ServerClaim`); others (push's) aren't this test's.
+				if (String(args[0]).startsWith('apron-connection:')) locks.push(String(args[0]));
+				return request(...args);
+			}) as LockManager['request'];
+		});
+		const tab = await context.newPage();
+		const tabOpened: string[] = [];
+		await mockServer(tab, { opened: tabOpened, servers: { [PIPER]: { auth: ['guest'], title: 'Pied Piper' } } });
+		await tab.goto(`${process.env.E2E_URL}/#server=${encodeURIComponent(PIPER)}&room=eng`);
+		const form = tab.getByRole('form', { name: 'Sign in' });
+		await expect(form).toContainText('A link opened this page to #eng on this server.');
+		// Asking: no connection, to the link's server or its own, and no server taken from the first window, which stays connected.
+		expect(tabOpened).toEqual([]);
+		expect(await tab.evaluate(() => (window as unknown as { locksAsked: string[] }).locksAsked)).toEqual([]);
+		await expect(page.getByTestId('connection-status')).toHaveText('Connected');
+		// Cancel: this tab stays on its own server, and connects to it now.
+		await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+		await expect(form).toHaveCount(0);
+		await expect(tab.getByTestId('connection-status')).toHaveText('Connected');
+		expect(tabOpened).toEqual([own]);
+		expect(await tab.evaluate(() => (window as unknown as { locksAsked: string[] }).locksAsked)).toEqual([`apron-connection:${own}`]);
 	});
 
 	test('says when the address isn’t an Apron server, and Cancel stays where the page was', async ({ preview, page }) => {

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { ComponentProps } from 'svelte';
+	import type { DraftFacts } from '$lib/design/components/compose';
 	import ComposerEditable from '$lib/design/components/ComposerEditable.svelte';
 	import type { MentionPerson } from '$lib/protocol/markdown';
 	import { DraftField } from '$lib/ui/draft-field.svelte';
@@ -91,9 +92,9 @@
 		draft.insert(text);
 	}
 
-	/** The draft has more than one line (`DraftField.multiline`). */
-	export function multiline(): boolean {
-		return draft.multiline;
+	/** What the composer asks of the draft (`DraftField.facts`): reactive, and replaced only as one of them changes. */
+	export function facts(): DraftFacts {
+		return draft.facts;
 	}
 
 	/** Makes a formatting change to the draft and its selection, as typing it would (`DraftField.apply`). */

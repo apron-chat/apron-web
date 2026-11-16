@@ -11,6 +11,7 @@ import type { EmojiMartData } from '@emoji-mart/data';
 import { loadEmojiData } from './emoji-picker.svelte';
 import { directory } from './directory.svelte';
 import { enterAction, handheld } from './handheld';
+import { draftFacts, sameFacts, type DraftFacts } from '$lib/design/components/compose';
 import type { TextEdit } from './text-edit';
 
 /**
@@ -104,11 +105,12 @@ export class DraftField {
 	/** Nothing is in the field: its placeholder shows. */
 	empty = $state(true);
 	/**
-	 * The draft has more than one line: set only as that changes, so what reads it (the composer's Expand) isn't asked
-	 * again on every key, as it would be reading the draft itself.
+	 * What the composer asks of the draft (blank, past one line, a command, with a link): replaced only as one of them
+	 * changes, so what reads them isn't asked again on every key, as it would be reading the draft itself.
 	 */
-	multiline = $state(false);
-	private wasMultiline = false;
+	facts = $state.raw<DraftFacts>(draftFacts(''));
+	/** `facts` as last set, a plain copy: reading the state itself would cost each key what it is here to save. */
+	private lastFacts = draftFacts('');
 		/** The text after `@` at the caret, or undefined when the picker is closed. */
 	query = $state<string | undefined>();
 	/** The `:shortcode` or `#room` at the caret, while its picker is open. */
@@ -159,6 +161,8 @@ export class DraftField {
 	constructor(host: DraftHost, pickerId: string) {
 		this.host = host;
 		this.pickerId = pickerId;
+		// The draft the field opens on (one kept, or written before a recording), before it is drawn and first committed.
+		this.facts = this.lastFacts = draftFacts(untrack(() => host.value));
 		this.roles = $derived(roomRoles(host.people));
 		this.roleIds = $derived(this.roles.map((suggestion) => suggestion.role));
 		this.outsideRoles = $derived(host.outsiders?.length ? outsideRoles(host.outsiders, this.roleIds) : []);
@@ -650,9 +654,8 @@ export class DraftField {
 		const text = draftText(parts);
 		this.shown = { field: root, text };
 		this.empty = parts.length === 0;
-		// Compared with a plain copy: reading the state itself would cost each key what this is here to save.
-		const multiline = text.includes('\n');
-		if (multiline !== this.wasMultiline) this.multiline = this.wasMultiline = multiline;
+		const facts = draftFacts(text);
+		if (!sameFacts(facts, this.lastFacts)) this.facts = this.lastFacts = facts;
 		const mentioned = draftMentions(parts, this.roleMembers);
 		if (mentioned.join('\u0000') !== this.host.mentions.join('\u0000')) this.host.mentions = mentioned;
 		if (this.empty && root.childNodes.length > 0) root.replaceChildren();

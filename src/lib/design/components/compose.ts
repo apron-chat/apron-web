@@ -23,3 +23,29 @@ export function composing(event: Pick<KeyboardEvent, 'isComposing' | 'keyCode'>)
 export function isCommand(text: string): boolean {
 	return text.startsWith('/') && !text.startsWith('//');
 }
+
+/**
+ * What a Composer asks of its draft as it changes. Worked out in one pass where the draft is written (`DraftField`) and
+ * passed on only as one of them changes, so what reads a fact isn't asked again on every key, as it would be reading
+ * the draft itself.
+ */
+export interface DraftFacts {
+	/** Nothing but spaces, if anything: nothing to send. */
+	blank: boolean;
+	/** More than one line, by a line break. */
+	multiline: boolean;
+	/** A command (`isCommand`). */
+	command: boolean;
+	/** It may hold a link: every one previewed has `://`. */
+	linked: boolean;
+}
+
+/** The facts of a draft's text. */
+export function draftFacts(text: string): DraftFacts {
+	return { blank: !text.trim(), multiline: text.includes('\n'), command: isCommand(text), linked: text.includes('://') };
+}
+
+/** The same facts: a draft whose facts are the same as before needs nothing that reads them asked again. */
+export function sameFacts(a: DraftFacts, b: DraftFacts): boolean {
+	return a.blank === b.blank && a.multiline === b.multiline && a.command === b.command && a.linked === b.linked;
+}

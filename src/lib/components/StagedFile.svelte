@@ -2,7 +2,7 @@
 	import { localMedia } from '$lib/ui/media-gate';
 	import type { UploadFile } from '$lib/protocol/client';
 	import AttachmentTile from '$lib/design/components/AttachmentTile.svelte';
-	import { fileSize } from '$lib/ui/images';
+	import { fileSize } from '$lib/ui/file-size';
 	import type { StagedFile } from '$lib/ui/pane-drafts.svelte';
 
 	/**

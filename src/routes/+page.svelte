@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { docViewerHost, editorsNudge, installNudge, mentionAddLine, messageEditor, newPrivateDialog, newThreadDialog, profileCardHost, reactorsPopover, roomEditor, searchDialog, selectionBar, serverPaneHost, shortcutsDialog, signInLinkDialog } from '$lib/components/lazy';
+	import { docViewerHost, editorsNudge, fileUpload, installNudge, mentionAddLine, messageEditor, newPrivateDialog, newThreadDialog, profileCardHost, reactorsPopover, roomEditor, searchDialog, selectionBar, serverPaneHost, shortcutsDialog, signInLinkDialog } from '$lib/components/lazy';
 	import { onMount, tick, untrack } from 'svelte';
 	import { fromAction } from 'svelte/attachments';
 	import { pushState, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { passkeySupportError } from '$lib/protocol/webauthn';
-	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, editableTitle, findMessage, keepsBio, normalizeWebSocketUrl, serverArchive, serverLook, serverMedia, serverSettings, timelineMessages, webPushKey, yourPermissions, type ClientSnapshot, type EmbedEdits, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
+	import { ChatClient, UNSUPPORTED, defaultWebSocketUrl, editableTitle, findMessage, keepsBio, normalizeWebSocketUrl, serverArchive, serverLook, serverMedia, serverSettings, timelineMessages, webPushKey, yourPermissions, type ClientSnapshot, type EmbedEdits, type MediaTypes, type RoomSnapshot, type WebSocketFactory } from '$lib/protocol/client';
 	import { embedsLabel, serverOrigin } from '$lib/protocol/embeds';
 	import { withoutBidiOverrides } from '$lib/protocol/plain-text';
 	import { compareLogIds } from '$lib/protocol/reducer';
@@ -59,7 +59,7 @@
 	import { directory } from '$lib/ui/directory.svelte';
 	import { FeedbackState, type Feedback } from '$lib/ui/feedback.svelte';
 	import type { LiveComposer } from '$lib/ui/live-composer.svelte';
-	import { prepareUpload } from '$lib/ui/images';
+	import type { Attachment } from '$lib/ui/images';
 	import { MentionTracker } from '$lib/ui/mentions.svelte';
 	import { IncomingMessageTracker } from '$lib/ui/incoming-messages';
 	import { UnreadTracker, countElsewhere, mutedMentions } from '$lib/ui/unread.svelte';
@@ -301,6 +301,8 @@
 	const linkedParents = new Map<string, string | null | undefined>();
 	/** The connect screen is up for a link's server: it can be cancelled even before this server is ready. */
 	let offeringLink = $state(false);
+	/** The page opened on a link's server, offered, and hasn't connected anywhere yet: staying connects to its own. */
+	let awaitingOffer = false;
 	/** How far back a linked message is looked for, in pages of history. */
 	const LINKED_MESSAGE_PAGES = 20;
 	/** How long a pushed room waits for its account and rooms before it is dropped. */
@@ -1352,7 +1354,12 @@
 		});
 		// Each session the client begins goes on from what this device kept for its server.
 		keeper?.watch(chat);
-		chat.start();
+		// A link to a server not used here asks first (the connect screen, below). Until the viewer stays, this window
+		// doesn't connect to the one it was on, nor take it from the window using it (`ServerClaim`): disconnected, as
+		// the server pane's Disconnect leaves it, so connecting to either starts it (`stayAfterOffer`, `setUrl`).
+		if (offeredServer) chat.disconnect();
+		else chat.start();
+		awaitingOffer = Boolean(offeredServer);
 		client = chat;
 		if (signInLink) links.follow(signInLink);
 		if (pushed) void followPush(chat, pushed);
@@ -1436,6 +1443,22 @@
 		client.listMembers(room.id, maxAge).catch(() => undefined);
 	}
 
+	/**
+	 * The connect screen was cancelled: this window stays on its server. Opened on a link's server, offered, it hasn't
+	 * connected to it yet (`awaitingOffer`), and does now.
+	 */
+	function stayAfterOffer(): void {
+		connectOpen = false;
+		offeringLink = false;
+		if (!client) return;
+		serverInput = client.url;
+		// Not while another window has the server: Use here takes it back.
+		if (awaitingOffer && !elsewhere) {
+			awaitingOffer = false;
+			client.start();
+		}
+	}
+
 	/** Use here: this window takes its server back from the one that took it, and connects again. */
 	function useHere(): void {
 		if (!client || !elsewhere) return;
@@ -1462,6 +1485,7 @@
 
 	/** The connect form was submitted: whatever belonged to the previous backend goes. */
 	function leaveBackend(): void {
+		awaitingOffer = false;
 		drafts.open(undefined);
 		selectedRoomId = undefined;
 		activeThread = undefined;
@@ -1722,6 +1746,8 @@
 		connectOpen = false;
 		offeringLink = false;
 		disconnected = false;
+		// Signed in here, however (a token or a code to its own server starts the client itself): nothing waits on the offer.
+		awaitingOffer = false;
 	}
 
 	// --- Navigation and drafts ---
@@ -2464,11 +2490,22 @@
 	 * where it states them (`ext:media`); one that can't be readied, or that
 	 * the server said it doesn't take, is taken back off with the reason.
 	 */
+	/**
+	 * Readies a file for upload (`prepareUpload`), with the code that loads on demand: a staged file waits for it as it
+	 * waits to be readied. Code that couldn't be fetched says so plainly, not in the browser's words for a failed import.
+	 */
+	async function readyUpload(file: File, limits: MediaTypes | undefined): Promise<Attachment> {
+		const prepareUpload = await fileUpload.load().catch(() => {
+			throw new Error('The file couldn’t be readied, as part of the app didn’t load: check your connection and attach it again');
+		});
+		return prepareUpload(file, { limits });
+	}
+
 	function stageFiles(picked: File[]): void {
 		// Staging is local: it goes on whatever the connection, as typing does, and sending waits for it.
 		if (session.readOnly || !session.capabilities['embed:upload']) return;
 		const limits = serverMedia(session.server).upload;
-		const staged = picked.map((file): StagedFile => ({ id: `staged-${++stagedCount}`, file, prepared: prepareUpload(file, { limits }) }));
+		const staged = picked.map((file): StagedFile => ({ id: `staged-${++stagedCount}`, file, prepared: readyUpload(file, limits) }));
 		for (const { id, prepared } of staged) {
 			prepared.catch((cause: unknown) => {
 				drafts.unstage(id);
@@ -2506,7 +2543,7 @@
 		// `/emoji add` takes its image to the server's emoji limits (`ext.media.emoji`), not those it was staged to.
 		const media = serverMedia(session.server);
 		const limits = attachmentLimits(action, media);
-		const refit = limits !== media.upload ? staged.map(({ file }) => prepareUpload(file, { limits })) : undefined;
+		const refit = limits !== media.upload ? staged.map(({ file }) => readyUpload(file, limits)) : undefined;
 		const text = action.kind === 'message' ? action.text : draft;
 		const mentions = [...new Set([...composerMentions, ...added])];
 		const dismissed = drafts.dismissed;
@@ -3553,7 +3590,7 @@
 		{client} {session} bind:serverInput bind:displayName {passkeyUnavailable} bind:recentServers
 		canCancel={!disconnected && (session.rooms.length > 0 || session.ready || offeringLink)} initialScheme={connectScheme}
 		initialError={links.failure?.error} initialChoosing={connectChoosing} linked={offeringLink && linked ? { server: linked.server, room: linked.room } : undefined}
-		onconnect={leaveBackend} onconnected={connected} oncancel={() => { connectOpen = false; offeringLink = false; if (client) serverInput = client.url; }} onsignout={signedOut}
+		onconnect={leaveBackend} onconnected={connected} oncancel={stayAfterOffer} onsignout={signedOut}
 	/>
 {:else}
 <!-- A message row's embed, through the app's media gates; and the row being edited, in the editor loaded for it. -->

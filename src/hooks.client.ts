@@ -37,7 +37,9 @@ function connectEarly(): void {
 		const location = window.location;
 		// A notification's link names its room only (`takePushRoom`, which counts one with a room, as this does).
 		const link = new URLSearchParams(location.hash.slice(1)).get(PUSH_ROOM_PARAM) ? {} : readDestination(location);
-		openEarlyConnection(startServer(loadServerUrl() ?? defaultWebSocketUrl(location), link, loadRecentServers(), location).server);
+		const start = startServer(loadServerUrl() ?? defaultWebSocketUrl(location), link, loadRecentServers(), location);
+		// A link to a server not used here asks first: until the viewer answers, the page connects nowhere.
+		if (!start.offered) openEarlyConnection(start.server);
 	} catch {
 		// Never in the way of the app starting: the client connects itself.
 	}
