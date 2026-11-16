@@ -1207,7 +1207,7 @@
 		const stopFirstScreen = watchFirstScreen();
 		narrowMedia.addEventListener('change', narrowMediaChange);
 		// Taken, and scrubbed from the address bar, before anything else can read or keep the URL.
-		const signInLink = previewMode ? undefined : takeSignInLink(window.location, scrubUrl);
+		const signInLink = previewMode ? undefined : takeSignInLink(window.location, scrubUrl, findProposal);
 		// A server's sign-in page that this tab left the app for sent it back (`/signed-in/` brought the answer here):
 		// what finishes it loads only then.
 		const returning = !previewMode && returnedWaiting() ? import('$lib/ui/sign-in-page') : undefined;
@@ -1215,7 +1215,7 @@
 		const hashChanged = (event: HashChangeEvent) => {
 			// Preferences opening, closing or changing section (`ProfileBar`) doesn't move the page.
 			if (onlyPreferencesDiffer(event.oldURL, event.newURL)) return;
-			const link = previewMode ? undefined : takeSignInLink(window.location, scrubUrl);
+			const link = previewMode ? undefined : takeSignInLink(window.location, scrubUrl, findProposal);
 			if (link) {
 				links.follow(link);
 				return;

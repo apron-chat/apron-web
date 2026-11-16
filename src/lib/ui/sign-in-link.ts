@@ -38,9 +38,14 @@ export interface SignInLink {
  * `state` from the address bar (and so from history and bookmarks) at once,
  * keeping the rest of the URL, the fragment's other keys included. Any
  * fragment carrying `token` is scrubbed, even one that isn't a usable link.
- * Returns undefined, touching nothing else, when the fragment is not such a link.
+ * One of a proposal here (`find`) that names another server is dropped
+ * (`linkUse`), and its whole fragment goes: the server it names isn't
+ * offered either. Returns undefined, touching nothing else, when the
+ * fragment is not such a link.
  */
-export function takeSignInLink(location: Pick<Location, 'hash' | 'pathname' | 'search'>, replace: (url: string) => void): SignInLink | undefined {
+export function takeSignInLink(
+	location: Pick<Location, 'hash' | 'pathname' | 'search'>, replace: (url: string) => void, find?: (state: string | undefined) => Proposal | undefined
+): SignInLink | undefined {
 	const hash = location.hash;
 	const params = fragmentParams(hash);
 	if (!params?.has('token')) return undefined;
@@ -48,7 +53,7 @@ export function takeSignInLink(location: Pick<Location, 'hash' | 'pathname' | 's
 	const link = parseSignInLink(hash);
 	params.delete('token');
 	params.delete('state');
-	const rest = params.toString();
+	const rest = link && find && linkUse(link, find)?.kind === 'elsewhere' ? '' : params.toString();
 	replace(`${location.pathname}${location.search}${rest ? `#${rest}` : ''}`);
 	return link;
 }

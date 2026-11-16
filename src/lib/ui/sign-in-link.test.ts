@@ -28,6 +28,17 @@ describe('sign-in links (§4.11.2)', () => {
 		// A place link.apron.chat passed with the token stays (Appendix A.4).
 		expect(takeSignInLink({ hash: '#server=wss://chat.example/ws&room=general&token=apron_invite_x', pathname: '/', search: '' }, (url: string) => replaced.push(url))).toEqual({ token: 'apron_invite_x', server: 'wss://chat.example/ws' });
 		expect(replaced.at(-1)).toBe('/#server=wss%3A%2F%2Fchat.example%2Fws&room=general');
+		// One of a proposal here that names another server, or none, leaves nothing for the page to offer.
+		const ours = (state: string | undefined) => (state === 's' ? proposal({}) : undefined);
+		expect(takeSignInLink({ hash: '#token=1&state=s&server=wss%3A%2F%2Fevil.example%2F', pathname: '/', search: '?x=1' }, (url: string) => replaced.push(url), ours)).toEqual({ token: '1', state: 's', server: 'wss://evil.example/' });
+		expect(replaced.at(-1)).toBe('/?x=1');
+		expect(takeSignInLink({ hash: '#token=1&state=s&room=general', pathname: '/', search: '' }, (url: string) => replaced.push(url), ours)).toEqual({ token: '1', state: 's' });
+		expect(replaced.at(-1)).toBe('/');
+		// One naming the server proposed to, or of no proposal here, keeps the rest as before.
+		takeSignInLink({ hash: '#token=1&state=s&server=wss%3A%2F%2Fhome.example%2F', pathname: '/', search: '' }, (url: string) => replaced.push(url), ours);
+		expect(replaced.at(-1)).toBe('/#server=wss%3A%2F%2Fhome.example%2F');
+		takeSignInLink({ hash: '#token=1&state=theirs&server=wss%3A%2F%2Fevil.example%2F', pathname: '/', search: '' }, (url: string) => replaced.push(url), ours);
+		expect(replaced.at(-1)).toBe('/#server=wss%3A%2F%2Fevil.example%2F');
 		// Read before a live location is scrubbed.
 		const location = { hash: '#token=9', pathname: '/', search: '' };
 		expect(takeSignInLink(location, () => (location.hash = ''))).toEqual({ token: '9' });

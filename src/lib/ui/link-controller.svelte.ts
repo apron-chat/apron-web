@@ -105,7 +105,10 @@ export class SignInLinks {
 		const use = linkUse(link, (state) => this.host.findProposal(state));
 		if (!use) return;
 		if (use.kind === 'elsewhere') {
-			this.host.feedback.error(`That sign-in link is for another server, not ${serverLabel(use.server) || use.server}, where you asked for it, so it wasn’t used.`);
+			const asked = serverLabel(use.server) || use.server;
+			this.host.feedback.error(link.server || link.badServer
+				? `That sign-in link is for another server, not ${asked}, where you asked for it, so it wasn’t used.`
+				: `That sign-in link doesn’t say it’s for ${asked}, where you asked for it, so it wasn’t used.`);
 			return;
 		}
 		if (use.kind === 'addition') this.addition = use;

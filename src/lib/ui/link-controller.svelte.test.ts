@@ -88,7 +88,7 @@ describe('a sign-in link this browser proposed', () => {
 		expect([links.asked, links.addition, links.busy, links.failure]).toEqual([undefined, undefined, false, undefined]);
 		expect(said).toEqual([
 			'! That sign-in link is for another server, not there.example, where you asked for it, so it wasn’t used.',
-			'! That sign-in link is for another server, not there.example, where you asked for it, so it wasn’t used.',
+			'! That sign-in link doesn’t say it’s for there.example, where you asked for it, so it wasn’t used.',
 			'! That sign-in link is for another server, not here.example, where you asked for it, so it wasn’t used.'
 		]);
 	});
