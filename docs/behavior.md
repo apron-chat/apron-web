@@ -2116,9 +2116,10 @@ the server's own page, through OAuth 2.1's authorization code flow with PKCE
    server uses an older external sign-in this app doesn't support, to sign in
    another way or ask its admin to update it.
 2. **Open.** The window goes to `url` with its own query kept and this
-   client's parameters added: `response_type=code`, `client_id` (unless `url`
-   has one), `redirect_uri`, an S256 `code_challenge`, a random `state`, and
-   `resource`, the server's origin worked out from its WebSocket address
+   client's parameters added: `response_type=code`, this app's own
+   `client_id` (in place of any `url` has), `redirect_uri`, an S256
+   `code_challenge`, a random `state`, and `resource`, the server's origin
+   worked out from its WebSocket address
    (`https://` plus host and port; `http://` for a `ws:` address on a loopback
    host, as in development), never from anything the server said. The window
    can't reach this one (`opener` is cleared). Where the browser blocks the

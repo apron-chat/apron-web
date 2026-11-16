@@ -25,7 +25,7 @@ export interface AuthorizationRequest {
 	state: string;
 	codeVerifier: string;
 	redirectUri: string;
-	/** The `client_id` sent: `url`'s own when the server put one there, else this client's. */
+	/** The `client_id` sent: always this client's own, in place of any in `url`. */
 	clientId: string;
 	resource: string;
 }
@@ -74,9 +74,10 @@ export async function codeChallenge(verifier: string): Promise<string> {
 
 /**
  * `external.url` with this client's parameters added (§4.12.2): its own
- * query is kept, `client_id` only when it has none, and the rest replace any
- * the server put there (§4.12.1 says it puts none). Returns the URL and the
- * `client_id` it carries, which redeeming the code repeats.
+ * query is kept, and this client's parameters, its own `client_id` among
+ * them, replace any the server put there (§4.12.1 says it puts none).
+ * Returns the URL and the `client_id` it carries, which redeeming the code
+ * repeats.
  */
 export function authorizationUrl(
 	page: string,
@@ -84,7 +85,7 @@ export function authorizationUrl(
 ): { url: string; clientId: string } {
 	const url = new URL(page);
 	const query = url.searchParams;
-	const clientId = query.get('client_id') || params.client.clientId;
+	const clientId = params.client.clientId;
 	query.set('response_type', 'code');
 	query.set('client_id', clientId);
 	query.set('redirect_uri', params.client.redirectUri);

@@ -34,13 +34,13 @@ describe('authorization requests', () => {
 		expect(clientId).toBe(client.clientId);
 	});
 
-	it('sends the page’s own client_id once, and redeems with it', () => {
-		// A server naming a foreign issuer puts a client_id that issuer accepts in `url` (§4.12.1).
+	it('sends its own client_id once, in place of one the page has, and redeems with it', () => {
+		// Clients add their own `client_id` (§4.12.2): one the server put in `url` anyway is replaced, never sent or redeemed with.
 		const { url, clientId } = authorizationUrl('https://id.example/authorize?client_id=apron-public&scope=openid', { client, state: 's', challenge: 'c', resource: 'https://chat.example' });
 		const query = new URL(url).searchParams;
-		expect(query.getAll('client_id')).toEqual(['apron-public']);
+		expect(query.getAll('client_id')).toEqual([client.clientId]);
 		expect(query.get('scope')).toBe('openid');
-		expect(clientId).toBe('apron-public');
+		expect(clientId).toBe(client.clientId);
 		// A parameter of the request's own that the server put there anyway is replaced, never sent twice.
 		const replaced = new URL(authorizationUrl('https://chat.example/oauth/authorize?state=theirs&resource=https://other.example', { client, state: 'ours', challenge: 'c', resource: 'https://chat.example' }).url).searchParams;
 		expect(replaced.getAll('state')).toEqual(['ours']);
