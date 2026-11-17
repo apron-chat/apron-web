@@ -38,3 +38,9 @@ npm test && npm run check && npm run e2e && npm run qa -- budget --build build
   - When one would (a screen that loads late, a feature unavailable until something arrives), or when it costs much more code or storage than it saves, don't commit it.
   - Propose it instead, with the measured before/after counts, what users would notice, and a recommendation.
   - Report leads you found but didn't pursue, with numbers, rather than dropping them.
+
+## Pull requests and HISTORY.md
+
+We squash-merge, so a PR's title and description become its commit on main. Keep them true to what the branch does, including changes made in review, until it merges.
+
+If users of Apron would notice the change or need to know about it, follow the prompt at the top of `HISTORY.md` to add it there in the same PR.
