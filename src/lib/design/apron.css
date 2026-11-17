@@ -302,6 +302,10 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
    on one line clears the next's. */
 :where(.ap-msg-text, .ap-servcard-description) :is(li + li, li > :is(ul, ol)) { margin-top: var(--space-1); }
 .ap-msg-text a { color: var(--denim); }
+/* A link whose text isn't simply where it goes (markdown.ts, `ap-link-labelled`): one written [label](href), or a URL
+   whose host reads otherwise (another script, sent as punycode; a user name in front). Not denim, so it doesn't pass
+   for a plain link. */
+:is(.ap-msg-text, .ap-servcard-description, .ap-profcard-bio) a.ap-link-labelled { color: var(--term-cyan); }
 /* Who else saved a message's text (`ext:editors`): a quiet line under it. */
 .ap-msg-edited { font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
 /* A message whose text is still arriving (an `append` embed, §4.8.5): a quiet line under what has come so far. */
