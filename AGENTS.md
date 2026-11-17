@@ -43,4 +43,4 @@ npm test && npm run check && npm run e2e && npm run qa -- budget --build build
 
 We squash-merge, so a PR's title and description become its commit on main. Keep them true to what the branch does, including changes made in review, until it merges.
 
-If users of Apron would notice the change or need to know about it, follow the prompt at the top of `HISTORY.md` to add it there in the same PR.
+If users of Apron would notice the change or need to know about it, add it to `HISTORY.md` in the same PR by following the prompt at the top of that file. If you can start a subagent, give the task to a fresh one: pass it the prompt, `git diff origin/main`, and the PR's description, but not your own summary, then review what it writes. A fresh reader judges the change by what it does for users, not by how you think of it.
