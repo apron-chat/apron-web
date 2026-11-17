@@ -57,7 +57,7 @@ export class Preview {
 
 	/**
 	 * Opens the app's own route, `/` (with `fragment`), against `mockServer` (a scripted backend offering guests,
-	 * passkeys and email), and waits until it is connected as a guest.
+	 * passkeys, email and tokens), and waits until it is connected as a guest.
 	 */
 	async openRoot(options: MockOptions = {}, fragment = ''): Promise<void> {
 		const base = process.env.E2E_URL;
