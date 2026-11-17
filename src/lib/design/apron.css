@@ -304,9 +304,9 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-msg-text a { color: var(--denim); }
 /* A link whose text isn't simply where it goes (markdown.ts, `ap-link-labelled`): one written [label](href), or a URL
    whose host reads otherwise (another script, sent as punycode; a user name in front). Not denim, so it doesn't pass
-   for a plain link: a faint wash of its own colour behind it, like a wiki link.
+   for a plain link: a faint wash of its own colour behind it, like a wiki link, set off as inline code is.
    Each line it wraps onto gets its own ends. */
-:is(.ap-msg-text, .ap-servcard-description, .ap-profcard-bio) a.ap-link-labelled { color: var(--term-cyan); background: color-mix(in srgb, var(--term-cyan) 14%, transparent); border-radius: var(--radius-sm); padding: 0 var(--space-0_5); -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+:is(.ap-msg-text, .ap-servcard-description, .ap-profcard-bio) a.ap-link-labelled { color: var(--term-cyan); background: color-mix(in srgb, var(--term-cyan) 14%, transparent); border-radius: var(--radius-sm); padding: 0 var(--space-1); -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 /* Who else saved a message's text (`ext:editors`): a quiet line under it. */
 .ap-msg-edited { font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
 /* A message whose text is still arriving (an `append` embed, §4.8.5): a quiet line under what has come so far. */
