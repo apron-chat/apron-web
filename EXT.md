@@ -367,9 +367,16 @@ messages.
   name needs its `@user_id` (§3.3): a remote Sam and this server's Sam need
   none, and anyone here named "Sam (chat.example)" shows theirs, as the
   remote Sam does then.
+- A remote user's avatar carries a globe in place of their status dot
+  ("From chat.example"), in the member list, on their profile card, in
+  reactions, and on a private room's face: their status isn't shared between
+  servers. Message headers and profile cards keep the host as text.
 - A member that is a link (`remote` without `user_id`) shows the room as
   shared with the host of its `server`: "Shared with chat.example" where the
-  room's description goes, before it. The member list lists links last, under
-  Shared with, as that host, and offers them no direct message.
+  room's description goes, before it, and a globe after its name (and lock)
+  in the rooms list, Other Rooms included. A thread shows its room's, and its
+  own: `ext.remote` with `server` on its room record, or a link among its
+  members. The member list lists links last, under Shared with, as that host,
+  and offers them no direct message.
 - apron-web doesn't show `message_id` from `remote` (the time on the other
   server) yet.

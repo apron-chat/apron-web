@@ -599,6 +599,8 @@ export interface Face {
 	status?: Presence | (string & {});
 	/** The status's words instead of its own. */
 	statusLabel?: string;
+	/** The host of the server a remote user comes from (`ext:remote`): a globe in place of the status, on a face shown alone. */
+	remote?: string;
 }
 
 /** Someone in a PeoplePicker's list of people to pick (PrivateRoomForm, AddMembersForm). */

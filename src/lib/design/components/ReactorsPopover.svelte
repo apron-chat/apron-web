@@ -41,7 +41,7 @@
 		{#each reactors as reactor (reactor.user_id)}
 			{@const name = reactor.name || reactor.user_id}
 			<li class="ap-reactors-row" data-testid={rowTestid} data-user-id={reactor.user_id}>
-				{#if avatar}{@render avatar(reactor)}{:else}<Avatar {name} user_id={reactor.user_id} src={reactor.avatar} />{/if}
+				{#if avatar}{@render avatar(reactor)}{:else}<Avatar {name} user_id={reactor.user_id} src={reactor.avatar} remote={reactor.origin} />{/if}
 				<div class="ap-reactors-names">
 					<div class="ap-reactors-nameline"><span class="ap-reactors-name">{name}</span>{#if reactor.origin}<span class="ap-reactors-muted">({reactor.origin})</span>{/if}{#if reactor.you}<span class="ap-reactors-muted">(you)</span>{/if}</div>
 					{#if reactor.handle}<div class="ap-reactors-muted ap-reactors-handle">@{reactor.user_id}</div>{/if}

@@ -32,4 +32,17 @@ describe('Avatar', () => {
 		expect(byText('AL').classList.contains('ap-avatar-xs')).toBe(true);
 		expect(document.querySelector('.ap-presence')).toBeNull();
 	});
+
+	it('marks a remote user with a globe in place of their status, which isn’t shared between servers, saying where from', () => {
+		dom.render(Avatar, { name: 'Sam', size: 'sm', status: 'offline', remote: 'a.example' });
+		const badge = document.querySelector('.ap-remote-badge')!;
+		expect([badge.getAttribute('role'), badge.getAttribute('aria-label'), badge.getAttribute('title')]).toEqual(['img', 'From a.example', 'From a.example']);
+		expect(badge.querySelector('svg')).not.toBeNull();
+		expect(document.querySelector('.ap-presence')).toBeNull();
+		dom.unmount();
+		document.body.innerHTML = '';
+		// Too small for either.
+		dom.render(Avatar, { name: 'Sam', size: 'xs', remote: 'a.example' });
+		expect(document.querySelector('.ap-remote-badge')).toBeNull();
+	});
 });

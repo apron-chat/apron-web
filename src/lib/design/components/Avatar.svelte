@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Globe from '@lucide/svelte/icons/globe';
 	import StatusDot from './StatusDot.svelte';
 	import type { Presence, MediaSrc } from './types';
 	import { initials, presence } from './util';
@@ -8,7 +9,8 @@
 	 * initials: on a tint of `hue`, such as one made from the `user_id` so people are told apart at a glance, or on the
 	 * denim placeholder without one. With a `status` (§4.5), a StatusDot sits on its corner; it is decorative, with
 	 * `statusLabel` as its tooltip, so whoever shows the name says the status. `xs` is for a face inside a line of
-	 * small text, such as a reply's quote or a link card's title, and is too small to carry a status.
+	 * small text, such as a reply's quote or a link card's title, and is too small to carry a status. A remote user's
+	 * (`remote`) carries a globe there instead: their status isn't shared between servers, so it never says.
 	 */
 	interface Props {
 		name?: string;
@@ -21,8 +23,10 @@
 		status?: Presence | (string & {});
 		/** The dot's tooltip, instead of the status's own words ("Invisible · others see you as offline"). */
 		statusLabel?: string;
+		/** The host of the server a remote user comes from (`ext:remote`): a globe in place of the StatusDot, "From" it. */
+		remote?: string;
 	}
-	let { name, user_id, src, size = 'md', hue, status, statusLabel }: Props = $props();
+	let { name, user_id, src, size = 'md', hue, status, statusLabel, remote }: Props = $props();
 </script>
 
 {#snippet face()}
@@ -33,7 +37,9 @@
 	{/if}
 {/snippet}
 
-{#if size !== 'xs' && presence(status) !== undefined}
+{#if remote && size !== 'xs'}
+	<span class="ap-avatar-status ap-avatar-status-{size} ap-avatar-remote">{@render face()}<span class="ap-remote-badge" role="img" aria-label="From {remote}" title="From {remote}"><Globe aria-hidden="true" /></span></span>
+{:else if size !== 'xs' && presence(status) !== undefined}
 	<span class="ap-avatar-status ap-avatar-status-{size}">{@render face()}<StatusDot {status} {size} label={statusLabel} decorative /></span>
 {:else}
 	{@render face()}

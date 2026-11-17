@@ -185,7 +185,7 @@
 										onpointerdown={() => pressing(person.user_id)}
 										onclick={(event) => { const who = event.currentTarget.querySelector<HTMLElement>('.ap-member-who'); if (who && !(event.target as Element).closest('button')) press(who, person); }}>
 										<button class="ap-member-who" type="button" data-user-id={person.user_id} aria-haspopup="dialog" aria-controls={opened ? menuId : undefined} title={words ? `@${person.user_id} · ${words}` : `@${person.user_id}`} onclick={(event) => press(event.currentTarget, person)} onkeydown={(event) => namekey(event, person, name)}>
-											{#if avatar}{@render avatar(person)}{:else}<Avatar {name} user_id={person.user_id} src={person.avatar} size="sm" status={person.status} statusLabel={words} />{/if}
+											{#if avatar}{@render avatar(person)}{:else}<Avatar {name} user_id={person.user_id} src={person.avatar} size="sm" status={person.status} statusLabel={words} remote={person.origin} />{/if}
 											<span class="ap-member-name">
 												<bdi class="ap-member-text">{name}</bdi>{#if person.origin || person.handle}{#if person.origin}<small class="ap-member-handle ap-member-origin">({person.origin})</small>{/if}{#if person.handle}<small class="ap-member-handle">@{person.user_id}</small>{/if}{/if}{#if person.you}<small>(you)</small>{/if}{#if words}<span class="ap-sr">, {words.charAt(0).toLowerCase()}{words.slice(1)}</span>{/if}
 											</span>

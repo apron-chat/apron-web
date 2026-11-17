@@ -106,6 +106,6 @@
 		onkeydown={keydown}
 		onfocusout={focusout}
 	>
-		{#snippet avatar(reactor)}<Avatar name={reactor.name ?? reactor.user_id} hue={hueOf(reactor.user_id)} src={reactor.avatar} />{/snippet}
+		{#snippet avatar(reactor)}<Avatar name={reactor.name ?? reactor.user_id} hue={hueOf(reactor.user_id)} src={reactor.avatar} remote={reactor.origin} />{/snippet}
 	</ReactorsPopover>
 {/if}

@@ -262,9 +262,10 @@ export const hasRemote = (server: ServerParams | undefined) => hasCapability(ser
  * Where a user comes from (draft extension `ext:remote`, `ext.remote`): the host of the other server they are a user
  * of (`remote.server`), and whether they are a link, the account that writes for that server (no `remote.user_id`).
  * Undefined for a user of this server, or a `remote` without a `server` that is a `ws:` or `wss:` URL. Read only from
- * `ext.remote`, never from the `user_id`, which any server may shape as it likes.
+ * `ext.remote`, never from the `user_id`, which any server may shape as it likes. A room record's `ext.remote` (a
+ * thread of a shared room) reads the same way: the host of the server it is shared with.
  */
-export function remoteOf(user: Identity | undefined): { host: string; link: boolean } | undefined {
+export function remoteOf(user: { ext?: unknown } | undefined): { host: string; link: boolean } | undefined {
 	const remote = isJsonObject(user?.ext) ? user.ext.remote : undefined;
 	if (!isJsonObject(remote) || typeof remote.server !== 'string') return undefined;
 	let host: string;

@@ -319,4 +319,18 @@ describe('ThreadList', () => {
 			expect(up()).toEqual(['A', 'B', 'C', 'D', 'E', 'Retro']);
 		});
 	});
+
+	it('marks the threads of a shared room as shared, and an other thread whose own record says so (ext:remote)', async () => {
+		const { directory } = await import('$lib/ui/directory.svelte');
+		const { blankSnapshot } = await import('$lib/ui/session.svelte');
+		directory.apply({ ...blankSnapshot(), authenticated: true, server: { apron: 10, auth: ['guest'], capabilities: ['ext:remote'] } }, undefined);
+		const shared = (id: string) => one(`button[data-thread="${id}"], button[data-other-thread="${id}"]`)?.querySelector('.ap-shared')?.getAttribute('aria-label');
+		render({ shared: 'a.example' });
+		expect(['deploy', 'offsite'].map(shared)).toEqual(['Shared with a.example', 'Shared with a.example']);
+		dom.unmount();
+		const own = { ...listed('offsite', 'Offsite'), record: { room_id: 'offsite', title: 'Offsite', parent_room_id: 'general', ext: { remote: { server: 'wss://b.example/ws', room_id: 't1' } } } } as RoomListing;
+		render({ others: [own, listed('logo', 'Logo')] });
+		expect(['deploy', 'offsite', 'logo'].map(shared)).toEqual([undefined, 'Shared with b.example', undefined]);
+		directory.forget();
+	});
 });

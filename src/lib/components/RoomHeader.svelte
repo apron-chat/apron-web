@@ -106,8 +106,8 @@
 	 * The servers the room is shared with (`ext:remote`): those whose links, the accounts they write through, are
 	 * members. Its people there read and write here too, so it says so where its description goes, before it.
 	 */
-	let sharedWith = $derived(thread || !directory.remoteUsers ? [] : [...new Set((room.members ?? []).flatMap((member) => directory.linkHost(member) ?? []))]);
-	let shared = $derived(sharedWith.length ? `Shared with ${sharedWith.join(', ')}` : '');
+	let sharedWith = $derived(thread || !directory.remoteOn ? undefined : directory.sharedWith(room));
+	let shared = $derived(sharedWith ? `Shared with ${sharedWith}` : '');
 	let line = $derived(people ? privateRoomLine(people.map((member) => directory.name(member)), people.length === 1 ? presenceLabel(directory.status(people[0])) : undefined) : '');
 </script>
 
@@ -116,7 +116,7 @@
 	room={room.id}
 	name={room.title}
 	topic={[shared, topic || line].filter(Boolean).join(' · ')}
-	topicTitle={topic ? room.description : shared ? `People on ${sharedWith.join(', ')} read and write in this room too` : undefined}
+	topicTitle={topic ? room.description : shared ? `People on ${sharedWith} read and write in this room too` : undefined}
 	private={pane.private}
 	{faces}
 	{typing}

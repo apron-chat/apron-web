@@ -118,6 +118,12 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-avatar-status-lg { --presence-d: 12px; --presence-gap: 3px; }
 .ap-avatar-status > .ap-avatar { --presence-cut: calc(var(--presence-d) / 2 + var(--presence-gap)); -webkit-mask: radial-gradient(circle at calc(100% - var(--presence-d) / 2) calc(100% - var(--presence-d) / 2), transparent var(--presence-cut), #000 calc(var(--presence-cut) + .5px)); mask: radial-gradient(circle at calc(100% - var(--presence-d) / 2) calc(100% - var(--presence-d) / 2), transparent var(--presence-cut), #000 calc(var(--presence-cut) + .5px)); }
 .ap-avatar-status > .ap-presence { position: absolute; right: 0; bottom: 0; }
+/* A remote user's (`ext:remote`): a globe in the presence dot's place, larger, as a line drawing needs. */
+.ap-avatar-remote { --presence-d: 13px; --presence-gap: 1.5px; }
+.ap-avatar-remote.ap-avatar-status-sm { --presence-d: 10px; --presence-gap: 1px; }
+.ap-avatar-remote.ap-avatar-status-lg { --presence-d: 20px; --presence-gap: 2px; }
+.ap-remote-badge { position: absolute; right: 0; bottom: 0; display: grid; place-items: center; width: var(--presence-d); height: var(--presence-d); border-radius: var(--radius-full); background: var(--ink-muted); color: var(--bg-000); }
+.ap-remote-badge > svg { width: 80%; height: 80%; stroke-width: 2.5; }
 
 /* Message */
 .ap-msg { position: relative; display: grid; grid-template-columns: var(--avatar-md) minmax(0, 1fr); column-gap: var(--space-3); padding: var(--space-1) var(--space-2); margin: var(--space-3) var(--space-2) 0; border-radius: var(--radius-md); }
@@ -589,6 +595,8 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-room-unread .ap-tline-latest { color: var(--ink); }
 /* A private room (§4.2.4): a small lock beside its name, wherever the name shows. */
 .ap-lock { --ap-icon-size: 12px; flex: none; margin-inline-start: var(--space-1); color: var(--ink-muted); }
+/* Shared with other servers (`ext:remote`): a globe after the name, and its lock. */
+.ap-shared { --ap-icon-size: 12px; flex: none; margin-inline-start: var(--space-1); color: var(--ink-muted); }
 .ap-count { --ap-pill-h: 20px; flex: none; min-width: 20px; padding-inline: var(--space-1_5); border-radius: var(--radius-full); background: var(--accent); color: var(--on-accent); font-size: var(--text-sm); line-height: var(--leading-field); font-weight: 600; text-align: center; font-variant-numeric: tabular-nums; }
 
 /* StatusBanner */
@@ -1259,6 +1267,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-profcard.ap-popover-sheet { padding-bottom: calc(var(--profcard-pad) + env(safe-area-inset-bottom) + var(--corner-clear)); }
 .ap-profcard .ap-avatar-lg { width: 80px; height: 80px; font-size: 26px; }
 .ap-profcard .ap-avatar-status-lg { --presence-d: 16px; --presence-gap: 4px; }
+.ap-profcard .ap-avatar-remote.ap-avatar-status-lg { --presence-d: 22px; --presence-gap: 2px; }
 .ap-profcard-who { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
 .ap-profcard-names { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .ap-profcard-nameline { display: flex; align-items: baseline; gap: var(--space-1); min-width: 0; }
@@ -2235,4 +2244,5 @@ a.ap-linkchip-elsewhere:hover { background: var(--hover); }
 	.ap-member { border-inline-end-color: Canvas; }
 	/* Each status keeps its shape (its mask); only the color is the system's. */
 	.ap-presence { forced-color-adjust: none; background: CanvasText; }
+	.ap-remote-badge { forced-color-adjust: none; background: CanvasText; color: Canvas; }
 }

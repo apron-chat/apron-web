@@ -203,7 +203,7 @@ describe('remote users (ext:remote)', () => {
 	});
 
 	it('takes nobody as remote for an ID that only looks like one, or a remote that is not a ws: or wss: server', () => {
-		expect(remoteOf({ user_id: 'carol@a.example', name: 'Carol' })).toBeUndefined();
+		expect(remoteOf({ user_id: 'carol@a.example', name: 'Carol' } as Identity)).toBeUndefined();
 		expect(remoteOf(remote('wss://a.example/ws'))).toBeUndefined();
 		expect(remoteOf(remote({ user_id: 'carol' }))).toBeUndefined();
 		expect(remoteOf(remote({ server: 'https://a.example/', user_id: 'carol' }))).toBeUndefined();

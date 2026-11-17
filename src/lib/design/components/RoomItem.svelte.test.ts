@@ -92,4 +92,12 @@ describe('RoomItem', () => {
 		row = render({ listed: true, topic: '12 members · Join' });
 		expect([row.dataset.room, row.dataset.join]).toEqual([undefined, 'general']);
 	});
+
+	it('marks a room shared with other servers with a globe after its name and lock, naming them', () => {
+		const row = render({ private: true, shared: 'a.example' });
+		const marks = [...row.querySelectorAll('.ap-room-name [role="img"]')].map((mark) => [mark.getAttribute('aria-label'), mark.getAttribute('title')]);
+		expect(marks).toEqual([['Private', null], ['Shared with a.example', 'Shared with a.example']]);
+		dom.unmount();
+		expect(render({}).querySelector('.ap-shared')).toBeNull();
+	});
 });

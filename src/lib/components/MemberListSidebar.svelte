@@ -180,7 +180,7 @@
 	note={task.note}
 	remark={session.snapshot.memberChangesUnsupported && canChange ? 'This server doesn’t let members add or remove others.' : undefined}
 >
-	{#snippet avatar(member)}<Avatar name={member.name ?? member.user_id} hue={hueOf(member.user_id)} src={member.avatar} size="sm" status={member.status} statusLabel={member.statusLabel} />{/snippet}
+	{#snippet avatar(member)}<Avatar name={member.name ?? member.user_id} hue={hueOf(member.user_id)} src={member.avatar} size="sm" status={member.status} statusLabel={member.statusLabel} remote={member.origin} />{/snippet}
 	{#snippet roles(member)}<RoleBadges user={byId.get(member.user_id)} />{/snippet}
 </MemberList>
 <!-- Gone as soon as adding is: the room left, or the server refusing member changes. -->

@@ -222,11 +222,21 @@ class Directory {
 	}
 
 	/**
-	 * Whether the server shows other servers' users as its own (`ext:remote`), tracked: for what reads no user's name,
-	 * such as which servers a room is shared with. What reads names (`name`, `person`) runs again when it changes.
+	 * The servers a room or thread is shared with (`ext:remote`), as one line of their hosts: those of the links among
+	 * its members (`linkHost`), and the `server` of `ext.remote` on its room record, which a thread of a shared room may
+	 * carry. A thread also takes its room's (`ThreadList`'s `shared`). Undefined for a room shared with none, and
+	 * without the extension. Tracked: a room's row reads it, and may name no one.
 	 */
-	get remoteUsers(): boolean {
-		return this.remote;
+	sharedWith(room: { members?: readonly Identity[]; record?: { ext?: unknown } } | undefined): string | undefined {
+		if (!room || !this.remote) return undefined;
+		const hosts = new Set<string>();
+		for (const member of room.members ?? []) {
+			const host = this.linkHost(member);
+			if (host !== undefined) hosts.add(host);
+		}
+		const own = remoteOf(room.record);
+		if (own) hosts.add(own.host);
+		return hosts.size ? [...hosts].join(', ') : undefined;
 	}
 
 	/**

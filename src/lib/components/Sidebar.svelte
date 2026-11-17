@@ -251,6 +251,20 @@
 	let canCreateRoom = $derived(session.canManageRooms && session.steady && !session.readOnly);
 	/** Visible rooms this user hasn't joined (or has left), from the latest `room_list`. */
 	let unjoined = $derived((session.snapshot.directory ?? []).filter((listing) => !listing.joined));
+	/**
+	 * The servers each room is shared with (`ext:remote`, `directory.sharedWith`), by `room_id`: a globe on its row, and
+	 * on its threads'. Worked out with the lists, not each row, and nothing without the extension.
+	 */
+	const NO_SHARED: Record<string, string> = {};
+	let sharedRooms = $derived.by((): Record<string, string> => {
+		if (!directory.remoteOn) return NO_SHARED;
+		const shared: Record<string, string> = {};
+		for (const room of [...rooms, ...privateRooms, ...unjoined]) {
+			const hosts = directory.sharedWith(room);
+			if (hosts !== undefined) shared[room.id] = hosts;
+		}
+		return shared;
+	});
 	/** Threads of the active room this user hasn't joined, once `room_list` has listed them. */
 	// From the same source as the room's thread cards: a held view's listing while it shows, so they change over together.
 	let otherThreads = $derived(canBrowse ? (session.threadSource(session.activeRoomId).directory ?? []).filter((listing) => !listing.joined) : []);
@@ -317,7 +331,7 @@
 	{@const isFolded = threadsFolded.includes(room.id)}
 	<!-- What's new in the room itself (its threads show their own): none while you're reading it. The Private list says it's private: no lock there. -->
 	<RoomItem
-		room={room.id} name={room.title} title={room.untitled ? room.id : undefined} private={faces ? false : room.private} {faces} muted={room.mutedUntil !== undefined} active={current}
+		room={room.id} name={room.title} title={room.untitled ? room.id : undefined} private={faces ? false : room.private} shared={sharedRooms[room.id]} {faces} muted={room.mutedUntil !== undefined} active={current}
 		unread={current ? 0 : (unread[room.id] ?? 0)} mentions={current ? 0 : (mentions[room.id] ?? 0)} unreadTestid="room-unread" loading={room.recovering && !session.reconnectQuiet} keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
 		onselect={() => pickRoom(room, current)} onnewthread={active && canCreateRoom ? () => onnewthread(room) : undefined} newThreadTestid="create-thread"
 		onexpand={active && isFolded ? () => foldThreads(room.id, false) : undefined} expandTestid="expand-threads"
@@ -325,13 +339,13 @@
 	{#if reordering}
 		<!-- While a room is carried, every room's threads are folded away. -->
 	{:else if active && !isFolded}
-		<ThreadList roomId={room.id} roomTitle={room.title} {threads} others={otherThreads} foldInactive {activeThread} {mentions} {unread} muted={session.snapshot.roomMutes} canJoin={canJoinThreads} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
+		<ThreadList roomId={room.id} roomTitle={room.title} shared={sharedRooms[room.id]} {threads} others={otherThreads} foldInactive {activeThread} {mentions} {unread} muted={session.snapshot.roomMutes} canJoin={canJoinThreads} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
 	{:else}
 		<!-- Under a room that isn't open (or is folded, when its row has a … that unfolds it), only its joined threads with news, so activity there isn't missed; and the one open in it, which stays while you read it. -->
 		{@const news = threadsWithNews(threadsOf.get(room.id) ?? [], room.id, unread, mentions)}
 		{@const kept = active ? threads.filter((entry) => entry.id === activeThread || news.some((other) => other.id === entry.id)) : news}
 		{#if kept.length > 0}
-			<ThreadList roomId={room.id} roomTitle={room.title} threads={kept} others={[]} activeThread={active ? activeThread : undefined} {mentions} {unread} muted={session.snapshot.roomMutes} canJoin={canJoinThreads} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
+			<ThreadList roomId={room.id} roomTitle={room.title} shared={sharedRooms[room.id]} threads={kept} others={[]} activeThread={active ? activeThread : undefined} {mentions} {unread} muted={session.snapshot.roomMutes} canJoin={canJoinThreads} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread} />
 		{/if}
 	{/if}
 {/snippet}
@@ -376,11 +390,11 @@
 						{@const members = listing.memberCount ?? listing.members.length}
 						{@const count = members > 0 ? `${members} ${members === 1 ? 'member' : 'members'}` : ''}
 						<!-- Picking one opens it to read without joining (joining shows everyone in it), and it shows as open as a joined room does; the header's Join, or posting there, joins it. -->
-						<RoomItem room={listing.id} name={listing.title} topic={count || undefined} listed active={listing.id === session.activeRoomId && !activeThread} onselect={() => onopenroom(listing.id)} />
+						<RoomItem room={listing.id} name={listing.title} topic={count || undefined} shared={sharedRooms[listing.id]} listed active={listing.id === session.activeRoomId && !activeThread} onselect={() => onopenroom(listing.id)} />
 						<!-- The one open to read without joining lists its threads under it, to explore them without joining either. -->
 						{#if listing.id === session.activeRoomId}
 							<ThreadList
-								roomId={listing.id} roomTitle={listing.title} {threads} others={otherThreads} foldInactive roomUnjoined {activeThread}
+								roomId={listing.id} roomTitle={listing.title} shared={sharedRooms[listing.id]} {threads} others={otherThreads} foldInactive roomUnjoined {activeThread}
 								{mentions} {unread} muted={session.snapshot.roomMutes} canJoin={canJoinThreads} {onthread} onopen={onopenthread} {onjoin} onleave={onleavethread}
 							/>
 						{:else}

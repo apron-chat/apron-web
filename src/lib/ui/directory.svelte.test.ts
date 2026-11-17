@@ -309,4 +309,15 @@ describe('directory: remote users (ext:remote)', () => {
 		expect(directory.sharesName(remoteSam)).toBe(true);
 		expect(directory.resolve('sam@a.example')).toMatchObject({ name: 'Sam', shared: true });
 	});
+
+	it('says which servers a room is shared with: its links’, and its record’s ext.remote, only with the capability', () => {
+		const other: Identity = { user_id: 'link-b', name: 'B', ext: { remote: { server: 'ws://127.0.0.1:8181/ws' } } };
+		directory.apply(snapshot([ada, remoteSam, link, other], { server: REMOTE }), undefined);
+		expect(directory.sharedWith({ members: [ada, remoteSam] })).toBeUndefined();
+		expect(directory.sharedWith({ members: [ada, link, remoteSam] })).toBe('a.example');
+		expect(directory.sharedWith({ members: [link, other] })).toBe('a.example, 127.0.0.1:8181');
+		expect(directory.sharedWith({ members: [], record: { ext: { remote: { server: 'wss://c.example/ws', room_id: 'r1' } } } })).toBe('c.example');
+		directory.apply(snapshot([ada, link], { server: server([]) }), undefined);
+		expect(directory.sharedWith({ members: [link], record: { ext: { remote: { server: 'wss://c.example/ws' } } } })).toBeUndefined();
+	});
 });

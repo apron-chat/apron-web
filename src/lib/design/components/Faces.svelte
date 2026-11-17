@@ -19,7 +19,7 @@
 
 {#if shown.length === 1}
 	{@const face = shown[0]}
-	<span class={['ap-faces', `ap-faces-${size}`, className]} aria-hidden="true"><Avatar name={face.name || face.user_id} src={face.src} hue={face.hue} {size} status={face.status} statusLabel={face.statusLabel} /></span>
+	<span class={['ap-faces', `ap-faces-${size}`, className]} aria-hidden="true"><Avatar name={face.name || face.user_id} src={face.src} hue={face.hue} {size} status={face.status} statusLabel={face.statusLabel} remote={face.remote} /></span>
 {:else if shown.length > 1}
 	<span class={['ap-faces', `ap-faces-${size}`, 'ap-faces-group', className]} aria-hidden="true">
 		{#each shown as face (face.user_id)}<Avatar name={face.name || face.user_id} src={face.src} hue={face.hue} {size} />{/each}

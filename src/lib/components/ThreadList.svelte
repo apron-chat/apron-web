@@ -3,6 +3,7 @@
 	import ThreadItem from '$lib/design/components/ThreadItem.svelte';
 	import DesignThreadList from '$lib/design/components/ThreadList.svelte';
 	import type { RoomListing } from '$lib/protocol/client';
+	import { directory } from '$lib/ui/directory.svelte';
 	import { designTitle, inHeldOrder, threadLatest, threadDescriptionText, type ThreadEntry } from '$lib/ui/timeline';
 	import { loadInactiveThreadsOpen, loadOtherThreadsOpen, saveInactiveThreadsOpen, saveOtherThreadsOpen } from '$lib/ui/storage';
 	import { minuteNow } from '$lib/ui/clock.svelte';
@@ -19,6 +20,8 @@
 	interface Props {
 		/** The room the threads belong to: its `room_id` and title. */
 		roomId: string;
+		/** The servers its room is shared with (`ext:remote`, `directory.sharedWith`), which its threads are too: a globe on each. */
+		shared?: string;
 		roomTitle: string;
 		/** Its threads you've joined, most recently active first, and one open without joining while it's open, which lists with the others. */
 		threads: ThreadEntry[];
@@ -44,10 +47,10 @@
 		onjoin: (thread: string) => void;
 		onleave: (thread: string) => void;
 	}
-	let { roomId, roomTitle, threads, others, activeThread, mentions, unread, muted = {}, foldInactive = false, roomUnjoined = false, canJoin, onthread, onopen, onjoin, onleave }: Props = $props();
+	let { roomId, roomTitle, shared, threads, others, activeThread, mentions, unread, muted = {}, foldInactive = false, roomUnjoined = false, canJoin, onthread, onopen, onjoin, onleave }: Props = $props();
 
 	/** A thread you haven't joined: what its listing says, its description as text and when it was last active. */
-	type Other = { id: string; title: string; untitled?: true; private: boolean; description: string; latestLogId?: string };
+	type Other = { id: string; title: string; untitled?: true; private: boolean; description: string; latestLogId?: string; shared?: string };
 
 	/** Whether a thread is muted, by its own mute or its room's. */
 	const isMuted = (thread: string) => muted[thread] !== undefined || muted[roomId] !== undefined;
@@ -128,11 +131,16 @@
 	/** The thread open without joining: it stays among the others, picked out, rather than looking joined. */
 	let reading = $derived(threads.find((entry) => !entry.joined && entry.id === activeThread));
 	let allOthers = $derived.by((): Other[] => {
-		const listed = others.map((listing): Other => ({
-			id: listing.id, title: listing.title, ...(listing.untitled ? { untitled: true as const } : {}), private: listing.record.private === true,
-			description: threadDescriptionText({ description: typeof listing.record.description === 'string' ? listing.record.description : undefined }),
-			...(listing.latestLogId !== undefined ? { latestLogId: listing.latestLogId } : {})
-		}));
+		const listed = others.map((listing): Other => {
+			// Shared as its room is, or on its own: its record's `ext.remote`, or a link among its members.
+			const own = shared === undefined && directory.remoteOn ? directory.sharedWith(listing) : undefined;
+			return {
+				id: listing.id, title: listing.title, ...(listing.untitled ? { untitled: true as const } : {}), private: listing.record.private === true,
+				description: threadDescriptionText({ description: typeof listing.record.description === 'string' ? listing.record.description : undefined }),
+				...(listing.latestLogId !== undefined ? { latestLogId: listing.latestLogId } : {}),
+				...(own ? { shared: own } : {})
+			};
+		});
 		// One opened from elsewhere (a link, or past what the server listed) leads the list while it's open.
 		return reading && !listed.some((other) => other.id === reading.id)
 			? [{ id: reading.id, title: reading.title, ...(reading.untitled ? { untitled: true as const } : {}), private: reading.private === true, description: threadDescriptionText(reading), ...(reading.latestMessage ? { latestLogId: reading.latestMessage.message_id } : {}) }, ...listed]
@@ -167,7 +175,7 @@
 		<!-- Its description, then its latest message: both when it has both, each marked so either reads alone, as on its card. One bubble for what's new: unread replies in grey, orange with an @ when they include a mention. A thread with nothing new shows none, and steps back. -->
 		<!-- Leaving is the archive: the thread stops alerting and moves down to Other Threads, on every device. -->
 		<ThreadItem
-			thread={entry.id} name={designTitle(entry)} private={entry.private} muted={isMuted(entry.id)} active={open}
+			thread={entry.id} name={designTitle(entry)} private={entry.private} {shared} muted={isMuted(entry.id)} active={open}
 			unread={open ? 0 : (unread[entry.id] ?? 0)} mentions={open ? 0 : (mentions[entry.id] ?? 0)}
 			description={threadDescriptionText(entry)} latest={threadLatest(entry)} linesTestid="thread-list" unreadTestid="thread-unread"
 			onselect={() => onthread(entry.id)} onleave={canJoin ? () => onleave(entry.id) : undefined}
@@ -179,7 +187,7 @@
 		{@const last = other.latestLogId}
 		<!-- The one being read has its history loaded, so its count is known; the others say when they were last active. Joining is a door in, as leaving is a door out. -->
 		<ThreadItem
-			thread={other.id} name={designTitle(other)} private={other.private} muted={isMuted(other.id)} unjoined active={open} description={other.description} linesTestid="other-thread"
+			thread={other.id} name={designTitle(other)} private={other.private} shared={shared ?? other.shared} muted={isMuted(other.id)} unjoined active={open} description={other.description} linesTestid="other-thread"
 			count={open ? reading?.count : undefined}
 			ago={last !== undefined ? { text: idAgo(last, minuteNow()), datetime: idIso(last), title: `Last active ${idDateTime(last)}` } : undefined} agoTestid="other-thread-ago"
 			title={open ? undefined : `Read ${other.title} without joining`}

@@ -9,7 +9,8 @@ import { othersIn } from './private-rooms';
 /** A person as the design system's Face, as the directory knows them: with their status, unless `status` is false. */
 export function faceOf(person: Identity, status = true): Face {
 	const shown = status ? directory.status(person) : undefined;
-	return { user_id: person.user_id, name: directory.name(person), src: directory.avatar(person), hue: hueOf(person.user_id), status: shown, statusLabel: presenceLabel(shown) };
+	const remote = status && directory.remoteOn ? directory.remoteHost(person) : undefined;
+	return { user_id: person.user_id, name: directory.name(person), src: directory.avatar(person), hue: hueOf(person.user_id), status: shown, statusLabel: presenceLabel(shown), ...(remote ? { remote } : {}) };
 }
 
 /** People as the design system's Faces, each as the directory knows them: their status only where one shows alone. */

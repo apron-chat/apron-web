@@ -244,6 +244,6 @@
 		onclose={() => profileCard.close()}
 	>
 		{#snippet bioBody()}{@html bioHtml}{/snippet}
-		{#snippet avatar()}<Avatar {name} hue={hueOf(userId)} src={directory.avatar(person)} size="lg" {status} statusLabel={me ? ownStatusLabel(status) : undefined} />{/snippet}
+		{#snippet avatar()}<Avatar {name} hue={hueOf(userId)} src={directory.avatar(person)} size="lg" {status} statusLabel={me ? ownStatusLabel(status) : undefined} remote={directory.remoteHost(person)} />{/snippet}
 	</ProfileCard>
 {/if}

@@ -17,6 +17,8 @@
 		name?: string;
 		/** `private: true` (§4.2.4): a lock beside the name */
 		private?: boolean;
+		/** Shared with other servers (`ext:remote`): their hosts, as one line. A globe beside the name (and lock), "Shared with" them on hover. */
+		shared?: string;
 		/** The open thread: a neutral fill and an accent bar at its left, so it never reads as unread or a mention. */
 		active?: boolean;
 		/**
@@ -62,7 +64,7 @@
 		class?: ClassValue;
 	}
 	let {
-		thread, name, private: isPrivate, active, unjoined = false, muted = false, unread, mentions, description, latest, ago, count, onselect, onleave, onjoin,
+		thread, name, private: isPrivate, shared, active, unjoined = false, muted = false, unread, mentions, description, latest, ago, count, onselect, onleave, onjoin,
 		linesTestid, agoTestid, unreadTestid, title, class: className
 	}: Props = $props();
 	const shown = $derived(roomName(name, thread, { thread: true }));
@@ -75,7 +77,7 @@
 {#snippet lines()}<ThreadLines {description} {latest} descriptionTestid={linesTestid && `${linesTestid}-description`} latestTestid={linesTestid && `${linesTestid}-latest`} />{/snippet}
 
 <RoomRow
-	room={thread} noun="thread" label={shown} {tip} private={isPrivate} {muted} {active} nested framed listed={unjoined} {title} {onselect} {onleave} {onjoin} {lines}
+	room={thread} noun="thread" label={shown} {tip} private={isPrivate} {shared} {muted} {active} nested framed listed={unjoined} {title} {onselect} {onleave} {onjoin} {lines}
 	class={[(mentions || (unread && !muted)) && 'ap-room-unread', unjoined && 'ap-room-unjoined', mention && 'ap-room-mention', quiet && 'ap-room-quiet', className]}
 >
 	<UnreadCount unread={unread ?? 0} mentions={mentions ?? 0} noun="reply" testid={unreadTestid} />

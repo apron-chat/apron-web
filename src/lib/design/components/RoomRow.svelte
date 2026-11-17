@@ -1,6 +1,7 @@
 <script lang="ts">
 	import BellOff from '@lucide/svelte/icons/bell-off';
 	import DoorOpen from '@lucide/svelte/icons/door-open';
+	import Globe from '@lucide/svelte/icons/globe';
 	import Lock from '@lucide/svelte/icons/lock';
 	import LogIn from '@lucide/svelte/icons/log-in';
 	import type { Snippet } from 'svelte';
@@ -21,6 +22,8 @@
 		label: string;
 		tip?: string;
 		private?: boolean;
+		/** Shared with other servers (`ext:remote`): their hosts, as one line. A globe beside the name (and lock), "Shared with" them on hover. */
+		shared?: string;
 		/** Muted (§4.5 `mute` with its `room_id`): a bell-off at the end of the row, before its count or time. */
 		muted?: boolean;
 		active?: boolean;
@@ -50,7 +53,7 @@
 		/** The keys that act on the row besides picking it, for assistive tech (`aria-keyshortcuts`), such as moving it. */
 		keyshortcuts?: string;
 	}
-	let { room, noun, label, tip, private: isPrivate, muted, active, nested, framed, listed = false, title, onselect, onleave, onjoin, lead, lines, children, start, keyshortcuts, class: className }: Props = $props();
+	let { room, noun, label, tip, private: isPrivate, shared, muted, active, nested, framed, listed = false, title, onselect, onleave, onjoin, lead, lines, children, start, keyshortcuts, class: className }: Props = $props();
 	const thread = $derived(noun === 'thread');
 </script>
 
@@ -62,7 +65,7 @@
 		class={['ap-room', nested && 'ap-room-nested', active && 'ap-room-active', className]} onclick={onselect}
 	>
 		{@render lead?.()}
-		<span class="ap-room-text"><span class="ap-room-name"><span class="ap-room-label" title={tip}>{label}</span>{#if isPrivate}<Lock class="ap-lock ap-inline-icon" role="img" aria-label="Private" />{/if}</span>{@render lines?.()}</span>
+		<span class="ap-room-text"><span class="ap-room-name"><span class="ap-room-label" title={tip}>{label}</span>{#if isPrivate || shared}{#if isPrivate}<Lock class="ap-lock ap-inline-icon" role="img" aria-label="Private" />{/if}{#if shared}<span class="ap-shared" role="img" aria-label="Shared with {shared}" title="Shared with {shared}"><Globe class="ap-inline-icon" aria-hidden="true" /></span>{/if}{/if}</span>{@render lines?.()}</span>
 		{#if muted}<BellOff class="ap-muted" role="img" aria-label="Muted" />{/if}
 		{@render children?.()}
 	</button>
