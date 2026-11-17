@@ -95,7 +95,7 @@ describe('mentions (Appendix A.3)', () => {
 		expect(renderMarkdown('`@alice` stays', resolve)).not.toContain('ap-mention');
 		expect(renderMarkdown('```\n@alice\n```', resolve)).not.toContain('ap-mention');
 		const html = renderMarkdown('[@alice](https://example.com/@alice)', resolve);
-		expect(html).toContain('<a href="https://example.com/@alice" rel="noreferrer noopener" target="_blank">');
+		expect(html).toContain('<a href="https://example.com/@alice" class="ap-link-labelled" rel="noreferrer noopener" target="_blank">');
 		expect(html).not.toContain('ap-mention');
 		// A plain body is escaped around its mentions, and without a resolver there are none.
 		expect(renderPlain('<b>@alice</b>', resolve)).toBe('&lt;b&gt;<button type="button" class="ap-chip ap-mention" data-user-id="alice" title="@alice">@Alice Chen</button>&lt;/b&gt;');
@@ -186,15 +186,31 @@ describe('bare links', () => {
 	});
 
 	it('leaves links, code, other schemes and bare schemes alone', () => {
-		expect(renderMarkdown('[docs](https://example.com)')).toBe('<p><a href="https://example.com" rel="noreferrer noopener" target="_blank">docs</a></p>\n');
+		expect(renderMarkdown('[docs](https://example.com)')).toBe('<p><a href="https://example.com" class="ap-link-labelled" rel="noreferrer noopener" target="_blank">docs</a></p>\n');
 		expect(renderMarkdown('`https://example.com`')).toBe('<p><code>https://example.com</code></p>\n');
 		expect(renderMarkdown('```\nhttps://example.com\n```')).not.toContain('<a ');
 		expect(renderPlain('javascript:alert(1) ftp://example.com https://')).not.toContain('<a ');
 	});
 
 	it('opens markdown links and autolinks in a new tab too', () => {
-		expect(renderMarkdown('[docs](https://example.com "Docs")')).toBe('<p><a href="https://example.com" title="Docs" rel="noreferrer noopener" target="_blank">docs</a></p>\n');
+		expect(renderMarkdown('[docs](https://example.com "Docs")')).toBe('<p><a href="https://example.com" title="Docs" class="ap-link-labelled" rel="noreferrer noopener" target="_blank">docs</a></p>\n');
 		expect(renderMarkdown('<https://example.com>')).toBe(`<p>${link('https://example.com')}</p>\n`);
+	});
+
+	it('colours a link whose text is not simply where it goes', () => {
+		const labelled = (href: string, text: string) => `<a href="${href}" class="ap-link-labelled" rel="noreferrer noopener" target="_blank">${text}</a>`;
+		// Written [label](href), even with its URL for a label: the text is the writer's, not the link's.
+		expect(renderMarkdown('[https://example.com](https://example.com)')).toBe(`<p>${labelled('https://example.com', 'https://example.com')}</p>\n`);
+		// A host in another script, sent as punycode, written in Unicode or as punycode, bare or as an autolink.
+		expect(renderPlain('https://y\u043Eutube.com/a')).toBe(labelled('https://y\u043Eutube.com/a', 'https://y\u043Eutube.com/a'));
+		expect(renderPlain('https://xn--yutube-wqf.com/a')).toBe(labelled('https://xn--yutube-wqf.com/a', 'https://xn--yutube-wqf.com/a'));
+		expect(renderMarkdown('<https://y\u043Eutube.com/a>')).toBe(`<p>${labelled('https://xn--yutube-wqf.com/a', 'https://y\u043Eutube.com/a')}</p>\n`);
+		expect(renderMarkdown('<https://xn--yutube-wqf.com/a>')).toContain(' class="ap-link-labelled"');
+		expect(renderMarkdown('<mailto:ann@xn--mnchen-3ya.de>')).toContain(' class="ap-link-labelled"');
+		// A user name in front of the host: it reads as one site and opens another.
+		expect(renderPlain('https://bank.example@evil.example/')).toBe(labelled('https://bank.example@evil.example/', 'https://bank.example@evil.example/'));
+		// A URL that shows where it goes stays a plain link: bare, autolinked, or with an @ after its host.
+		for (const text of ['https://example.com/@alice', '<https://example.com/é?q=1>', '<ann@example.com>', 'apron:?room=ops']) expect(renderMarkdown(text), text).not.toContain(' class="ap-link-labelled"');
 	});
 
 	it('does not turn an @ inside a URL into a mention', () => {
@@ -250,7 +266,7 @@ describe('images (§5.5)', () => {
 			'<p><a href="https://tracker.example/p.gif" target="_blank" rel="noreferrer noopener" title="Hi">pixel</a> and <a href="https://tracker.example/q.gif" target="_blank" rel="noreferrer noopener">https://tracker.example/q.gif</a></p>\n'
 		);
 		// Linked, as a reference, or in a link: never a link in a link.
-		expect(shown('[![badge](https://tracker.example/b.svg)](https://example.com)')).toBe('<p><a href="https://example.com" rel="noreferrer noopener" target="_blank">badge</a></p>\n');
+		expect(shown('[![badge](https://tracker.example/b.svg)](https://example.com)')).toBe('<p><a href="https://example.com" class="ap-link-labelled" rel="noreferrer noopener" target="_blank">badge</a></p>\n');
 		expect(shown('![ref][r]\n\n[r]: https://tracker.example/r.png')).not.toContain('<img');
 	});
 
