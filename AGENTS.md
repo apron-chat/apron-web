@@ -41,8 +41,6 @@ npm test && npm run check && npm run e2e && npm run qa -- budget --build build
 
 ## Pull requests and HISTORY.md
 
-We squash-merge, so a PR's title and description become its commit on main.
+We squash-merge, so a PR's title and description become its commit on main. Keep them true to what the branch does, including changes made in review, until it merges.
 
-- Keep the PR's title and description true to what the branch does, including changes made in review, until it merges.
-- If the change passes the filter in the prompt at the top of `HISTORY.md`, add its entry to the current week there (start the week's section if it has none), and link the PR once it has a number.
-- A conflict in `HISTORY.md` with another PR is resolved by keeping both entries.
+If users of Apron would notice the change or need to know about it, follow the prompt at the top of `HISTORY.md` to add it there in the same PR.

@@ -3,13 +3,19 @@
 What changed in Apron for the people using it, a week at a time, newest first.
 
 <!--
-To update: run `git fetch --unshallow origin` if the clone is shallow, then read
+To catch up: run `git fetch --unshallow origin` if the clone is shallow, then read
 this file and find the newest week below. PRs usually add their own entry, so
 check every commit that landed on origin/main from that week's Monday on, as
 main records it, and add entries only for those that qualify but have none:
 `git log --first-parent --reverse --format='%h %cd %s' --date=short --since=<monday> origin/main`.
 A merge commit counts as one change; read it with `git diff <hash>^1 <hash>`.
 Add new weeks above the old ones. Don't edit past weeks unless an entry is wrong.
+
+From a PR: add the entry to the current week (start its section if there is
+none) and link the PR once it has a number. If the week already has an entry for
+the same feature, update that entry and add the link to it instead. A conflict
+here with another PR is resolved by keeping both, merged into one entry if
+they're about the same feature.
 
 Don't trust commit messages and PR descriptions alone: they can describe plans
 that changed or miss work added in later commits. Check each commit's diff
