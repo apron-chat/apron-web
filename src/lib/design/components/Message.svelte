@@ -417,7 +417,11 @@
 			{#if !grouped}
 				<header class="ap-msg-head">
 					<button class="ap-msg-sender ap-msg-who" type="button" data-user-id={view.sender.user_id} aria-haspopup="dialog" title="Show profile">{view.sender.name}</button>
-					{#if view.sender.handle}<span class="ap-msg-handle" data-testid={testids?.handle}>@{view.sender.handle}</span>{/if}
+					<!-- One block for both, which most senders have neither of. -->
+					{#if view.sender.origin || view.sender.handle}
+						{#if view.sender.origin}<span class="ap-msg-handle ap-msg-origin" data-testid={testids?.origin}>({view.sender.origin})</span>{/if}
+						{#if view.sender.handle}<span class="ap-msg-handle" data-testid={testids?.handle}>@{view.sender.handle}</span>{/if}
+					{/if}
 					{#if view.sender.roles?.length}<RoleBadges roles={view.sender.roles} />{/if}
 					<span class="ap-msg-meta">{#if t.short}<time datetime={t.iso} title={t.exact}>{t.short}</time>{/if}</span>
 				</header>

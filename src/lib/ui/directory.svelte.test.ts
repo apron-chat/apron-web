@@ -2,7 +2,7 @@ import { flushSync } from 'svelte';
 import { describe, expect, it } from 'vitest';
 import type { ClientSnapshot, RoomListing } from '$lib/protocol/client';
 import { renderMarkdown } from '$lib/protocol/markdown';
-import type { Identity } from '$lib/protocol/types';
+import type { Identity, ServerParams } from '$lib/protocol/types';
 import { directory } from './directory.svelte';
 import { mediaSettings } from './media-settings.svelte';
 import { blankSnapshot } from './session.svelte';
@@ -258,5 +258,55 @@ describe('directory', () => {
 		} finally {
 			mediaSettings.update('trusted', [], []);
 		}
+	});
+});
+
+describe('directory: remote users (ext:remote)', () => {
+	const server = (capabilities: string[]): ServerParams => ({ apron: 10, auth: ['guest'], capabilities });
+	const REMOTE = server(['ext:remote']);
+	const sam: Identity = { user_id: 'sam', name: 'Sam' };
+	const remoteSam: Identity = { user_id: 'sam@a.example', name: 'Sam', ext: { remote: { server: 'wss://a.example/ws', user_id: 'sam' } } };
+	const link: Identity = { user_id: 'link-a', name: 'Link bot', roles: ['bot'], ext: { remote: { server: 'wss://a.example/ws' } } };
+
+	it('shows a remote user as "Name (host)", from the kept user object, else the recorded one', () => {
+		directory.apply(snapshot([ada, sam, remoteSam, link], { server: REMOTE }), undefined);
+		expect(directory.name(remoteSam)).toBe('Sam');
+		expect(directory.remoteHost(remoteSam)).toBe('a.example');
+		expect(directory.label(remoteSam)).toBe('Sam (a.example)');
+		expect(directory.label(sam)).toBe('Sam');
+		// A link is no remote user: the room it joined is shared with its server.
+		expect([directory.remoteHost(link), directory.linkHost(link), directory.label(link)]).toEqual([undefined, 'a.example', 'Link bot']);
+		expect(directory.linkHost(remoteSam)).toBeUndefined();
+		// Only recorded (a message's `from`), never kept; kept without `ext`, the recorded one's.
+		directory.apply(snapshot([ada], { server: REMOTE, recordedUsers: { 'sam@a.example': remoteSam } }), undefined);
+		expect(directory.label(remoteSam)).toBe('Sam (a.example)');
+		directory.apply(snapshot([ada, { user_id: 'sam@a.example', name: 'Samuel' }], { server: REMOTE }), undefined);
+		expect(directory.label(remoteSam)).toBe('Samuel (a.example)');
+	});
+
+	it('tells a remote user from this server’s by the host, with no @user_id, and still marks one named like it', () => {
+		directory.apply(snapshot([ada, sam, remoteSam], { server: REMOTE }), undefined);
+		expect(directory.sharesName(sam)).toBe(false);
+		expect(directory.sharesName(remoteSam)).toBe(false);
+		// Someone here who names themselves as the remote user shows: both get their @user_id.
+		const mallory: Identity = { user_id: 'mallory', name: 'Sam (a.example)' };
+		directory.apply(snapshot([ada, sam, remoteSam, mallory], { server: REMOTE }), undefined);
+		expect(directory.sharesName(mallory)).toBe(true);
+		expect(directory.sharesName(remoteSam)).toBe(true);
+		expect(directory.sharesName(sam)).toBe(false);
+	});
+
+	it('mentions a remote user as @Name (host)', () => {
+		directory.apply(snapshot([ada, sam, remoteSam], { server: REMOTE }), undefined);
+		expect(directory.resolve('sam@a.example')).toMatchObject({ kind: 'user', name: 'Sam (a.example)' });
+		expect(directory.resolve('sam')).toMatchObject({ kind: 'user', name: 'Sam' });
+		expect(directory.resolve('sam')?.kind === 'user' && directory.resolve('sam')).not.toHaveProperty('shared');
+	});
+
+	it('shows remote users as local ones without the capability, the @user_id telling the two Sams apart', () => {
+		directory.apply(snapshot([ada, sam, remoteSam, link], { server: server(['ext']) }), undefined);
+		expect([directory.label(remoteSam), directory.remoteHost(remoteSam), directory.linkHost(link)]).toEqual(['Sam', undefined, undefined]);
+		expect(directory.sharesName(remoteSam)).toBe(true);
+		expect(directory.resolve('sam@a.example')).toMatchObject({ name: 'Sam', shared: true });
 	});
 });

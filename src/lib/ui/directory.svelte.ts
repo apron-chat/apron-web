@@ -1,5 +1,5 @@
 import type { ClientSnapshot } from '$lib/protocol/client-types';
-import { bioOf, serverMedia, userIn } from '$lib/protocol/client-views';
+import { bioOf, hasRemote, remoteOf, serverMedia, userIn } from '$lib/protocol/client-views';
 import { safeLink, serverOrigin } from '$lib/protocol/embeds';
 import { mediaGate as gateFor, type MediaGate, type MediaSrc } from './media-gate';
 import { shownPerson, withoutBidiOverrides } from '$lib/protocol/plain-text';
@@ -66,6 +66,13 @@ class Directory {
 	 */
 	account = $state<string | undefined>();
 	private users = $state.raw<Users>({ users: {}, recordedUsers: {}, userAliases: {} });
+	/** The server shows other servers' users as its own (`ext:remote`): their names say which server (`remoteHost`). */
+	private remote = $state(false);
+	/**
+	 * The same, as a plain field: for what draws each message, name or mention, which runs again when `users` (one of
+	 * the `pieces`) changes, as it does when this does, so it needn't track it on its own, nor pay a read of state for each.
+	 */
+	remoteOn = false;
 	/** When this client saw each user go offline (`ClientSnapshot.sawOffline`): a floor under their `seen`. */
 	private sawOffline = $state.raw<Record<string, number>>({});
 	/** The statuses held through a resume until its listing (`ClientSnapshot.statusesBeforeResume`). */
@@ -79,16 +86,20 @@ class Directory {
 	 * Every known `user_id` by the display name it shows under: its kept name,
 	 * else (only when nothing is kept for it, not when it was cleared) the name
 	 * it was last recorded with, else its `user_id`; as shown, without bidi
-	 * embeddings and overrides (§3.5.2), so none tells two alike names apart.
+	 * embeddings and overrides (§3.5.2), so none tells two alike names apart;
+	 * and a remote user's with its server after it (`label`), as it shows.
 	 * Retired IDs count as the identity that replaced them.
 	 */
 	private readonly byName = $derived.by(() => {
 		const { users, recordedUsers, userAliases } = this.users;
 		const names = new Map<string, Set<string>>();
+		const remote = this.remoteOn;
 		for (const id of new Set([...Object.keys(users), ...Object.keys(recordedUsers)])) {
 			if (userAliases[id] !== undefined) continue;
 			const kept = users[id];
-			const name = withoutBidiOverrides((kept && Object.hasOwn(kept, 'name') ? kept.name : recordedUsers[id]?.name) || '') || id;
+			const plain = withoutBidiOverrides((kept && Object.hasOwn(kept, 'name') ? kept.name : recordedUsers[id]?.name) || '') || id;
+			const origin = remote ? remoteUser(kept && remoteOf(kept) ? kept : recordedUsers[id]) : undefined;
+			const name = origin ? withHost(plain, origin) : plain;
 			let ids = names.get(name);
 			if (!ids) names.set(name, (ids = new Set()));
 			ids.add(id);
@@ -113,6 +124,12 @@ class Directory {
 		if (origins.join(' ') !== this.serverMedia.join(' ')) this.serverMedia = origins;
 		// Its custom emoji (`ext:emoji`), kept through a reconnect until the next server frame says otherwise.
 		if (frame) customEmoji.apply(frame, server, (url) => this.mediaGate.src(url) !== undefined);
+		// Kept through a reconnect, as the media origins are, until the next server frame says otherwise.
+		if (frame && hasRemote(frame) !== this.remoteOn) {
+			this.remote = this.remoteOn = hasRemote(frame);
+			// How names show changed: what is drawn from the users draws again.
+			this.users = { ...this.users };
+		}
 		if (!snapshot.authenticated) return;
 		this.you = snapshot.you;
 		const account = snapshot.passkeySession || snapshot.keptSession ? snapshot.you?.user_id : undefined;
@@ -165,6 +182,7 @@ class Directory {
 		this.you = undefined;
 		this.account = undefined;
 		this.users = { users: {}, recordedUsers: {}, userAliases: {} };
+		this.remote = this.remoteOn = false;
 		this.sawOffline = {};
 		this.beforeResume = {};
 		this.rooms = {};
@@ -185,6 +203,40 @@ class Directory {
 	name(from: Identity | undefined): string {
 		const person = this.person(from);
 		return person?.name || person?.user_id || 'Unknown sender';
+	}
+
+	/**
+	 * The host of the server a remote user is a user of (`ext:remote`), from the kept user object, else the recorded one
+	 * (`person`): shown after their name, "Sam (chat.example)". Never read from the `user_id`. Undefined for this
+	 * server's users, for a link (`linkHost`), and without the extension.
+	 */
+	remoteHost(from: Identity | undefined): string | undefined {
+		return this.remoteOn ? remoteUser(this.person(from)) : undefined;
+	}
+
+	/** A display name with the server of a remote user after it (`remoteHost`), as a line of text shows them: "Sam (chat.example)". */
+	label(from: Identity | undefined): string {
+		const name = this.name(from);
+		const origin = this.remoteOn ? remoteUser(this.person(from)) : undefined;
+		return origin ? withHost(name, origin) : name;
+	}
+
+	/**
+	 * Whether the server shows other servers' users as its own (`ext:remote`), tracked: for what reads no user's name,
+	 * such as which servers a room is shared with. What reads names (`name`, `person`) runs again when it changes.
+	 */
+	get remoteUsers(): boolean {
+		return this.remote;
+	}
+
+	/**
+	 * The host of the server a link writes for (`ext:remote`: a `remote` without `user_id`): the room it has joined is
+	 * shared with that server. Undefined for anyone else, and without the extension.
+	 */
+	linkHost(from: Identity | undefined): string | undefined {
+		if (!this.remoteOn) return undefined;
+		const remote = remoteOf(this.person(from));
+		return remote?.link ? remote.host : undefined;
 	}
 
 	/**
@@ -245,9 +297,11 @@ class Directory {
 	sharesName(from: Identity | undefined): boolean {
 		const person = this.person(from);
 		if (!person) return false;
-		const name = this.name(from);
+		const name = person.name || person.user_id;
 		if (name === person.user_id) return false;
-		const ids = this.byName.get(name);
+		// As it shows: a remote user's server after the name tells them apart from this server's (`label`).
+		const origin = this.remoteOn ? remoteUser(person) : undefined;
+		const ids = this.byName.get(origin ? withHost(name, origin) : name);
 		if (!ids) return false;
 		for (const id of ids) if (id !== person.user_id && id !== from!.user_id) return true;
 		return false;
@@ -318,7 +372,8 @@ class Directory {
 		const from = recorded ?? { user_id: id };
 		const known = users[id] || userAliases[id] !== undefined || recorded ? this.person(from) : undefined;
 		if (!known) return undefined;
-		const target: MentionTarget = { kind: 'user', id, name: known.name || known.user_id, me: this.isMe(id) };
+		const origin = this.remoteOn ? remoteUser(known) : undefined;
+		const target: MentionTarget = { kind: 'user', id, name: origin ? withHost(known.name || known.user_id, origin) : known.name || known.user_id, me: this.isMe(id) };
 		if (this.sharesName(from)) target.shared = true;
 		return target;
 	};
@@ -330,6 +385,17 @@ class Directory {
 	 */
 	readonly markdown = (text: string | undefined, links = false): string =>
 		text?.trim() ? renderMarkdown(text, this.resolve, this.resolveRoom, links ? this.resolveLink : undefined, this.resolveEmoji, this.mediaGate) : '';
+}
+
+/** The host of a remote user's server (`ext:remote`); undefined for a link, or a user of this server. */
+function remoteUser(user: Identity | undefined): string | undefined {
+	const remote = remoteOf(user);
+	return remote && !remote.link ? remote.host : undefined;
+}
+
+/** "Name (host)", as clients show a remote user (`ext:remote`). */
+export function withHost(name: string, host: string): string {
+	return `${name} (${host})`;
 }
 
 /** Whether two `pieces` of the directory are the same, so what was rendered from one is current for the other. */

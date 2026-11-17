@@ -12,7 +12,7 @@ import type {
 } from './types';
 import type { Capabilities, ClientSnapshot, RoomSnapshot } from './client-types';
 
-const CAPABILITIES: Capability[] = ['history', 'edit', 'rooms', 'reactions', 'activity', 'embed:upload', 'embed:append', 'embed:terminal', 'command', 'status', 'ext', 'ext:settings', 'ext:limits', 'ext:media', 'ext:permissions', 'ext:bio', 'ext:archive', 'ext:editors'];
+const CAPABILITIES: Capability[] = ['history', 'edit', 'rooms', 'reactions', 'activity', 'embed:upload', 'embed:append', 'embed:terminal', 'command', 'status', 'ext', 'ext:settings', 'ext:limits', 'ext:media', 'ext:permissions', 'ext:bio', 'ext:archive', 'ext:editors', 'ext:remote'];
 
 /**
  * A `server` frame's params as this client keeps them (§3.1), or undefined
@@ -253,6 +253,30 @@ export const cleanBio = (text: string) => cleanPlainText(text, MAX_BIO_CHARS);
 export function bioOf(user: Identity | undefined): string | undefined {
 	const bio = isJsonObject(user?.ext) ? user.ext.bio : undefined;
 	return typeof bio === 'string' ? cleanBio(bio) || undefined : undefined;
+}
+
+/** Whether the server shows other servers' users as its own (draft extension `ext:remote`, trusted federation). */
+export const hasRemote = (server: ServerParams | undefined) => hasCapability(server, 'ext:remote');
+
+/**
+ * Where a user comes from (draft extension `ext:remote`, `ext.remote`): the host of the other server they are a user
+ * of (`remote.server`), and whether they are a link, the account that writes for that server (no `remote.user_id`).
+ * Undefined for a user of this server, or a `remote` without a `server` that is a `ws:` or `wss:` URL. Read only from
+ * `ext.remote`, never from the `user_id`, which any server may shape as it likes.
+ */
+export function remoteOf(user: Identity | undefined): { host: string; link: boolean } | undefined {
+	const remote = isJsonObject(user?.ext) ? user.ext.remote : undefined;
+	if (!isJsonObject(remote) || typeof remote.server !== 'string') return undefined;
+	let host: string;
+	try {
+		const url = new URL(remote.server);
+		if (url.protocol !== 'ws:' && url.protocol !== 'wss:') return undefined;
+		host = url.host;
+	} catch {
+		return undefined;
+	}
+	if (!host) return undefined;
+	return { host: withoutBidiOverrides(host), link: !(typeof remote.user_id === 'string' && remote.user_id !== '') };
 }
 
 /** How a server shows itself (§3.1), where people pick it or sign in to it, always beside its address. */

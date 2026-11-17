@@ -68,6 +68,8 @@
 	let status = $derived(directory.status(person));
 	let userId = $derived(person?.user_id ?? request?.userId ?? '');
 	let name = $derived(directory.name(person));
+	/** The name as the card shows it: a remote user's server after it (`ext:remote`), "Sam (chat.example)". */
+	let label = $derived(directory.label(person));
 	let me = $derived(directory.isMe(userId));
 	/** When they were last seen (§4.5.2), while they show offline: never yours. Redone each minute, so `recently` and `15m ago` move on. */
 	let seen = $derived.by(() => {
@@ -214,7 +216,7 @@
 		left={placement.mode === 'popover' ? placement.left : undefined}
 		width={placement.mode === 'popover' ? WIDTH : undefined}
 		{userId}
-		{name}
+		name={label}
 		you={me}
 		{status}
 		statusLabel={me ? ownStatusLabel(status) : undefined}

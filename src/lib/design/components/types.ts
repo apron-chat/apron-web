@@ -201,6 +201,8 @@ export interface Reactor extends Sender {
 	you?: boolean;
 	/** Show `@user_id` under the name, where it tells people apart: another user listed or shown has the same name. Off by default. */
 	handle?: boolean;
+	/** The host of the server a remote user comes from (`ext:remote`), in parentheses after the name. */
+	origin?: string;
 }
 
 /** A file on a draft (§4.8.4), as Attachments shows it. */
@@ -293,6 +295,10 @@ export interface MemberListPerson {
 	roles?: string[];
 	/** Show `@user_id` after the name, where someone else has the same one (§3.3). */
 	handle?: boolean;
+	/** The host of the server a remote user comes from (`ext:remote`), in parentheses after the name. */
+	origin?: string;
+	/** A link (`ext:remote`), the account another server writes through: listed last, quieter, as no one to talk to. */
+	link?: boolean;
 	/** You: marked "(you)", and never offered for removal. */
 	you?: boolean;
 	/** A system identity (`~`, Appendix A.1): nothing is sent to it, so its menu offers no Direct message. */
@@ -337,6 +343,8 @@ export interface MessageSender {
 	name: string;
 	/** `@user_id` beside the name, set only where it tells people apart: another user shows under the same name. */
 	handle?: string;
+	/** The host of the server a remote user comes from (`ext:remote`), in parentheses after the name: "Sam (chat.example)". */
+	origin?: string;
 	/** Badges beside the name (never part of it); absent when there are none. */
 	roles?: string[];
 	/** An avatar this client will load (§4.8.6); without one, initials. */
@@ -526,6 +534,8 @@ export interface MessageHandlers {
 export interface MessageTestids {
 	row?: string;
 	handle?: string;
+	/** The server after a remote sender's name (`MessageSender.origin`). */
+	origin?: string;
 	reply?: string;
 	/** Each card for a message, room or thread its links point to. */
 	linkCard?: string;

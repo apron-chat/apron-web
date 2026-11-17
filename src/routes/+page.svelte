@@ -760,7 +760,7 @@
 	});
 	let typingNames = $derived(session.typing
 		.filter((entry) => entry.room === paneRoom?.id && entry.from.user_id !== session.you?.user_id)
-		.map((entry) => directory.name(entry.from)));
+		.map((entry) => directory.label(entry.from)));
 	// `server.agent` names the implementation, for debugging, not the server: its host and path are the label.
 	/** What an archive's server says of it (`ext:archive`, ARCHIVE.md §4.1), while reading one. */
 	let archive = $derived(serverArchive(session.server));
@@ -2849,7 +2849,7 @@
 	 */
 	function reactionsFor(event: MessageRecord): ReactionChip[] {
 		const room = session.room(event.room_id);
-		return reactionChips(room?.timeline.reactions[event.message_id], session.you?.user_id, event.deleted === true, (user) => directory.name(user), directory.emojiImage);
+		return reactionChips(room?.timeline.reactions[event.message_id], session.you?.user_id, event.deleted === true, (user) => directory.label(user), directory.emojiImage);
 	}
 
 	/** The emoji you reacted with last, latest first: read the first time a row's toolbar asks for its quick reactions. */

@@ -102,6 +102,12 @@
 	let mutedWithRoom = $derived(thread && pane.mutedUntil === undefined && room.mutedUntil !== undefined);
 	let mutedUntil = $derived(mutedWithRoom ? room.mutedUntil : pane.mutedUntil);
 	let muted = $derived(mutedUntil === undefined ? undefined : mutedUntil === true ? 'until you unmute' : pausedUntilLabel(mutedUntil));
+	/**
+	 * The servers the room is shared with (`ext:remote`): those whose links, the accounts they write through, are
+	 * members. Its people there read and write here too, so it says so where its description goes, before it.
+	 */
+	let sharedWith = $derived(thread || !directory.remoteUsers ? [] : [...new Set((room.members ?? []).flatMap((member) => directory.linkHost(member) ?? []))]);
+	let shared = $derived(sharedWith.length ? `Shared with ${sharedWith.join(', ')}` : '');
 	let line = $derived(people ? privateRoomLine(people.map((member) => directory.name(member)), people.length === 1 ? presenceLabel(directory.status(people[0])) : undefined) : '');
 </script>
 
@@ -109,8 +115,8 @@
 <DesignRoomHeader
 	room={room.id}
 	name={room.title}
-	topic={topic || line}
-	topicTitle={topic ? room.description : undefined}
+	topic={[shared, topic || line].filter(Boolean).join(' · ')}
+	topicTitle={topic ? room.description : shared ? `People on ${sharedWith.join(', ')} read and write in this room too` : undefined}
 	private={pane.private}
 	{faces}
 	{typing}

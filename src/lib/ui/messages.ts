@@ -2,11 +2,11 @@ import { markdownText, type MentionPerson } from '$lib/protocol/markdown';
 import { embedsLabel } from '$lib/protocol/embeds';
 import { cleanPlainText } from '$lib/protocol/plain-text';
 import { isJsonObject, isSystemId, type Embed, type Identity, type MessageRecord } from '$lib/protocol/types';
-import { directory } from './directory.svelte';
+import { directory, withHost } from './directory.svelte';
 
-/** The sender's display name (§3.3): the kept one, else the one the message was posted under. */
+/** The sender's display name (§3.3): the kept one, else the one the message was posted under; a remote sender's server after it (`ext:remote`). */
 export function senderName(event: MessageRecord): string {
-	return directory.name(event.from);
+	return directory.label(event.from);
 }
 
 /** Senders whose `user_id` starts with `~` are system identities (Appendix A.1), shown as system lines. */
@@ -112,11 +112,13 @@ export function peopleIn(messages: MessageRecord[], me: Identity | undefined, me
 		if (listed && !listed.has(from.user_id) && from.user_id !== me?.user_id) return;
 		seen.add(from.user_id);
 		const latest = directory.person(from) ?? from;
+		const origin = directory.remoteOn ? directory.remoteHost(from) : undefined;
 		const avatar = directory.avatar(from);
 		const roles = Array.isArray(latest.roles) ? latest.roles.filter((role) => typeof role === 'string') : [];
 		people.push({
 			id: from.user_id,
-			...(latest.name ? { name: latest.name } : {}),
+			// A remote user's server after the name (`ext:remote`), as a chip for them shows it.
+			...(origin ? { name: withHost(latest.name || latest.user_id, origin) } : latest.name ? { name: latest.name } : {}),
 			...(avatar ? { avatar } : {}),
 			...(roles.length ? { roles } : {}),
 			...(from.user_id === me?.user_id ? { me: true } : {})

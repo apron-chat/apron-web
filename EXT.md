@@ -2,7 +2,7 @@
 
 | Protocol Version | 10         |
 |------------------|------------|
-| Last Updated     | 2026-11-08 |
+| Last Updated     | 2026-11-17 |
 
 apron-web is a web client for the
 [Apron Chat Protocol](https://github.com/shazow/apron/blob/main/PROTOCOL.md).
@@ -41,6 +41,7 @@ the fallback of that capability:
 | `ext:emoji`    | shows the server's custom emoji in reactions and text, and offers them to pick ([§9](#9-extemoji)) | shows keys as text, and in reactions as a placeholder |
 | `ext:archive`  | says whose archive it reads, and when it was written ([§10](#10-extarchive))                    | says only that you read            |
 | `ext:editors`  | asks whether those a message with a checklist mentions may edit its text, lets you edit a message that shares its text with you, and shows who edited it ([§11](#11-exteditors)) | edits only your own messages |
+| `ext:remote`   | shows another server's users as "Name (host)", and a room that a link has joined as shared with that server ([§12](#12-extremote)) | shows them as local users |
 
 Some features have no capability:
 
@@ -340,3 +341,35 @@ defines it.
   delete, reply removal, or embed changes.
 - apron-web shows `edited_by` under the text as "edited by" and the user's
   name.
+
+---
+
+## 12. `ext:remote`
+
+Trusted federation: a server shows the users of another Apron server, a
+remote server, as its own, and a link, an account bound to that server, writes
+for them. A draft, defined in the recipe
+[Trusted federation](https://github.com/shazow/apron/blob/main/recipes/trusted_federation.md#draft-extension-extremote):
+`ext.remote` `{server, user_id?, room_id?, message_id?}` on user objects and
+messages.
+
+### 12.1 apron-web
+
+- apron-web reads where a user comes from only from `ext.remote` on their user
+  object (the kept one, else the recorded one), never from the `user_id`. It
+  takes `remote.server` only as a `ws:` or `wss:` URL, and shows its host.
+- A remote user (`remote` with `user_id`) shows as their name and the host in
+  parentheses, "Sam (chat.example)": beside the name on their messages, in the
+  member list, on their profile card, in reactions, in mentions and the
+  mention chips of the composer, in who joined and left, in who is typing, and
+  in notifications.
+- apron-web compares names as they show, with the host, to decide where a
+  name needs its `@user_id` (§3.3): a remote Sam and this server's Sam need
+  none, and anyone here named "Sam (chat.example)" shows theirs, as the
+  remote Sam does then.
+- A member that is a link (`remote` without `user_id`) shows the room as
+  shared with the host of its `server`: "Shared with chat.example" where the
+  room's description goes, before it. The member list lists links last, under
+  Shared with, as that host, and offers them no direct message.
+- apron-web doesn't show `message_id` from `remote` (the time on the other
+  server) yet.

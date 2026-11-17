@@ -78,7 +78,7 @@
 	function choicesFor(person: MemberListPerson): ContextMenuChoice[] {
 		const choices: ContextMenuChoice[] = [{ value: 'profile', label: 'Profile', icon: UserRound }];
 		if (person.you || busy) return choices;
-		if (onmessage && !person.system) choices.push({ value: 'message', label: 'Direct message', icon: MessageCircle });
+		if (onmessage && !person.system && !person.link) choices.push({ value: 'message', label: 'Direct message', icon: MessageCircle });
 		if (onremove) choices.push({ value: 'remove', label: 'Remove from room', danger: true, icon: UserMinus });
 		return choices;
 	}
@@ -180,14 +180,14 @@
 									{@const opened = menuOpen && menu?.person.user_id === person.user_id}
 									<!-- The whole row is its name's: a press anywhere else on it presses the name (which keyboards reach), opening their profile. Held or right-clicked, the menu opens there. -->
 									<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
-									<li class={['ap-member', (shown === 'offline' || shown === 'invisible') && 'ap-member-offline', opened && 'ap-member-menu']} data-user={person.user_id} data-status={shown} data-presses-anchor
+									<li class={['ap-member', (shown === 'offline' || shown === 'invisible') && 'ap-member-offline', person.link && 'ap-member-link', opened && 'ap-member-menu']} data-user={person.user_id} data-status={shown} data-presses-anchor
 										{@attach rowMenu}
 										onpointerdown={() => pressing(person.user_id)}
 										onclick={(event) => { const who = event.currentTarget.querySelector<HTMLElement>('.ap-member-who'); if (who && !(event.target as Element).closest('button')) press(who, person); }}>
 										<button class="ap-member-who" type="button" data-user-id={person.user_id} aria-haspopup="dialog" aria-controls={opened ? menuId : undefined} title={words ? `@${person.user_id} · ${words}` : `@${person.user_id}`} onclick={(event) => press(event.currentTarget, person)} onkeydown={(event) => namekey(event, person, name)}>
 											{#if avatar}{@render avatar(person)}{:else}<Avatar {name} user_id={person.user_id} src={person.avatar} size="sm" status={person.status} statusLabel={words} />{/if}
 											<span class="ap-member-name">
-												<bdi class="ap-member-text">{name}</bdi>{#if person.handle}<small class="ap-member-handle">@{person.user_id}</small>{/if}{#if person.you}<small>(you)</small>{/if}{#if words}<span class="ap-sr">, {words.charAt(0).toLowerCase()}{words.slice(1)}</span>{/if}
+												<bdi class="ap-member-text">{name}</bdi>{#if person.origin || person.handle}{#if person.origin}<small class="ap-member-handle ap-member-origin">({person.origin})</small>{/if}{#if person.handle}<small class="ap-member-handle">@{person.user_id}</small>{/if}{/if}{#if person.you}<small>(you)</small>{/if}{#if words}<span class="ap-sr">, {words.charAt(0).toLowerCase()}{words.slice(1)}</span>{/if}
 											</span>
 										</button>
 										{#if roles}{@render roles(person)}{:else}<RoleBadges roles={person.roles} />{/if}

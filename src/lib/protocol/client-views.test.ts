@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { bioOf, cleanBio, keepsBio, MAX_BIO_CHARS, MAX_LABEL_CHARS, mediaLimit, parseLabels, parseServerParams, peopleTitle, serverLook, serverMedia, serverSettings, yourPermissions } from './client-views';
-import type { ServerParams } from './types';
+import { bioOf, cleanBio, hasRemote, keepsBio, MAX_BIO_CHARS, MAX_LABEL_CHARS, mediaLimit, parseLabels, parseServerParams, peopleTitle, remoteOf, serverLook, serverMedia, serverSettings, yourPermissions } from './client-views';
+import type { Identity, JsonValue, ServerParams } from './types';
 
 const server = (capabilities: string[], ext?: ServerParams['ext']): ServerParams => ({ apron: 10, capabilities, auth: ['guest'], ...(ext ? { ext } : {}) });
 
@@ -188,5 +188,34 @@ describe('bios (ext:bio)', () => {
 	it('are cleaned as plain text before they show or go (cleanPlainText)', () => {
 		expect(cleanBio('evil\u202Egnp.exe\n\n\n\nok\u0000')).toBe('evilgnp.exe\n\nok');
 		expect(bioOf({ user_id: 'ada', ext: { bio: '\u202E\u0000 ' } })).toBeUndefined();
+	});
+});
+
+describe('remote users (ext:remote)', () => {
+	const remote = (value: JsonValue): Identity => ({ user_id: 'carol@a.example', name: 'Carol', ext: { remote: value } });
+
+	it('reads the host of the server a remote user or a link comes from, only from ext.remote', () => {
+		expect(remoteOf(remote({ server: 'wss://a.example/ws', user_id: 'carol' }))).toEqual({ host: 'a.example', link: false });
+		expect(remoteOf(remote({ server: 'ws://127.0.0.1:8181/ws', user_id: 'carol' }))).toEqual({ host: '127.0.0.1:8181', link: false });
+		// A link writes for the server: no user_id of its own there.
+		expect(remoteOf(remote({ server: 'wss://a.example/ws' }))).toEqual({ host: 'a.example', link: true });
+		expect(remoteOf(remote({ server: 'wss://a.example/ws', user_id: '' }))).toEqual({ host: 'a.example', link: true });
+	});
+
+	it('takes nobody as remote for an ID that only looks like one, or a remote that is not a ws: or wss: server', () => {
+		expect(remoteOf({ user_id: 'carol@a.example', name: 'Carol' })).toBeUndefined();
+		expect(remoteOf(remote('wss://a.example/ws'))).toBeUndefined();
+		expect(remoteOf(remote({ user_id: 'carol' }))).toBeUndefined();
+		expect(remoteOf(remote({ server: 'https://a.example/', user_id: 'carol' }))).toBeUndefined();
+		expect(remoteOf(remote({ server: 'not a url', user_id: 'carol' }))).toBeUndefined();
+		expect(remoteOf(remote({ server: 42, user_id: 'carol' }))).toBeUndefined();
+		expect(remoteOf(undefined)).toBeUndefined();
+	});
+
+	it('is used only while the server advertises the capability', () => {
+		const server = (capabilities: string[]): ServerParams => ({ apron: 10, auth: ['guest'], capabilities });
+		expect(hasRemote(server(['ext:remote']))).toBe(true);
+		expect(hasRemote(server(['ext']))).toBe(false);
+		expect(hasRemote(undefined)).toBe(false);
 	});
 });

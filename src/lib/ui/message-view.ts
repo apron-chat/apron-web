@@ -149,6 +149,9 @@ function draw(event: MessageRecord): Drawn {
 	const roles = Array.isArray(person?.roles) ? [...new Set(person.roles.filter((role) => typeof role === 'string' && role.trim()))] : [];
 	const avatar = directory.avatar(event.from);
 	const sender: MessageSender = { user_id: userId, name: directory.name(event.from) };
+	// A remote user's server after their name (`ext:remote`): "Sam (chat.example)".
+	const origin = directory.remoteOn ? directory.remoteHost(event.from) : undefined;
+	if (origin) sender.origin = origin;
 	// Name (@user_id) (§3.3): only where it tells people apart, when another user shows under the same name.
 	if (userId && directory.sharesName(event.from)) sender.handle = userId;
 	if (roles.length) sender.roles = roles;
@@ -169,7 +172,7 @@ function draw(event: MessageRecord): Drawn {
 	// Most messages carry no `ext`: they read nothing more.
 	const by = event.ext && !event.deleted ? editedBy(event) : undefined;
 	// Name (@user_id) where another user shows under the same name (§3.3), so no editor passes as the sender.
-	if (by) next.editedBy = directory.sharesName({ user_id: by }) ? `${directory.name({ user_id: by })} (@${by})` : directory.name({ user_id: by });
+	if (by) next.editedBy = directory.sharesName({ user_id: by }) ? `${directory.label({ user_id: by })} (@${by})` : directory.label({ user_id: by });
 	drawn.set(event, next);
 	return next;
 }

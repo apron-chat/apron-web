@@ -64,8 +64,16 @@
 	let hasStatus = $derived(session.capabilities.status);
 	/** By status (online, idle, dnd, unknown, offline, then none), and by name within each. */
 	let members = $derived(byStatus([...(roomMembers ?? [])].sort(byName), statusOf));
-	/** Online, then offline, each in the order above; with no `status` capability (§4.5), one list. */
-	let sections = $derived(memberSections(members, statusOf, hasStatus));
+	/**
+	 * Online, then offline, each in the order above; with no `status` capability (§4.5), one list. The links
+	 * (`ext:remote`), through which other servers write here, last, under Shared with: no one to talk to.
+	 */
+	let sections = $derived.by(() => {
+		const links = directory.remoteOn ? members.filter((member) => directory.linkHost(member) !== undefined) : [];
+		if (!links.length) return memberSections(members, statusOf, hasStatus);
+		const people = memberSections(members.filter((member) => !links.includes(member)), statusOf, hasStatus);
+		return [...people, { key: 'links', label: 'Shared with', people: links }];
+	});
 	/** Sections folded away, as the rooms list folds Other Threads: a long Offline needn't push the rest out of view. */
 	let shut = $state(new Set(loadShutMemberSections()));
 
@@ -91,6 +99,10 @@
 
 	function person(member: Identity): MemberListPerson {
 		const me = directory.isMe(member.user_id);
+		// A link shows as the server it writes for: its presence is its connection's, which comes and goes as it writes.
+		const link = directory.remoteOn ? directory.linkHost(member) : undefined;
+		if (link !== undefined) return { user_id: member.user_id, name: link, avatar: directory.avatar(member), link: true };
+		const origin = directory.remoteOn ? directory.remoteHost(member) : undefined;
 		const status = statusOf(member);
 		// `seen` (§4.5.2) only while they show offline, never yours: in the row's tooltip, after "Offline". Redone each minute.
 		// Only as the row shows them: one still shown as before a resume (`statusOf`) isn't offline yet here.
@@ -103,6 +115,7 @@
 			status,
 			statusLabel: (me ? ownStatusLabel(status) : undefined) ?? withLastSeen(presenceLabel(status), last),
 			handle: directory.sharesName(member),
+			...(origin ? { origin } : {}),
 			you: me,
 			...(isSystemId(member.user_id) ? { system: true } : {})
 		};
