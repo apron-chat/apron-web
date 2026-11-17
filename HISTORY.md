@@ -4,8 +4,9 @@ What changed in Apron for the people using it, a week at a time, newest first.
 
 <!--
 To update: run `git fetch --unshallow origin` if the clone is shallow, then read
-this file and find the newest week below. Summarize every commit that landed on
-origin/main since then, as main records it:
+this file and find the newest week below. PRs usually add their own entry, so
+check every commit that landed on origin/main from that week's Monday on, as
+main records it, and add entries only for those that qualify but have none:
 `git log --first-parent --reverse --format='%h %cd %s' --date=short --since=<monday> origin/main`.
 A merge commit counts as one change; read it with `git diff <hash>^1 <hash>`.
 Add new weeks above the old ones. Don't edit past weeks unless an entry is wrong.
