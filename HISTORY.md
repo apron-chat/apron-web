@@ -43,13 +43,18 @@ commit message, PR description or diff; don't invent one. If a change explains
 itself, just state it.
 
 Order within a week:
-1. **New feature:** something users can now do that they couldn't before.
-2. **Changed:** existing behaviour that works differently now, or a breaking
-   change: something a user has to relearn, set again or upgrade. Say what to do
-   if anything.
+1. **New feature:** something users can now do that they couldn't before,
+   including what was possible only in some setups and now works in more (another
+   server, another client, another device). Name the setup. Judge by what users
+   can do now, not by how a commit names it: a "fallback" can be a new feature.
+2. **Changed:** something works differently, and someone used to the old way
+   would trip over it or need to act: relearn a habit, find a control that
+   moved, change a setting, re-bookmark, or update their server. Say what's
+   different and what to do. If a change is both better and different, it's
+   Changed: the label tells readers what needs their attention.
 3. **Removed:** something users could do before and can't now.
-4. **Improved:** a substantial gain in UX, accessibility, reliability, speed
-   users would notice, privacy or security.
+4. **Improved:** it works the same way, only better: faster, more reliable,
+   clearer, safer or more accessible. There's nothing to relearn.
 5. **Fixed:** a bug that users would have noticed or reported, such as lost
    drafts, a stuck sign-in or wrong data. Leave out flaky tests and fixes for
    bugs that never shipped.
@@ -80,10 +85,11 @@ Aim for 3–8 entries a week; a week that shipped many features can have more.
 
 ## Week of 2026-11-16
 
+- **New feature:** Sign in with a passkey from any copy of Apron, not only one on the server's own domain or a domain it trusts, such as Apron hosted elsewhere or web.apron.chat on another server. Apron sends you to the server's passkey page to sign in, create an account or add a passkey, and finishes when you come back. ([#278](https://github.com/apron-chat/apron-web/pull/278))
 - **New feature:** Notices no longer pile up in the timeline: dismiss a server notice, a command's reply or a local error with its ×. ([#284](https://github.com/apron-chat/apron-web/pull/284))
 - **Changed:** External sign-in finishes by itself, with no code to copy: the server's sign-in page opens in a small window (or this tab, if the window is blocked) and Apron picks up when you return. Servers with the older external sign-in aren't supported, so sign in another way or ask the server's admin to update. ([#278](https://github.com/apron-chat/apron-web/pull/278))
 - **Changed:** Messages with links go out with their preview cards instead of without them: Send waits up to 1.5 seconds for previews, with a spinner, and sends at once if you leave the page. ([#282](https://github.com/apron-chat/apron-web/pull/282), [#283](https://github.com/apron-chat/apron-web/pull/283))
-- **Improved:** Passkeys work on servers whose passkeys this page couldn't use before, by finishing on the server's own passkey page. Sign-in choices use the server's own names for them, such as "Acme SSO". ([#278](https://github.com/apron-chat/apron-web/pull/278))
+- **Improved:** Sign-in choices use the server's own names for them, such as "Acme SSO". ([#278](https://github.com/apron-chat/apron-web/pull/278))
 - **Improved:** Links that could mislead you about where they go stand out in their own colour: a label that hides the address, lookalike letters, punycode, or a name before the host such as `bank.example@evil.example`. ([#286](https://github.com/apron-chat/apron-web/pull/286))
 - **Improved:** YouTube previews show the video's thumbnail, so you can see what a link is before opening it. ([#282](https://github.com/apron-chat/apron-web/pull/282))
 - **Fixed:** An emailed sign-in code stopped working if the page reconnected while you checked your email, for example after a phone slept. ([#278](https://github.com/apron-chat/apron-web/pull/278))
@@ -97,10 +103,10 @@ Aim for 3–8 entries a week; a week that shipped many features can have more.
 - **New feature:** Mention anyone, not only people already in the room: the @ picker offers others, and "Add to room on send" brings them in with the message. Mentions that won't reach anyone are greyed out. ([#267](https://github.com/apron-chat/apron-web/pull/267))
 - **New feature:** Room and thread descriptions can be as rich as messages, with formatting, mentions, checklists and Preview. ([#249](https://github.com/apron-chat/apron-web/pull/249), [#266](https://github.com/apron-chat/apron-web/pull/266))
 - **New feature:** Reacting takes one click: the toolbar offers your three most recent reactions, and a + beside a message's reactions opens the picker. ([#248](https://github.com/apron-chat/apron-web/pull/248))
+- **New feature:** A terminal you're done watching can be put away: closing a live terminal embed hides it and stops streaming, and it stays closed after a reload. Back, or a click beside the content, closes any viewer. ([#253](https://github.com/apron-chat/apron-web/pull/253), [#254](https://github.com/apron-chat/apron-web/pull/254), [#255](https://github.com/apron-chat/apron-web/pull/255), [#259](https://github.com/apron-chat/apron-web/pull/259))
 - **Changed:** Extra tabs no longer use up a server's connection limit: only one window of a browser connects to a server at a time, and **Use here** in another window takes it over. ([#270](https://github.com/apron-chat/apron-web/pull/270))
 - **Changed:** The message toolbar no longer covers the first line of the message, where it hid links you wanted to click. It's a row of icons above the message, with labels in wide windows and a ⋯ menu on desktop. ([#248](https://github.com/apron-chat/apron-web/pull/248), [#250](https://github.com/apron-chat/apron-web/pull/250), [#252](https://github.com/apron-chat/apron-web/pull/252), [#271](https://github.com/apron-chat/apron-web/pull/271))
-- **Changed:** A terminal you're done watching can be put away: closing a live terminal embed hides it and stops streaming, and it stays closed after a reload. Back, or a click beside the content, closes any viewer. ([#253](https://github.com/apron-chat/apron-web/pull/253), [#254](https://github.com/apron-chat/apron-web/pull/254), [#255](https://github.com/apron-chat/apron-web/pull/255), [#259](https://github.com/apron-chat/apron-web/pull/259))
-- **Changed:** Leaving a thread you're the last one in asks first, since some servers delete empty threads. ([#265](https://github.com/apron-chat/apron-web/pull/265))
+- **Improved:** Leaving a thread you're the last one in asks first, since some servers delete empty threads. ([#265](https://github.com/apron-chat/apron-web/pull/265))
 - **Improved:** A reconnect no longer takes the composer away mid-sentence, closing the phone's keyboard with it: you can keep typing, and only Send waits. ([#272](https://github.com/apron-chat/apron-web/pull/272))
 - **Improved:** Coming back to Apron on a phone, or switching from Wi-Fi to cellular, reconnects in about 2 seconds instead of waiting on a dead connection. ([#264](https://github.com/apron-chat/apron-web/pull/264), [#268](https://github.com/apron-chat/apron-web/pull/268))
 - **Improved:** On a small phone with the keyboard up, you can still see the line you're writing and Send. ([#279](https://github.com/apron-chat/apron-web/pull/279))
@@ -165,7 +171,7 @@ Aim for 3–8 entries a week; a week that shipped many features can have more.
 - **Changed:** The host serving Apron no longer learns which servers and rooms you open: your place in the app is kept after the `#` in the address, which browsers don't send. Old `?room=` bookmarks open the default room, so re-bookmark them. ([#114](https://github.com/apron-chat/apron-web/pull/114))
 - **Changed:** Moving other people's messages works on any server that allows it, not only Apron's own: whether you can is up to the server's permissions, not your admin or mod role. ([#111](https://github.com/apron-chat/apron-web/pull/111))
 - **Changed:** A room's purpose stays in view: its description is pinned under the header in three lines, and × hides it until it changes. Threads call it "Description" instead of "Summary". ([#91](https://github.com/apron-chat/apron-web/pull/91), [#94](https://github.com/apron-chat/apron-web/pull/94), [#108](https://github.com/apron-chat/apron-web/pull/108), [#117](https://github.com/apron-chat/apron-web/pull/117))
-- **Changed:** In an installed app, the offer to turn on notifications comes at sign-in instead of waiting for your first mention. ([#93](https://github.com/apron-chat/apron-web/pull/93))
+- **Improved:** In an installed app, the offer to turn on notifications comes at sign-in instead of waiting for your first mention. ([#93](https://github.com/apron-chat/apron-web/pull/93))
 - **Improved:** Pick up where you left off: rooms and threads open at the New divider, remembered on this device even where the server keeps no read position. ([#100](https://github.com/apron-chat/apron-web/pull/100))
 - **Improved:** Moving messages into a thread no longer hides them from their authors, who are added to the thread. ([#95](https://github.com/apron-chat/apron-web/pull/95))
 - **Improved:** See who's around at a glance: the member list is split into Online and Offline, each with a count. ([#99](https://github.com/apron-chat/apron-web/pull/99), [#101](https://github.com/apron-chat/apron-web/pull/101))
@@ -180,7 +186,7 @@ Aim for 3–8 entries a week; a week that shipped many features can have more.
 
 - **New feature:** Bookmark, share or reload any room, thread or message: each has its own address, and a message's ⋯ menu has Copy link. ([#86](https://github.com/apron-chat/apron-web/pull/86))
 - **New feature:** On a phone, see when there's news elsewhere: the back arrow in a room's header counts your unread messages in other rooms, in orange with an @ when you're mentioned. ([#84](https://github.com/apron-chat/apron-web/pull/84))
-- **Changed:** On a phone, Back from the rooms list returns you to what you were reading, instead of skipping to the previous room. ([#85](https://github.com/apron-chat/apron-web/pull/85))
+- **Improved:** On a phone, Back from the rooms list returns you to what you were reading, instead of skipping to the previous room. ([#85](https://github.com/apron-chat/apron-web/pull/85))
 - **Improved:** Tell what a thread is about and how lively it is from the room: thread cards show its summary, latest reply, and when it was last replied to. ([#87](https://github.com/apron-chat/apron-web/pull/87))
 - **Improved:** People who share a display name are no longer mixed up in mentions: each shows their user ID too. ([#82](https://github.com/apron-chat/apron-web/pull/82))
 - **Fixed:** A guest who signed up for an account appeared twice in a room's member list. ([#81](https://github.com/apron-chat/apron-web/pull/81))
@@ -213,9 +219,9 @@ Aim for 3–8 entries a week; a week that shipped many features can have more.
 - **New feature:** Find out who someone is: click a mention, name or avatar for their profile card, which warns when someone else uses the same name. From it you can mention them, copy their ID or add them to the room. ([#47](https://github.com/apron-chat/apron-web/pull/47))
 - **New feature:** Send several files with one message: attach them to a draft by picking, pasting, dropping or recording, check the previews, and send them with your text. ([#35](https://github.com/apron-chat/apron-web/pull/35), [#49](https://github.com/apron-chat/apron-web/pull/49))
 - **Changed:** Room descriptions, private rooms, email sign-in, roles and member changes need a v7 server, and rooms on v6 servers no longer show their intro message. **Requires server protocol v7** ([#36](https://github.com/apron-chat/apron-web/pull/36))
-- **Changed:** Start thread gets a thread going in one step: it names the thread after the message, pins its gist as the summary, and quotes it in your reply. ([#36](https://github.com/apron-chat/apron-web/pull/36))
 - **Changed:** Passkey sign-in asks up front whether you're signing in or creating an account, and passkeys no longer pop up by themselves after a reconnect: tap Sign in on the banner. ([#40](https://github.com/apron-chat/apron-web/pull/40), [#41](https://github.com/apron-chat/apron-web/pull/41), [#46](https://github.com/apron-chat/apron-web/pull/46))
 - **Removed:** The client's banner about how long the demo server keeps messages. A server can say this in its own welcome notice. ([#45](https://github.com/apron-chat/apron-web/pull/45))
+- **Improved:** Start thread gets a thread going in one step: it names the thread after the message, pins its gist as the summary, and quotes it in your reply. ([#36](https://github.com/apron-chat/apron-web/pull/36))
 - **Improved:** Uploads are quicker and keep where you were private: images are shrunk before upload, and photos are re-encoded, which removes location and other EXIF data. ([#35](https://github.com/apron-chat/apron-web/pull/35))
 - **Fixed:** Passkey sign-in did nothing with password-manager extensions such as 1Password. ([#40](https://github.com/apron-chat/apron-web/pull/40), [#43](https://github.com/apron-chat/apron-web/pull/43))
 - **Fixed:** Accounts created with a passkey or invite got a random ID or "Member" instead of the name you chose. ([#45](https://github.com/apron-chat/apron-web/pull/45))
