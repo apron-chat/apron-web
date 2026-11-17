@@ -48,10 +48,26 @@ Order within a week:
 
 Mark protocol or server-compatibility changes with **Requires server protocol vN**.
 
-Leave out styling tweaks (pixel sizes, spacing, corners), refactors, tests, CI,
-perf-budget updates, dependency bumps and follow-up review fixes. If you can't
-tell whether a user would notice a change, leave it out. Aim for 3–8 entries a
-week; a week that shipped many features can have more.
+Deciding what goes in. Include a change if any of these is true:
+- A user would notice it in normal use without being told.
+- A user has to do something about it: relearn a habit, change a setting,
+  re-bookmark, or update their server.
+- It changes what others can see or do: privacy, security, permissions, or what
+  servers and other sites learn about you.
+- It fixes a bug a user could have hit on main and might have reported.
+
+Leave it out if:
+- It only changes the look: sizes, spacing, corners, colours or wording.
+- It polishes a feature from the same week: fold it into that entry instead.
+- It fixes a bug that never reached main, or changes only tests, CI, tooling,
+  refactors or dependencies.
+- It's a speed-up that only shows up when measured. Include one users would
+  feel, with the number.
+
+When unsure, ask whether a regular user reading it would be glad to know, or
+surprised that nobody told them. If neither, leave it out.
+
+Aim for 3–8 entries a week; a week that shipped many features can have more.
 -->
 
 ## Week of 2026-11-16
@@ -63,6 +79,7 @@ week; a week that shipped many features can have more.
 - **Improved:** Links that could mislead you about where they go stand out in their own colour: a label that hides the address, lookalike letters, punycode, or a name before the host such as `bank.example@evil.example`. (#286)
 - **Improved:** YouTube previews show the video's thumbnail, so you can see what a link is before opening it. (#282)
 - **Fixed:** An emailed sign-in code stopped working if the page reconnected while you checked your email, for example after a phone slept. (#278)
+- **Fixed:** Opening a link to another server in a new tab took over the server from the window you were using, which then showed "Apron is open in another window". (#280)
 
 ## Week of 2026-11-09
 
@@ -90,6 +107,8 @@ week; a week that shipped many features can have more.
 - **New feature:** Room to write longer messages: Expand opens a full-panel composer with a formatting toolbar and Preview. (#229, #243)
 - **New feature:** Keep track of tasks in chat: `- [ ]` items become checkboxes that the author and anyone the message mentions can tick. (#236, #242, #243)
 - **New feature:** Voice notes are easier to listen to, in Apron's own player: a waveform you can seek along, and 1×, 1.5× or 2× speed. (#233, #235, #237, #241)
+- **New feature:** Bring a whole team in at once: Add members takes `@role` to add everyone with that role, and mentioning someone who isn't in the room asks whether to add them. (#227)
+- **New feature:** Take terminal output with you: terminal embeds have Copy, which copies it as plain text, and Open in a new tab. (#207)
 - **Changed:** Signing out no longer costs you this device's history: it's kept for when you sign in again. To delete it, untick Keep local history when you sign out, or use Preferences > History. (#199)
 - **Changed:** Look around a room before joining it: one picked under Other Rooms opens for reading, and joining (with Join, or by posting) keeps what you've already read. (#212, #215)
 - **Changed:** Muting a room quiets it without making you miss what's meant for you: it no longer counts toward the tab title or app badge, but mentions of you still get through. (#226, #228)
@@ -102,6 +121,8 @@ week; a week that shipped many features can have more.
 - **Fixed:** Blank lines typed in the composer were dropped, so paragraphs were sent as one. (#208)
 - **Fixed:** In Safari, pressing Enter to confirm input-method text (for example Japanese) sent the message. (#223)
 - **Fixed:** New replies in joined threads didn't show in the rooms list after a reconnect or reload. (#200)
+- **Fixed:** A server icon hosted on the site Apron is loaded from was blocked and shown as initials. (#214)
+- **Fixed:** Menus could open underneath the member list. (#234)
 
 ## Week of 2026-10-26
 
@@ -111,9 +132,21 @@ week; a week that shipped many features can have more.
 - **New feature:** A busy rooms list stays manageable: drag rooms into your order, mute a room or thread for a while, and fold headings down to what has news. Threads quiet for 3 days fold under Inactive, and Browse rooms is now Other Rooms. (#125, #145, #147, #148, #150, #151, #160, #185, #198)
 - **New feature:** Make Apron look your way with a theme: Apron, Ferrous, Gumball, Linocut (high contrast, also for e-ink), or your own CSS. Fonts you chose before become a custom theme. (#174, #177)
 - **New feature:** Copy selected messages as a readable Markdown log, reach everyone with a role with `@&role`, and get mention chips and suggestions while editing. Links to YouTube, X, Bluesky and Wikipedia get previews too. (#122, #159, #164, #168, #172, #181)
-- **Changed:** Media from sites you haven't trusted no longer loads without your say-so: images, video and audio from anywhere but the chat server and your trusted sites wait for Load, Always load or Block. To load from every site you haven't blocked, choose Any site in Preferences → Media. (#163, #193, #194)
+- **New feature:** Your server's own custom emoji work in messages, reactions and the picker, and the top of the rooms list shows the server's name, description and avatar. (#138)
+- **New feature:** See when someone was last around: an offline person's profile card and member row say when they were last seen. (#126)
+- **New feature:** On a phone, Apron offers once to add itself to the Home Screen, with the steps for your browser. (#167)
+- **Changed:** Media from sites you haven't trusted no longer loads without your say-so: images, video and audio from anywhere but the chat server and your trusted sites wait for Load, Always load or Block, and the prompt shows the full address. To load from every site you haven't blocked, choose Any site in Preferences → Media. (#163, #186, #193, #194)
 - **Changed:** Your profile and the server's settings are each one click away: Preferences opens at Profile from one button in the profile bar, and the server's name above the rooms list opens its details, with Connect to another server… and Disconnect. (#174, #177)
 - **Improved:** A brief drop in connection is barely noticeable: no flashing banners or emptied page, and the room you're reading catches up first. Unread counts survive a reload on servers that keep read cursors, and notifications clear once you've read the room on another device. (#127, #128, #130, #154, #169, #173)
+- **Improved:** A server can no longer use your passkey to sign in as you somewhere else: Apron runs a passkey sign-in only for a domain the server owns. (#183)
+- **Improved:** Right-to-left languages get a correctly mirrored layout, and hidden direction-override characters are stripped from what people write, so text can't be disguised with them. (#138)
+- **Improved:** Touch screens get the same reach as a mouse: long-press a message for its menu, and tap a member for their profile or long-press for a menu with Direct message. (#139, #153, #161)
+- **Improved:** On a phone, the rooms list leaves a sliver of the room showing, to tap or swipe back to. (#192)
+- **Improved:** The timeline shows when people are added to a room, when they join or leave a thread, and when a room is renamed. (#170)
+- **Improved:** Reply quotes, link cards and notifications show a Markdown message as text, without its `**` and backticks. (#146)
+- **Fixed:** A failed upload showed "Uploading…" to everyone else forever. It now reads "Upload failed" after ten minutes. (#136)
+- **Fixed:** On iOS, the timeline jittered when pulled past the latest message, and slow drags didn't stay pinned to the bottom. (#165, #196)
+- **Fixed:** The jump-to-latest button could stay on screen with the latest message already in view. (#190)
 
 ## Week of 2026-10-19
 
@@ -124,8 +157,11 @@ week; a week that shipped many features can have more.
 - **Changed:** The host serving Apron no longer learns which servers and rooms you open: your place in the app is kept after the `#` in the address, which browsers don't send. Old `?room=` bookmarks open the default room, so re-bookmark them. (#114)
 - **Changed:** Moving other people's messages works on any server that allows it, not only Apron's own: whether you can is up to the server's permissions, not your admin or mod role. (#111)
 - **Changed:** A room's purpose stays in view: its description is pinned under the header in three lines, and × hides it until it changes. Threads call it "Description" instead of "Summary". (#91, #94, #108, #117)
+- **Changed:** In an installed app, the offer to turn on notifications comes at sign-in instead of waiting for your first mention. (#93)
 - **Improved:** Pick up where you left off: rooms and threads open at the New divider, remembered on this device even where the server keeps no read position. (#100)
 - **Improved:** Moving messages into a thread no longer hides them from their authors, who are added to the thread. (#95)
+- **Improved:** See who's around at a glance: the member list is split into Online and Offline, each with a count. (#99, #101)
+- **Improved:** Thread cards show what's new to you, with your unread count and an @ for a mention instead of a total, and private threads are marked. The sidebar lists a room's joined threads most recently active first. (#103, #120)
 - **Improved:** Writing on a phone keeps the app in view above the keyboard, with the header showing, and iPhone no longer zooms into the composer. (#97, #118)
 - **Improved:** Hitting a rate limit no longer leaves you guessing when to retry: a countdown shows in the timeline and on Send, and a held-back room loads again by itself. (#109)
 - **Improved:** Voice clips take about a quarter of the space, and any image your browser opens, such as HEIC or AVIF, works as an avatar. (#92, #96)
@@ -149,6 +185,7 @@ week; a week that shipped many features can have more.
 - **New feature:** See images properly: click one to open it full screen, and page through the room's images with the arrow keys. (#53)
 - **New feature:** Fix an attachment mistake without resending: remove or rename a message's files while editing it, or rename a file before you send it. (#70)
 - **New feature:** Discover the conversations in a room: threads you haven't joined are listed under Other threads, and you can join or leave from the row. (#50, #66, #73, #74, #79)
+- **New feature:** Admins and moderators can tidy a conversation by moving anyone's messages into a thread. A move happens all or nothing. (#54)
 - **Changed:** Apron needs a server that speaks protocol v8. **Requires server protocol v8** (#48)
 - **Changed:** Notifications are simpler to set: one switch covers desktop and push, and **Notify me about** picks mentions, replies to you, private rooms or joined rooms, for each account. (#48, #57)
 - **Changed:** Starting a thread asks for a title and an optional summary first. (#66, #71, #75)
@@ -156,6 +193,9 @@ week; a week that shipped many features can have more.
 - **Changed:** The rooms list and member list open and close from buttons in the window's top corners, and a room's Edit and Leave moved into its header's ⋯ menu. (#51, #59, #62)
 - **Improved:** With a passkey or email account, reopening Apron shows your rooms and messages from last time straight away, without waiting on the server. (#56, #67, #72)
 - **Improved:** An update won't cost you a message: the update notice warns when reloading would lose one you haven't sent. (#53)
+- **Improved:** Replies in other rooms are harder to miss: joined threads with new messages show in the sidebar even under rooms you don't have open, with one unread count per row, orange with an @ for a mention. (#76)
+- **Improved:** A growing draft no longer pushes the latest messages out of view behind the composer. (#64)
+- **Fixed:** Long names in the member list were cut off by role badges and by the space kept for the remove button. (#77, #80)
 
 ## Week of 2026-09-28
 
