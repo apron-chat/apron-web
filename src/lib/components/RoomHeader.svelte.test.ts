@@ -6,7 +6,7 @@ import * as dom from '$lib/test/dom';
 import { byTestid } from '$lib/test/queries';
 
 /** The header of a joined room, offering the member list's toggle or not. */
-function render(memberListToggle?: boolean, elsewhere: { unreadElsewhere?: number; mentionsElsewhere?: number; showTopic?: boolean; ondescription?: () => void } = {}) {
+function render(memberListToggle?: boolean, elsewhere: { unreadElsewhere?: number; mentionsElsewhere?: number; showTopic?: boolean; ondescription?: () => void; descriptionUpdated?: boolean } = {}) {
 	const room = { id: 'general', title: 'General', description: 'Say **hello**.', joined: true } as unknown as RoomSnapshot;
 	const noop = () => {};
 	dom.render(RoomHeader, {
@@ -42,6 +42,16 @@ describe('RoomHeader', () => {
 		expect(button?.getAttribute('aria-label')).toBe('Show the room description');
 		button?.click();
 		expect(ondescription).toHaveBeenCalledOnce();
+	});
+
+	it('marks Description once the description put away has been edited since, in its name and with a class that draws it blue', () => {
+		render(undefined, { ondescription: () => {} });
+		expect(byTestid('show-description')?.classList.contains('ap-roomhead-description-updated')).toBe(false);
+		dom.unmount();
+		render(undefined, { ondescription: () => {}, descriptionUpdated: true });
+		const button = byTestid('show-description');
+		expect(button?.classList.contains('ap-roomhead-description-updated')).toBe(true);
+		expect(button?.getAttribute('aria-label')).toBe('Show the room description, updated since you hid it');
 	});
 
 	it('tags the back arrow with what the rooms list counts as new elsewhere', () => {
