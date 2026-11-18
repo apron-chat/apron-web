@@ -2,7 +2,7 @@ import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
 import type { Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
-import { UPDATE_POLL_MS } from './src/lib/ui/update-poll';
+import { UPDATE_POLL_MS } from './src/lib/ui/update-poll.ts';
 
 // Node's fs, without Node's types (the app has none): only to sort the test files below.
 const fsModule = 'node:fs';
