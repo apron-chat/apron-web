@@ -96,6 +96,17 @@ describe('RoomHeader', () => {
 		// A mirror, whose record names the room it mirrors: hosted there.
 		const mirror = { room_id: 'ops', ext: { remote: { server: 'wss://a.example/ws', room_id: 'ops-a' } } };
 		expect(show(['ext:remote'], undefined, mirror)).toEqual(['Hosted by a.example', 'This room lives on a.example: what you write here goes there first']);
+		// A thread says it as its room does, after its count of replies; with none counted yet, as a room's line.
+		const thread = (replyCount?: number) => {
+			const room = { id: 'ops', title: 'ops', record: mirror, joined: true, members: [] } as unknown as RoomSnapshot;
+			const pane = { id: 't1', title: 'Postmortem', parentRoomId: 'ops', record: { room_id: 't1' }, joined: true, members: [] } as unknown as RoomSnapshot;
+			const noop = () => {};
+			dom.render(RoomHeader, { room, pane, threadTitle: 'Postmortem', ...(replyCount !== undefined ? { replyCount } : {}), typing: [], canEdit: false, editDisabled: false, canLeave: false, memberListOpen: false, onback: noop, onroom: noop, onedit: noop, onleave: noop, onmemberlist: noop });
+			const text = document.querySelector('.ap-roomhead-sub')?.textContent;
+			dom.unmount();
+			return text;
+		};
+		expect([thread(2), thread()]).toEqual(['2 replies · Hosted by a.example', 'Hosted by a.example']);
 		// Without the capability, a link is just a member.
 		expect(show([], 'Deploys')).toEqual(['Deploys', 'Deploys']);
 		directory.forget();

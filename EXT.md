@@ -388,6 +388,6 @@ messages, and mirror rooms' records.
   keeps the draft.
 - The member list lists remote users under Remote, after Online and Offline
   and before Shared with, neither online nor offline: whoever this client saw
-  write in the room last first, with when ("active 5m ago"), then by name.
+  write in the room last first, with when ("5m ago"), then by name.
 - apron-web doesn't show `message_id` from `remote` (the time on the other
   server) yet.

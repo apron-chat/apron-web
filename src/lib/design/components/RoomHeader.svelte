@@ -33,6 +33,8 @@
 		typing?: string[];
 		/** An open thread's replies, once its history has loaded, in place of the topic; `more`: older ones aren't loaded, so the count is a lower bound ("12+ replies"). */
 		replies?: { count: number; more?: boolean };
+		/** With `replies`: how the thread is shared with other servers (`ext:remote`), after its count ("2 replies · Hosted by a.example"), with its tooltip. */
+		federation?: { text: string; title: string };
 		/** A short status after the title, such as "History unavailable". */
 		note?: string;
 		/** Phones: a ‹ back to the rooms list. */
@@ -101,7 +103,7 @@
 		class?: ClassValue;
 	}
 	let {
-		room, name, topic, topicTitle, private: isPrivate, faces, typing = [], replies, note, onback, unreadElsewhere = 0, mentionsElsewhere = 0,
+		room, name, topic, topicTitle, private: isPrivate, faces, typing = [], replies, federation, note, onback, unreadElsewhere = 0, mentionsElsewhere = 0,
 		thread, threadName, onroom, canJoin = false, onjoin, onmemberlist, memberListOpen = false, onedit, onleave, oncopylink, muteChoices, onmute, muted, onunmute, mutedWithRoom = false, busy = false, updating = false, onsearch, searchHint, onshortcuts,
 		ondescription, tagTestid, topicTestid, joinTestid, descriptionTestid, actionsTestid, editTestid, leaveTestid, copyLinkTestid, searchTestid, muteTestid, unmuteTestid,
 		unmuteButtonTestid, class: className
@@ -164,7 +166,7 @@
 		{#if typing.length}
 			<p class="ap-roomhead-sub ap-roomhead-typing">{#if typing.length === 1}<bdi>{typing[0]}</bdi> is typing…{:else}{typing.length} people are typing…{/if}</p>
 		{:else if replies}
-			<p class="ap-roomhead-sub">{replies.count}{replies.more ? '+' : ''} {replies.count === 1 && !replies.more ? 'reply' : 'replies'}</p>
+			<p class="ap-roomhead-sub">{replies.count}{replies.more ? '+' : ''} {replies.count === 1 && !replies.more ? 'reply' : 'replies'}{#if federation}{' · '}<span title={federation.title}>{federation.text}</span>{/if}</p>
 		{:else if topic}
 			<p class="ap-roomhead-sub" data-testid={topicTestid} title={topicTitle}>{topic}</p>
 		{/if}

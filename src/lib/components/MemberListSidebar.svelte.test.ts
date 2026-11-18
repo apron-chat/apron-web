@@ -337,7 +337,7 @@ describe('MemberListSidebar', () => {
 			// Cal wrote 5 minutes ago, Dee 30; Bea and Eli, never seen writing, by name.
 			expect(sections()).toEqual([['Online· 1', ['ada']], ['Remote· 4', ['cal@a.example', 'dee@a.example', 'bea@a.example', 'eli@a.example']]]);
 			const hint = (row: HTMLLIElement) => row.querySelector('.ap-member-hint')?.textContent ?? null;
-			expect(rows.slice(1).map(hint)).toEqual(['active 5m ago', 'active 30m ago', null, null]);
+			expect(rows.slice(1).map(hint)).toEqual(['5m ago', '30m ago', null, null]);
 			expect(rows[1].querySelector('.ap-member-who')?.getAttribute('title')).toMatch(/^@cal@a\.example · Last wrote here \d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/);
 			// The count stays everyone.
 			expect(document.querySelector('[data-testid="member-count"]')?.textContent).toBe('5');
@@ -355,5 +355,28 @@ describe('MemberListSidebar', () => {
 		directory.apply({ ...blank, capabilities: { ...blank.capabilities, status: true }, authenticated: true, you: ada, users: { ada, 'sam@a.example': sam }, recordedUsers: {}, userAliases: {}, server: { apron: 10, auth: ['guest'], capabilities: ['status', 'ext:remote'] } }, undefined);
 		flushSync();
 		expect(sections()).toEqual([['Online· 1', ['ada']], ['Remote· 1', ['sam@a.example']]]);
+	});
+
+	it('lists a mirror room’s 200 remote members under Remote, from a long timeline read once, in order', () => {
+		vi.useFakeTimers({ now: new Date(1_800_000_000_000), toFake: ['Date'] });
+		try {
+			const remote = (userId: string) => ({ remote: { server: 'wss://a.example/ws', user_id: userId } });
+			const users: Identity[] = [ada, ...Array.from({ length: 200 }, (_, index) => ({ user_id: `u${index}@a.example`, name: `User ${String(index).padStart(3, '0')}`, ext: remote(`u${index}`) }))];
+			// 2000 messages, the newest from u199 down to u100; u0–u99 never seen writing.
+			const messages = Array.from({ length: 2000 }, (_, index) => ({ message_id: String(1_800_000_000_000 - (2000 - index) * 1000), room_id: 'general', from: { user_id: `u${100 + (index % 100)}@a.example` }, body: { text: 'hi' } }));
+			const timeline = { order: messages.map((entry) => entry.message_id), events: Object.fromEntries(messages.map((entry) => [entry.message_id, entry])) } as unknown as RoomSnapshot['timeline'];
+			const started = performance.now();
+			const rows = render(users, { server: { apron: 10, auth: ['guest'], capabilities: ['status', 'ext:remote'] } }, false, {}, timeline);
+			const took = performance.now() - started;
+			const [[label, ids]] = sections().slice(-1) as [[string, string[]]];
+			expect([label, ids.length, rows.length]).toEqual(['Remote· 200', 200, 201]);
+			expect(ids.slice(0, 2)).toEqual(['u199@a.example', 'u198@a.example']);
+			expect(ids.slice(99, 102)).toEqual(['u100@a.example', 'u0@a.example', 'u1@a.example']);
+			expect(rows.filter((row) => row.querySelector('.ap-member-hint')).length).toBe(100);
+			// A generous ceiling for a slow machine: it draws in tens of milliseconds.
+			expect(took).toBeLessThan(5000);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 });

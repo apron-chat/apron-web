@@ -160,15 +160,15 @@
 	}
 
 	/**
-	 * When a remote user last wrote here, as a muted hint after their name ("active 5m ago", "active Sep 14"), and in
-	 * words with the exact time for the row's tooltip; nothing when this client saw no message of theirs. It moves on
-	 * with the minute, as an offline member's last seen does.
+	 * When a remote user last wrote here, as a short muted hint after their name ("5m ago", "Sep 14"), and in words
+	 * with the exact time for the row's tooltip; nothing when this client saw no message of theirs. It moves on with the
+	 * minute, as an offline member's last seen does.
 	 */
 	function activeHint(messageId: string | undefined): { text: string; label: string } | undefined {
 		if (messageId === undefined) return undefined;
 		const since = idSince(messageId, minuteNow());
 		if (!since) return undefined;
-		const text = since === 'now' ? 'active now' : `active ${/^\d+[mhd]$/.test(since) ? `${since} ago` : since}`;
+		const text = since === 'now' ? 'just now' : /^\d+[mhd]$/.test(since) ? `${since} ago` : since;
 		return { text, label: `Last wrote here ${idDateTime(messageId)}` };
 	}
 

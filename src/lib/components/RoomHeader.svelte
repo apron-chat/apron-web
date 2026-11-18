@@ -103,10 +103,11 @@
 	let mutedUntil = $derived(mutedWithRoom ? room.mutedUntil : pane.mutedUntil);
 	let muted = $derived(mutedUntil === undefined ? undefined : mutedUntil === true ? 'until you unmute' : pausedUntilLabel(mutedUntil));
 	/**
-	 * How the room is shared with other servers (`ext:remote`): "Hosted by" the one it lives on, for a mirror, or
-	 * "Shared with" the ones whose links are members. It says so where its description goes, before it.
+	 * How the room or thread is shared with other servers (`ext:remote`): "Hosted by" the one it lives on, for a mirror,
+	 * or "Shared with" the ones whose links are members; a thread by its own record or links, else as its room is. It
+	 * says so where the room's description goes, before it, and after a thread's count of replies.
 	 */
-	let federation = $derived(thread || !directory.remoteUsers ? undefined : directory.federation(room));
+	let federation = $derived(!directory.remoteUsers ? undefined : thread ? (directory.federation(pane) ?? directory.federation(room)) : directory.federation(room));
 	let line = $derived(people ? privateRoomLine(people.map((member) => directory.name(member)), people.length === 1 ? presenceLabel(directory.status(people[0])) : undefined) : '');
 </script>
 
@@ -120,6 +121,7 @@
 	{faces}
 	{typing}
 	replies={replyCount !== undefined ? { count: replyCount, more: moreReplies } : undefined}
+	federation={thread ? federation : undefined}
 	note={copied ? 'Link copied' : waiting ? 'Waiting' : pane.recoveryError ? 'History unavailable' : undefined}
 	{onback}
 	{unreadElsewhere}
