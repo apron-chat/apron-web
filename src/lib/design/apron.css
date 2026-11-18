@@ -726,7 +726,8 @@ a.ap-embed-card:hover { background: var(--hover); }
 /* Description, once the description put away is edited: a small dot in the description's blue after its name, or on its
    icon where the name is hidden (phones). Still and small, not the accent unread rooms and mentions wear: fine to leave. */
 .ap-roomhead-description-updated { position: relative; }
-.ap-roomhead-description-updated .ap-roomhead-description-word::after { content: ''; display: inline-block; width: 6px; height: 6px; margin-inline-start: var(--space-1_5); vertical-align: 2px; border-radius: var(--radius-full); background: var(--denim); }
+/* The button centres its items (inline-flex), so the dot, one of them after the name, sits centred on it. */
+.ap-roomhead-description-updated::after { content: ''; flex: none; width: 6px; height: 6px; margin-inline-start: 2px; border-radius: var(--radius-full); background: var(--denim); }
 /* With something new elsewhere, the ‹ becomes the point of a tag holding the count: ink for unread, orange with an @ for a mention, as in the rooms list. */
 .ap-roomhead-tag { --ap-pill-h: var(--control-xs); position: relative; padding-inline: 3px var(--space-2); border-radius: 0; border-start-end-radius: var(--radius-sm); border-end-end-radius: var(--radius-sm); isolation: isolate; font-size: var(--text-sm); font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; white-space: nowrap; }
 /* The point: a square turned on its corner, rounded at the tip, behind the count (its side the tag's 22px over √2). */
@@ -742,7 +743,7 @@ a.ap-embed-card:hover { background: var(--hover); }
 	.ap-roomhead .ap-roomhead-description { padding: 0 var(--space-2); }
 	.ap-roomhead-description-word { display: none; }
 	/* The dot on the icon's top end corner: the icon is 15px, centred, after the button's --space-2 of padding. */
-	.ap-roomhead-description-updated::after { content: ''; position: absolute; top: calc(50% - 7.5px - 2px); inset-inline-end: calc(var(--space-2) - 3px); width: 6px; height: 6px; border-radius: var(--radius-full); background: var(--denim); box-shadow: 0 0 0 1.5px var(--bg-100); }
+	.ap-roomhead-description-updated::after { content: ''; position: absolute; margin: 0; top: calc(50% - 7.5px - 2px); inset-inline-end: calc(var(--space-2) - 3px); width: 6px; height: 6px; border-radius: var(--radius-full); background: var(--denim); box-shadow: 0 0 0 1.5px var(--bg-100); }
 	/* The tag's point hangs into the button's left padding, where the arrow sits: its 7.78px, and 2px clear of the edge. */
 	.ap-roomhead-back.ap-roomhead-back-tagged { display: flex; flex: none; align-items: center; width: auto; min-width: var(--control-lg); padding: 0 2px; padding-inline-start: 10px; }
 }

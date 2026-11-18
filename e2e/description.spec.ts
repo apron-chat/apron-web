@@ -10,11 +10,7 @@ const button = (preview: Preview) => preview.page.getByTestId('show-description'
 const UPDATED = /ap-roomhead-description-updated/;
 
 /** Whether the dot is drawn: after Description's name, or on its icon where the name is hidden (phones). */
-const dotDrawn = (preview: Preview) => button(preview).evaluate((el) => {
-	const word = el.querySelector('.ap-roomhead-description-word');
-	const onWord = word && getComputedStyle(word).display !== 'none' && getComputedStyle(word, '::after').content !== 'none';
-	return Boolean(onWord || getComputedStyle(el, '::after').content !== 'none');
-});
+const dotDrawn = (preview: Preview) => button(preview).evaluate((el) => getComputedStyle(el, '::after').content !== 'none');
 
 async function putAway(preview: Preview): Promise<void> {
 	await preview.open();
