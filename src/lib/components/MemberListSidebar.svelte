@@ -47,7 +47,7 @@
 		drawRows?: boolean;
 	}
 	/** No other servers' users or links in the room (`remote`), or no extension. */
-	const NO_REMOTE: { users: Identity[]; links: Identity[] } = { users: [], links: [] };
+	const NO_REMOTE: { local: Identity[]; users: Identity[]; links: Identity[] } = { local: [], users: [], links: [] };
 	const NO_WRITES: ReadonlyMap<string, string> = new Map();
 
 	let { drawRows = true, client, session, room, open, canChange, canAdd, canMessage = false, onnamed, onopenroom }: Props = $props();
@@ -74,10 +74,10 @@
 	 * extension, which reads nothing more.
 	 */
 	let remote = $derived.by(() => {
-		if (!directory.remoteOn) return NO_REMOTE;
-		const users = members.filter((member) => directory.remoteHost(member) !== undefined);
-		const links = members.filter((member) => directory.linkHost(member) !== undefined);
-		return users.length || links.length ? { users, links } : NO_REMOTE;
+		if (!directory.remoteUsers) return NO_REMOTE;
+		const local: Identity[] = [], users: Identity[] = [], links: Identity[] = [];
+		for (const member of members) (directory.linkHost(member) !== undefined ? links : directory.remoteHost(member) !== undefined ? users : local).push(member);
+		return users.length || links.length ? { local, users, links } : NO_REMOTE;
 	});
 	/**
 	 * When each member last wrote in the room, as far as this client has seen (`lastWrote`): read from its timeline
@@ -92,10 +92,9 @@
 	 */
 	let sections = $derived.by(() => {
 		if (remote === NO_REMOTE) return memberSections(members, statusOf, hasStatus);
-		const { users, links } = remote;
-		const people = memberSections(members.filter((member) => !users.includes(member) && !links.includes(member)), statusOf, hasStatus);
+		const { local, users, links } = remote;
 		return [
-			...people,
+			...memberSections(local, statusOf, hasStatus),
 			...(users.length ? [{ key: 'remote', label: 'Remote', people: byLastWrote([...users].sort(byName), wrote) }] : []),
 			...(links.length ? [{ key: 'links', label: 'Shared with', people: links }] : [])
 		];

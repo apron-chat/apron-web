@@ -345,4 +345,15 @@ describe('MemberListSidebar', () => {
 			vi.useRealTimers();
 		}
 	});
+
+	it('shows the Remote section once the server frame says ext:remote, after the list drew without it (a kept view, then the frame)', () => {
+		const sam: Identity = { user_id: 'sam@a.example', name: 'Sam', ext: { remote: { server: 'wss://a.example/ws', user_id: 'sam' } } };
+		const users = [ada, sam];
+		render(users, { server: { apron: 10, auth: ['guest'], capabilities: ['status'] } });
+		expect(sections()).toEqual([['Online· 2', ['ada', 'sam@a.example']]]);
+		const blank = blankSnapshot();
+		directory.apply({ ...blank, capabilities: { ...blank.capabilities, status: true }, authenticated: true, you: ada, users: { ada, 'sam@a.example': sam }, recordedUsers: {}, userAliases: {}, server: { apron: 10, auth: ['guest'], capabilities: ['status', 'ext:remote'] } }, undefined);
+		flushSync();
+		expect(sections()).toEqual([['Online· 1', ['ada']], ['Remote· 1', ['sam@a.example']]]);
+	});
 });

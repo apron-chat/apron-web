@@ -103,11 +103,10 @@
 	let mutedUntil = $derived(mutedWithRoom ? room.mutedUntil : pane.mutedUntil);
 	let muted = $derived(mutedUntil === undefined ? undefined : mutedUntil === true ? 'until you unmute' : pausedUntilLabel(mutedUntil));
 	/**
-	 * The servers the room is shared with (`ext:remote`): those whose links, the accounts they write through, are
-	 * members. Its people there read and write here too, so it says so where its description goes, before it.
+	 * How the room is shared with other servers (`ext:remote`): "Hosted by" the one it lives on, for a mirror, or
+	 * "Shared with" the ones whose links are members. It says so where its description goes, before it.
 	 */
-	let sharedWith = $derived(thread || !directory.remoteOn ? undefined : directory.sharedWith(room));
-	let shared = $derived(sharedWith ? `Shared with ${sharedWith}` : '');
+	let federation = $derived(thread || !directory.remoteUsers ? undefined : directory.federation(room));
 	let line = $derived(people ? privateRoomLine(people.map((member) => directory.name(member)), people.length === 1 ? presenceLabel(directory.status(people[0])) : undefined) : '');
 </script>
 
@@ -115,8 +114,8 @@
 <DesignRoomHeader
 	room={room.id}
 	name={room.title}
-	topic={[shared, topic || line].filter(Boolean).join(' · ')}
-	topicTitle={topic ? room.description : shared ? `People on ${sharedWith} read and write in this room too` : undefined}
+	topic={[federation?.text, topic || line].filter(Boolean).join(' · ')}
+	topicTitle={topic ? room.description : federation?.title}
 	private={pane.private}
 	{faces}
 	{typing}

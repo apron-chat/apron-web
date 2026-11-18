@@ -216,27 +216,36 @@ class Directory {
 
 	/** A display name with the server of a remote user after it (`remoteHost`), as a line of text shows them: "Sam (chat.example)". */
 	label(from: Identity | undefined): string {
-		const name = this.name(from);
-		const origin = this.remoteOn ? remoteUser(this.person(from)) : undefined;
-		return origin ? withHost(name, origin) : name;
+		const origin = this.remoteHost(from);
+		return origin ? withHost(this.name(from), origin) : this.name(from);
 	}
 
 	/**
-	 * The servers a room or thread is shared with (`ext:remote`), as one line of their hosts: those of the links among
-	 * its members (`linkHost`), and the `server` of `ext.remote` on its room record, which a thread of a shared room may
-	 * carry. A thread also takes its room's (`ThreadList`'s `shared`). Undefined for a room shared with none, and
-	 * without the extension. Tracked: a room's row reads it, and may name no one.
+	 * Whether the server shows other servers' users and rooms (`ext:remote`), tracked: for what decides from it alone
+	 * whether to read more, such as a list of rooms, so it reads them once the extension shows up.
 	 */
-	sharedWith(room: { members?: readonly Identity[]; record?: { ext?: unknown } } | undefined): string | undefined {
+	get remoteUsers(): boolean {
+		return this.remote;
+	}
+
+	/**
+	 * How a room or thread is shared with other servers (`ext:remote`), in words for its row and header: a mirror, whose
+	 * room record carries `ext.remote`, is "Hosted by" that `server`'s host; a room that links have joined (`linkHost`)
+	 * is "Shared with" their servers'. A thread also takes its room's (`ThreadList`'s `federation`). Undefined for a
+	 * room of this server alone, and without the extension. Tracked.
+	 */
+	federation(room: { members?: readonly Identity[]; record?: { ext?: unknown } } | undefined): Federation | undefined {
 		if (!room || !this.remote) return undefined;
+		const host = remoteOf(room.record)?.host;
+		if (host !== undefined) return { text: `Hosted by ${host}`, title: `This room lives on ${host}: what you write here goes there first` };
 		const hosts = new Set<string>();
 		for (const member of room.members ?? []) {
-			const host = this.linkHost(member);
-			if (host !== undefined) hosts.add(host);
+			const linked = this.linkHost(member);
+			if (linked !== undefined) hosts.add(linked);
 		}
-		const own = remoteOf(room.record);
-		if (own) hosts.add(own.host);
-		return hosts.size ? [...hosts].join(', ') : undefined;
+		if (!hosts.size) return undefined;
+		const servers = [...hosts].join(', ');
+		return { text: `Shared with ${servers}`, title: `People on ${servers} read and write in this room too` };
 	}
 
 	/**
@@ -307,8 +316,8 @@ class Directory {
 	sharesName(from: Identity | undefined): boolean {
 		const person = this.person(from);
 		if (!person) return false;
-		const name = person.name || person.user_id;
-		if (name === person.user_id) return false;
+		const name = person.name;
+		if (!name || name === person.user_id) return false;
 		// As it shows: a remote user's server after the name tells them apart from this server's (`label`).
 		const origin = this.remoteOn ? remoteUser(person) : undefined;
 		const ids = this.byName.get(origin ? withHost(name, origin) : name);
@@ -382,8 +391,9 @@ class Directory {
 		const from = recorded ?? { user_id: id };
 		const known = users[id] || userAliases[id] !== undefined || recorded ? this.person(from) : undefined;
 		if (!known) return undefined;
+		const name = known.name || known.user_id;
 		const origin = this.remoteOn ? remoteUser(known) : undefined;
-		const target: MentionTarget = { kind: 'user', id, name: origin ? withHost(known.name || known.user_id, origin) : known.name || known.user_id, me: this.isMe(id) };
+		const target: MentionTarget = { kind: 'user', id, name: origin ? withHost(name, origin) : name, me: this.isMe(id) };
 		if (this.sharesName(from)) target.shared = true;
 		return target;
 	};
@@ -395,6 +405,12 @@ class Directory {
 	 */
 	readonly markdown = (text: string | undefined, links = false): string =>
 		text?.trim() ? renderMarkdown(text, this.resolve, this.resolveRoom, links ? this.resolveLink : undefined, this.resolveEmoji, this.mediaGate) : '';
+}
+
+/** How a room is shared with other servers (`Directory.federation`): its words, and a longer line for its tooltip. */
+export interface Federation {
+	text: string;
+	title: string;
 }
 
 /** The host of a remote user's server (`ext:remote`); undefined for a link, or a user of this server. */

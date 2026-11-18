@@ -76,14 +76,14 @@ describe('RoomHeader', () => {
 		expect(dom.queryByRole('button', /^Unmute/)).toBeNull();
 	});
 
-	it('says which servers a room is shared with, by its links’ ext.remote (ext:remote), before its description', async () => {
+	it('says which servers a room is shared with, or hosted by (ext:remote), before its description', async () => {
 		const { directory } = await import('$lib/ui/directory.svelte');
 		const { blankSnapshot } = await import('$lib/ui/session.svelte');
 		const link = { user_id: 'link-a', name: 'Link bot', roles: ['bot'], ext: { remote: { server: 'wss://a.example/ws' } } };
 		const carol = { user_id: 'carol@a.example', name: 'Carol', ext: { remote: { server: 'wss://a.example/ws', user_id: 'carol' } } };
-		const show = (capabilities: string[], description?: string) => {
+		const show = (capabilities: string[], description?: string, record?: object) => {
 			directory.apply({ ...blankSnapshot(), authenticated: true, users: { 'link-a': link, 'carol@a.example': carol }, server: { apron: 10, auth: ['guest'], capabilities } }, undefined);
-			const room = { id: 'ops', title: 'ops', ...(description ? { description } : {}), joined: true, members: [link, carol] } as unknown as RoomSnapshot;
+			const room = { id: 'ops', title: 'ops', ...(description ? { description } : {}), ...(record ? { record } : {}), joined: true, members: [link, carol] } as unknown as RoomSnapshot;
 			const noop = () => {};
 			dom.render(RoomHeader, { room, pane: room, typing: [], canEdit: false, editDisabled: false, canLeave: false, memberListOpen: false, onback: noop, onroom: noop, onedit: noop, onleave: noop, onmemberlist: noop });
 			const line = document.querySelector('[data-testid="room-description"]');
@@ -93,6 +93,9 @@ describe('RoomHeader', () => {
 		};
 		expect(show(['ext:remote'])).toEqual(['Shared with a.example', 'People on a.example read and write in this room too']);
 		expect(show(['ext:remote'], 'Deploys')).toEqual(['Shared with a.example · Deploys', 'Deploys']);
+		// A mirror, whose record names the room it mirrors: hosted there.
+		const mirror = { room_id: 'ops', ext: { remote: { server: 'wss://a.example/ws', room_id: 'ops-a' } } };
+		expect(show(['ext:remote'], undefined, mirror)).toEqual(['Hosted by a.example', 'This room lives on a.example: what you write here goes there first']);
 		// Without the capability, a link is just a member.
 		expect(show([], 'Deploys')).toEqual(['Deploys', 'Deploys']);
 		directory.forget();

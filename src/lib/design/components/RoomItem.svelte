@@ -20,8 +20,8 @@
 		topic?: string;
 		/** `private: true` (§4.2.4): a lock beside the name */
 		private?: boolean;
-		/** Shared with other servers (`ext:remote`): their hosts, as one line. A globe beside the name (and lock), "Shared with" them on hover. */
-		shared?: string;
+		/** How it is shared with other servers (`ext:remote`), in words ("Hosted by a.example", "Shared with b.example"): a globe after the name (and lock), saying so. */
+		federation?: string;
 		/** Who a private room is with, before its name: one person's face with their status, or two of a group's (Faces). */
 		faces?: Face[];
 		/**
@@ -57,7 +57,7 @@
 		/** Classes for the row's button, added to its own. */
 		class?: ClassValue;
 	}
-	let { room, name, topic, private: isPrivate, shared, faces, muted = false, unread, mentions, active, loading, onselect, onleave, onnewthread, onexpand, listed, title, keyshortcuts, unreadTestid, newThreadTestid, expandTestid, class: className }: Props = $props();
+	let { room, name, topic, private: isPrivate, federation, faces, muted = false, unread, mentions, active, loading, onselect, onleave, onnewthread, onexpand, listed, title, keyshortcuts, unreadTestid, newThreadTestid, expandTestid, class: className }: Props = $props();
 	const shown = $derived(roomName(name, room));
 
 	/** The … goes once it has unfolded the threads: keyboard focus moves to the row's button rather than dropping to the page. */
@@ -77,7 +77,7 @@
 {/snippet}
 
 <RoomRow
-	{room} noun="room" label={shown} private={isPrivate} {shared} {muted} {active} {listed} {title} {onselect} {onleave} {keyshortcuts} lead={faces?.length ? lead : undefined} {lines} start={onnewthread || onexpand ? start : undefined}
+	{room} noun="room" label={shown} private={isPrivate} {federation} {muted} {active} {listed} {title} {onselect} {onleave} {keyshortcuts} lead={faces?.length ? lead : undefined} {lines} start={onnewthread || onexpand ? start : undefined}
 	class={[(mentions || (unread && !muted)) && 'ap-room-unread', faces?.length && 'ap-room-faced', className]}
 >
 	<UnreadCount unread={unread ?? 0} mentions={mentions ?? 0} noun="message" testid={unreadTestid} />

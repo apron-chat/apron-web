@@ -2,7 +2,7 @@
 
 | Protocol Version | 10         |
 |------------------|------------|
-| Last Updated     | 2026-11-17 |
+| Last Updated     | 2026-11-18 |
 
 apron-web is a web client for the
 [Apron Chat Protocol](https://github.com/shazow/apron/blob/main/PROTOCOL.md).
@@ -348,10 +348,11 @@ defines it.
 
 Trusted federation: a server shows the users of another Apron server, a
 remote server, as its own, and a link, an account bound to that server, writes
-for them. A draft, defined in the recipe
+for them. A room lives on one server, which hosts it; another shows it as a
+mirror room. A draft, defined in the recipe
 [Trusted federation](https://github.com/shazow/apron/blob/main/recipes/trusted_federation.md#draft-extension-extremote):
-`ext.remote` `{server, user_id?, room_id?, message_id?}` on user objects and
-messages.
+`ext.remote` `{server, user_id?, room_id?, message_id?}` on user objects,
+messages, and mirror rooms' records.
 
 ### 12.1 apron-web
 
@@ -371,13 +372,20 @@ messages.
   ("From chat.example"), in the member list, on their profile card, in
   reactions, and on a private room's face: their status isn't shared between
   servers. Message headers and profile cards keep the host as text.
-- A member that is a link (`remote` without `user_id`) shows the room as
-  shared with the host of its `server`: "Shared with chat.example" where the
-  room's description goes, before it, and a globe after its name (and lock)
-  in the rooms list, Other Rooms included. A thread shows its room's, and its
-  own: `ext.remote` with `server` on its room record, or a link among its
-  members. The member list lists links last, under Shared with, as that host,
-  and offers them no direct message.
+- A room whose record carries `ext.remote` (a mirror) shows as hosted by the
+  host of its `server`: "Hosted by chat.example". Otherwise a member that is a
+  link (`remote` without `user_id`) shows the room as shared with the host of
+  its `server`: "Shared with chat.example". Either shows where the room's
+  description goes, before it, and as a globe after its name (and lock) in
+  the rooms list, Other Rooms included. A thread shows its room's, or its own
+  record's or links'. The member list lists links last, under Shared with, as
+  that host, and offers them no direct message.
+- Sending in a mirror room goes through the server that hosts it, and can
+  take a round trip: "Sending…" shows until its result, up to the client's
+  request timeout (20 seconds), and a refusal gives the draft back with the
+  server's words. A `retry_after` from the host is handled as any other
+  ([§2](#2-the-boundary)): the composer waits it out, counting down, and
+  keeps the draft.
 - The member list lists remote users under Remote, after Online and Offline
   and before Shared with, neither online nor offline: whoever this client saw
   write in the room last first, with when ("active 5m ago"), then by name.

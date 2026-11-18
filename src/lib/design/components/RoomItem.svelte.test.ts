@@ -94,7 +94,7 @@ describe('RoomItem', () => {
 	});
 
 	it('marks a room shared with other servers with a globe after its name and lock, naming them', () => {
-		const row = render({ private: true, shared: 'a.example' });
+		const row = render({ private: true, federation: 'Shared with a.example' });
 		const marks = [...row.querySelectorAll('.ap-room-name [role="img"]')].map((mark) => [mark.getAttribute('aria-label'), mark.getAttribute('title')]);
 		expect(marks).toEqual([['Private', null], ['Shared with a.example', 'Shared with a.example']]);
 		dom.unmount();
