@@ -392,6 +392,18 @@ export class MemoryProtocolServer {
 	}
 
 	/**
+	 * Someone else (not you) changes a room's or thread's description (`room_set`), as if they saved it now: the room's
+	 * members get its new record live. An empty one clears it.
+	 */
+	describe(roomId: string, description: string): void {
+		const room = this.rooms.get(roomId);
+		if (!room) return;
+		room.description = description || undefined;
+		this.nextLog(room);
+		this.broadcast({ method: 'room_update', params: { updated: [this.roomRecord(room)] } }, room);
+	}
+
+	/**
 	 * A message from someone else (not you), as if they sent it now: stored, and delivered live to the room's
 	 * members. `body` is the text, or the whole body. Returns its `message_id`.
 	 */

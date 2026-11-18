@@ -61,6 +61,8 @@
 		onmemberlist: () => void;
 		/** The room's or thread's description was put away with its ×: a Description button brings it back. */
 		ondescription?: () => void;
+		/** The description put away has been edited since: Description wears a small dot. */
+		descriptionUpdated?: boolean;
 		/** Opens Search local history; `searchHint` names its shortcut. */
 		onsearch?: () => void;
 		searchHint?: string;
@@ -69,7 +71,7 @@
 	}
 	let {
 		room, pane, showTopic = true, threadTitle, typing, replyCount, moreReplies = false, waiting = false, updating = false, canEdit, editDisabled, canLeave, canJoin = false,
-		memberListOpen, memberListToggle = true, unreadElsewhere = 0, mentionsElsewhere = 0, onback, onroom, onedit, onleave, oncopylink, onjoin, onmute, onmemberlist, ondescription, onsearch, searchHint, onshortcuts
+		memberListOpen, memberListToggle = true, unreadElsewhere = 0, mentionsElsewhere = 0, onback, onroom, onedit, onleave, oncopylink, onjoin, onmute, onmemberlist, ondescription, descriptionUpdated = false, onsearch, searchHint, onshortcuts
 	}: Props = $props();
 
 	/** Mutes the pane for the chosen while, from when it's chosen. */
@@ -137,6 +139,7 @@
 	busy={editDisabled}
 	{updating}
 	{ondescription}
+	{descriptionUpdated}
 	{onsearch}
 	{searchHint}
 	{onshortcuts}

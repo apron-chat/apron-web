@@ -16,8 +16,10 @@
 		enabled: boolean;
 		/** It closed: saved, or put away. */
 		onclose: () => void;
+		/** It saved a new description: yours, so not news to you. */
+		ondescriptionsaved?: () => void;
 	}
-	let { client, room, thread, enabled, people = [], rooms = [], onmention, onclose }: Props = $props();
+	let { client, room, thread, enabled, people = [], rooms = [], onmention, onclose, ondescriptionsaved }: Props = $props();
 
 	// The form starts from the room as it was opened; the caller remounts it per room.
 	const initialTitle = untrack(() => room.title);
@@ -48,7 +50,10 @@
 			open = false;
 			return;
 		}
-		if (await task.run('saving', () => client.updateRoom(room.id, patch).promise, { failed: (cause) => messageOf(cause, `Unable to save ${noun}`) })) open = false;
+		if (await task.run('saving', () => client.updateRoom(room.id, patch).promise, { failed: (cause) => messageOf(cause, `Unable to save ${noun}`) })) {
+			if ('description' in patch) ondescriptionsaved?.();
+			open = false;
+		}
 	}
 </script>
 

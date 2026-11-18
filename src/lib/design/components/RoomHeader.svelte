@@ -84,6 +84,8 @@
 		onshortcuts?: () => void;
 		/** The room's or thread's pinned <ThreadDescription> was put away with its ×: a Description button brings it back. */
 		ondescription?: () => void;
+		/** The description put away has been edited since: a small dot on Description says so, quietly enough to leave. */
+		descriptionUpdated?: boolean;
 		/** `data-testid`s for its parts: the ‹'s tag of what's new elsewhere, the topic, Join, Description, the bell-off Unmute button, the ⋯ menu and its Search, Edit, Leave, Copy link, Mute and Unmute. */
 		tagTestid?: string;
 		topicTestid?: string;
@@ -103,7 +105,7 @@
 	let {
 		room, name, topic, topicTitle, private: isPrivate, faces, typing = [], replies, note, onback, unreadElsewhere = 0, mentionsElsewhere = 0,
 		thread, threadName, onroom, canJoin = false, onjoin, onmemberlist, memberListOpen = false, onedit, onleave, oncopylink, muteChoices, onmute, muted, onunmute, mutedWithRoom = false, busy = false, updating = false, onsearch, searchHint, onshortcuts,
-		ondescription, tagTestid, topicTestid, joinTestid, descriptionTestid, actionsTestid, editTestid, leaveTestid, copyLinkTestid, searchTestid, muteTestid, unmuteTestid,
+		ondescription, descriptionUpdated = false, tagTestid, topicTestid, joinTestid, descriptionTestid, actionsTestid, editTestid, leaveTestid, copyLinkTestid, searchTestid, muteTestid, unmuteTestid,
 		unmuteButtonTestid, class: className
 	}: Props = $props();
 	const noun = $derived(thread ? 'thread' : 'room');
@@ -176,7 +178,7 @@
 		</button>
 	{/if}
 	{#if ondescription}
-		<button type="button" class="ap-btn ap-btn-sm ap-btn-ghost ap-roomhead-description" data-testid={descriptionTestid} aria-label="Show the {noun} description" title="Show the {noun} description" onclick={ondescription}>
+		<button type="button" class={['ap-btn', 'ap-btn-sm', 'ap-btn-ghost', 'ap-roomhead-description', descriptionUpdated && 'ap-roomhead-description-updated']} data-testid={descriptionTestid} aria-label="Show the {noun} description{descriptionUpdated ? ', updated since you hid it' : ''}" title="Show the {noun} description{descriptionUpdated ? ' (updated since you hid it)' : ''}" onclick={ondescription}>
 			<TextAlignStart size={15} strokeWidth={2} aria-hidden="true" /><span class="ap-roomhead-description-word">Description</span>
 		</button>
 	{/if}
