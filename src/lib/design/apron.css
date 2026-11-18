@@ -301,6 +301,10 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 /* Wherever Markdown is drawn, a list's items, and a nested list under its item, a little apart: a mention or link chip
    on one line clears the next's. */
 :where(.ap-msg-text, .ap-servcard-description) :is(li + li, li > :is(ul, ol)) { margin-top: var(--space-1); }
+/* A message's list as far from the paragraphs around it as they are from each other (`p + p`), not the browser's 1em;
+   a nested list, under its item, with none below it. */
+:where(.ap-msg-text) :is(ul, ol) { margin-block: var(--space-2); }
+:where(.ap-msg-text) li > :is(ul, ol) { margin-bottom: 0; }
 .ap-msg-text a { color: var(--denim); }
 /* A link whose text isn't simply where it goes (markdown.ts, `ap-link-labelled`): one written [label](href), or a URL
    whose host reads otherwise (another script, sent as punycode; a user name in front). Not denim, so it doesn't pass
