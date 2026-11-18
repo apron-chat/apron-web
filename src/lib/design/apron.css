@@ -301,6 +301,10 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 /* Wherever Markdown is drawn, a list's items, and a nested list under its item, a little apart: a mention or link chip
    on one line clears the next's. */
 :where(.ap-msg-text, .ap-servcard-description) :is(li + li, li > :is(ul, ol)) { margin-top: var(--space-1); }
+/* A message's list as far from the paragraphs around it as they are from each other (`p + p`), not the browser's 1em;
+   a nested list, under its item, with none below it. */
+:where(.ap-msg-text) :is(ul, ol) { margin-block: var(--space-2); }
+:where(.ap-msg-text) li > :is(ul, ol) { margin-bottom: 0; }
 .ap-msg-text a { color: var(--denim); }
 /* A link whose text isn't simply where it goes (markdown.ts, `ap-link-labelled`): one written [label](href), or a URL
    whose host reads otherwise (another script, sent as punycode; a user name in front). Not denim, so it doesn't pass
@@ -1359,20 +1363,21 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 /* ThreadDescription — pinned under the header of a thread view */
 /* The description icon has a column of its own, so every line of the text starts after it, not just the first. */
 .ap-description { position: relative; flex: none; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--space-2); margin: var(--space-3) var(--space-4) var(--space-1); padding: var(--space-2) var(--space-3); background: var(--denim-soft); border-radius: var(--radius-md); }
-.ap-description-icon { display: grid; place-items: center; height: var(--leading-field); color: var(--denim); }
+.ap-description-icon { display: grid; place-items: center; height: var(--leading-body); color: var(--denim); }
 .ap-description-closable { padding-inline-end: 36px; }
 /* × sits beside the first line, centred on it. */
-.ap-description-close { position: absolute; z-index: var(--z-raised); top: 6px; inset-inline-end: 6px; width: var(--control-sm); height: var(--control-sm); }
-/* A preview of five and a half lines, faded where it's cut, so the half line says there's more; opened, it scrolls within the pinned box past a third of the pane. */
-.ap-description-text { max-height: calc(var(--leading-field) * 5.5); overflow: hidden; margin: 0; font-size: var(--text-field); line-height: var(--leading-field); color: var(--ink); }
+.ap-description-close { position: absolute; z-index: var(--z-raised); top: 7px; inset-inline-end: 6px; width: var(--control-sm); height: var(--control-sm); }
+/* Its text set as a message's body is (`.ap-msg-text`, the size and line height it inherits): the same Markdown, drawn the same.
+   A preview of five and a half lines, faded where it's cut, so the half line says there's more; opened, it scrolls within the pinned box past a third of the pane. */
+.ap-description-text { max-height: calc(var(--leading-body) * 5.5); overflow: hidden; margin: 0; color: var(--ink); }
 .ap-description-clipped { mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent); }
 .ap-description-clipped, .ap-description-open { cursor: pointer; }
 .ap-description-open { max-height: 33vh; overflow-y: auto; }
 /* The keyboard's way to open and fold it: invisible, under the pointer's reach, a focus ring around the description. */
 .ap-description-toggle { position: absolute; inset: 0; padding: 0; border: 0; border-radius: inherit; background: none; pointer-events: none; }
-/* Its lists indented, but not one with tasks, whose checks line up with the text above (`.ap-task-list`). */
-.ap-description-text ul, .ap-description-text ol { margin: var(--space-1) 0 0; }
-.ap-description-text :is(ul, ol):not(.ap-task-list) { padding-inline-start: var(--space-6); }
+/* Its lists spaced and indented as a message's, but none at its very top or foot: the box's padding is space enough there. */
+.ap-description-text :is(ul, ol):not(li > *):first-child { margin-top: 0; }
+.ap-description-text :is(ul, ol):not(li > *):last-child { margin-bottom: 0; }
 .ap-description-text pre { background: var(--bg-100); }
 .ap-description-text code { background: var(--bg-100); }
 
