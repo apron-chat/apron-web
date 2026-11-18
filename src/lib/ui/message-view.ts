@@ -195,6 +195,9 @@ function replyOf(event: MessageRecord, context: MessageContext): MessageReply | 
 	const target = context.resolve(id);
 	if (!target) return {};
 	const reply: MessageReply = { id: target.message_id, name: directory.name(target.from), avatar: directory.avatar(target.from), hue: hueOf(directory.person(target.from)?.user_id) };
+	// Which Sam: a remote sender's server, as on their own message (`ext:remote`).
+	const origin = directory.remoteOn ? directory.remoteHost(target.from) : undefined;
+	if (origin) reply.origin = origin;
 	if (target.deleted) reply.deleted = true;
 	else reply.snippet = snippetOf(messageSnippet(target));
 	return reply;

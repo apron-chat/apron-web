@@ -363,6 +363,8 @@ export interface MessageReply {
 	/** The quoted message's `message_id`, to jump to. */
 	id?: string;
 	name?: string;
+	/** The host of the server its remote sender comes from (`ext:remote`), after the name: "Sam (chat.example)". */
+	origin?: string;
 	avatar?: MediaSrc;
 	hue?: number;
 	/** One line of its text (~120 chars, first line, no Markdown), mentions picked out. */

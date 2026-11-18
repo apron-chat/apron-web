@@ -360,8 +360,8 @@ messages, and mirror rooms' records.
   object (the kept one, else the recorded one), never from the `user_id`. It
   takes `remote.server` only as a `ws:` or `wss:` URL, and shows its host.
 - A remote user (`remote` with `user_id`) shows as their name and the host in
-  parentheses, "Sam (chat.example)": beside the name on their messages, in the
-  member list, on their profile card, in reactions, in mentions and the
+  parentheses, "Sam (chat.example)": beside the name on their messages and in
+  the quote of a reply to them, in the member list, on their profile card, in reactions, in mentions and the
   mention chips of the composer, in who joined and left, in who is typing, and
   in notifications.
 - apron-web compares names as they show, with the host, to decide where a

@@ -106,6 +106,17 @@ describe('messageView', () => {
 		expect(messageView(messageRecord(9, 'ops', { reply_to: { message_id: '5' }, deleted: true }), row(), context([quoted])).reply).toBeUndefined();
 	});
 
+	it('shows a remote sender’s server after their name, on their message and in a reply’s quote (ext:remote)', () => {
+		const sam: Identity = { user_id: 'sam@a.example', name: 'Sam', ext: { remote: { server: 'wss://a.example/ws', user_id: 'sam' } } };
+		know({ 'sam@a.example': sam }, { server: { apron: 10, auth: ['guest'], capabilities: ['ext:remote'] } });
+		const quoted = messageRecord(5, 'ops', { from: { user_id: 'sam@a.example' }, body: { text: 'the trace' } });
+		expect(messageView(quoted, row(), context()).sender).toMatchObject({ name: 'Sam', origin: 'a.example' });
+		expect(messageView(messageRecord(6, 'ops', { from: you, reply_to: { message_id: '5' } }), row(), context([quoted])).reply).toMatchObject({ name: 'Sam', origin: 'a.example' });
+		// Without the extension, as anyone's.
+		know({ 'sam@a.example': sam }, { server: { apron: 10, auth: ['guest'], capabilities: [] } });
+		expect(messageView(messageRecord(7, 'ops', { from: you, reply_to: { message_id: '5' } }), row(), context([quoted])).reply).not.toHaveProperty('origin');
+	});
+
 	it('shows a card for each link to a loaded message, in order, at most three, and none for one only its path is known of', () => {
 		know({ ada }, { rooms: [roomSnapshot('ops'), roomSnapshot('t1', [], { title: '', untitled: true, parentRoomId: 'ops' })] });
 		const linkedOps = messageRecord(1710000000000, 'ops', { from: { user_id: 'ada' }, body: { text: 'ship it @you\n\n\nnow\nthen\nlater' } });
