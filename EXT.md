@@ -378,5 +378,8 @@ messages.
   own: `ext.remote` with `server` on its room record, or a link among its
   members. The member list lists links last, under Shared with, as that host,
   and offers them no direct message.
+- The member list lists remote users under Remote, after Online and Offline
+  and before Shared with, neither online nor offline: whoever this client saw
+  write in the room last first, with when ("active 5m ago"), then by name.
 - apron-web doesn't show `message_id` from `remote` (the time on the other
   server) yet.

@@ -299,6 +299,8 @@ export interface MemberListPerson {
 	origin?: string;
 	/** A link (`ext:remote`), the account another server writes through: listed last, quieter, as no one to talk to. */
 	link?: boolean;
+	/** With `origin`: a muted hint after the name, such as when they last wrote here ("active 5m ago"); `statusLabel` says it in words. */
+	hint?: string;
 	/** You: marked "(you)", and never offered for removal. */
 	you?: boolean;
 	/** A system identity (`~`, Appendix A.1): nothing is sent to it, so its menu offers no Direct message. */

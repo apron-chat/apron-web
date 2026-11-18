@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { absentMentions, addMembers, couldNotAdd, isGuest, memberSections, roleSets, unheldRoleHolders, userIdToAdd, outsidersOf } from './members';
+import { absentMentions, addMembers, byLastWrote, couldNotAdd, isGuest, lastWrote, memberSections, outsidersOf, roleSets, unheldRoleHolders, userIdToAdd } from './members';
 
 describe('adding a member', () => {
 	it('takes exactly the user_id typed, with or without @, and never a display name, which isn’t unique', () => {
@@ -114,5 +114,20 @@ describe('people to mention who aren’t here', () => {
 		expect(outsidersOf(known, undefined, undefined, skip)).toEqual([]);
 		expect(outsidersOf(known, [{ user_id: 'ada' }], 9, skip)).toEqual([]);
 		expect(outsidersOf(known, [{ user_id: 'ada' }, { user_id: 'bob' }], undefined, skip)).toEqual([]);
+	});
+});
+
+describe('lastWrote and byLastWrote', () => {
+	const message = (id: string, userId: string) => ({ message_id: id, room_id: 'r', from: { user_id: userId } });
+	const messages = [message('10', 'bea'), message('20', 'cal'), message('30', 'bea'), message('9', 'dee')];
+	const timeline = { order: ['9', '10', '20', '30'], events: Object.fromEntries(messages.map((entry) => [entry.message_id, entry])) } as never;
+
+	it('takes each user’s newest message in one pass, newest first', () => {
+		expect([...lastWrote(timeline)]).toEqual([['bea', '30'], ['cal', '20'], ['dee', '9']]);
+	});
+
+	it('orders whoever wrote last first, and those never seen writing after, as given', () => {
+		const people = ['eli', 'dee', 'bea', 'ann', 'cal'].map((user_id) => ({ user_id }));
+		expect(byLastWrote(people, lastWrote(timeline)).map((person) => person.user_id)).toEqual(['bea', 'cal', 'dee', 'eli', 'ann']);
 	});
 });

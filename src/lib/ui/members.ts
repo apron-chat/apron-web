@@ -1,5 +1,6 @@
 import type { ChatClient } from '$lib/protocol/client';
 import { isMentionableRole, type MentionPerson } from '$lib/protocol/markdown';
+import { compareLogIds, type TimelineState } from '$lib/protocol/reducer';
 import type { Identity } from '$lib/protocol/types';
 
 /**
@@ -126,6 +127,28 @@ export function memberSections<T>(people: readonly T[], statusOf: (person: T) =>
 		{ key: 'offline', label: 'Offline', people: people.filter(offline) }
 	];
 	return sections.filter((section) => section.people.length);
+}
+
+/**
+ * When each user last wrote in a room, as far as this client has seen: the `message_id` of their newest message there
+ * (deleted ones too), by `user_id`. One pass over the timeline, newest first.
+ */
+export function lastWrote(timeline: Pick<TimelineState, 'order' | 'events'>): Map<string, string> {
+	const last = new Map<string, string>();
+	for (let index = timeline.order.length - 1; index >= 0; index--) {
+		const event = timeline.events[timeline.order[index]];
+		const id = event?.from?.user_id;
+		if (id !== undefined && !last.has(id)) last.set(id, event.message_id);
+	}
+	return last;
+}
+
+/** `people` by who wrote last (`lastWrote`), newest first, then those not seen writing, each in the order given. */
+export function byLastWrote<T extends { user_id: string }>(people: readonly T[], last: ReadonlyMap<string, string>): T[] {
+	return people
+		.map((person, index) => ({ person, index, at: last.get(person.user_id) }))
+		.sort((a, b) => (a.at === undefined ? (b.at === undefined ? a.index - b.index : 1) : b.at === undefined ? -1 : compareLogIds(b.at, a.at) || a.index - b.index))
+		.map(({ person }) => person);
 }
 
 /** Someone who couldn't be added to a room, with the server's words why. */

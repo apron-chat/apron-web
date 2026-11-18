@@ -24,7 +24,7 @@ afterEach(() => {
 const ada: Identity = { user_id: 'ada', name: 'Ada', status: 'online' };
 
 /** The member list of a room whose members carry these statuses, signed in as Ada, on a server with `status`. */
-function render(users: Identity[], fields: Partial<ClientSnapshot> = {}, canChange = false, client: object = {}) {
+function render(users: Identity[], fields: Partial<ClientSnapshot> = {}, canChange = false, client: object = {}, timeline: RoomSnapshot['timeline'] = { order: [], events: {} } as unknown as RoomSnapshot['timeline']) {
 	const blank = blankSnapshot();
 	const snapshot: ClientSnapshot = {
 		...blank,
@@ -37,7 +37,7 @@ function render(users: Identity[], fields: Partial<ClientSnapshot> = {}, canChan
 		...fields
 	};
 	directory.apply(snapshot, undefined);
-	const room = { id: 'general', title: 'General', joined: true, members: users.map(({ user_id }) => ({ user_id })) } as unknown as RoomSnapshot;
+	const room = { id: 'general', title: 'General', joined: true, members: users.map(({ user_id }) => ({ user_id })), timeline } as unknown as RoomSnapshot;
 	const session = { snapshot, capabilities: snapshot.capabilities, canManageRooms: true } as unknown as SessionView;
 	dom.render(MemberListSidebar, { client: canChange ? (client as never) : undefined, session, room, open: true, canChange, canAdd: canChange });
 	return [...document.querySelectorAll<HTMLLIElement>('li.ap-member')];
@@ -304,14 +304,45 @@ describe('MemberListSidebar', () => {
 		];
 		const blank = blankSnapshot();
 		const rows = render(users, { server: { apron: 10, auth: ['guest'], capabilities: ['status', 'ext:remote'] } });
-		expect(sections()).toEqual([['Online· 2', ['ada', 'sam']], ['Offline· 1', ['sam@a.example']], ['Shared with· 1', ['link-a']]]);
+		expect(sections()).toEqual([['Online· 2', ['ada', 'sam']], ['Remote· 1', ['sam@a.example']], ['Shared with· 1', ['link-a']]]);
 		const names = rows.map((row) => row.querySelector('.ap-member-name')?.textContent?.trim());
-		expect(names).toEqual(['Ada(you), online', 'Sam, online', 'Sam(a.example), offline', 'a.example']);
+		// No presence for another server's user: no dot, not dimmed as offline, a globe instead.
+		expect(names).toEqual(['Ada(you), online', 'Sam, online', 'Sam(a.example)', 'a.example']);
+		expect([rows[2].dataset.status, rows[2].classList.contains('ap-member-offline'), rows[2].querySelector('.ap-presence'), rows[2].querySelector('.ap-remote-badge')?.getAttribute('aria-label')])
+			.toEqual([undefined, false, null, 'From a.example']);
 		expect(rows[3].classList.contains('ap-member-link')).toBe(true);
 		dom.unmount();
 		// Without the capability, as any members: the two Sams told apart by their @user_id.
 		render(users, { server: { ...blank.server, apron: 10, auth: ['guest'], capabilities: ['status'] } });
 		expect(sections()).toEqual([['Online· 3', ['ada', 'link-a', 'sam']], ['Offline· 1', ['sam@a.example']]]);
 		expect(queryByText('@sam@a.example')).not.toBeNull();
+	});
+
+	it('lists other servers’ users under Remote, whoever wrote here last first, with when (ext:remote)', () => {
+		vi.useFakeTimers({ now: new Date(1_800_000_000_000), toFake: ['Date'] });
+		try {
+			const remote = (userId: string) => ({ remote: { server: 'wss://a.example/ws', user_id: userId } });
+			const users: Identity[] = [
+				ada,
+				{ user_id: 'bea@a.example', name: 'Bea', ext: remote('bea') },
+				{ user_id: 'cal@a.example', name: 'Cal', ext: remote('cal') },
+				{ user_id: 'dee@a.example', name: 'Dee', ext: remote('dee') },
+				{ user_id: 'eli@a.example', name: 'Eli', ext: remote('eli') }
+			];
+			const at = (minutesAgo: number) => String(1_800_000_000_000 - minutesAgo * 60_000);
+			const message = (id: string, userId: string) => ({ message_id: id, room_id: 'general', from: { user_id: userId }, body: { text: 'hi' } });
+			const messages = [message(at(90), 'cal@a.example'), message(at(30), 'dee@a.example'), message(at(5), 'cal@a.example'), message(at(3), 'ada')];
+			const timeline = { order: messages.map((entry) => entry.message_id), events: Object.fromEntries(messages.map((entry) => [entry.message_id, entry])) } as unknown as RoomSnapshot['timeline'];
+			const rows = render(users, { server: { apron: 10, auth: ['guest'], capabilities: ['status', 'ext:remote'] } }, false, {}, timeline);
+			// Cal wrote 5 minutes ago, Dee 30; Bea and Eli, never seen writing, by name.
+			expect(sections()).toEqual([['Online· 1', ['ada']], ['Remote· 4', ['cal@a.example', 'dee@a.example', 'bea@a.example', 'eli@a.example']]]);
+			const hint = (row: HTMLLIElement) => row.querySelector('.ap-member-hint')?.textContent ?? null;
+			expect(rows.slice(1).map(hint)).toEqual(['active 5m ago', 'active 30m ago', null, null]);
+			expect(rows[1].querySelector('.ap-member-who')?.getAttribute('title')).toMatch(/^@cal@a\.example · Last wrote here \d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/);
+			// The count stays everyone.
+			expect(document.querySelector('[data-testid="member-count"]')?.textContent).toBe('5');
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 });

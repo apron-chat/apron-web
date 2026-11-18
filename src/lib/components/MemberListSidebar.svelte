@@ -3,7 +3,7 @@
 	import { isSystemId, type Identity } from '$lib/protocol/types';
 	import type { SessionView } from '$lib/ui/session.svelte';
 	import { directory } from '$lib/ui/directory.svelte';
-	import { memberSections } from '$lib/ui/members';
+	import { byLastWrote, lastWrote, memberSections } from '$lib/ui/members';
 	import { messageThem, START_FAILED } from '$lib/ui/private-rooms';
 	import { failure, Task } from '$lib/ui/task.svelte';
 	import { byName } from '$lib/ui/people';
@@ -14,6 +14,7 @@
 	import type { MemberListPerson, MemberListSection } from '$lib/design/components/types';
 	import { byStatus, lastSeen, ownStatusLabel, withLastSeen } from '$lib/ui/user-status';
 	import { minuteNow } from '$lib/ui/clock.svelte';
+	import { idDateTime, idSince } from '$lib/ui/time';
 	import Avatar from '$lib/design/components/Avatar.svelte';
 	import { hueOf } from '$lib/ui/messages';
 	import { addMembersDialog } from './lazy';
@@ -45,6 +46,10 @@
 		 */
 		drawRows?: boolean;
 	}
+	/** No other servers' users or links in the room (`remote`), or no extension. */
+	const NO_REMOTE: { users: Identity[]; links: Identity[] } = { users: [], links: [] };
+	const NO_WRITES: ReadonlyMap<string, string> = new Map();
+
 	let { drawRows = true, client, session, room, open, canChange, canAdd, canMessage = false, onnamed, onopenroom }: Props = $props();
 
 	/**
@@ -65,14 +70,35 @@
 	/** By status (online, idle, dnd, unknown, offline, then none), and by name within each. */
 	let members = $derived(byStatus([...(roomMembers ?? [])].sort(byName), statusOf));
 	/**
-	 * Online, then offline, each in the order above; with no `status` capability (§4.5), one list. The links
-	 * (`ext:remote`), through which other servers write here, last, under Shared with: no one to talk to.
+	 * Other servers' users (`ext:remote`) and the links they write through, apart from the rest: none without the
+	 * extension, which reads nothing more.
+	 */
+	let remote = $derived.by(() => {
+		if (!directory.remoteOn) return NO_REMOTE;
+		const users = members.filter((member) => directory.remoteHost(member) !== undefined);
+		const links = members.filter((member) => directory.linkHost(member) !== undefined);
+		return users.length || links.length ? { users, links } : NO_REMOTE;
+	});
+	/**
+	 * When each member last wrote in the room, as far as this client has seen (`lastWrote`): read from its timeline
+	 * once for the list, and only while it has remote users, whom it orders and says when they were active.
+	 */
+	let wrote = $derived(remote.users.length ? lastWrote(room!.timeline) : NO_WRITES);
+	/**
+	 * Online, then offline, each in the order above; with no `status` capability (§4.5), one list. Then other servers'
+	 * users (`ext:remote`), under Remote, whoever wrote here last first: their presence isn't shared between servers, so
+	 * they are neither online nor offline. The links, through which those servers write here, last, under Shared with:
+	 * no one to talk to.
 	 */
 	let sections = $derived.by(() => {
-		const links = directory.remoteOn ? members.filter((member) => directory.linkHost(member) !== undefined) : [];
-		if (!links.length) return memberSections(members, statusOf, hasStatus);
-		const people = memberSections(members.filter((member) => !links.includes(member)), statusOf, hasStatus);
-		return [...people, { key: 'links', label: 'Shared with', people: links }];
+		if (remote === NO_REMOTE) return memberSections(members, statusOf, hasStatus);
+		const { users, links } = remote;
+		const people = memberSections(members.filter((member) => !users.includes(member) && !links.includes(member)), statusOf, hasStatus);
+		return [
+			...people,
+			...(users.length ? [{ key: 'remote', label: 'Remote', people: byLastWrote([...users].sort(byName), wrote) }] : []),
+			...(links.length ? [{ key: 'links', label: 'Shared with', people: links }] : [])
+		];
 	});
 	/** Sections folded away, as the rooms list folds Other Threads: a long Offline needn't push the rest out of view. */
 	let shut = $state(new Set(loadShutMemberSections()));
@@ -103,6 +129,19 @@
 		const link = directory.remoteOn ? directory.linkHost(member) : undefined;
 		if (link !== undefined) return { user_id: member.user_id, name: link, avatar: directory.avatar(member), link: true };
 		const origin = directory.remoteOn ? directory.remoteHost(member) : undefined;
+		// Another server's user: no presence, which isn't shared between servers, but when they last wrote here.
+		if (origin !== undefined) {
+			const active = activeHint(wrote.get(member.user_id));
+			return {
+				user_id: member.user_id,
+				name: directory.name(member),
+				avatar: directory.avatar(member),
+				...(active ? { statusLabel: active.label, hint: active.text } : {}),
+				handle: directory.sharesName(member),
+				origin,
+				you: me
+			};
+		}
 		const status = statusOf(member);
 		// `seen` (§4.5.2) only while they show offline, never yours: in the row's tooltip, after "Offline". Redone each minute.
 		// Only as the row shows them: one still shown as before a resume (`statusOf`) isn't offline yet here.
@@ -119,6 +158,19 @@
 			you: me,
 			...(isSystemId(member.user_id) ? { system: true } : {})
 		};
+	}
+
+	/**
+	 * When a remote user last wrote here, as a muted hint after their name ("active 5m ago", "active Sep 14"), and in
+	 * words with the exact time for the row's tooltip; nothing when this client saw no message of theirs. It moves on
+	 * with the minute, as an offline member's last seen does.
+	 */
+	function activeHint(messageId: string | undefined): { text: string; label: string } | undefined {
+		if (messageId === undefined) return undefined;
+		const since = idSince(messageId, minuteNow());
+		if (!since) return undefined;
+		const text = since === 'now' ? 'active now' : `active ${/^\d+[mhd]$/.test(since) ? `${since} ago` : since}`;
+		return { text, label: `Last wrote here ${idDateTime(messageId)}` };
 	}
 
 	/** The room's id, which changes only with the room: its record changes (a member added) leave the add form open. */

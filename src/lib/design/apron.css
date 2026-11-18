@@ -993,6 +993,8 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-member .ap-roles { flex: 0 1e6 auto; }
 .ap-member-name small { flex: none; margin-inline-start: 4px; color: var(--ink-muted); font-size: var(--text-xs); white-space: nowrap; }
 .ap-member-name .ap-member-handle { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* A remote user's hint ("active 5m ago") gives way before their server, which says who they are. */
+.ap-member-name .ap-member-hint { flex: 0 1e6 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 /* The least a name truncates to: --ap-name-min, all of a shorter one, or the whole row where that's narrower. Without
    calc-size() the name can truncate further, after the badges have gone (RoleBadges still holds it at --ap-name-min). */
 @supports (min-width: calc-size(max-content, size)) {
