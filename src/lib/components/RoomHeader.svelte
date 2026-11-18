@@ -61,7 +61,7 @@
 		onmemberlist: () => void;
 		/** The room's or thread's description was put away with its ×: a Description button brings it back. */
 		ondescription?: () => void;
-		/** The description put away has been edited since: Description wears a small dot. */
+		/** The description put away has been edited since: Description is drawn in the description's blue. */
 		descriptionUpdated?: boolean;
 		/** Opens Search local history; `searchHint` names its shortcut. */
 		onsearch?: () => void;

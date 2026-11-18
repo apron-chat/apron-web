@@ -44,7 +44,7 @@ describe('RoomHeader', () => {
 		expect(ondescription).toHaveBeenCalledOnce();
 	});
 
-	it('marks Description once the description put away has been edited since, in its name and with a class for its dot', () => {
+	it('marks Description once the description put away has been edited since, in its name and with a class that draws it blue', () => {
 		render(undefined, { ondescription: () => {} });
 		expect(byTestid('show-description')?.classList.contains('ap-roomhead-description-updated')).toBe(false);
 		dom.unmount();

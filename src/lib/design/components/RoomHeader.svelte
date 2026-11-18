@@ -84,7 +84,7 @@
 		onshortcuts?: () => void;
 		/** The room's or thread's pinned <ThreadDescription> was put away with its ×: a Description button brings it back. */
 		ondescription?: () => void;
-		/** The description put away has been edited since: a small dot on Description says so, quietly enough to leave. */
+		/** The description put away has been edited since: Description is drawn in the description's blue, quietly enough to leave. */
 		descriptionUpdated?: boolean;
 		/** `data-testid`s for its parts: the ‹'s tag of what's new elsewhere, the topic, Join, Description, the bell-off Unmute button, the ⋯ menu and its Search, Edit, Leave, Copy link, Mute and Unmute. */
 		tagTestid?: string;
@@ -172,14 +172,15 @@
 		{/if}
 	</div>
 	{#if note}<span class="ap-roomhead-sub" role="status">{note}</span>{/if}
-	{#if onmemberlist}
-		<button type="button" class={['ap-iconbtn', 'ap-roomhead-members', memberListOpen && 'ap-iconbtn-on']} aria-label={memberLabel} aria-expanded={memberListOpen} title={memberLabel} onclick={onmemberlist}>
-			<Users size={18} strokeWidth={1.8} aria-hidden="true" />
-		</button>
-	{/if}
 	{#if ondescription}
 		<button type="button" class={['ap-btn', 'ap-btn-sm', 'ap-btn-ghost', 'ap-roomhead-description', descriptionUpdated && 'ap-roomhead-description-updated']} data-testid={descriptionTestid} aria-label="Show the {noun} description{descriptionUpdated ? ', updated since you hid it' : ''}" title="Show the {noun} description{descriptionUpdated ? ' (updated since you hid it)' : ''}" onclick={ondescription}>
 			<TextAlignStart size={15} strokeWidth={2} aria-hidden="true" /><span class="ap-roomhead-description-word">Description</span>
+		</button>
+	{/if}
+	<!-- The member list's toggle after Description, at the end of the header's own buttons. -->
+	{#if onmemberlist}
+		<button type="button" class={['ap-iconbtn', 'ap-roomhead-members', memberListOpen && 'ap-iconbtn-on']} aria-label={memberLabel} aria-expanded={memberListOpen} title={memberLabel} onclick={onmemberlist}>
+			<Users size={18} strokeWidth={1.8} aria-hidden="true" />
 		</button>
 	{/if}
 	{#if muted !== undefined && onunmute}

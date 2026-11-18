@@ -805,11 +805,11 @@
 	let hiddenDescriptions = $state(loadHiddenDescriptions());
 	/** Whether the open room's or thread's description is put away: the header's Description brings it back. */
 	let descriptionPutAway = $derived(Boolean(editTarget?.description && descriptionHidden(hiddenDescriptions, draftKey(editTarget.id))));
-	/** It was put away, and someone has edited it since: Description wears a dot until it's brought back. */
+	/** It was put away, and someone has edited it since: Description is drawn blue until it's brought back. */
 	let descriptionEdited = $derived(Boolean(descriptionPutAway && editTarget?.description && descriptionUpdated(hiddenDescriptions, draftKey(editTarget.id), editTarget.description)));
 	/**
-	 * Your own edit of a description you put away isn't news to you: it stays put away, recorded as it now reads, without a
-	 * dot. Called once the save is answered, by which time its `room_update` (the text as the server kept it) has come.
+	 * Your own edit of a description you put away isn't news to you: it stays put away, recorded as it now reads, Description
+	 * left grey. Called once the save is answered, by which time its `room_update` (the text as the server kept it) has come.
 	 */
 	function acknowledgeDescription(roomId: string): void {
 		const key = draftKey(roomId);
