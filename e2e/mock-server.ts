@@ -42,8 +42,8 @@ export type MockOptions = {
  * A scripted server for the app's own route (`/`), which, unlike `/__preview`, connects to a real backend
  * (`wss://server.apron.chat` by default) and shows the connect screen and sign-in. Every WebSocket the page
  * opens is answered here instead, and every request off this machine is refused, so no test reaches the
- * network. It offers guests, passkeys and email, and has one room, `General`, with no history unless `history` gives
- * it some, all in one page. With capability
+ * network. It offers guests, passkeys, email and tokens (a server that lists `email` lists `token`, §4.11), and
+ * has one room, `General`, with no history unless `history` gives it some, all in one page. With capability
  * `status` (§4.5), General's other members show their status: Bob online, and Ada offline, last seen two hours
  * before the tests' clock (`seen`, §4.5.2).
  */
@@ -103,6 +103,6 @@ export async function mockServer(page: Page, options: MockOptions = {}): Promise
 					if (frame.id !== undefined) ws.send(JSON.stringify({ id: frame.id, error: { code: -32601, message: `Not in the mock: ${frame.method}` } }));
 			}
 		});
-		ws.send(JSON.stringify({ method: 'server', params: { apron: 10, agent: 'apron-e2e-mock', auth: ['guest', 'webauthn', 'email'], signup: ['guest', 'webauthn'], ping: 60, capabilities: ['history', 'rooms', 'status'], ...options.server, ...options.servers?.[ws.url()] } }));
+		ws.send(JSON.stringify({ method: 'server', params: { apron: 10, agent: 'apron-e2e-mock', auth: ['guest', 'webauthn', 'email', 'token'], signup: ['guest', 'webauthn'], ping: 60, capabilities: ['history', 'rooms', 'status'], ...options.server, ...options.servers?.[ws.url()] } }));
 	});
 }

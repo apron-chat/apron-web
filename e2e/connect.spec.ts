@@ -92,7 +92,7 @@ test.describe('the server pane', () => {
 		await form.getByRole('button', { name: 'Continue', exact: true }).click();
 		await expect(page.getByTestId('connect-server')).toContainText('Mock Chat');
 		await expect(page.getByTestId('server-url-input')).toHaveCount(0);
-		await expect(form.getByRole('radiogroup', { name: 'Sign in with' }).getByRole('radio')).toHaveText(['Guest', 'Passkey', 'Email']);
+		await expect(form.getByRole('radiogroup', { name: 'Sign in with' }).getByRole('radio')).toHaveText(['Guest', 'Passkey', 'Email', 'Token']);
 		await page.getByTestId('connect-server').getByRole('button', { name: 'Change', exact: true }).click();
 		await expect(page.getByTestId('server-url-input')).toHaveValue('wss://server.apron.chat/');
 		// Cancel goes back to the chat as it was.
