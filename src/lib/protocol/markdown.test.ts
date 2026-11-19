@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import type { MediaCheck } from './sanitize';
+import { maskSpoilers } from './spoiler';
 import { toggleTask } from './task-list';
 import { markdownRoles, markdownText, writtenRoles, renderBio, renderMarkdown, renderPlain, type EmojiResolver, type LinkResolver, type MentionResolver, mentionSegments, hasTaskItems } from './markdown';
 
@@ -583,5 +584,12 @@ describe('spoilers', () => {
 	it('shows none of a spoiler in plain text, however long it was', () => {
 		expect(markdownText('The butler ||did **it**|| and ||a ||b|| c||.')).toBe('The butler ▒▒▒▒▒ and ▒▒▒▒▒.');
 		expect(markdownText('a || b')).toBe('a || b');
+	});
+});
+
+describe('maskSpoilers', () => {
+	it('hides spoilers in Markdown as written, and leaves bars that hide nothing', () => {
+		expect(maskSpoilers('||a|| and ||b c|| then a || b')).toBe('▒▒▒▒▒ and ▒▒▒▒▒ then a || b');
+		expect(maskSpoilers('no bars')).toBe('no bars');
 	});
 });

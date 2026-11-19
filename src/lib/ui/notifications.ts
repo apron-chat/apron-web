@@ -1,6 +1,7 @@
 import { embedsLabel } from '$lib/protocol/embeds';
 import { compareLogIds } from '$lib/protocol/reducer';
 import { withoutBidiOverrides } from '$lib/protocol/plain-text';
+import { maskSpoilers } from '$lib/protocol/spoiler';
 import { isJsonObject } from '$lib/protocol/types';
 import { loadShownMarks, markShown } from './push-store';
 import type { RoomTitle } from './push-titles';
@@ -365,7 +366,9 @@ export function pushNotification(message: unknown, pushId: string | undefined, t
 	// Each as shown (§3.5.2): a name, or a `user_id` or `room_id` standing in for one, can't reorder the title.
 	const shown = (value: unknown) => (typeof value === 'string' ? withoutBidiOverrides(value) : undefined);
 	const sender = [shown(from.name), shown(from.user_id)].find((value): value is string => value !== undefined && value.trim() !== '') ?? 'Someone';
-	const text = isJsonObject(message.body) && typeof message.body.text === 'string' ? message.body.text : undefined;
+	const written = isJsonObject(message.body) && typeof message.body.text === 'string' ? message.body.text : undefined;
+	// Its spoilers hidden, without the Markdown renderer, which the service worker doesn't load.
+	const text = written !== undefined && isJsonObject(message.body) && message.body.format === 'markdown' ? maskSpoilers(written) : written;
 	const body = notificationBody(text) || embedsLabel(isJsonObject(message.body) ? message.body.embeds : undefined) || 'New message';
 	const target: PushTarget = { push: true, roomId, pushId, messageId, group: notificationGroup(pushId, roomId) };
 	const room = titles?.get(roomId);

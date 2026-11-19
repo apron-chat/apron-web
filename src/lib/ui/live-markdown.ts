@@ -91,9 +91,12 @@ function openCodeSpan(text: string): { at: number; run: string } | undefined {
 	return open;
 }
 
-/** The text with its closed code spans blanked out, keeping every offset, so their content counts as no delimiter. */
+/**
+ * The text with its closed code spans blanked out, keeping every offset, so their content counts as no delimiter.
+ * Blanked with a character that isn't space, as a span's backticks aren't, so a delimiter right after one isn't spaced.
+ */
 function withoutCodeSpans(text: string): string {
-	return text.replace(/(?<!\\)(`+)([\s\S]*?[^`])\1(?!`)/g, (span) => ' '.repeat(span.length));
+	return text.replace(/(?<!\\)(`+)([\s\S]*?[^`])\1(?!`)/g, (span) => '\0'.repeat(span.length));
 }
 
 /**

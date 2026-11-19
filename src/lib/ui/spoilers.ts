@@ -18,7 +18,10 @@ export function showSpoiler(spoiler: Element): void {
 export function listenForSpoilers(doc: Document): () => void {
 	const click = (event: MouseEvent): void => reveal(event, (event.target as Element | null)?.closest?.(HIDDEN));
 	const key = (event: KeyboardEvent): void => {
-		if (event.key === 'Enter' || event.key === ' ') reveal(event, (event.target as Element | null)?.matches?.(HIDDEN) ? (event.target as Element) : null);
+		if (event.key !== 'Enter' && event.key !== ' ') return;
+		const target = event.target as Element | null;
+		// A link whose label hides a spoiler shows it first, rather than going where the reader can't yet see.
+		reveal(event, target?.matches?.(HIDDEN) ? target : event.key === 'Enter' ? target?.closest?.('a')?.querySelector(HIDDEN) : null);
 	};
 	doc.addEventListener('click', click, true);
 	doc.addEventListener('keydown', key, true);

@@ -381,7 +381,7 @@ export function markdownText(source: string): string {
 function hideSpoilers(html: string): string {
 	if (!html.includes(`<span class="${SPOILER}"`)) return html;
 	let depth = 0;
-	return html.replace(/<span class="ap-spoiler"[^>]*>|<\/span>|[^<]+|<[^>]*>/g, (part) => {
+	return html.replace(new RegExp(`<span class="${SPOILER}"[^>]*>|</span>|[^<]+|<[^>]*>`, 'g'), (part) => {
 		if (part.startsWith('<span')) return depth++ ? '' : SPOILER_TEXT;
 		if (part === '</span>') {
 			depth = Math.max(0, depth - 1);
