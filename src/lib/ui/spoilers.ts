@@ -3,16 +3,18 @@ import { SPOILER, SPOILER_SHOWN } from '$lib/protocol/spoiler';
 /** A spoiler not yet shown. */
 const HIDDEN = `.${SPOILER}:not(.${SPOILER_SHOWN})`;
 
-/** Shows a spoiler: its text drawn and read, and no longer a button. */
+/** Shows a spoiler: its text drawn and read, and no longer a button. It keeps the focus, if it had it. */
 export function showSpoiler(spoiler: Element): void {
 	spoiler.classList.add(SPOILER_SHOWN);
-	for (const name of ['tabindex', 'role', 'aria-label']) spoiler.removeAttribute(name);
+	spoiler.setAttribute('tabindex', '-1');
+	for (const name of ['role', 'aria-label']) spoiler.removeAttribute(name);
 }
 
 /**
  * Shows each spoiler (`||text||`) clicked, or pressed with Enter or Space, wherever markup shows one: a message, a
  * description, a document. Listened for once, on the whole document, ahead of everything else: the click or key
- * only shows it, so it opens no message, profile or link under it, which its hidden parts don't take anyway. A spoiler
+ * only shows it, so it opens no message, profile or link under it, which its hidden parts don't take anyway; in select
+ * mode, or as a long press ends, the click is the message's. A spoiler
  * stays shown until its markup is drawn again.
  */
 export function listenForSpoilers(doc: Document): () => void {
@@ -31,8 +33,11 @@ export function listenForSpoilers(doc: Document): () => void {
 	};
 }
 
+/** Where a click picks a message (select mode) or ends a long press (its menu), the message has it, not the spoiler. */
+const MESSAGE_TAKES = '.ap-msg-selectable, .ap-msg-held';
+
 function reveal(event: Event, spoiler: Element | null | undefined): void {
-	if (!spoiler) return;
+	if (!spoiler || spoiler.closest(MESSAGE_TAKES)) return;
 	event.preventDefault();
 	event.stopPropagation();
 	showSpoiler(spoiler);

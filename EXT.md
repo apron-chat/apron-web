@@ -357,26 +357,28 @@ shows its syntax as text, so the message stays readable.
 |--------------------------------|---------------------------------------------------|----------------------------------------------------------------------------------------------------|
 | a line break                   | a line break, not a space                         | §3.5.2 (soft breaks as hard breaks)                                                                |
 | `\| a \| b \|` and `\|---\|---\|` | a table, each column aligned as its `:` say     | [GFM tables](https://github.github.com/gfm/#tables-extension-)                                     |
-| `~~text~~`                     | struck-through text                               | [GFM strikethrough](https://github.github.com/gfm/#strikethrough-extension-)                       |
+| `~~text~~` (two tildes)        | struck-through text                               | [GFM strikethrough](https://github.github.com/gfm/#strikethrough-extension-)                       |
 | `- [ ] task`, `- [x] done`     | a checklist ([§12.2](#122-task-lists))            | [GFM task list items](https://github.github.com/gfm/#task-list-items-extension-)                   |
 | `\|\|text\|\|`                 | a spoiler ([§12.1](#121-spoilers))                | this section                                                                                       |
-| `https://…`, `apron:?…`        | a link, without `<` `>` around it                 | a bare URL runs to the next space, without the punctuation at its end                              |
-| ```` ```lang ````              | code, highlighted as `lang`                       | the fence's info string (CommonMark)                                                               |
+| `http(s)://…`, `apron:?…`      | a link, without `<` `>` around it                 | a bare URL runs to the next space, `<`, `>` or `"`, without `.,:;!?'*_~` or an unopened `)` at its end |
+| ```` ```lang ````              | code, highlighted as `lang` where apron-web knows it | the fence's info string (CommonMark)                                                               |
 
 Mentions (`@user_id`, `#room_id`,
 [Appendix A.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#a3-prefixes-in-text))
 and custom emoji keys ([§9](#9-extemoji)) aren't Markdown: apron-web shows
-them in any text, outside code.
+them in messages and descriptions, outside code and links.
 
 apron-web renders no other extension: no raw HTML (it shows as text), no
 footnotes, definition lists, `==highlight==`, math, or typographic quotes.
 
 ### 12.1 Spoilers
 
-- `||text||` hides `text` until the reader shows it. Its `||` follow the
-  rules of GFM strikethrough's `~~`, with `|` for `~`: a pair opens and
-  closes as `~~` does, spoilers nest with emphasis and with each other, and
-  `a || b`, with space on both sides, is no spoiler. A spoiler is inline, so
+- `||text||` hides `text` until the reader shows it. Its `||` pair as
+  markdown-it's `~~` do, with `|` for `~`: a run of bars opens or closes by
+  CommonMark's flanking rules, splits into pairs (an odd run leaves one `|` as
+  text), and pairs with the nearest run that can close it. Spoilers nest with
+  emphasis and with each other, and `a || b`, with space on both sides, is no
+  spoiler. A spoiler is inline, so
   it ends with its paragraph. In a table cell its bars are escaped
   (`\|\|text\|\|`), as any `|` in a cell is.
 - Where a client shows text without rendering it (a notification, a reply's

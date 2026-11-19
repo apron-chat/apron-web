@@ -6,6 +6,7 @@
 	import { draftFacts } from '$lib/design/components/compose';
 	import { mediaLimit, type MediaTypes } from '$lib/protocol/client';
 	import { MARKDOWN_EXTENSIONS } from '$lib/protocol/client-views';
+	import { maskSpoilers } from '$lib/protocol/spoiler';
 	import { linkPreviews, samePreviews } from '$lib/ui/link-previews';
 	import type { Embed as LinkEmbed } from '$lib/protocol/types';
 	import { directory } from '$lib/ui/directory.svelte';
@@ -166,9 +167,9 @@
 	let previewsArrived = $state(0);
 	/**
 	 * The draft where it may hold a link (every one previewed has `://`), else empty: what link previews read, so a
-	 * draft without a link doesn't look for them again on every key.
+	 * draft without a link doesn't look for them again on every key. A link in a spoiler gets none, which would show it.
 	 */
-	let linkText = $derived(facts.linked ? value : '');
+	let linkText = $derived(facts.linked ? maskSpoilers(value) : '');
 	/** The previews last found: kept while typing finds the same ones, so their cards aren't drawn again on every key. */
 	let lastPreviews: LinkEmbed[] = NO_PREVIEWS;
 	/** The link embeds the draft will be sent with (a command takes none). */

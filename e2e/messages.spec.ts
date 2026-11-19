@@ -251,8 +251,34 @@ test.describe('a spoiler', () => {
 		await spoilers.focus();
 		await page.keyboard.press('Enter');
 		await expect(spoilers).toHaveCount(0);
-		await expect(row.locator('.ap-spoiler').nth(0)).not.toHaveCSS('color', 'rgba(0, 0, 0, 0)');
-		await expect(row.locator('.ap-spoiler').nth(0)).toHaveText('did it');
+		const shown = row.locator('.ap-spoiler').nth(0);
+		await expect(shown).not.toHaveCSS('color', 'rgba(0, 0, 0, 0)');
+		await expect(shown).toHaveText('did it');
+		// The focus stays where it was, for the arrows to go on from.
+		await expect(shown).toBeFocused();
+	});
+
+	test('Enter on a link it labels shows it, rather than following the link', async ({ preview, page }) => {
+		await preview.open();
+		await preview.post('general', 'ada', 'Spoils [||the ending||](https://example.com/ending)');
+		const link = preview.message('Spoils').locator('.ap-msg-text a');
+		const pages = page.context().pages().length;
+		await link.focus();
+		await page.keyboard.press('Enter');
+		await expect(preview.message('Spoils').locator('.ap-spoiler-shown')).toHaveText('the ending');
+		expect(page.context().pages()).toHaveLength(pages);
+	});
+
+	test('in select mode, a click on one picks its message and leaves it hidden', async ({ preview, page }) => {
+		await preview.open();
+		await preview.post('general', 'ada', 'Pick me ||still hidden||');
+		await act(preview, 'Pick me', 'More actions');
+		await preview.message('Pick me').getByTestId('select-message').click();
+		await expect(page.getByTestId('selection-bar')).toContainText('1 message selected');
+		// It unpicks the one message picked, which ends select mode.
+		await preview.message('Pick me').locator('.ap-spoiler').click();
+		await expect(page.getByTestId('selection-bar')).toBeHidden();
+		await expect(preview.message('Pick me').locator('.ap-spoiler-shown')).toHaveCount(0);
 	});
 });
 
