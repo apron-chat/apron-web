@@ -10,7 +10,7 @@
 			"domNodes": 537,
 			"layouts": 10,
 			"styleRecalcs": 18,
-			"calls": 210962,
+			"calls": 208818,
 			"heapMB": 8.4
 		},
 		"load-busy": {
@@ -28,7 +28,7 @@
 			"domNodes": 538,
 			"layouts": 10,
 			"styleRecalcs": 16,
-			"calls": 185348,
+			"calls": 183397,
 			"heapMB": 8.2
 		},
 		"load-phone-busy": {
@@ -112,7 +112,7 @@
 	},
 	"production": {
 		"startupFiles": 13,
-		"startupJsKB": 861.1,
-		"startupJsBrotliKB": 242.4
+		"startupJsKB": 855.1,
+		"startupJsBrotliKB": 241.6
 	}
 }

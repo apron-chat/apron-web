@@ -87,10 +87,11 @@ function markdownItUnusedRules(): Plugin {
 /**
  * Each lucide icon (`@lucide/svelte/icons/<name>`) is a component of its own that passes its shape and its props on
  * to lucide's `Icon`, compiled once per icon. Here each is its shape handed to one shared component that does the
- * same: the code Svelte compiles each icon's `<Icon {...props} icon={iconData} />` to, written once. About 5 KB of
- * startup JS and some 1,300 calls on load less. It uses what that compiled code uses (`rest_props`, `spread_props`
- * from `svelte/internal/client`), so only in the client; and the build fails if an icon's file isn't the one-line
- * wrapper it reads, as after a lucide upgrade that changed them.
+ * same, written once: its props, with its shape as `icon`, spread onto `Icon` as Svelte compiles each icon's
+ * `<Icon {...props} icon={iconData} />` to (`spread_props`, from `svelte/internal/client`, so only in the client),
+ * less the wrapper's own `rest_props`, which leaves out what `Icon`'s does too (`$$slots`, `$$events`, `$$legacy`).
+ * About 5 KB of startup JS less, and a component and its props fewer for every icon drawn. The build fails if an
+ * icon's file isn't the one-line wrapper it reads, as after a lucide upgrade that changed them.
  */
 function lucideSharedIcon(): Plugin {
 	const ICON = '\0apron-lucide-icon:';
@@ -112,12 +113,8 @@ function lucideSharedIcon(): Plugin {
 				const icon = fileURLToPath(new URL('Icon.svelte', pathToFileURL(entry.id)));
 				return [
 					`import Icon from ${JSON.stringify(icon)};`,
-					"import { rest_props, spread_props } from 'svelte/internal/client';",
-					"const EXCLUDES = new Set(['$$slots', '$$events', '$$legacy']);",
-					'export const lucideIcon = (icon) => (anchor, $$props) => {',
-					'\tconst props = rest_props($$props, EXCLUDES);',
-					'\tIcon(anchor, spread_props(() => props, { get icon() { return icon; } }));',
-					'};'
+					"import { spread_props } from 'svelte/internal/client';",
+					'export const lucideIcon = (icon) => (anchor, props) => Icon(anchor, spread_props(props, { icon }));'
 				].join('\n');
 			}
 			if (!id.startsWith(ICON)) return;
