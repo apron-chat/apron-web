@@ -6,10 +6,10 @@ import { UPDATE_POLL_MS } from './src/lib/ui/update-poll';
 
 // Node's fs, without Node's types (the app has none): only to sort the test files below.
 const fsModule = 'node:fs';
-const fs = (await import(/* @vite-ignore */ fsModule)) as { readdirSync(path: URL, options: { recursive: true }): string[]; readFileSync(path: URL, encoding: 'utf8'): string };
+const fs = (await import(/* @vite-ignore */ fsModule)) as { readdirSync(path: URL, options: { recursive: true }): string[]; readFileSync(path: URL | string, encoding: 'utf8'): string };
 const src = new URL('./src/', import.meta.url);
 const urlModule = 'node:url';
-const { fileURLToPath } = (await import(/* @vite-ignore */ urlModule)) as { fileURLToPath(url: URL): string };
+const { fileURLToPath, pathToFileURL } = (await import(/* @vite-ignore */ urlModule)) as { fileURLToPath(url: URL): string; pathToFileURL(path: string): URL };
 
 /**
  * The tests that mock a module (`vi.mock`). A mock takes only where the module is imported afresh, so these
@@ -49,6 +49,91 @@ function emojiDataNativeOnly(): Plugin {
 	};
 }
 
+/**
+ * markdown-it's rules for options `markdown.ts` keeps off (`html`, `linkify`, `typographer`), each of which returns at
+ * once on its option: replaced by a stub that still does, so the rule and what only it uses (HTML block names,
+ * smart quotes) leave the bundle, about 7 KB of startup JS. Each stub throws if its option is turned on, rather than
+ * quietly doing nothing; and the build fails if a rule isn't found as written, or no longer starts from its option,
+ * as after a markdown-it upgrade that changed it.
+ */
+function markdownItUnusedRules(): Plugin {
+	const rules: Array<{ head: string; option: string; returns: string }> = [
+		{ head: 'linkify$1(state)', option: 'linkify', returns: '' },
+		{ head: 'linkify(state, silent)', option: 'linkify', returns: 'false' },
+		{ head: 'replace(state)', option: 'typographer', returns: '' },
+		{ head: 'smartquotes(state)', option: 'typographer', returns: '' },
+		{ head: 'html_block(state, startLine, endLine, silent)', option: 'html', returns: 'false' },
+		{ head: 'html_inline(state, silent)', option: 'html', returns: 'false' }
+	];
+	return {
+		name: 'apron:markdown-it-unused-rules',
+		enforce: 'pre',
+		transform(code, id) {
+			if (!id.split('?')[0].endsWith('/markdown-it/dist/markdown-it.mjs')) return;
+			for (const { head, option, returns } of rules) {
+				const start = code.indexOf(`\nfunction ${head} {\n`);
+				const end = start < 0 ? -1 : code.indexOf('\n}\n', start);
+				if (end < 0 || !code.slice(start, end).includes(`if (!state.md.options.${option}) return${returns ? ` ${returns}` : ''};`)) {
+					throw new Error(`apron:markdown-it-unused-rules: markdown-it's ${head} isn't as written; check what it does now`);
+				}
+				const stub = `if (state.md.options.${option}) throw new Error("markdown-it's ${option} rules are stubbed out (vite.config.ts): markdown.ts must keep ${option} off"); return ${returns};`;
+				code = `${code.slice(0, start)}\nfunction ${head} {${stub}}${code.slice(end + 2)}`;
+			}
+			return { code, map: null };
+		}
+	};
+}
+
+/**
+ * Each lucide icon (`@lucide/svelte/icons/<name>`) is a component of its own that passes its shape and its props on
+ * to lucide's `Icon`, compiled once per icon. Here each is its shape handed to one shared component that does the
+ * same: the code Svelte compiles each icon's `<Icon {...props} icon={iconData} />` to, written once. About 5 KB of
+ * startup JS and some 1,300 calls on load less. It uses what that compiled code uses (`rest_props`, `spread_props`
+ * from `svelte/internal/client`), so only in the client; and the build fails if an icon's file isn't the one-line
+ * wrapper it reads, as after a lucide upgrade that changed them.
+ */
+function lucideSharedIcon(): Plugin {
+	const ICON = '\0apron-lucide-icon:';
+	const SHARED = '\0apron-lucide-shared';
+	return {
+		name: 'apron:lucide-shared-icon',
+		enforce: 'pre',
+		async resolveId(source, importer, options) {
+			if (source === SHARED) return SHARED;
+			// The client's only: a server render (prerendering, tests in Node) calls components otherwise.
+			if (options.ssr || !/^@lucide\/svelte\/icons\/[a-z0-9-]+$/.test(source)) return;
+			const resolved = await this.resolve(source, importer, { skipSelf: true });
+			return resolved && ICON + resolved.id;
+		},
+		async load(id) {
+			if (id === SHARED) {
+				const entry = await this.resolve('@lucide/svelte', fileURLToPath(src), { skipSelf: true });
+				if (!entry) throw new Error('apron:lucide-shared-icon: @lucide/svelte not found');
+				const icon = fileURLToPath(new URL('Icon.svelte', pathToFileURL(entry.id)));
+				return [
+					`import Icon from ${JSON.stringify(icon)};`,
+					"import { rest_props, spread_props } from 'svelte/internal/client';",
+					"const EXCLUDES = new Set(['$$slots', '$$events', '$$legacy']);",
+					'export const lucideIcon = (icon) => (anchor, $$props) => {',
+					'\tconst props = rest_props($$props, EXCLUDES);',
+					'\tIcon(anchor, spread_props(() => props, { get icon() { return icon; } }));',
+					'};'
+				].join('\n');
+			}
+			if (!id.startsWith(ICON)) return;
+			const entry = id.slice(ICON.length);
+			// An icon's module re-exports its component, maybe another's under an old name (`smile`).
+			const component = /^export \{ default \} from "\.\/([a-z0-9-]+\.svelte)";$/m.exec(fs.readFileSync(entry, 'utf8'))?.[1];
+			const source = component && fs.readFileSync(fileURLToPath(new URL(component, pathToFileURL(entry))), 'utf8');
+			const data = source && /^const iconData = (\{.*\});$/m.exec(source)?.[1];
+			if (!data || !/^<Icon \{\.\.\.props\} icon=\{iconData\} \/>$/m.test(source) || !/^let props = \$props\(\);$/m.test(source)) {
+				throw new Error(`apron:lucide-shared-icon: ${entry} isn't the wrapper it reads; check what lucide's icons do now`);
+			}
+			return `import { lucideIcon } from ${JSON.stringify(SHARED)};\nexport default lucideIcon(${data});\n`;
+		}
+	};
+}
+
 export default defineConfig(({ command }) => {
 	const preview = command === 'serve' || env.APRON_PREVIEW === '1';
 	return {
@@ -64,6 +149,8 @@ export default defineConfig(({ command }) => {
 		},
 		plugins: [
 			emojiDataNativeOnly(),
+			markdownItUnusedRules(),
+			lucideSharedIcon(),
 			sveltekit({
 				compilerOptions: {
 					runes: ({ filename }) =>
