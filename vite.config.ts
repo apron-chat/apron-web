@@ -1,6 +1,6 @@
 import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
-import type { Plugin } from 'vite';
+import { normalizePath, type Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
 import { UPDATE_POLL_MS } from './src/lib/ui/update-poll';
 
@@ -10,6 +10,10 @@ const fs = (await import(/* @vite-ignore */ fsModule)) as { readdirSync(path: UR
 const src = new URL('./src/', import.meta.url);
 const urlModule = 'node:url';
 const { fileURLToPath, pathToFileURL } = (await import(/* @vite-ignore */ urlModule)) as { fileURLToPath(url: URL): string; pathToFileURL(path: string): URL };
+const cryptoModule = 'node:crypto';
+const { createHash } = (await import(/* @vite-ignore */ cryptoModule)) as { createHash(algorithm: 'sha256'): { update(data: string): { digest(encoding: 'hex'): string } } };
+const moduleModule = 'node:module';
+const { createRequire } = (await import(/* @vite-ignore */ moduleModule)) as { createRequire(from: string | URL): { resolve(id: string): string } };
 
 /**
  * The tests that mock a module (`vi.mock`). A mock takes only where the module is imported afresh, so these
@@ -53,31 +57,33 @@ function emojiDataNativeOnly(): Plugin {
  * markdown-it's rules for options `markdown.ts` keeps off (`html`, `linkify`, `typographer`), each of which returns at
  * once on its option: replaced by a stub that still does, so the rule and what only it uses (HTML block names,
  * smart quotes) leave the bundle, about 7 KB of startup JS. Each stub throws if its option is turned on, rather than
- * quietly doing nothing; and the build fails if a rule isn't found as written, or no longer starts from its option,
- * as after a markdown-it upgrade that changed it.
+ * quietly doing nothing. Each rule must read exactly as it did when checked (`sha`, of markdown-it 15.0.3's), so the
+ * build fails after an upgrade that changed one: check that it still does nothing more with its option off, then
+ * record its new `sha`. A stub keeps the rule's line count, so what follows it keeps its lines.
  */
 function markdownItUnusedRules(): Plugin {
-	const rules: Array<{ head: string; option: string; returns: string }> = [
-		{ head: 'linkify$1(state)', option: 'linkify', returns: '' },
-		{ head: 'linkify(state, silent)', option: 'linkify', returns: 'false' },
-		{ head: 'replace(state)', option: 'typographer', returns: '' },
-		{ head: 'smartquotes(state)', option: 'typographer', returns: '' },
-		{ head: 'html_block(state, startLine, endLine, silent)', option: 'html', returns: 'false' },
-		{ head: 'html_inline(state, silent)', option: 'html', returns: 'false' }
+	const rules: Array<{ head: string; option: string; returns: string; sha: string }> = [
+		{ head: 'linkify$1(state)', option: 'linkify', returns: '', sha: '225d67aff5653229' },
+		{ head: 'linkify(state, silent)', option: 'linkify', returns: 'false', sha: '85002114200aa5f7' },
+		{ head: 'replace(state)', option: 'typographer', returns: '', sha: '8f40c885b0a0f7a3' },
+		{ head: 'smartquotes(state)', option: 'typographer', returns: '', sha: 'fe7bd280aa21d5cc' },
+		{ head: 'html_block(state, startLine, endLine, silent)', option: 'html', returns: 'false', sha: '19e0f241b7a18ec0' },
+		{ head: 'html_inline(state, silent)', option: 'html', returns: 'false', sha: '9326ced3bdc049d2' }
 	];
 	return {
 		name: 'apron:markdown-it-unused-rules',
 		enforce: 'pre',
 		transform(code, id) {
 			if (!id.split('?')[0].endsWith('/markdown-it/dist/markdown-it.mjs')) return;
-			for (const { head, option, returns } of rules) {
+			for (const { head, option, returns, sha } of rules) {
 				const start = code.indexOf(`\nfunction ${head} {\n`);
-				const end = start < 0 ? -1 : code.indexOf('\n}\n', start);
-				if (end < 0 || !code.slice(start, end).includes(`if (!state.md.options.${option}) return${returns ? ` ${returns}` : ''};`)) {
-					throw new Error(`apron:markdown-it-unused-rules: markdown-it's ${head} isn't as written; check what it does now`);
+				const end = start < 0 ? -1 : code.indexOf('\n}\n', start) + 2;
+				const rule = code.slice(start, end);
+				if (end < 2 || createHash('sha256').update(rule).digest('hex').slice(0, 16) !== sha) {
+					throw new Error(`apron:markdown-it-unused-rules: markdown-it's ${head} isn't as checked; see that it does nothing with ${option} off, then record its sha`);
 				}
 				const stub = `if (state.md.options.${option}) throw new Error("markdown-it's ${option} rules are stubbed out (vite.config.ts): markdown.ts must keep ${option} off"); return ${returns};`;
-				code = `${code.slice(0, start)}\nfunction ${head} {${stub}}${code.slice(end + 2)}`;
+				code = `${code.slice(0, start)}\nfunction ${head} {${stub}${'\n'.repeat(rule.split('\n').length - 2)}}${code.slice(end)}`;
 			}
 			return { code, map: null };
 		}
@@ -96,21 +102,20 @@ function markdownItUnusedRules(): Plugin {
 function lucideSharedIcon(): Plugin {
 	const ICON = '\0apron-lucide-icon:';
 	const SHARED = '\0apron-lucide-shared';
+	// Read from lucide's own files, not where Vite resolves it: `vite dev` resolves it to its prebundled copy.
+	const dist = new URL('.', pathToFileURL(createRequire(import.meta.url).resolve('@lucide/svelte')));
 	return {
 		name: 'apron:lucide-shared-icon',
 		enforce: 'pre',
-		async resolveId(source, importer, options) {
+		resolveId(source, _importer, options) {
 			if (source === SHARED) return SHARED;
 			// The client's only: a server render (prerendering, tests in Node) calls components otherwise.
-			if (options.ssr || !/^@lucide\/svelte\/icons\/[a-z0-9-]+$/.test(source)) return;
-			const resolved = await this.resolve(source, importer, { skipSelf: true });
-			return resolved && ICON + resolved.id;
+			const name = options.ssr ? undefined : /^@lucide\/svelte\/icons\/([a-z0-9-]+)$/.exec(source)?.[1];
+			return name && ICON + name;
 		},
-		async load(id) {
+		load(id) {
 			if (id === SHARED) {
-				const entry = await this.resolve('@lucide/svelte', fileURLToPath(src), { skipSelf: true });
-				if (!entry) throw new Error('apron:lucide-shared-icon: @lucide/svelte not found');
-				const icon = fileURLToPath(new URL('Icon.svelte', pathToFileURL(entry.id)));
+				const icon = normalizePath(fileURLToPath(new URL('Icon.svelte', dist)));
 				return [
 					`import Icon from ${JSON.stringify(icon)};`,
 					"import { spread_props } from 'svelte/internal/client';",
@@ -118,13 +123,13 @@ function lucideSharedIcon(): Plugin {
 				].join('\n');
 			}
 			if (!id.startsWith(ICON)) return;
-			const entry = id.slice(ICON.length);
+			const entry = new URL(`icons/${id.slice(ICON.length)}.js`, dist);
 			// An icon's module re-exports its component, maybe another's under an old name (`smile`).
 			const component = /^export \{ default \} from "\.\/([a-z0-9-]+\.svelte)";$/m.exec(fs.readFileSync(entry, 'utf8'))?.[1];
-			const source = component && fs.readFileSync(fileURLToPath(new URL(component, pathToFileURL(entry))), 'utf8');
+			const source = component && fs.readFileSync(new URL(component, entry), 'utf8');
 			const data = source && /^const iconData = (\{.*\});$/m.exec(source)?.[1];
 			if (!data || !/^<Icon \{\.\.\.props\} icon=\{iconData\} \/>$/m.test(source) || !/^let props = \$props\(\);$/m.test(source)) {
-				throw new Error(`apron:lucide-shared-icon: ${entry} isn't the wrapper it reads; check what lucide's icons do now`);
+				throw new Error(`apron:lucide-shared-icon: ${fileURLToPath(entry)} isn't the wrapper it reads; check what lucide's icons do now`);
 			}
 			return `import { lucideIcon } from ${JSON.stringify(SHARED)};\nexport default lucideIcon(${data});\n`;
 		}
