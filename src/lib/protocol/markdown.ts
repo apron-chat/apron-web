@@ -2,6 +2,7 @@ import MarkdownIt from 'markdown-it';
 import { emojiKeySegments } from './custom-emoji';
 import { withoutBidiOverrides } from './plain-text';
 import { canSanitize, NOWHERE, sanitizeHtml, type MediaCheck } from './sanitize';
+import { SPOILER, SPOILER_LABEL, SPOILER_TEXT } from './spoiler';
 
 /**
  * A body's `markdown` format is CommonMark (§3.5). This renders CommonMark
@@ -81,6 +82,70 @@ function hostMisleads(url: string): boolean {
 	const host = /^[a-z][a-z0-9+.-]*:\/\/([^/?#]*)/i.exec(url)?.[1] ?? /^mailto:[^?]*@([^?]*)/i.exec(url)?.[1];
 	return host !== undefined && (host.includes('@') || /[^\x00-\x7f]|(?:^|\.)xn--/i.test(host));
 }
+
+/**
+ * Spoilers: `||text||` hides its text until it is clicked (`$lib/ui/spoilers`). Their delimiters follow strikethrough's
+ * (`~~`), whose rules these are with `|` for `~`: they nest with emphasis and each other, a run of four is two, and
+ * an odd run leaves one `|` as text. `a || b`, flanked by spaces, is no spoiler. Inline only, so a table cell needs
+ * its bars escaped (`\|\|`), as any `|` in one does.
+ */
+const BAR = 0x7c;
+/** The text rule's terminators (markdown-it's `isTerminatorChar`), with `|`, which markdown-it otherwise reads as text. */
+const TEXT_END = /[\n!#$%&*+\-:<=>@[\\\]^_`{}~|]/g;
+
+md.inline.ruler.at('text', (state, silent) => {
+	TEXT_END.lastIndex = state.pos;
+	const end = Math.min(TEXT_END.exec(state.src)?.index ?? state.posMax, state.posMax);
+	if (end === state.pos) return false;
+	if (!silent) state.pending += state.src.slice(state.pos, end);
+	state.pos = end;
+	return true;
+});
+
+md.inline.ruler.before('emphasis', 'spoiler', (state, silent) => {
+	if (silent || state.src.charCodeAt(state.pos) !== BAR) return false;
+	const scanned = state.scanDelims(state.pos, true);
+	let length = scanned.length;
+	if (length < 2) return false;
+	if (length % 2) {
+		state.push('text', '', 0).content = '|';
+		length -= 1;
+	}
+	for (let index = 0; index < length; index += 2) {
+		state.push('text', '', 0).content = '||';
+		state.delimiters.push({ marker: BAR, length: 0, token: state.tokens.length - 1, end: -1, open: scanned.can_open, close: scanned.can_close });
+	}
+	state.pos += scanned.length;
+	return true;
+});
+
+type InlineState = Parameters<Parameters<typeof md.inline.ruler2.push>[1]>[0];
+
+/** The pairs `balance_pairs` matched, as a spoiler's span; a lone `|` before a close moves after it, as `~` does. */
+function pairSpoilers(state: InlineState, delimiters: InlineState['delimiters']): void {
+	const lone: number[] = [];
+	for (const start of delimiters) {
+		if (start.marker !== BAR || start.end === -1) continue;
+		const end = delimiters[start.end];
+		Object.assign(state.tokens[start.token], { type: 'spoiler_open', tag: 'span', nesting: 1, markup: '||', content: '' });
+		state.tokens[start.token].attrs = [['class', SPOILER], ['tabindex', '0'], ['role', 'button'], ['aria-label', SPOILER_LABEL]];
+		Object.assign(state.tokens[end.token], { type: 'spoiler_close', tag: 'span', nesting: -1, markup: '||', content: '' });
+		const before = state.tokens[end.token - 1];
+		if (before.type === 'text' && before.content === '|') lone.push(end.token - 1);
+	}
+	for (let at = lone.pop(); at !== undefined; at = lone.pop()) {
+		let last = at + 1;
+		while (last < state.tokens.length && state.tokens[last].type === 'spoiler_close') last += 1;
+		last -= 1;
+		if (at !== last) [state.tokens[at], state.tokens[last]] = [state.tokens[last], state.tokens[at]];
+	}
+}
+
+md.inline.ruler2.before('emphasis', 'spoiler', (state) => {
+	pairSpoilers(state, state.delimiters);
+	for (const meta of state.tokens_meta) if (meta?.delimiters) pairSpoilers(state, meta.delimiters);
+	return false;
+});
 
 /** Whether Markdown holds a task list item that renders as a checkbox (`task_lists`): parsed as it would render. */
 export function hasTaskItems(source: string): boolean {
@@ -305,11 +370,25 @@ export function renderBio(source: string): string {
  * breaks) and entities decoded. The result is text, never markup.
  */
 export function markdownText(source: string): string {
-	return unescapeHtml(markdown(withoutBidiOverrides(source))
+	return unescapeHtml(hideSpoilers(markdown(withoutBidiOverrides(source)))
 		.replace(/<br\s*\/?>|<\/(?:p|li|h[1-6]|pre|blockquote|tr)>/gi, '\n')
 		.replace(/<[^>]*>/g, ''))
 		.replace(/\n{2,}/g, '\n')
 		.trim();
+}
+
+/** Rendered markup with each spoiler, nested ones and all, as `SPOILER_TEXT`. Markdown writes no other `span`. */
+function hideSpoilers(html: string): string {
+	if (!html.includes(`<span class="${SPOILER}"`)) return html;
+	let depth = 0;
+	return html.replace(/<span class="ap-spoiler"[^>]*>|<\/span>|[^<]+|<[^>]*>/g, (part) => {
+		if (part.startsWith('<span')) return depth++ ? '' : SPOILER_TEXT;
+		if (part === '</span>') {
+			depth = Math.max(0, depth - 1);
+			return '';
+		}
+		return depth ? '' : part;
+	});
 }
 
 function escapeHtml(value: string): string {

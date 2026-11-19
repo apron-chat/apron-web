@@ -107,3 +107,17 @@ describe('sanitizeHtml: media in an HTML embed (§4.8)', () => {
 		expect(embed('<img src="https://chat.example/a.png" alt="A">', none)).toBe('<a href="https://chat.example/a.png" target="_blank" rel="noreferrer noopener">A</a>');
 	});
 });
+
+describe('sanitizeHtml: spoilers', () => {
+	it("keeps a spoiler's tabindex and role in a body, on its span alone, as the renderer writes them", () => {
+		const spoiler = '<span class="ap-spoiler" tabindex="0" role="button" aria-label="Spoiler">x</span>';
+		expect(sanitizeHtml(spoiler, 'message', NOWHERE)).toBe(spoiler);
+		expect(sanitizeHtml('<span class="ap-spoiler" tabindex="-1" role="link">x</span>', 'message', NOWHERE)).toBe('<span class="ap-spoiler">x</span>');
+		expect(sanitizeHtml('<span class="ap-task" tabindex="0" role="button">x</span>', 'message', NOWHERE)).toBe('<span class="ap-task">x</span>');
+	});
+
+	it('keeps none of it in an embed, whose markup names none of the page', () => {
+		expect(embed('<span tabindex="0" role="button" class="ap-spoiler">x</span>')).toBe('<span>x</span>');
+		expect(embed('<span class="ap-spoiler" tabindex="0" role="button">x</span>')).toBe('<span>x</span>');
+	});
+});

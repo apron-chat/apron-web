@@ -7,7 +7,7 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
    one that fills its row, list or track (--focus-offset-inset), where an outer ring would be clipped or cross its
    neighbours. A field rings its own border, which takes the color too (.ap-field); the composer and a message being
    edited light their frame instead, and a panel's handle its border. */
-:where(.ap-btn, .ap-embed-remove, .ap-link, .ap-dialog-titlebtn, .ap-thread, .ap-composer-field, .ap-embed-card, .ap-embed-url, .ap-actions-btn, .ap-jumpbar-btn, .ap-jumpfab, .ap-sect-toggle, .ap-roomhead-back, .ap-roomhead-crumb, .ap-profile-me, .ap-shell-sidehead-return, .ap-shell-sidehead-open, .ap-field, .ap-reply, .ap-choice-item, .ap-msg-check, .ap-msg-who, .ap-member-who, .ap-iconbtn, .ap-foldpill, .ap-rchip, .ap-switch, .ap-description-toggle, .ap-attachment-rename, .ap-viewer-btn, .ap-embed-ogcard, .ap-embed-imagelink, button.ap-mention, a.ap-linkchip, .ap-pick-chip-remove, .ap-audio-play, .ap-audio-rate, .ap-audio-seek, .ap-embed-audiotitle, .ap-task):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
+:where(.ap-btn, .ap-embed-remove, .ap-link, .ap-dialog-titlebtn, .ap-thread, .ap-composer-field, .ap-embed-card, .ap-embed-url, .ap-actions-btn, .ap-jumpbar-btn, .ap-jumpfab, .ap-sect-toggle, .ap-roomhead-back, .ap-roomhead-crumb, .ap-profile-me, .ap-shell-sidehead-return, .ap-shell-sidehead-open, .ap-field, .ap-reply, .ap-choice-item, .ap-msg-check, .ap-msg-who, .ap-member-who, .ap-iconbtn, .ap-foldpill, .ap-rchip, .ap-switch, .ap-description-toggle, .ap-attachment-rename, .ap-viewer-btn, .ap-embed-ogcard, .ap-embed-imagelink, button.ap-mention, a.ap-linkchip, .ap-pick-chip-remove, .ap-audio-play, .ap-audio-rate, .ap-audio-seek, .ap-embed-audiotitle, .ap-task, .ap-spoiler):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
 :where(.ap-room, .ap-room-exit, .ap-room-join, .ap-menu-item, .ap-seg-item, .ap-connect-recent-item, .ap-font-option, .ap-font-load, .ap-preferences-nav button, .ap-profedit-upload):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset-inset); }
 /* The people picker's field rings itself while its input has the keyboard, as a field does. */
 .ap-pick-field:has(.ap-pick-input:focus-visible) { outline: var(--focus-ring); outline-offset: var(--focus-offset); border-color: var(--focus); }
@@ -318,6 +318,13 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-emoji { font-family: var(--font-emoji); }
 /* A custom emoji (`ext:emoji`) in text: an image as tall as the line, its width from its aspect ratio. */
 .ap-cemoji { display: inline-block; height: 1.3em; width: auto; max-width: 4em; vertical-align: -0.3em; object-fit: contain; }
+/* A spoiler (`||text||`): a bar until clicked (`$lib/ui/spoilers`). Its text is drawn in no colour, and whatever is
+   in it (code, links, mentions, emoji) not at all, so none of it shows or takes a click; drawn as written, so forced colours don't show it either. */
+.ap-spoiler { border-radius: var(--radius-sm); -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.ap-spoiler:not(.ap-spoiler-shown) { forced-color-adjust: none; background: var(--ink-muted); color: transparent; cursor: pointer; }
+.ap-spoiler:not(.ap-spoiler-shown)::selection { color: transparent; }
+.ap-spoiler:not(.ap-spoiler-shown) * { visibility: hidden; }
+.ap-spoiler-shown { background: color-mix(in srgb, var(--ink) 10%, transparent); }
 .ap-msg-text code { font-family: var(--font-mono); font-size: var(--text-ui); background: var(--bg-300); border-radius: var(--radius-sm); padding: 1px var(--space-1); }
 .ap-msg-text pre { font-family: var(--font-mono); font-size: var(--text-ui); line-height: var(--leading-body); background: var(--bg-200); border: 1px solid var(--line); border-radius: var(--radius-md); padding: var(--space-2) var(--space-3); margin: var(--space-1) 0; overflow-x: auto; }
 .ap-msg-text pre code { background: none; padding: 0; }

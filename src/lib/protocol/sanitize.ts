@@ -8,6 +8,7 @@
  * decided: the check works in an inert document.
  */
 import DOMPurify, { type Config } from 'dompurify';
+import { SPOILER } from './spoiler';
 
 /** Where media may load from, as `$lib/ui/media-gate`'s gates answer: `key` changes whenever the answers do. */
 export interface MediaCheck {
@@ -28,7 +29,7 @@ export const NOWHERE: MediaCheck = { key: 'none', src: () => undefined };
 
 /**
  * `message`: what a body holds once rendered, what CommonMark produces plus the links, mention chips and custom
- * emoji added to it, and task lists' checkboxes; raw HTML never gets this far, and sanitizing last also covers everything done after rendering.
+ * emoji added to it, task lists' checkboxes, and spoilers; raw HTML never gets this far, and sanitizing last also covers everything done after rendering.
  * `embed`: an HTML embed (§4.8), as its server sent it: text, tables, lists, links and media, without scripts,
  * styles, forms or anything but HTML. Nothing in it names the page's own parts (`class`, `id`, `role`, ARIA) or
  * shows itself on its own (`open`, `hidden`, `popover`, a dialog), so it can't wear the app's classes to draw
@@ -66,10 +67,15 @@ export type SanitizeKind = keyof typeof CONFIGS;
 /** A custom emoji's `style`, as `customEmojiTag` writes it: its aspect ratio, and nothing else. */
 const EMOJI_STYLE = /^aspect-ratio: \d+(?:\.\d+)? \/ \d+(?:\.\d+)?$/;
 
-// The one `style` let through: a custom emoji's aspect ratio (`ext:emoji`), on its own image.
+/** What makes a spoiler a button until it is shown (`markdown.ts`), as it writes them. */
+const SPOILER_ATTRS: Record<string, string> = { tabindex: '0', role: 'button' };
+
+// The one `style` let through: a custom emoji's aspect ratio (`ext:emoji`), on its own image. And a spoiler's
+// `tabindex` and `role`, on its own span, where a body's classes are (not in an embed).
 if (DOMPurify.isSupported) {
 	DOMPurify.addHook('uponSanitizeAttribute', (node, data) => {
 		if (data.attrName === 'style' && node.nodeName === 'IMG' && (node as Element).classList.contains('ap-cemoji') && EMOJI_STYLE.test(data.attrValue)) data.forceKeepAttr = true;
+		if (SPOILER_ATTRS[data.attrName] === data.attrValue && node.nodeName === 'SPAN' && data.allowedAttributes.class && (node as Element).getAttribute('class') === SPOILER) data.forceKeepAttr = true;
 	});
 }
 

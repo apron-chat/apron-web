@@ -2,7 +2,7 @@
 
 | Protocol Version | 10         |
 |------------------|------------|
-| Last Updated     | 2026-11-08 |
+| Last Updated     | 2026-11-19 |
 
 apron-web is a web client for the
 [Apron Chat Protocol](https://github.com/shazow/apron/blob/main/PROTOCOL.md).
@@ -56,6 +56,8 @@ Some features have no capability:
   address, and its title and avatar in the sidebar, over its host.
 - After a failed WebSocket handshake, apron-web asks the server why over HTTP
   ([§5](#5-connection-status)).
+- apron-web renders the Markdown extensions in [§12](#12-markdown), among
+  them spoilers (`||text||`).
 - apron-web writes no `ext` of its own, except `ext.bio` ([§8](#8-extbio)) and
   `ext.editors` ([§11](#11-exteditors)).
 
@@ -340,3 +342,52 @@ defines it.
   delete, reply removal, or embed changes.
 - apron-web shows `edited_by` under the text as "edited by" and the user's
   name.
+
+---
+
+## 12. Markdown
+
+A `markdown` body is CommonMark, and clients MAY render common extensions
+([§3.5.2](https://github.com/shazow/apron/blob/main/PROTOCOL.md#352-rendering)).
+These are the ones apron-web renders, and writes from its composer, so that
+other clients can render the same set. A client without one of them still
+shows its syntax as text, so the message stays readable.
+
+| Syntax                         | apron-web renders                                 | As defined by                                                                                      |
+|--------------------------------|---------------------------------------------------|----------------------------------------------------------------------------------------------------|
+| a line break                   | a line break, not a space                         | §3.5.2 (soft breaks as hard breaks)                                                                |
+| `\| a \| b \|` and `\|---\|---\|` | a table, each column aligned as its `:` say     | [GFM tables](https://github.github.com/gfm/#tables-extension-)                                     |
+| `~~text~~`                     | struck-through text                               | [GFM strikethrough](https://github.github.com/gfm/#strikethrough-extension-)                       |
+| `- [ ] task`, `- [x] done`     | a checklist ([§12.2](#122-task-lists))            | [GFM task list items](https://github.github.com/gfm/#task-list-items-extension-)                   |
+| `\|\|text\|\|`                 | a spoiler ([§12.1](#121-spoilers))                | this section                                                                                       |
+| `https://…`, `apron:?…`        | a link, without `<` `>` around it                 | a bare URL runs to the next space, without the punctuation at its end                              |
+| ```` ```lang ````              | code, highlighted as `lang`                       | the fence's info string (CommonMark)                                                               |
+
+Mentions (`@user_id`, `#room_id`,
+[Appendix A.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#a3-prefixes-in-text))
+and custom emoji keys ([§9](#9-extemoji)) aren't Markdown: apron-web shows
+them in any text, outside code.
+
+apron-web renders no other extension: no raw HTML (it shows as text), no
+footnotes, definition lists, `==highlight==`, math, or typographic quotes.
+
+### 12.1 Spoilers
+
+- `||text||` hides `text` until the reader shows it. Its `||` follow the
+  rules of GFM strikethrough's `~~`, with `|` for `~`: a pair opens and
+  closes as `~~` does, spoilers nest with emphasis and with each other, and
+  `a || b`, with space on both sides, is no spoiler. A spoiler is inline, so
+  it ends with its paragraph. In a table cell its bars are escaped
+  (`\|\|text\|\|`), as any `|` in a cell is.
+- Where a client shows text without rendering it (a notification, a reply's
+  quote, a card), it SHOULD show a spoiler as a placeholder of the same
+  length whatever it hides. apron-web shows `▒▒▒▒▒`.
+- A spoiler hides text from view, not from other clients: one without this
+  extension shows `||text||` as written.
+
+### 12.2 Task lists
+
+- A list item whose text starts with `[ ]`, `[x]` or `[X]` and a space shows
+  a checkbox in its place. One with nothing after its marker stays text.
+- Where the viewer may edit the message (`edit`, and [§11](#11-exteditors)),
+  checking a box edits the message's text: it rewrites that one marker.

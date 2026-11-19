@@ -229,6 +229,33 @@ test.describe('the message toolbar, phone', () => {
 	});
 });
 
+test.describe('a spoiler', () => {
+	test.use(DEVICES.desktop);
+
+	test('hides its text, and its link, until a click or a key shows it, which does nothing else', async ({ preview, page }) => {
+		await preview.open();
+		await preview.post('general', 'ada', 'The butler ||did it||, see ||[the clue](https://example.com/clue)||');
+		const row = preview.message('The butler');
+		const spoilers = row.getByRole('button', { name: 'Spoiler', exact: true });
+		await expect(spoilers).toHaveCount(2);
+		await expect(spoilers.nth(0)).toHaveCSS('color', 'rgba(0, 0, 0, 0)');
+		const clue = row.getByRole('link', { name: 'the clue' });
+		await expect(clue).toBeHidden();
+
+		const pages = page.context().pages().length;
+		await row.locator('.ap-spoiler').nth(1).click();
+		await expect(clue).toBeVisible();
+		await expect(spoilers).toHaveCount(1);
+		expect(page.context().pages()).toHaveLength(pages);
+
+		await spoilers.focus();
+		await page.keyboard.press('Enter');
+		await expect(spoilers).toHaveCount(0);
+		await expect(row.locator('.ap-spoiler').nth(0)).not.toHaveCSS('color', 'rgba(0, 0, 0, 0)');
+		await expect(row.locator('.ap-spoiler').nth(0)).toHaveText('did it');
+	});
+});
+
 test.describe('a task list', () => {
 	test.use(DEVICES.desktop);
 

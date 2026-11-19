@@ -7,7 +7,7 @@
  * finished message renders, stay as written.
  *
  * Deliberately small: it closes an open code fence, then, in the last
- * paragraph only, an open code span and an odd `**` or `~~`, and holds back a
+ * paragraph only, an open code span and an odd `**`, `~~` or `||`, and holds back a
  * link or image whose destination hasn't closed, a `[` not yet closed, and a
  * last line that is only a list marker or the start of a setext underline.
  */
@@ -52,7 +52,7 @@ function settleParagraph(text: string): string {
 	if (span) return tail.slice(span.at + span.run.length).trim() ? `${tail.trimEnd()}${span.run}` : tail.slice(0, span.at);
 	tail = holdBackLink(tail);
 	const open: { mark: string; at: number }[] = [];
-	for (const mark of ['~~', '**']) {
+	for (const mark of ['~~', '**', '||']) {
 		const at = unmatched(withoutCodeSpans(tail), mark);
 		if (at === undefined) continue;
 		// A delimiter with nothing after it yet is held back; one with text after it is closed after that text.
@@ -96,9 +96,14 @@ function withoutCodeSpans(text: string): string {
 	return text.replace(/(?<!\\)(`+)([\s\S]*?[^`])\1(?!`)/g, (span) => ' '.repeat(span.length));
 }
 
-/** Where the last of an odd number of `mark`s is, outside escapes; undefined when they pair up. */
+/**
+ * Where the last of an odd number of `mark`s is, outside escapes; undefined when they pair up. One with space on both
+ * sides (`a || b`) neither opens nor closes, so it doesn't count; one at the end may yet open.
+ */
 function unmatched(text: string, mark: string): number | undefined {
-	const escaped = mark.replace(/[*~]/g, (char) => `\\${char}`);
-	const found = [...text.matchAll(new RegExp(`(?<!\\\\)${escaped}`, 'g'))].map((match) => match.index);
+	const escaped = mark.replace(/[*~|]/g, (char) => `\\${char}`);
+	const found = [...text.matchAll(new RegExp(`(?<!\\\\)${escaped}`, 'g'))]
+		.map((match) => match.index)
+		.filter((at) => !(/^\s?$/.test(text[at - 1] ?? '') && /\s/.test(text[at + mark.length] ?? '')));
 	return found.length % 2 ? found.at(-1) : undefined;
 }

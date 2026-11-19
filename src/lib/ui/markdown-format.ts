@@ -29,7 +29,7 @@ function run(text: string, at: number, char: string, back: boolean): number {
 }
 
 /**
- * Bold (`**`), italic (`*`), strikethrough (`~~`) or inline code (`` ` ``) around the selection, leaving out the spaces
+ * Bold (`**`), italic (`*`), strikethrough (`~~`), a spoiler (`||`) or inline code (`` ` ``) around the selection, leaving out the spaces
  * at its ends; off again when the selection already has it, inside or just outside. A marker is there when the run of
  * its character holds it, so italic and bold each come off `***both***` alone, and italic doesn't take one star off
  * bold. A bare caret gets the pair with the caret between them, to type into.

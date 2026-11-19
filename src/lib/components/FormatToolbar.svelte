@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Bold from '@lucide/svelte/icons/bold';
 	import Code from '@lucide/svelte/icons/code';
+	import EyeOff from '@lucide/svelte/icons/eye-off';
 	import Italic from '@lucide/svelte/icons/italic';
 	import Link from '@lucide/svelte/icons/link';
 	import List from '@lucide/svelte/icons/list';
@@ -32,6 +33,7 @@
 			{ label: 'Bold', icon: Bold, change: (edit: TextEdit) => wrap(edit, '**') },
 			{ label: 'Italic', icon: Italic, change: (edit: TextEdit) => wrap(edit, '*') },
 			{ label: 'Strikethrough', icon: Strikethrough, change: (edit: TextEdit) => wrap(edit, '~~') },
+			{ label: 'Spoiler', icon: EyeOff, change: (edit: TextEdit) => wrap(edit, '||') },
 			{ label: 'Link', icon: Link, change: link }
 		]],
 		['Lists', [

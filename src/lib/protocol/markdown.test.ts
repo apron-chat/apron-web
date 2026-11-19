@@ -552,3 +552,36 @@ describe('hasTaskItems', () => {
 		expect(hasTaskItems('- [ ]x')).toBe(false);
 	});
 });
+
+describe('spoilers', () => {
+	const SPAN = '<span class="ap-spoiler" tabindex="0" role="button" aria-label="Spoiler">';
+
+	it('hides `||text||` behind a button named only Spoiler', () => {
+		expect(renderMarkdown('The butler ||did it||.')).toBe(`<p>The butler ${SPAN}did it</span>.</p>\n`);
+	});
+
+	it('nests with emphasis, links, code and mentions, and with itself', () => {
+		expect(renderMarkdown('**||bold||** ||*it*|| ||`code`||')).toContain(`<strong>${SPAN}bold</span></strong> ${SPAN}<em>it</em></span> ${SPAN}<code>code</code></span>`);
+		expect(renderMarkdown('||see [here](https://example.com)||')).toContain(`${SPAN}see <a href="https://example.com"`);
+		expect(renderMarkdown('||@alice||', resolve)).toContain(`${SPAN}<button type="button" class="ap-chip ap-mention" data-user-id="alice"`);
+		expect(renderMarkdown('||a ||b|| c||')).toContain(`${SPAN}a ${SPAN}b</span> c</span>`);
+	});
+
+	it('leaves bars that open or close nothing as text: spaced, single, unmatched, escaped, or in code', () => {
+		for (const source of ['a || b', 'a | b', '||open', 'shut||', '\\||no\\||', '`||code||`', '||\n||']) {
+			expect(renderMarkdown(source), source).not.toContain('ap-spoiler');
+		}
+		expect(renderMarkdown('|||odd|||')).toContain(`|${SPAN}odd</span>|`);
+	});
+
+	it('keeps table cells apart, where a spoiler needs its bars escaped', () => {
+		const html = renderMarkdown('| a | b |\n|---|---|\n| \\|\\|x\\|\\| | y |');
+		expect(html).toContain(`<td>${SPAN}x</span></td>`);
+		expect(html).toContain('<td>y</td>');
+	});
+
+	it('shows none of a spoiler in plain text, however long it was', () => {
+		expect(markdownText('The butler ||did **it**|| and ||a ||b|| c||.')).toBe('The butler ▒▒▒▒▒ and ▒▒▒▒▒.');
+		expect(markdownText('a || b')).toBe('a || b');
+	});
+});
