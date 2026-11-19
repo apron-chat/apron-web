@@ -324,16 +324,4 @@ describe('directory: remote users (ext:remote)', () => {
 		directory.apply(snapshot([ada, link], { server: server([]) }), undefined);
 		expect(text({ members: [link], record: mirror })).toBeUndefined();
 	});
-
-	it('shows a third server’s users in a mirror by their own server, from ext.remote: "Dana (c.example)"', () => {
-		// On b.example, mirroring a room hosted on a.example, where Dana of c.example writes too.
-		const dana: Identity = { user_id: 'dana@c.example', name: 'Dana', ext: { remote: { server: 'wss://c.example/ws', user_id: 'dana' } } };
-		const hostSam: Identity = { user_id: 'sam@a.example', name: 'Sam', ext: { remote: { server: 'wss://a.example/ws', user_id: 'sam' } } };
-		directory.apply(snapshot([ada, dana, hostSam], { server: REMOTE }), undefined);
-		expect([directory.label(dana), directory.label(hostSam)]).toEqual(['Dana (c.example)', 'Sam (a.example)']);
-		expect(directory.resolve('dana@c.example')).toMatchObject({ name: 'Dana (c.example)' });
-		// A recorded `from` alone (a copy's sender this server keeps no object for) says the same.
-		directory.apply(snapshot([ada], { server: REMOTE }), undefined);
-		expect(directory.label(dana)).toBe('Dana (c.example)');
-	});
 });

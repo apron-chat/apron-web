@@ -302,7 +302,6 @@ describe('MemberListSidebar', () => {
 			{ user_id: 'sam@a.example', name: 'Sam', status: 'offline', ext: remote('wss://a.example/ws', 'sam') },
 			{ user_id: 'link-a', name: 'Link bot for a.example', roles: ['bot'], status: 'online', ext: remote('wss://a.example/ws') }
 		];
-		const blank = blankSnapshot();
 		const rows = render(users, { server: { apron: 10, auth: ['guest'], capabilities: ['status', 'ext:remote'] } });
 		expect(sections()).toEqual([['Online· 2', ['ada', 'sam']], ['Remote· 1', ['sam@a.example']], ['Shared with· 1', ['link-a']]]);
 		const names = rows.map((row) => row.querySelector('.ap-member-name')?.textContent?.trim());
@@ -313,7 +312,7 @@ describe('MemberListSidebar', () => {
 		expect(rows[3].classList.contains('ap-member-link')).toBe(true);
 		dom.unmount();
 		// Without the capability, as any members: the two Sams told apart by their @user_id.
-		render(users, { server: { ...blank.server, apron: 10, auth: ['guest'], capabilities: ['status'] } });
+		render(users, { server: { apron: 10, auth: ['guest'], capabilities: ['status'] } });
 		expect(sections()).toEqual([['Online· 3', ['ada', 'link-a', 'sam']], ['Offline· 1', ['sam@a.example']]]);
 		expect(queryByText('@sam@a.example')).not.toBeNull();
 	});
