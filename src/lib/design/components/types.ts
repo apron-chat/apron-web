@@ -538,8 +538,6 @@ export interface MessageHandlers {
 export interface MessageTestids {
 	row?: string;
 	handle?: string;
-	/** The server after a remote sender's name (`MessageSender.origin`). */
-	origin?: string;
 	reply?: string;
 	/** Each card for a message, room or thread its links point to. */
 	linkCard?: string;

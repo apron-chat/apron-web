@@ -153,7 +153,6 @@
 			status,
 			statusLabel: (me ? ownStatusLabel(status) : undefined) ?? withLastSeen(presenceLabel(status), last),
 			handle: directory.sharesName(member),
-			...(origin ? { origin } : {}),
 			you: me,
 			...(isSystemId(member.user_id) ? { system: true } : {})
 		};
