@@ -5,6 +5,7 @@ import { isLogId, type Identity, type MessageRecord } from '$lib/protocol/types'
 import { embedsLabel } from '$lib/protocol/embeds';
 import { markdownText } from '$lib/protocol/markdown';
 import { withoutBidiOverrides } from '$lib/protocol/plain-text';
+import { maskSpoilers } from '$lib/protocol/spoiler';
 import { isBaseline, MembershipRun } from './membership';
 import { isOwn, senderName, textOf } from './messages';
 import { dayKey, dayKeyOf, dayLabel, dayLabelOf, isGrouped } from './time';
@@ -203,18 +204,24 @@ export function threadDescriptionText(entry: Pick<ThreadEntry, 'description'>): 
 	return entry.description ? markdownText(entry.description).trim() : '';
 }
 
+/** A message's text as written, for a line that shows it so, but with a markdown body's spoilers hidden. */
+function shownText(event: MessageRecord): string {
+	const text = textOf(event);
+	return event.body?.format === 'markdown' ? maskSpoilers(text) : text;
+}
+
 /** A thread's newest loaded message as a preview line (ThreadLines, in the sidebar and on its card): its sender, and its text on one line. */
 export function threadLatest(entry: Pick<ThreadEntry, 'latestMessage'>): { sender: string; text: string } | undefined {
 	const event = entry.latestMessage;
 	if (!event) return undefined;
 	if (event.deleted) return { sender: '', text: 'Message deleted' };
-	const text = withoutBidiOverrides(textOf(event)).replace(/\s+/g, ' ').trim();
+	const text = withoutBidiOverrides(shownText(event)).replace(/\s+/g, ' ').trim();
 	return { sender: senderName(event), text: text || embedsLabel(event.body?.embeds) || 'Empty message' };
 }
 
 /** A title for a thread started from a message: its first non-empty line, shortened, else "Thread". */
 export function threadTitleFor(event: MessageRecord | undefined): string {
-	const line = (event && !event.deleted ? textOf(event) : '').split('\n').find((part) => part.trim())?.replace(/\s+/g, ' ').trim() ?? '';
+	const line = (event && !event.deleted ? shownText(event) : '').split('\n').find((part) => part.trim())?.replace(/\s+/g, ' ').trim() ?? '';
 	return shorten(line, THREAD_TITLE_MAX) || 'Thread';
 }
 

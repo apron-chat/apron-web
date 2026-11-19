@@ -8,6 +8,8 @@ const json = (body: unknown, status = 200, headers: Record<string, string> = {})
 describe('finding links', () => {
 	it('finds URLs in text without the punctuation or brackets around them, keeping brackets they open', () => {
 		expect(trimUrl('https://a.example/x).')).toBe('https://a.example/x');
+		// A spoiler's bars after it, as in `||https://…||`.
+		expect(trimUrl('https://a.example/x||')).toBe('https://a.example/x');
 		expect(trimUrl('https://en.wikipedia.org/wiki/Mercury_(planet)')).toBe('https://en.wikipedia.org/wiki/Mercury_(planet)');
 		expect(trimUrl('https://en.wikipedia.org/wiki/Mercury_(planet)),')).toBe('https://en.wikipedia.org/wiki/Mercury_(planet)');
 		expect(trimUrl("https://en.wikipedia.org/wiki/Hitchhiker's_Guide'")).toBe("https://en.wikipedia.org/wiki/Hitchhiker's_Guide");

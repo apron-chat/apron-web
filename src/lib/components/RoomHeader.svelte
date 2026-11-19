@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { RoomSnapshot } from '$lib/protocol/client';
 	import { markdownText } from '$lib/protocol/markdown';
+	import { maskSpoilers } from '$lib/protocol/spoiler';
 	import DesignRoomHeader from '$lib/design/components/RoomHeader.svelte';
 	import { presenceLabel } from '$lib/design/components/util';
 	import { directory } from '$lib/ui/directory.svelte';
@@ -112,7 +113,7 @@
 	room={room.id}
 	name={room.title}
 	topic={topic || line}
-	topicTitle={topic ? room.description : undefined}
+	topicTitle={topic && room.description ? maskSpoilers(room.description) : undefined}
 	private={pane.private}
 	{faces}
 	{typing}

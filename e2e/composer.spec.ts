@@ -521,7 +521,7 @@ test.describe('the full panel', () => {
 		await expect(toolbar.getByRole('button', { name: 'Bold', exact: true })).toBeFocused();
 		await page.keyboard.press('ArrowLeft');
 		await expect(toolbar.getByRole('button', { name: 'Code block' })).toBeFocused();
-		// Tab leaves it, rather than stepping through its other nine; Shift+Tab comes back to where it was.
+		// Tab leaves it, rather than stepping through its other ten; Shift+Tab comes back to where it was.
 		await page.keyboard.press('Tab');
 		expect(await toolbar.evaluate((bar) => bar.contains(document.activeElement))).toBe(false);
 		await page.keyboard.press('Shift+Tab');

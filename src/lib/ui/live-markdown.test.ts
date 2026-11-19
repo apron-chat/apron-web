@@ -42,6 +42,17 @@ describe('Markdown still arriving (an append embed, §4.8.5)', () => {
 		expect(settleMarkdown('2 \\** 3')).toBe('2 \\** 3');
 	});
 
+	it('closes an open spoiler, and counts no bars spaced on both sides', () => {
+		expect(settleMarkdown('The butler ||did')).toBe('The butler ||did||');
+		expect(settleMarkdown('The butler ||')).toBe('The butler ');
+		expect(settleMarkdown('a || b')).toBe('a || b');
+		expect(settleMarkdown('a ** b')).toBe('a ** b');
+		// Right after a code span is no space: the marker there closes.
+		expect(settleMarkdown('**a `code`** b')).toBe('**a `code`** b');
+		expect(settleMarkdown('||a `c`|| b')).toBe('||a `c`|| b');
+		expect(shown('||did **it')).toContain('<strong>it</strong></span>');
+	});
+
 	it('looks only at the last paragraph, so an odd ** that ended earlier stays as written', () => {
 		expect(settleMarkdown('a ** b\n\nc')).toBe('a ** b\n\nc');
 	});

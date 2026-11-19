@@ -42,7 +42,7 @@ export function trimUrl(url: string): string {
 			break;
 		}
 	}
-	return url.slice(0, end).replace(/[.,:;!?*_~']+$/, '');
+	return url.slice(0, end).replace(/[.,:;!?*_~'|]+$/, '');
 }
 
 /** The http(s) URLs written in `text`, in order. */

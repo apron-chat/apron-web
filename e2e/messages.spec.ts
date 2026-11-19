@@ -229,6 +229,59 @@ test.describe('the message toolbar, phone', () => {
 	});
 });
 
+test.describe('a spoiler', () => {
+	test.use(DEVICES.desktop);
+
+	test('hides its text, and its link, until a click or a key shows it, which does nothing else', async ({ preview, page }) => {
+		await preview.open();
+		await preview.post('general', 'ada', 'The butler ||did it||, see ||[the clue](https://example.com/clue)||');
+		const row = preview.message('The butler');
+		const spoilers = row.getByRole('button', { name: 'Spoiler', exact: true });
+		await expect(spoilers).toHaveCount(2);
+		await expect(spoilers.nth(0)).toHaveCSS('color', 'rgba(0, 0, 0, 0)');
+		const clue = row.getByRole('link', { name: 'the clue' });
+		await expect(clue).toBeHidden();
+
+		const pages = page.context().pages().length;
+		await row.locator('.ap-spoiler').nth(1).click();
+		await expect(clue).toBeVisible();
+		await expect(spoilers).toHaveCount(1);
+		expect(page.context().pages()).toHaveLength(pages);
+
+		await spoilers.focus();
+		await page.keyboard.press('Enter');
+		await expect(spoilers).toHaveCount(0);
+		const shown = row.locator('.ap-spoiler').nth(0);
+		await expect(shown).not.toHaveCSS('color', 'rgba(0, 0, 0, 0)');
+		await expect(shown).toHaveText('did it');
+		// The focus stays where it was, for the arrows to go on from.
+		await expect(shown).toBeFocused();
+	});
+
+	test('Enter on a link it labels shows it, rather than following the link', async ({ preview, page }) => {
+		await preview.open();
+		await preview.post('general', 'ada', 'Spoils [||the ending||](https://example.com/ending)');
+		const link = preview.message('Spoils').locator('.ap-msg-text a');
+		const pages = page.context().pages().length;
+		await link.focus();
+		await page.keyboard.press('Enter');
+		await expect(preview.message('Spoils').locator('.ap-spoiler-shown')).toHaveText('the ending');
+		expect(page.context().pages()).toHaveLength(pages);
+	});
+
+	test('in select mode, a click on one picks its message and leaves it hidden', async ({ preview, page }) => {
+		await preview.open();
+		await preview.post('general', 'ada', 'Pick me ||still hidden||');
+		await act(preview, 'Pick me', 'More actions');
+		await preview.message('Pick me').getByTestId('select-message').click();
+		await expect(page.getByTestId('selection-bar')).toContainText('1 message selected');
+		// It unpicks the one message picked, which ends select mode.
+		await preview.message('Pick me').locator('.ap-spoiler').click();
+		await expect(page.getByTestId('selection-bar')).toBeHidden();
+		await expect(preview.message('Pick me').locator('.ap-spoiler-shown')).toHaveCount(0);
+	});
+});
+
 test.describe('a task list', () => {
 	test.use(DEVICES.desktop);
 

@@ -156,6 +156,11 @@ describe('push notifications', () => {
 		expect(pushNotification({ message_id: '1', room_id: 'ops', body: { text: 'hi' } }, 'a1')?.title).toBe('Someone · ops');
 	});
 
+	it("hides a markdown body's spoilers, and leaves a plain body's bars as written", () => {
+		expect(pushNotification({ message_id: '1', room_id: 'ops', body: { text: 'The butler ||did it||.', format: 'markdown' } }, 'a1')?.options.body).toBe('The butler ▒▒▒▒▒.');
+		expect(pushNotification({ message_id: '1', room_id: 'ops', body: { text: 'a ||b||' } }, 'a1')?.options.body).toBe('a ||b||');
+	});
+
 	it('shows the sender and body without bidi embeddings and overrides (§3.5.2)', () => {
 		expect(notificationBody('evil\u202Egnp.exe')).toBe('evilgnp.exe');
 		const shown = pushNotification({ message_id: '1', room_id: 'ops', from: { user_id: 'mallory', name: 'Mal\u202Elory' }, body: { text: 'see\u202A this' } }, 'a1');

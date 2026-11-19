@@ -154,6 +154,10 @@ describe('thread grouping', () => {
 		expect(threadTitleFor(message(0, 'alice', { body: { text: '\n  Deploy   the thing \nmore' } }))).toBe('Deploy the thing');
 		expect([...threadTitleFor(message(0, 'alice', { body: { text: 'x'.repeat(80) } }))]).toHaveLength(60);
 		expect(threadTitleFor(message(0, 'alice', { body: { embeds: [{ kind: 'image' }] } }))).toBe('Thread');
+		// A markdown body's spoilers stay hidden in the title, as in the thread's latest line.
+		const spoiler = message(0, 'alice', { body: { text: 'The butler ||did it||', format: 'markdown' } });
+		expect(threadTitleFor(spoiler)).toBe('The butler ▒▒▒▒▒');
+		expect(threadLatest({ latestMessage: spoiler })).toMatchObject({ text: 'The butler ▒▒▒▒▒' });
 		expect(threadTitleFor(undefined)).toBe('Thread');
 	});
 

@@ -11,6 +11,7 @@
 	import { emojiPopover, mediaViewerHost } from '$lib/components/overlays-lazy';
 	import { emojiPicker } from '$lib/ui/emoji-picker.svelte';
 	import { mediaViewer } from '$lib/ui/media-viewer.svelte';
+	import { listenForSpoilers } from '$lib/ui/spoilers';
 	import TerminalViewerHost from '$lib/components/TerminalViewerHost.svelte';
 	import UpdateNotice from '$lib/components/UpdateNotice.svelte';
 
@@ -23,6 +24,7 @@
 		appearanceSettings.load();
 		// What the page renders only on demand (dialogs, editors) loads apart from it, in the background once it settles.
 		prefetchLazy();
+		return listenForSpoilers(document);
 	});
 </script>
 
