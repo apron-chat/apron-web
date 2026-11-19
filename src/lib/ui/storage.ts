@@ -365,7 +365,11 @@ function savedDescriptions(hidden: Record<string, string>): Record<string, strin
 	return persisting ? loadHiddenDescriptions() : hidden;
 }
 
-/** Puts a room's or thread's description away, until it's edited: returns the descriptions put away, this one newest. */
+/**
+ * Puts a room's or thread's description away, as it now reads (its fingerprint), until Description brings it back: an edit
+ * leaves it put away, and marks Description (`descriptionUpdated`). Put away again, or acknowledged after your own edit, it
+ * records the text anew. Returns the descriptions put away, this one newest.
+ */
 export function hideDescription(hidden: Record<string, string>, key: string, description: string): Record<string, string> {
 	const others = Object.entries(savedDescriptions(hidden)).filter(([entry]) => entry !== key);
 	const next = Object.fromEntries([...others, [key, descriptionFingerprint(description)]].slice(-HIDDEN_DESCRIPTIONS_MAX));
@@ -414,9 +418,14 @@ export function forgetClosedTerminals(keys: readonly string[], prefix: string): 
 	return next;
 }
 
-/** Whether a description was put away as it now reads: an edit brings it back. */
-export function descriptionHidden(hidden: Record<string, string>, key: string, description: string): boolean {
-	return hidden[key] === descriptionFingerprint(description);
+/** Whether a room's or thread's description is put away, whatever it reads now. */
+export function descriptionHidden(hidden: Record<string, string>, key: string): boolean {
+	return Object.hasOwn(hidden, key);
+}
+
+/** Whether a description put away has been edited since: it no longer reads as it did when put away. */
+export function descriptionUpdated(hidden: Record<string, string>, key: string, description: string): boolean {
+	return descriptionHidden(hidden, key) && hidden[key] !== descriptionFingerprint(description);
 }
 
 /** A short hash of a description (FNV-1a), enough to tell an edit, without keeping the text itself. */

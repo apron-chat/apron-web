@@ -57,7 +57,7 @@ export class Preview {
 
 	/**
 	 * Opens the app's own route, `/` (with `fragment`), against `mockServer` (a scripted backend offering guests,
-	 * passkeys and email), and waits until it is connected as a guest.
+	 * passkeys, email and tokens), and waits until it is connected as a guest.
 	 */
 	async openRoot(options: MockOptions = {}, fragment = ''): Promise<void> {
 		const base = process.env.E2E_URL;
@@ -102,6 +102,11 @@ export class Preview {
 			}, { message: `the client never sent a matching ${method}` })
 			.toBe(true);
 		return found!;
+	}
+
+	/** Someone else changes a room's or thread's description, delivered live. */
+	describe(room: string, description: string): Promise<void> {
+		return this.page.evaluate(([room, description]) => (window as any).__apronPreview.describe(room, description), [room, description] as const);
 	}
 
 	/** Someone else posts a message, delivered live. Returns its `message_id`. */

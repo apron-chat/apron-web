@@ -56,6 +56,32 @@ md.core.ruler.after('inline', 'task_lists', (state) => {
 		}
 	}
 });
+/**
+ * A link whose text isn't simply where it goes, drawn in a colour of its own: one written `[label](href)` (even when
+ * its label is its URL), and one written as its URL whose host reads otherwise (`hostMisleads`). An autolink
+ * (`<https://…>`) and a bare URL show where they go, so they stay plain links.
+ */
+const LABELLED = 'ap-link-labelled';
+
+md.core.ruler.push('link_class', (state) => {
+	for (const block of state.tokens) {
+		for (const token of block.children ?? []) {
+			if (token.type === 'link_open' && (token.markup !== 'autolink' || hostMisleads(String(token.attrGet('href') ?? '')))) token.attrJoin('class', LABELLED);
+		}
+	}
+});
+
+/**
+ * Whether a URL's host reads otherwise than where it goes: an internationalized one, which is sent as punycode
+ * (`xn--…`) and can pass letter for letter for another (`yоutube.com` with a Cyrillic `о`), whether written in
+ * Unicode or as punycode; or one with a user name in front of it (`https://bank.example@evil.example`).
+ * markdown-it gives an autolink's `href` its host in punycode, and shows it in Unicode.
+ */
+function hostMisleads(url: string): boolean {
+	const host = /^[a-z][a-z0-9+.-]*:\/\/([^/?#]*)/i.exec(url)?.[1] ?? /^mailto:[^?]*@([^?]*)/i.exec(url)?.[1];
+	return host !== undefined && (host.includes('@') || /[^\x00-\x7f]|(?:^|\.)xn--/i.test(host));
+}
+
 /** Whether Markdown holds a task list item that renders as a checkbox (`task_lists`): parsed as it would render. */
 export function hasTaskItems(source: string): boolean {
 	return md.parse(withoutBidiOverrides(source), {}).some((token) => token.type === 'list_item_open' && String(token.attrGet('class') ?? '').split(' ').includes('ap-task-item'));
@@ -389,7 +415,7 @@ function linkifyText(text: string, resolve?: MentionResolver, resolveRoom?: Room
 		}
 		if (!(webOnly ? /^https?:\/\/[^/?#]/i : /^(?:https?:\/\/[^/?#]|apron:\?.)/i).test(url)) continue;
 		out += chipText(emojiText(text.slice(index, match.index)), resolve, resolveRoom, resolveEmoji);
-		out += (resolveLink && linkChip(url, resolveLink)) || `<a href="${url}"${LINK_ATTRS}>${url}</a>`;
+		out += (resolveLink && linkChip(url, resolveLink)) || `<a href="${url}"${hostMisleads(unescapeHtml(url)) ? ` class="${LABELLED}"` : ''}${LINK_ATTRS}>${url}</a>`;
 		index = match.index + url.length;
 	}
 	return out + chipText(emojiText(text.slice(index)), resolve, resolveRoom, resolveEmoji);

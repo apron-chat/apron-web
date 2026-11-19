@@ -55,7 +55,7 @@
 	<span class="ap-description-icon" title="Description"><TextAlignStart size={15} strokeWidth={2} aria-hidden="true" /></span>
 	<!-- The pointer opens it from the text itself; the keyboard has the toggle, which shows only as a focus ring around the description. -->
 	<!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
-	<div class={['ap-description-text', 'ap-msg-text', expanded ? 'ap-description-open' : overflows && 'ap-description-clipped']} {@attach heights} onclick={click}>
+	<div class={['ap-description-text', 'ap-msg-text', 'ap-msg-markdown', expanded ? 'ap-description-open' : overflows && 'ap-description-clipped']} {@attach heights} onclick={click}>
 		<div>{#if children}{@render children()}{:else}<p>{description}</p>{/if}</div>
 	</div>
 	{#if overflows}

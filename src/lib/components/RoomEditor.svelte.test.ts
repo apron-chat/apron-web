@@ -14,7 +14,8 @@ describe('RoomEditor', () => {
 	it('edits a thread in the same centered dialog, and calls a room’s description its Description', async () => {
 		const updateRoom = vi.fn(() => ({ promise: Promise.resolve({}) }));
 		const onclose = vi.fn();
-		render(RoomEditor, { client: { updateRoom } as unknown as ChatClient, room: { id: 't1', title: 'Deploy', description: 'Old' }, thread: true, enabled: true, onclose });
+		const ondescriptionsaved = vi.fn();
+		render(RoomEditor, { client: { updateRoom } as unknown as ChatClient, room: { id: 't1', title: 'Deploy', description: 'Old' }, thread: true, enabled: true, onclose, ondescriptionsaved });
 		const dialog = field<HTMLDialogElement>('dialog');
 		expect(dialog.textContent).toContain('Edit thread');
 		expect(dialog.textContent).toContain('Description');
@@ -28,10 +29,26 @@ describe('RoomEditor', () => {
 		await vi.waitFor(() => expect(onclose).toHaveBeenCalled());
 		expect(updateRoom).toHaveBeenCalledWith('t1', { description: 'New' });
 		expect(onclose).toHaveBeenCalled();
+		// Your own description, saved: not news to you if you'd put it away.
+		expect(ondescriptionsaved).toHaveBeenCalledOnce();
 		unmount();
 		// A room's description is its Description.
 		render(RoomEditor, { client: {} as unknown as ChatClient, room: { id: 'r1', title: 'Ops' }, thread: false, enabled: true, onclose: vi.fn() });
 		expect(field('dialog').textContent).toContain('Edit room');
 		expect(field('dialog').textContent).toContain('Description');
+	});
+
+	it('says a description was saved only when the save changed it', async () => {
+		const updateRoom = vi.fn(() => ({ promise: Promise.resolve({}) }));
+		const onclose = vi.fn();
+		const ondescriptionsaved = vi.fn();
+		render(RoomEditor, { client: { updateRoom } as unknown as ChatClient, room: { id: 'r1', title: 'Ops', description: 'Same' }, thread: false, enabled: true, onclose, ondescriptionsaved });
+		const name = field<HTMLInputElement>('dialog input');
+		name.value = 'Operations';
+		name.dispatchEvent(new InputEvent('input', { bubbles: true }));
+		press(field('[data-testid="description-input"]'), 'Enter', { ctrlKey: true });
+		await vi.waitFor(() => expect(onclose).toHaveBeenCalled());
+		expect(updateRoom).toHaveBeenCalledWith('r1', { title: 'Operations' });
+		expect(ondescriptionsaved).not.toHaveBeenCalled();
 	});
 });

@@ -75,7 +75,7 @@
 	import { MEMBER_LIST_WIDTHS, ROOMS_LIST_WIDTHS, SidebarLayout } from '$lib/ui/sidebar.svelte';
 	import { NARROW_MAX, WIDE_MIN } from '$lib/ui/breakpoints';
 	import { closedTerminals } from '$lib/ui/terminal-closed.svelte';
-	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, installOfferAnswered, answerInstallOffer, loadRecentReactions, saveRecentReactions, loadRecentServers, loadServerUrl, loadSidebarPrefs, refreshRecentServer, rememberServer, saveDisplayName, saveLastSignIn, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, HIDDEN_DESCRIPTIONS_KEY, INSTALL_OFFER_KEY, loadAddedRooms, saveAddedRooms, loadHiddenDescriptions, hideDescription, showDescription, descriptionHidden, type RecentServer } from '$lib/ui/storage';
+	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, installOfferAnswered, answerInstallOffer, loadRecentReactions, saveRecentReactions, loadRecentServers, loadServerUrl, loadSidebarPrefs, refreshRecentServer, rememberServer, saveDisplayName, saveLastSignIn, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, HIDDEN_DESCRIPTIONS_KEY, INSTALL_OFFER_KEY, loadAddedRooms, saveAddedRooms, loadHiddenDescriptions, hideDescription, showDescription, descriptionHidden, descriptionUpdated, type RecentServer } from '$lib/ui/storage';
 	import TimelineLoading from '$lib/design/components/TimelineLoading.svelte';
 	import RateLimitNotice from '$lib/design/components/RateLimitNotice.svelte';
 	import SystemLine from '$lib/design/components/SystemLine.svelte';
@@ -804,8 +804,19 @@
 	/** Room and thread descriptions put away with their ×, on this device. */
 	let hiddenDescriptions = $state(loadHiddenDescriptions());
 	/** Whether the open room's or thread's description is put away: the header's Description brings it back. */
-	let descriptionPutAway = $derived(Boolean(editTarget?.description && descriptionHidden(hiddenDescriptions, draftKey(editTarget.id), editTarget.description)));
-	/** The open room's or thread's description, pinned under the header until its × puts it away (and again once it's edited). */
+	let descriptionPutAway = $derived(Boolean(editTarget?.description && descriptionHidden(hiddenDescriptions, draftKey(editTarget.id))));
+	/** It was put away, and someone has edited it since: Description is drawn blue until it's brought back. */
+	let descriptionEdited = $derived(Boolean(descriptionPutAway && editTarget?.description && descriptionUpdated(hiddenDescriptions, draftKey(editTarget.id), editTarget.description)));
+	/**
+	 * Your own edit of a description you put away isn't news to you: it stays put away, recorded as it now reads, Description
+	 * left grey. Called once the save is answered, by which time its `room_update` (the text as the server kept it) has come.
+	 */
+	function acknowledgeDescription(roomId: string): void {
+		const key = draftKey(roomId);
+		const description = editTarget?.id === roomId ? editTarget.description : session.room(roomId)?.description;
+		if (description && descriptionHidden(hiddenDescriptions, key)) hiddenDescriptions = hideDescription(hiddenDescriptions, key, description);
+	}
+	/** The open room's or thread's description, pinned under the header until its × puts it away. */
 	let pinnedDescription = $derived(editTarget?.description && !descriptionPutAway ? { id: editTarget.id, description: editTarget.description } : undefined);
 	/**
 	 * The pinned description makes way, for now (not put away), while the composer needs its room: as the full panel, whose
@@ -2466,7 +2477,7 @@
 				if (leaving === roomId && activeThread && activeRoom) backToRoom();
 				chat.leaveRoom(leaving).promise.catch(failed);
 			} else if (action.kind === 'topic') {
-				chat.updateRoom(roomId, { description: action.description }).promise.catch(failed);
+				chat.updateRoom(roomId, { description: action.description }).promise.then(() => acknowledgeDescription(roomId), failed);
 			} else {
 				// `/kick @user` and `/invite @user` as `room_leave`/`room_join` with `user_id` (§4.2.2). A server
 				// that answers `unsupported` may still have the command itself (§4.1): it gets the text as typed.
@@ -3709,6 +3720,7 @@
 				pane={paneRoom ?? activeRoom}
 				showTopic={!pinnedDescription}
 				ondescription={descriptionPutAway ? () => { if (editTarget) hiddenDescriptions = showDescription(hiddenDescriptions, draftKey(editTarget.id)); } : undefined}
+				descriptionUpdated={descriptionEdited}
 				threadTitle={activeThread ? threadTitle(activeThread) : undefined}
 				typing={typingNames}
 				replyCount={activeThread ? threadReplyCount : undefined}
@@ -3730,7 +3742,7 @@
 			{#if roomEditorOpen && editTarget && roomEditor.component}
 				{@const RoomEditor = roomEditor.component}
 				{#key editTarget.id}
-					<RoomEditor client={client!} room={editTarget} thread={Boolean(activeThread)} enabled={canCompose && session.canManageRooms} {people} rooms={roomSuggestions} onmention={refreshMembers} onclose={() => (roomEditorOpen = false)} />
+					<RoomEditor client={client!} room={editTarget} thread={Boolean(activeThread)} enabled={canCompose && session.canManageRooms} {people} rooms={roomSuggestions} onmention={refreshMembers} onclose={() => (roomEditorOpen = false)} ondescriptionsaved={() => { if (editTarget) acknowledgeDescription(editTarget.id); }} />
 				{/key}
 			{/if}
 

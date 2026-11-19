@@ -92,7 +92,7 @@
 		},
 		"hover-messages": {
 			"layouts": 7,
-			"styleRecalcs": 7,
+			"styleRecalcs": 11,
 			"calls": 6656
 		},
 		"hover-toolbar": {
