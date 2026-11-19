@@ -41,7 +41,7 @@ the fallback of that capability:
 | `ext:emoji`    | shows the server's custom emoji in reactions and text, and offers them to pick ([§9](#9-extemoji)) | shows keys as text, and in reactions as a placeholder |
 | `ext:archive`  | says whose archive it reads, and when it was written ([§10](#10-extarchive))                    | says only that you read            |
 | `ext:editors`  | asks whether those a message with a checklist mentions may edit its text, lets you edit a message that shares its text with you, and shows who edited it ([§11](#11-exteditors)) | edits only your own messages |
-| `ext:remote`   | shows another server's users as "Name (host)", and a room that a link has joined as shared with that server ([§12](#12-extremote)) | shows them as local users |
+| `ext:remote`   | shows another server's users as "Name (host)", and which servers a room is shared with or hosted by ([§12](#12-extremote)) | shows them as local users |
 
 Some features have no capability:
 
@@ -361,9 +361,9 @@ messages, and mirror rooms' records.
   takes `remote.server` only as a `ws:` or `wss:` URL, and shows its host.
 - A remote user (`remote` with `user_id`) shows as their name and the host in
   parentheses, "Sam (chat.example)": beside the name on their messages and in
-  the quote of a reply to them, in the member list, on their profile card, in reactions, in mentions and the
-  mention chips of the composer, in who joined and left, in who is typing, and
-  in notifications.
+  the quote of a reply to them, in the member list, on their profile card, in
+  reactions, in mentions and the mention chips of the composer, in who joined
+  and left, in who is typing, and in notifications.
 - apron-web compares names as they show, with the host, to decide where a
   name needs its `@user_id` (§3.3): a remote Sam and this server's Sam need
   none, and anyone here named "Sam (chat.example)" shows theirs, as the
@@ -378,8 +378,9 @@ messages, and mirror rooms' records.
   its `server`: "Shared with chat.example". Either shows where the room's
   description goes, before it, and as a globe after its name (and lock) in
   the rooms list, Other Rooms included. A thread shows its room's, or its own
-  record's or links'. The member list lists links last, under Shared with, as
-  that host, and offers them no direct message.
+  record's or links', also in its header after its count of replies ("2
+  replies · Hosted by chat.example"). The member list lists links last, under
+  Shared with, as that host, and offers them no direct message.
 - Sending in a mirror room goes through the server that hosts it, and can
   take a round trip: "Sending…" shows until its result, up to the client's
   request timeout (20 seconds), and a refusal gives the draft back with the
