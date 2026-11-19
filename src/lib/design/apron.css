@@ -602,10 +602,9 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-tline-multi > svg { margin-top: calc((1lh - 12px) / 2); }
 .ap-tline-multi .ap-tline-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: var(--ap-tline-lines); line-clamp: var(--ap-tline-lines); white-space: pre-wrap; overflow-wrap: anywhere; }
 .ap-room-unread .ap-tline-latest { color: var(--ink); }
-/* A private room (§4.2.4): a small lock beside its name, wherever the name shows. */
-.ap-lock { --ap-icon-size: 12px; flex: none; margin-inline-start: var(--space-1); color: var(--ink-muted); }
-/* Shared with other servers (`ext:remote`): a globe after the name, and its lock. */
-.ap-shared { --ap-icon-size: 12px; flex: none; margin-inline-start: var(--space-1); color: var(--ink-muted); }
+/* A private room (§4.2.4): a small lock beside its name, wherever the name shows; shared with other servers
+   (`ext:remote`), a globe after the name and its lock. */
+.ap-lock, .ap-shared { --ap-icon-size: 12px; flex: none; margin-inline-start: var(--space-1); color: var(--ink-muted); }
 .ap-count { --ap-pill-h: 20px; flex: none; min-width: 20px; padding-inline: var(--space-1_5); border-radius: var(--radius-full); background: var(--accent); color: var(--on-accent); font-size: var(--text-sm); line-height: var(--leading-field); font-weight: 600; text-align: center; font-variant-numeric: tabular-nums; }
 
 /* StatusBanner */
@@ -994,9 +993,9 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-timeline .ap-msg-mention + .ap-msg-mention.ap-msg-grouped::before { top: 0; border-start-end-radius: 0; }
 /* Role badges follow the name, as beside a message's sender. */
 .ap-member-who { display: flex; align-items: center; gap: var(--space-2); flex: 0 1e12 auto; min-width: 0; margin: 0; padding: 0; border: 0; border-radius: var(--radius-sm); background: none; color: inherit; font: inherit; text-align: start; cursor: pointer; }
-/* Offline members (§4.5) recede, badges and all; their ring and name still read. */
-.ap-member-offline .ap-member-who { color: var(--ink-muted); }
-.ap-member-link .ap-member-who { color: var(--ink-muted); }
+/* Offline members (§4.5) recede, badges and all; their ring and name still read. A link's name (`ext:remote`) is
+   quieter too: no one to talk to. */
+.ap-member-offline .ap-member-who, .ap-member-link .ap-member-who { color: var(--ink-muted); }
 .ap-member-offline .ap-avatar, .ap-member-offline .ap-roles { opacity: var(--opacity-dim); }
 /* As in a message's header, roles first: the name truncates to --ap-name-min before the badges compact (see Name rows);
    a handle, there to tell two people apart, gives way last. */
