@@ -50,11 +50,8 @@ export interface TransportHooks {
 	frame: (data: unknown) => void;
 	/** A socket reported an error; `current`: the current one. */
 	errored: (current: boolean) => void;
-	/**
-	 * The current socket closed, or was dropped as if it had: its connection ends. A reconnect and `emit` follow.
-	 * `code` and `reason`: the close's, where the socket closed rather than being dropped.
-	 */
-	closed: (code?: number, reason?: string) => void;
+	/** The current socket closed, or was dropped as if it had: its connection ends. A reconnect and `emit` follow. */
+	closed: () => void;
 	/** The next socket couldn't be made, for `message`. A reconnect and `emit` follow. */
 	failed: (message: string) => void;
 	/** The server said why a handshake failed (EXT.md §5): `message`, and how long to wait, `until`. */
@@ -361,23 +358,23 @@ export class Transport {
 			this.#hooks.errored(this.#isCurrentSocket(id, socket));
 		};
 		/** `handover`: the standby carries on as the next connection (`replaceQuiet`), so no reconnect is due. */
-		const closed = (handover = false, event?: CloseEvent): void => {
+		const closed = (handover = false): void => {
 			if (!this.#isCurrentSocket(id, socket)) return;
 			// Before the client ends the connection (`drop`), while it can still say it was signed in. Not with a
 			// reconnect already due, which the client asked for as it closed the socket: that one is counted.
 			if (!this.#reconnectTimer) this.#stayedUp(socket);
-			this.#hooks.closed(event?.code, event?.reason);
+			this.#hooks.closed();
 			if (this.#isRunning && !handover) {
 				if (opened) this.scheduleReconnect();
 				else void this.#diagnoseConnection(id);
 			}
 			this.#hooks.emit();
 		};
-		socket.onclose = (event) => {
+		socket.onclose = () => {
 			// Closed while a check of it waits with a standby opening beside it (the close the browser held while the
 			// page was frozen, delivered once it runs again): the standby carries on, as when the check runs out.
 			if (this.#isCurrentSocket(id, socket) && this.#standby && this.#waiting?.socket === socket && !this.#waiting.opening) this.#replaceQuiet(true);
-			else closed(false, event);
+			else closed();
 		};
 		// A socket whose peer vanished can stay OPEN here indefinitely, and one
 		// whose handshake went into a vanished network CONNECTING; close it and

@@ -116,16 +116,7 @@ rather than after the backoff; the network back between attempts also
 connects at once, and starts the backoff over. An explicit server retry window takes precedence, including a
 `retry_after` error about the connection as a whole (`data.retry_after`
 seconds); after such a `denied` error the client stops reconnecting, shows
-**Signed out** with the server's message, and waits for **Sign in**. So it does
-when the server closes a guest's connection with 1008 (policy), as one that
-stops taking guests does (a lobby that closes, say), after a notice saying so:
-signing in as a guest again would only be refused or ended again. The banner
-says "Signed out: The server ended this guest session (its reason).", and
-**Sign in** connects again and goes by what the server's new `server` frame
-offers: as a guest again where it has guests once more, else the connect
-screen, as for a server without guests (below). An account's connection, a
-guest's closed for any other reason, and a close the client made itself
-reconnect as usual.
+**Signed out** with the server's message, and waits for **Sign in**.
 One window or tab of a browser connects to a server at a time
 (`src/lib/ui/server-claim.ts`): the one most recently shown with its client
 running holds a Web Lock named for the server, taken from any other window with

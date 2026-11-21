@@ -476,8 +476,6 @@ export class ChatClient {
 	private signInNeeded?: Exclude<SignInMethod, 'link'>;
 	/** The current socket carried an error about the connection; its message outlives the close. */
 	private connectionErrored = false;
-	/** This client is closing the current socket itself, with a code of its own: the close says nothing of the server's. */
-	private closingHere = false;
 	private disconnectedAt?: number;
 	/**
 	 * When this reconnect began where someone could see it: the drop, on a page
@@ -512,7 +510,7 @@ export class ChatClient {
 			opened: () => this.socketOpened(),
 			frame: (data) => this.handleMessage(data),
 			errored: (current) => this.socketErrored(current),
-			closed: (code, reason) => this.socketClosed(code, reason),
+			closed: () => this.socketClosed(),
 			failed: (message) => this.handleConnectionFailure(message),
 			refused: (message, until) => this.connectionRefused(message, until),
 			visibilityChanged: () => this.visibilityChanged(),
@@ -3158,7 +3156,6 @@ export class ChatClient {
 		this.status = reconnecting ? 'reconnecting' : 'connecting';
 		this.error = undefined;
 		this.connectionErrored = false;
-		this.closingHere = false;
 		this.emit();
 	}
 
@@ -3177,19 +3174,8 @@ export class ChatClient {
 		this.emit();
 	}
 
-	/**
-	 * The current socket closed, or was dropped as if it had (`Transport`): its connection ends, and a reconnect follows
-	 * while running. `code` and `reason`: the close's, where the socket closed.
-	 */
-	private socketClosed(code?: number, reason?: string): void {
-		if (code === 1008 && !this.closingHere && this.authenticated && !this.registeredSession) {
-			// The server ended a guest's session for its policy (1008), as one does when it stops taking guests (a lobby
-			// that closes, say): a guest sign-in again would be refused or ended again, so nothing reconnects on its own.
-			// The banner's Sign in connects again, and the server's new `server` frame says what it offers now.
-			this.reconnectHeld = true;
-			const why = reason?.trim().slice(0, 300);
-			this.error = `The server ended this guest session${why ? ` (${why})` : ''}.`;
-		}
+	/** The current socket closed, or was dropped as if it had (`Transport`): its connection ends, and a reconnect follows while running. */
+	private socketClosed(): void {
 		// Only a session-only scrollback (no capability `history`) has a gap to mark; recovery fills any other.
 		this.showReconnectDivider = (this.rooms.size > 0 || this.showReconnectDivider) && !this.hasCap('history');
 		// The protocol view is rebuilt from the next connection's room_list
@@ -4721,10 +4707,7 @@ export class ChatClient {
 		this.startRecovery(room, head, true);
 		this.error = 'History is arriving faster than the client can recover; reconnecting.';
 		this.transport.scheduleReconnect();
-		if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-			this.closingHere = true;
-			this.socket.close(1008, 'history recovery overflow');
-		}
+		if (this.socket && this.socket.readyState === WebSocket.OPEN) this.socket.close(1008, 'history recovery overflow');
 	}
 
 	private abortRecovery(room: RoomState, message: string): void {
