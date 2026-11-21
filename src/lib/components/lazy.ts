@@ -18,7 +18,6 @@ export const autocompletePicker = part((m) => m.AutocompletePicker);
 export const installNudge = part((m) => m.InstallPrompt);
 export const mentionAddLine = part((m) => m.MentionAddLine);
 export const editorsNudge = part((m) => m.EditorsPrompt);
-export const lobbyNudge = part((m) => m.LobbyBanner);
 export const selectionBar = part((m) => m.SelectionBar);
 /**
  * Hosts that stay unmounted until their state first asks: render as `{#if host.once(Boolean(state.current))}`. The

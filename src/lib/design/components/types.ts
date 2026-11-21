@@ -297,8 +297,6 @@ export interface MemberListPerson {
 	you?: boolean;
 	/** A system identity (`~`, Appendix A.1): nothing is sent to it, so its menu offers no Direct message. */
 	system?: boolean;
-	/** Limited to a server's lobby, as far as can be told: its menu offers Invite, where the list does (`oninvite`). */
-	invitable?: boolean;
 }
 
 /** One group of a MemberList: Online, Offline, or with key `members` the one list of a server without status (§4.5), which has no heading and never folds. */

@@ -22,7 +22,6 @@
 	import ProfileBar from './ProfileBar.svelte';
 	import ThreadList from './ThreadList.svelte';
 	import RoomItem from '$lib/design/components/RoomItem.svelte';
-	import { lobbyMarker } from '$lib/ui/lobby';
 	import SidebarHead from '$lib/design/components/SidebarHead.svelte';
 	import { serverPane } from '$lib/ui/server-pane.svelte';
 	import SidebarSection from '$lib/design/components/SidebarSection.svelte';
@@ -102,12 +101,6 @@
 		drawRooms?: boolean;
 	}
 	let { drawRooms = true, client, session, backendLabel, people = [], roomSuggestions = [], serverLook, serverAddress, account, order = new RoomOrder(), threads, activeThread, mentions, unread, displayName = $bindable(), passkeyUnavailable, notificationsEnabled, notificationsSupported, notificationPermission, notifyScopes, onnotifications, onnotifyscopes, ontestnotifications, webPush, onwebpush, oninstallapp, pause, onpause, onresume, returnTo, onreturn, onroom, onthread, onopenthread, onjoin, onopenroom, onleavethread, oncreateroom, onnewthread, onnewprivate, onsignout, keptHistory, onsignin }: Props = $props();
-	/** The server's lobby, and what marks it beside its name, to someone not limited to it (`lobbyMarker`). */
-	let lobbyMark = $derived.by(() => {
-		const id = session.lobby?.room_id;
-		const label = lobbyMarker(session.lobby, id, Boolean(session.lobbyLimit));
-		return id !== undefined && label ? { id, label } : undefined;
-	});
 	/** The head's server button: the server pane sits beside it. */
 	let serverHead = $state<HTMLButtonElement | undefined>();
 	/** Threads are listed under their parent, not as rooms of their own; private rooms in a list of their own. */
@@ -324,7 +317,7 @@
 	{@const isFolded = threadsFolded.includes(room.id)}
 	<!-- What's new in the room itself (its threads show their own): none while you're reading it. The Private list says it's private: no lock there. -->
 	<RoomItem
-		room={room.id} name={room.title} title={room.untitled ? room.id : undefined} private={faces ? false : room.private} everyone={lobbyMark?.id === room.id ? lobbyMark.label : undefined} {faces} muted={room.mutedUntil !== undefined} active={current}
+		room={room.id} name={room.title} title={room.untitled ? room.id : undefined} private={faces ? false : room.private} {faces} muted={room.mutedUntil !== undefined} active={current}
 		unread={current ? 0 : (unread[room.id] ?? 0)} mentions={current ? 0 : (mentions[room.id] ?? 0)} unreadTestid="room-unread" loading={room.recovering && !session.reconnectQuiet} keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
 		onselect={() => pickRoom(room, current)} onnewthread={active && canCreateRoom ? () => onnewthread(room) : undefined} newThreadTestid="create-thread"
 		onexpand={active && isFolded ? () => foldThreads(room.id, false) : undefined} expandTestid="expand-threads"
@@ -383,7 +376,7 @@
 						{@const members = listing.memberCount ?? listing.members.length}
 						{@const count = members > 0 ? `${members} ${members === 1 ? 'member' : 'members'}` : ''}
 						<!-- Picking one opens it to read without joining (joining shows everyone in it), and it shows as open as a joined room does; the header's Join, or posting there, joins it. -->
-						<RoomItem room={listing.id} name={listing.title} topic={count || undefined} everyone={lobbyMark?.id === listing.id ? lobbyMark.label : undefined} listed active={listing.id === session.activeRoomId && !activeThread} onselect={() => onopenroom(listing.id)} />
+						<RoomItem room={listing.id} name={listing.title} topic={count || undefined} listed active={listing.id === session.activeRoomId && !activeThread} onselect={() => onopenroom(listing.id)} />
 						<!-- The one open to read without joining lists its threads under it, to explore them without joining either. -->
 						{#if listing.id === session.activeRoomId}
 							<ThreadList

@@ -165,6 +165,45 @@ describe('connection errors', () => {
 	});
 });
 
+describe('a guest session the server ends (1008)', () => {
+	/** The server closes the socket with a code and reason, as a browser's close event carries them. */
+	function closeWith(code: number, reason: string): void {
+		const socket = latest();
+		socket.readyState = FakeSocket.CLOSED;
+		(socket.onclose as ((event: { code: number; reason: string }) => void) | null)?.({ code, reason });
+	}
+
+	beforeEach(() => vi.useFakeTimers());
+
+	it('isn’t tried again as a guest on its own: held, saying so, until the user asks', async () => {
+		const { client, snap } = startClient();
+		await latest().greet();
+		closeWith(1008, 'The Public Lobby is closed');
+		expect(snap().held).toBe(true);
+		expect(snap().error).toBe('The server ended this guest session (The Public Lobby is closed).');
+		await vi.advanceTimersByTimeAsync(120_000);
+		expect(FakeSocket.instances).toHaveLength(1);
+		// Asked to, it connects again, and the server's new frame says what it offers now.
+		client.retryNow();
+		expect(FakeSocket.instances).toHaveLength(2);
+	});
+
+	it('reconnects an account as usual, and a guest after any other close', async () => {
+		startClient();
+		await latest().greet([], { auth: ['guest', 'token'], token: 'session-1', you: { user_id: 'ada', name: 'Ada' } });
+		closeWith(1008, 'policy');
+		await vi.advanceTimersByTimeAsync(30_000);
+		expect(FakeSocket.instances.length).toBeGreaterThan(1);
+
+		const { snap } = startClient();
+		await latest().greet();
+		closeWith(1001, 'going away');
+		expect(snap().held).toBeFalsy();
+		await vi.advanceTimersByTimeAsync(30_000);
+		expect(FakeSocket.instances.length).toBeGreaterThan(1);
+	});
+});
+
 describe('a guest sign-in refused with retry_after', () => {
 	let snapshot: ClientSnapshot;
 

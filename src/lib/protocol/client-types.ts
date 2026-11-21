@@ -4,7 +4,6 @@ import type {
 	JsonObject,
 	Capability,
 	Identity,
-	LobbyLimit,
 	MembershipEntry,
 	MessageBody,
 	MessageRecord,
@@ -290,17 +289,6 @@ export interface ClientSnapshot {
 	 * joining, leaving, and room changes are denied.
 	 */
 	readOnly?: boolean;
-	/**
-	 * Signed in as someone limited to the server's lobby (`ext:permissions` `lobby`, `server.ext.settings.lobby`):
-	 * waiting to be admitted, or an invited guest whose account made on this connection will be a member. Every other
-	 * room is as if it didn't exist. Absent when not limited.
-	 */
-	lobby?: LobbyLimit;
-	/**
-	 * When this session was let out of the lobby (`lobby` went away while signed in), in epoch milliseconds: its rooms
-	 * are listed again, and the page welcomes it in. Absent otherwise, and gone with the session.
-	 */
-	admittedAt?: number;
 	/**
 	 * Your notifications are paused (§4.5 `mute` without `room_id`, from the
 	 * server's `status`) until then, in epoch milliseconds, or `true` until

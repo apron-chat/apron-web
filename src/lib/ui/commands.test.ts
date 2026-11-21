@@ -31,6 +31,8 @@ describe('composer commands', () => {
 		// A reason, or a server that doesn't let members remove others, leaves /kick to the server.
 		expect(composerAction('/kick @guest_2', { ...both, members: false })).toEqual({ kind: 'command', text: '/kick @guest_2' });
 		expect(composerAction('/kick', both)).toEqual({ kind: 'command', text: '/kick' });
+		// A server's own commands go to it as typed, such as admitting someone from its lobby.
+		expect(composerAction('/welcome @guest_2', both, ['guest_2'])).toEqual({ kind: 'command', text: '/welcome @guest_2' });
 	});
 
 	it('reads a user argument per Appendix A.3, and exactly as a mention chip names it', () => {
@@ -42,14 +44,6 @@ describe('composer commands', () => {
 		// Email and federated forms are one ID.
 		expect(composerAction('/kick @ada@example.com', both)).toEqual({ kind: 'kick', user: 'ada@example.com' });
 		expect(composerAction('/invite carol:b.example.', both)).toEqual({ kind: 'invite', user: 'carol:b.example' });
-	});
-
-	it('leaves /invite to a server that lets you in from its lobby, and /kick as it was', () => {
-		const admits = { ...both, admits: true };
-		expect(composerAction('/invite @guest_7', admits)).toEqual({ kind: 'command', text: '/invite @guest_7' });
-		expect(composerAction('/invite guest_7', admits, ['guest_7'])).toEqual({ kind: 'command', text: '/invite guest_7' });
-		expect(composerAction('/kick @guest_7', admits)).toEqual({ kind: 'kick', user: 'guest_7' });
-		expect(composerAction('/toggle lobby', admits)).toEqual({ kind: 'command', text: '/toggle lobby' });
 	});
 });
 

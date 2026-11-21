@@ -2,7 +2,7 @@
 
 | Protocol Version | 10         |
 |------------------|------------|
-| Last Updated     | 2026-11-21 |
+| Last Updated     | 2026-11-19 |
 
 apron-web is a web client for the
 [Apron Chat Protocol](https://github.com/shazow/apron/blob/main/PROTOCOL.md).
@@ -25,7 +25,7 @@ the fallback of that capability:
 
 | capability     | apron-web with it                                                                               | without it                         |
 |----------------|-------------------------------------------------------------------------------------------------|------------------------------------|
-| `command`      | sends composer text that starts with `/` as `command`, and sends `/nick`, `/join`, `/leave`, `/topic`, `/kick`, and `/invite` as their requests (`/invite` as a command where you may admit people from a lobby, [§7](#7-extpermissions)) | posts every text as a message      |
+| `command`      | sends composer text that starts with `/` as `command`, and sends `/nick`, `/join`, `/leave`, `/topic`, `/kick`, and `/invite` as their requests | posts every text as a message      |
 | `rooms`        | lists, joins, leaves, creates, and edits rooms and threads                                      | shows the rooms that messages name |
 | `history`      | recovers each room, and loads older pages on demand                                             | shows what arrives live            |
 | `edit`         | edits, moves, and deletes messages                                                              | no edit, move, or delete controls  |
@@ -96,7 +96,7 @@ Some features have no capability:
 ## 3. `ext:settings`
 
 Defined in [EXTENSIONS.md](https://github.com/shazow/apron/blob/main/extensions/ext_settings.md):
-`server.ext.settings`, `{read_cursors?, read_receipts?, private_rooms?, lobby?}`.
+`server.ext.settings`, `{read_cursors?, read_receipts?, private_rooms?}`.
 
 ### 3.1 apron-web
 
@@ -112,10 +112,6 @@ Defined in [EXTENSIONS.md](https://github.com/shazow/apron/blob/main/extensions/
   limit it offers the user's private rooms to leave, the quietest first, in
   place of starting another. The server's refusal over the limit shows as
   the error.
-- It reads `lobby` only with a `room_id`, open unless it says `open: false`.
-  To a user who sees more than the lobby, apron-web marks the lobby's room
-  with a globe, "Visible to everyone", or "Public when the lobby is open"
-  while it's closed. A `server` frame that changes it changes the mark.
 
 ---
 
@@ -234,7 +230,7 @@ Defined in [EXTENSIONS.md](https://github.com/shazow/apron/blob/main/extensions/
 ## 7. `ext:permissions`
 
 Defined in [EXTENSIONS.md](https://github.com/shazow/apron/blob/main/extensions/ext_permissions.md):
-`you.ext.permissions`, an object `{write?, add_members?, move_any?, invite?, lobby?}`.
+`you.ext.permissions`, an object `{write?, add_members?, move_any?}`.
 
 ### 7.1 apron-web
 
@@ -260,19 +256,6 @@ Defined in [EXTENSIONS.md](https://github.com/shazow/apron/blob/main/extensions/
   the thread is in a private room.
 - apron-web offers to move the messages of other users only with `move_any`.
   Without it, it offers to move only your own messages.
-- With `lobby` (`waiting` or `invited`; any other value counts as absent),
-  apron-web shows a banner in the lobby saying where the user is. It offers a
-  guest a passkey (else another way to sign up that the server offers), to
-  keep their place while `waiting`, and prominently to finish joining while
-  `invited`. When `lobby` goes away, apron-web lists the joined rooms again
-  and says "Welcome in".
-- With `invite`, on a server that has a lobby (`ext.settings.lobby`),
-  apron-web offers Invite on the profile card and member row of a user with
-  the role `waiting` or `invited`, or a guest, which sends the command
-  `/invite <user_id>`. Typed `/invite` then goes to the server as a command,
-  rather than as `room_join`.
-- When the server closes a guest's connection with 1008, apron-web doesn't
-  reconnect as a guest until the user asks.
 - apron-web shows roles as badges only. They grant nothing.
 
 ---

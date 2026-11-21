@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bioOf, cleanBio, keepsBio, lobbyLimit, MAX_BIO_CHARS, MAX_LABEL_CHARS, mediaLimit, parseLabels, parseServerParams, peopleTitle, serverLook, serverMedia, serverSettings, yourPermissions } from './client-views';
+import { bioOf, cleanBio, keepsBio, MAX_BIO_CHARS, MAX_LABEL_CHARS, mediaLimit, parseLabels, parseServerParams, peopleTitle, serverLook, serverMedia, serverSettings, yourPermissions } from './client-views';
 import type { ServerParams } from './types';
 
 const server = (capabilities: string[], ext?: ServerParams['ext']): ServerParams => ({ apron: 10, capabilities, auth: ['guest'], ...(ext ? { ext } : {}) });
@@ -106,16 +106,6 @@ describe('serverSettings (ext:settings)', () => {
 		expect(serverSettings(server(['ext:settings'], { settings: { guest_posting: false, add_members: false } }))).toEqual({ read_cursors: true, read_receipts: false });
 	});
 
-	it('reads the lobby with a room_id, open unless it says open: false', () => {
-		expect(serverSettings(server(['ext:settings'], { settings: { lobby: { room_id: 'lobby', open: true } } })).lobby).toEqual({ room_id: 'lobby', open: true });
-		expect(serverSettings(server(['ext:settings'], { settings: { lobby: { room_id: 'lobby', open: false } } })).lobby).toEqual({ room_id: 'lobby', open: false });
-		expect(serverSettings(server(['ext:settings'], { settings: { lobby: { room_id: 'hall' } } })).lobby).toEqual({ room_id: 'hall', open: true });
-		for (const odd of [undefined, 'lobby', { open: true }, { room_id: '' }, { room_id: 'a b' }, { room_id: 7 }]) {
-			expect(serverSettings(server(['ext:settings'], { settings: { lobby: odd } })).lobby).toBeUndefined();
-		}
-		expect(serverSettings(server([], { settings: { lobby: { room_id: 'lobby', open: true } } })).lobby).toBeUndefined();
-	});
-
 	it('shows read receipts only where the server says "private"', () => {
 		expect(serverSettings(server(['ext:settings'], { settings: { read_receipts: 'private' } })).read_receipts).toBe('private');
 		for (const odd of [undefined, true, 'all', false]) expect(serverSettings(server(['ext:settings'], { settings: { read_receipts: odd } })).read_receipts).toBe(false);
@@ -154,11 +144,11 @@ describe('peopleTitle', () => {
 });
 
 describe('yourPermissions (ext:permissions)', () => {
-	const DEFAULTS = { write: true, add_members: false, move_any: false, invite: false };
+	const DEFAULTS = { write: true, add_members: false, move_any: false };
 
 	it('reads each permission from you, only while the server advertises the extension', () => {
 		const admin = { user_id: 'ada', roles: ['admin'], ext: { permissions: { add_members: true, move_any: true, delete_any: true } } };
-		expect(yourPermissions(server(['ext:permissions']), admin)).toEqual({ write: true, add_members: true, move_any: true, invite: false });
+		expect(yourPermissions(server(['ext:permissions']), admin)).toEqual({ write: true, add_members: true, move_any: true });
 		expect(yourPermissions(server(['ext:permissions']), { user_id: 'guest_1', ext: { permissions: { write: false } } })).toEqual({ ...DEFAULTS, write: false });
 		// An absent key takes its default while the extension is advertised.
 		expect(yourPermissions(server(['ext:permissions']), undefined)).toEqual(DEFAULTS);
@@ -167,7 +157,7 @@ describe('yourPermissions (ext:permissions)', () => {
 	});
 
 	it('offers what PROTOCOL.md allows without the extension: writes, adding people anywhere, and moving only your own', () => {
-		const CORE = { write: true, add_members: true, move_any: false, invite: false };
+		const CORE = { write: true, add_members: true, move_any: false };
 		expect(yourPermissions(server([]), { user_id: 'ada' })).toEqual(CORE);
 		expect(yourPermissions(undefined, undefined)).toEqual(CORE);
 		// you.ext.permissions means nothing then, whatever it says.
@@ -179,18 +169,6 @@ describe('yourPermissions (ext:permissions)', () => {
 		// The old list of names is the wrong type: nothing in it counts.
 		expect(yourPermissions(server(['ext:permissions']), { user_id: 'ada', ext: { permissions: ['move_any', 'add_members'] } })).toEqual(DEFAULTS);
 		expect(yourPermissions(server(['ext:permissions']), { user_id: 'ada', ext: { permissions: 'move_any' } })).toEqual(DEFAULTS);
-	});
-
-	it('reads invite as a flag, and lobby only as waiting or invited', () => {
-		const you = (permissions: Record<string, unknown>) => ({ user_id: 'ada', ext: { permissions } }) as never;
-		expect(yourPermissions(server(['ext:permissions']), you({ invite: true }))).toEqual({ ...DEFAULTS, invite: true });
-		expect(yourPermissions(server(['ext:permissions']), you({ invite: 'yes' }))).toEqual(DEFAULTS);
-		expect(yourPermissions(server(['ext:permissions']), you({ lobby: 'waiting' }))).toEqual({ ...DEFAULTS, lobby: 'waiting' });
-		expect(lobbyLimit(server(['ext:permissions']), you({ lobby: 'invited' }))).toBe('invited');
-		for (const odd of [undefined, '', 'admitted', true, {}]) expect(lobbyLimit(server(['ext:permissions']), you({ lobby: odd }))).toBeUndefined();
-		// Without the extension nothing limits you, and nothing is offered.
-		expect(lobbyLimit(server([]), you({ lobby: 'waiting' }))).toBeUndefined();
-		expect(yourPermissions(server([]), you({ invite: true })).invite).toBe(false);
 	});
 });
 

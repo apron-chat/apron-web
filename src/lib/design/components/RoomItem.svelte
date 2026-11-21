@@ -20,8 +20,6 @@
 		topic?: string;
 		/** `private: true` (§4.2.4): a lock beside the name */
 		private?: boolean;
-		/** Its records are visible to people who see nothing else, such as a server's lobby: a globe beside the name, labelled with this. */
-		everyone?: string;
 		/** Who a private room is with, before its name: one person's face with their status, or two of a group's (Faces). */
 		faces?: Face[];
 		/**
@@ -57,7 +55,7 @@
 		/** Classes for the row's button, added to its own. */
 		class?: ClassValue;
 	}
-	let { room, name, topic, private: isPrivate, everyone, faces, muted = false, unread, mentions, active, loading, onselect, onleave, onnewthread, onexpand, listed, title, keyshortcuts, unreadTestid, newThreadTestid, expandTestid, class: className }: Props = $props();
+	let { room, name, topic, private: isPrivate, faces, muted = false, unread, mentions, active, loading, onselect, onleave, onnewthread, onexpand, listed, title, keyshortcuts, unreadTestid, newThreadTestid, expandTestid, class: className }: Props = $props();
 	const shown = $derived(roomName(name, room));
 
 	/** The … goes once it has unfolded the threads: keyboard focus moves to the row's button rather than dropping to the page. */
@@ -77,7 +75,7 @@
 {/snippet}
 
 <RoomRow
-	{room} noun="room" label={shown} private={isPrivate} {everyone} {muted} {active} {listed} {title} {onselect} {onleave} {keyshortcuts} lead={faces?.length ? lead : undefined} {lines} start={onnewthread || onexpand ? start : undefined}
+	{room} noun="room" label={shown} private={isPrivate} {muted} {active} {listed} {title} {onselect} {onleave} {keyshortcuts} lead={faces?.length ? lead : undefined} {lines} start={onnewthread || onexpand ? start : undefined}
 	class={[(mentions || (unread && !muted)) && 'ap-room-unread', faces?.length && 'ap-room-faced', className]}
 >
 	<UnreadCount unread={unread ?? 0} mentions={mentions ?? 0} noun="message" testid={unreadTestid} />

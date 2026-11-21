@@ -23,8 +23,6 @@ export { default as AutocompletePicker } from './AutocompletePicker.svelte';
 export { default as InstallPrompt } from './InstallPrompt.svelte';
 export { default as MentionAddLine } from './MentionAddLine.svelte';
 export { default as EditorsPrompt } from './EditorsPrompt.svelte';
-// What someone limited to a server's lobby is told there, and the welcome once let out of it.
-export { default as LobbyBanner } from './LobbyBanner.svelte';
 export { default as SelectionBar } from './SelectionBar.svelte';
 // The composer's full panel: its formatting buttons and keys, and its Preview.
 export { default as FormatToolbar } from './FormatToolbar.svelte';

@@ -189,28 +189,6 @@ export interface ServerParams {
 }
 
 /**
- * The server's lobby (`server.ext.settings.lobby`, extension `ext:settings`):
- * the one room, with its threads, that people the server hasn't admitted may
- * see. Its records are visible to anyone who may see it, so clients mark it
- * as public to the users who see more. `open: false`: no new guests or
- * accounts see it, but users already waiting there do, and what is posted
- * meanwhile becomes public when it opens again.
- */
-export interface LobbySetting {
-	room_id: string;
-	open: boolean;
-}
-
-/**
- * How a user is limited to the lobby (`you.ext.permissions.lobby`, extension
- * `ext:permissions`): `waiting` to be admitted (a guest that waits may create
- * an account to keep its place), or `invited`, a guest whose next account
- * made on its connection is a member. Absent: not limited. When it goes away,
- * the user sees the rest of the server.
- */
-export type LobbyLimit = 'waiting' | 'invited';
-
-/**
  * Delivery fields of a room record (§4.2): this client's view, not logged.
  * Clients always take the latest values.
  */

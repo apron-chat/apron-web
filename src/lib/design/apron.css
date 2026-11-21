@@ -605,8 +605,6 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-room-unread .ap-tline-latest { color: var(--ink); }
 /* A private room (§4.2.4): a small lock beside its name, wherever the name shows. */
 .ap-lock { --ap-icon-size: 12px; flex: none; margin-inline-start: var(--space-1); color: var(--ink-muted); }
-/* A room anyone may see, such as a server's lobby (RoomRow, RoomHeader): a globe where a private room has its lock. */
-.ap-everyone { --ap-icon-size: 12px; flex: none; margin-inline-start: var(--space-1); color: var(--ink-muted); }
 .ap-count { --ap-pill-h: 20px; flex: none; min-width: 20px; padding-inline: var(--space-1_5); border-radius: var(--radius-full); background: var(--accent); color: var(--on-accent); font-size: var(--text-sm); line-height: var(--leading-field); font-weight: 600; text-align: center; font-variant-numeric: tabular-nums; }
 
 /* StatusBanner */
@@ -728,9 +726,7 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-roomhead-back, .ap-shell-sidehead-return { color: var(--denim); }
 :where([dir='rtl']) :is(.ap-roomhead-back, .ap-shell-sidehead-return) svg { transform: scaleX(-1); }
 .ap-roomhead-back:hover:not(:disabled), .ap-shell-sidehead-return:hover:not(:disabled) { color: var(--denim); }
-@container (max-width: 560px) { .ap-roomhead-text { flex-direction: column; align-items: stretch; gap: 0; } .ap-roomhead-everyone { display: none; } }
-/* The words beside a public room's globe (`everyone`): set as the subtitle is, but never taken for it. */
-.ap-roomhead-everyone { flex: none; margin: 0; font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); white-space: nowrap; }
+@container (max-width: 560px) { .ap-roomhead-text { flex-direction: column; align-items: stretch; gap: 0; } }
 /* The ‹ back to the rooms list, and typing in the subtitle, are for phones: wider, the rooms list is beside the pane and typing shows above the composer. */
 .ap-roomhead-back, .ap-roomhead-typing { display: none; }
 .ap-roomhead-members, .ap-roomhead-description { flex: none; }

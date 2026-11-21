@@ -1,6 +1,6 @@
 import type { ChatClient } from '$lib/protocol/client';
 import type { ClientSnapshot, ConnectionStatus, RoomSnapshot } from '$lib/protocol/client-types';
-import { canEdit, canManageRooms, canReact, capabilitiesOf, hasEditors, serverSettings, yourPermissions } from '$lib/protocol/client-views';
+import { canEdit, canManageRooms, canReact, capabilitiesOf, hasEditors } from '$lib/protocol/client-views';
 import type { Identity, ServerParams } from '$lib/protocol/types';
 import { connectionStateOf, isSessionReady, reconnectErrorOf } from './connection';
 
@@ -66,13 +66,6 @@ class SnapshotParts {
 	activeRoom = $state.raw<string | undefined>();
 	roomsListed = $state.raw<boolean | undefined>();
 	readOnly = $state.raw<boolean | undefined>();
-	/**
-	 * How you're limited to the server's lobby, and when you were let out of it: one part, set only as either changes,
-	 * since they seldom do and each snapshot would otherwise touch it.
-	 */
-	lobby = $state.raw<{ limit?: ClientSnapshot['lobby']; admittedAt?: number }>({});
-	/** What `lobby` was last set from, plain: comparing them costs each snapshot nothing. */
-	private lobbyFrom: { limit?: ClientSnapshot['lobby']; admittedAt?: number } = {};
 	passkeySession = $state.raw<boolean | undefined>();
 	signedInWith = $state.raw<ClientSnapshot['signedInWith']>();
 	signInMethods = $state.raw<ClientSnapshot['signInMethods']>();
@@ -124,10 +117,6 @@ class SnapshotParts {
 		this.activeRoom = next.activeRoom;
 		this.roomsListed = next.roomsListed;
 		this.readOnly = next.readOnly;
-		if (next.lobby !== this.lobbyFrom.limit || next.admittedAt !== this.lobbyFrom.admittedAt) {
-			this.lobbyFrom = { limit: next.lobby, admittedAt: next.admittedAt };
-			this.lobby = this.lobbyFrom;
-		}
 		this.passkeySession = next.passkeySession;
 		this.signedInWith = next.signedInWith;
 		if (!sameItems(this.signInMethods, next.signInMethods)) this.signInMethods = next.signInMethods;
@@ -205,8 +194,6 @@ export class SessionView {
 	private quietSince: number | undefined;
 	/** Try Again was pressed: the attempt it starts shows at once, with no quiet moment first. */
 	private retryAsked = false;
-	/** What `lobbyLimit` was last set to, plain: comparing with it costs each snapshot nothing. */
-	private lobbyKept: ClientSnapshot['lobby'];
 	/** The last ready snapshot of this session: what a quiet reconnect keeps showing of how you're signed in. */
 	private lastReady = $state.raw<ClientSnapshot | undefined>();
 
@@ -350,20 +337,6 @@ export class SessionView {
 	readonly readOnly = $derived(Boolean(this.live.readOnly) || (this.connection === 'reconnecting' && !this.live.held && Boolean(this.lastReady?.readOnly)));
 	/** Reaction chips and the React action (capability `reactions`). */
 	readonly canReact = $derived(canReact(this.server));
-	/** The server's lobby (`ext.settings.lobby`): its room, and whether it's open. Undefined without one. */
-	readonly lobby = $derived(serverSettings(this.server).lobby);
-	/**
-	 * You're limited to the lobby (`ext:permissions` `lobby`): waiting, or an invited guest. Kept through a reconnect from
-	 * a ready session short of being signed out, as `readOnly` is: a slow way back changes nothing you may see. Set as
-	 * snapshots arrive (`apply`), only when it changes: what reads it isn't checked again with each one.
-	 */
-	lobbyLimit = $state.raw<ClientSnapshot['lobby']>();
-	/** You may admit someone from the lobby with `/invite` (`ext:permissions` `invite`), on a server that has one. */
-	readonly canInvite = $derived(Boolean(this.lobby) && yourPermissions(this.server, this.you).invite);
-	/** When this session was let out of the lobby, for the page's welcome (`ClientSnapshot.admittedAt`). */
-	get admittedAt(): number | undefined {
-		return this.live.lobby.admittedAt;
-	}
 
 	/**
 	 * The held view to keep on this device for the next visit: one this page's session made, not one it was
@@ -392,12 +365,8 @@ export class SessionView {
 		if (this.held?.you && next.you && this.held.you.user_id !== next.you.user_id) this.forget();
 		// The server's own frame replaces the kept view's: what it says holds through a drop before the session is ready.
 		if (this.primed && this.held && next.server && this.held.server !== next.server) this.held = { ...this.held, server: next.server };
-		const ready = isSessionReady(next);
-		// Kept through a drop of a ready session, as `readOnly`; not once signed out (`held`), offline, or another session.
-		const limit = ready ? next.lobby : next.disconnectedAt !== undefined && next.status !== 'offline' && !next.held ? this.lobbyKept : undefined;
-		if (limit !== this.lobbyKept) this.lobbyLimit = this.lobbyKept = limit;
 		// Kept only through a drop (`disconnectedAt`): a restart, a sign-out or a sign-in elsewhere starts over.
-		if (ready) this.lastReady = next;
+		if (isSessionReady(next)) this.lastReady = next;
 		else if (next.disconnectedAt === undefined || next.status === 'offline' || next.held || (this.lastReady?.you && next.you && this.lastReady.you.user_id !== next.you.user_id)) this.lastReady = undefined;
 		if (next.status === 'offline' || (wasReady && isSessionReady(next) && next.rooms.length === 0)) {
 			// Offline, or a ready session that left its last room: nothing is being rebuilt.

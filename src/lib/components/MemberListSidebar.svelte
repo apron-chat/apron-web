@@ -4,7 +4,6 @@
 	import type { SessionView } from '$lib/ui/session.svelte';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { memberSections } from '$lib/ui/members';
-	import { inLobby, inviteCommand } from '$lib/ui/lobby';
 	import { messageThem, START_FAILED } from '$lib/ui/private-rooms';
 	import { failure, Task } from '$lib/ui/task.svelte';
 	import { byName } from '$lib/ui/people';
@@ -37,8 +36,6 @@
 		canAdd: boolean;
 		/** Offer Direct message, as a profile card's Message: a private room can be started, and opened with `onopenroom`. */
 		canMessage?: boolean;
-		/** Offer Invite for those limited to the server's lobby (`ext:permissions` `invite`): `/invite` with their `user_id`. */
-		canInvite?: boolean;
 		/** A private room was started here, for the page to open as yours rather than as one someone added you to. */
 		onnamed?: (roomId: string) => void;
 		onopenroom?: (roomId: string) => void;
@@ -48,7 +45,7 @@
 		 */
 		drawRows?: boolean;
 	}
-	let { drawRows = true, client, session, room, open, canChange, canAdd, canMessage = false, canInvite = false, onnamed, onopenroom }: Props = $props();
+	let { drawRows = true, client, session, room, open, canChange, canAdd, canMessage = false, onnamed, onopenroom }: Props = $props();
 
 	/**
 	 * Each member's `status` (§4.5) as kept: yours is the one you chose, as the profile bar shows it. Resuming after a
@@ -86,17 +83,13 @@
 	/** Messaging or removing someone, and what came of it: this room's, until the panel shows another. */
 	const task = new Task();
 	/** Each member as the list shows them, with their status in words: yours as you chose it, an offline one's with when they were last seen. */
-	let shown = $derived.by(() => {
-		// Read once for the list: whether its people may be offered Invite.
-		const invite = canInvite;
-		return sections.map((section): MemberListSection => ({ key: section.key, label: section.label, people: section.people.map((member) => person(member, invite)) }));
-	});
+	let shown = $derived(sections.map((section): MemberListSection => ({ key: section.key, label: section.label, people: section.people.map(person) })));
 	/** What the list shows: none before the room's listing has come, nor before it draws its rows (`drawRows`). */
 	let listing = $derived(roomMembers === undefined || !drawRows ? undefined : shown);
 	/** The members by `user_id`, for their role badges. */
 	let byId = $derived(new Map(members.map((member) => [member.user_id, member])));
 
-	function person(member: Identity, invite: boolean): MemberListPerson {
+	function person(member: Identity): MemberListPerson {
 		const me = directory.isMe(member.user_id);
 		const status = statusOf(member);
 		// `seen` (§4.5.2) only while they show offline, never yours: in the row's tooltip, after "Offline". Redone each minute.
@@ -111,8 +104,7 @@
 			statusLabel: (me ? ownStatusLabel(status) : undefined) ?? withLastSeen(presenceLabel(status), last),
 			handle: directory.sharesName(member),
 			you: me,
-			...(isSystemId(member.user_id) ? { system: true } : {}),
-			...(invite && !me && inLobby(directory.person(member)) ? { invitable: true } : {})
+			...(isSystemId(member.user_id) ? { system: true } : {})
 		};
 	}
 
@@ -145,15 +137,6 @@
 		});
 	}
 
-	/** Invite: lets them in from the lobby, as the server's `/invite` does; its replies come as notices in the room. */
-	async function invite(userId: string): Promise<void> {
-		if (!client || !room || task.busy) return;
-		const chat = client;
-		const target = room;
-		const name = directory.name({ user_id: userId });
-		await task.run('busy', () => chat.command(target.id, inviteCommand(userId), { mentions: [userId] }).promise, { failed: failure(`Unable to invite ${name}`) });
-	}
-
 	async function remove(userId: string): Promise<void> {
 		if (!client || !room || task.busy) return;
 		const chat = client;
@@ -179,7 +162,6 @@
 	onprofile={(_, anchor) => openProfileFrom(anchor)}
 	onmessage={canMessage && client && onopenroom ? message : undefined}
 	onremove={changing ? remove : undefined}
-	oninvite={canInvite && client ? invite : undefined}
 	onadd={changing && canAdd ? openAdd : undefined}
 	busy={task.busy}
 	note={task.note}

@@ -1,6 +1,5 @@
 <script lang="ts">
 	import Copy from '@lucide/svelte/icons/copy';
-	import DoorOpen from '@lucide/svelte/icons/door-open';
 	import MessageCircle from '@lucide/svelte/icons/message-circle';
 	import type { Snippet } from 'svelte';
 	import type { ClassValue } from 'svelte/elements';
@@ -47,7 +46,7 @@
 		sharesName?: boolean;
 		/** Their membership of the open room, in words ("Member of design"). */
 		membership?: string;
-		/** Offers Message, the card's primary action (but for Invite): a private conversation with them (§4.2.4). */
+		/** Offers Message, the card's primary action: a private conversation with them (§4.2.4). */
 		onmessage?: () => void;
 		/** Opening it is in flight: Message says "Opening…", disabled. */
 		messaging?: boolean;
@@ -59,10 +58,6 @@
 		onaddtoroom?: () => void;
 		/** Adding is in flight: Add to room says so, disabled. */
 		adding?: boolean;
-		/** Offers Invite: lets them in from a server's lobby (`/invite`), the card's primary action then. */
-		oninvite?: () => void;
-		/** Inviting is in flight: Invite says so, disabled. */
-		inviting?: boolean;
 		/** The outcome of the last action, under the actions ("Copied @ada"); `error` in the danger color, as an alert. */
 		note?: { text: string; error?: boolean };
 		/** The Popover's `<div>`, bindable. */
@@ -87,7 +82,7 @@
 		bioTestid?: string;
 	}
 	let {
-		userId, name, avatar, you = false, status, statusLabel, seen, roles, bio, bioBody, sharesName = false, membership, onmessage, messaging = false, onmention, oncopyid, onaddtoroom, adding = false, oninvite, inviting = false, note,
+		userId, name, avatar, you = false, status, statusLabel, seen, roles, bio, bioBody, sharesName = false, membership, onmessage, messaging = false, onmention, oncopyid, onaddtoroom, adding = false, note,
 		element = $bindable(), offsetHeight = $bindable(0), statusTestid, seenTestid, rolesTestid, bioTestid, mode, top, left, width, height, class: className, testid, onkeydown, onfocusout, onclose
 	}: Props = $props();
 	const shownName = $derived(name || userId);
@@ -120,10 +115,9 @@
 	{/if}
 	{#if bio}<p class="ap-profcard-bio" dir="auto" data-testid={bioTestid}>{#if bioBody}{@render bioBody()}{:else}{bio}{/if}</p>{/if}
 	{#if membership}<p class="ap-profcard-note">{membership}</p>{/if}
-	{#if onmessage || onmention || onaddtoroom || oninvite}
+	{#if onmessage || onmention || onaddtoroom}
 		<div class="ap-profcard-actions">
-			{#if oninvite}<Button variant="primary" size="sm" disabled={inviting} onclick={oninvite}><DoorOpen size={15} aria-hidden="true" />{inviting ? 'Inviting…' : 'Invite'}</Button>{/if}
-			{#if onmessage}<Button variant={oninvite ? 'quiet' : 'primary'} size="sm" disabled={messaging} onclick={onmessage}><MessageCircle size={15} aria-hidden="true" />{messaging ? 'Opening…' : 'Message'}</Button>{/if}
+			{#if onmessage}<Button variant="primary" size="sm" disabled={messaging} onclick={onmessage}><MessageCircle size={15} aria-hidden="true" />{messaging ? 'Opening…' : 'Message'}</Button>{/if}
 			{#if onmention}<Button size="sm" onclick={onmention}>Mention</Button>{/if}
 			{#if onaddtoroom}<Button variant="ghost" size="sm" disabled={adding} onclick={onaddtoroom}>{adding ? 'Adding…' : 'Add to room'}</Button>{/if}
 		</div>
