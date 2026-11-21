@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { docViewerHost, editorsNudge, fileUpload, installNudge, mentionAddLine, messageEditor, newPrivateDialog, newThreadDialog, profileCardHost, reactorsPopover, roomEditor, searchDialog, selectionBar, serverPaneHost, shortcutsDialog, signInLinkDialog } from '$lib/components/lazy';
+	import { commandReference, docViewerHost, editorsNudge, fileUpload, installNudge, mentionAddLine, messageEditor, newPrivateDialog, newThreadDialog, profileCardHost, reactorsPopover, roomEditor, searchDialog, selectionBar, serverPaneHost, shortcutsDialog, signInLinkDialog } from '$lib/components/lazy';
 	import { onMount, tick, untrack } from 'svelte';
 	import { fromAction } from 'svelte/attachments';
 	import { pushState, replaceState } from '$app/navigation';
@@ -55,6 +55,7 @@
 	import { faceOf, roomFaces } from '$lib/ui/faces';
 	import { receiptsByMessage, steadyReceipts } from '$lib/ui/receipts';
 	import { attachmentLimits, composerAction } from '$lib/ui/commands';
+	import { Commands } from '$lib/ui/command-offer.svelte';
 	import { serverLabel, statusLabel } from '$lib/ui/connection';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { FeedbackState, type Feedback } from '$lib/ui/feedback.svelte';
@@ -869,6 +870,15 @@
 			drafts.recallWhere(here, claim !== 'same');
 		});
 	});
+	/** The server's commands (`ext:command_list`): the composer's offer of them, and the command reference. */
+	const commands = new Commands({
+		context: () => ({ replying: drafts.reply !== undefined, attaching: drafts.files.length > 0 }),
+		caps: () => ({ rooms: session.canManageRooms, members: memberChangesOk, append: session.capabilities['embed:append'] }),
+		loadReference: () => commandReference.load(),
+		put: (name) => composer?.putCommand(name),
+		focus: () => composer?.focus(),
+		error: (cause, fallback) => feedback.error(cause, fallback)
+	});
 	/** The order of the sidebar's top-level rooms, kept on this device for the account. */
 	const roomOrder = new RoomOrder();
 	$effect(() => roomOrder.load(addedAccount));
@@ -1376,6 +1386,13 @@
 			session.apply(next, chat);
 			showDirectory(chat);
 			noteArrivals(next);
+			// Whose command list to follow, signed in: the same `notifyAccount` key, and whether it is kept. Built in
+			// place, as this runs on every snapshot, and followed only as it changes.
+			if (next.authenticated) {
+				const lists = next.capabilities['ext:command_list'] && next.capabilities.command && next.you;
+				const key = lists ? `${chat.url}\n${next.you!.user_id}\n${next.passkeySession || next.keptSession ? 'kept' : ''}` : '';
+				if (key !== commands.following) commands.follow(chat, next, key);
+			}
 		});
 		// Each session the client begins goes on from what this device kept for its server.
 		keeper?.watch(chat);
@@ -2399,6 +2416,14 @@
 			feedback.error('Send or remove the attached files before typing live');
 			return;
 		}
+		// `/help` where the server lists its commands opens the command reference instead, and asks for the list anew
+		// (the extension's suggested convention): the text goes, and a reply or files stay.
+		if (snapshot.capabilities.command && snapshot.capabilities['ext:command_list'] && drafts.text.trim() === '/help') {
+			drafts.text = '';
+			commands.refresh();
+			commands.show();
+			return;
+		}
 		// Sending waits as the server asked, files or not (the client holds back any message meanwhile): Send
 		// counts down, the draft and its files stay, and nothing goes by itself. A notice put away shows again.
 		if (sendWait && sendWait.until > Date.now()) {
@@ -2428,7 +2453,7 @@
 		const originKey = draftKey(roomId);
 		const mentions = [...new Set([...composerMentions, ...added])];
 		const dismissed = drafts.dismissed;
-		const action = composerAction(draft, { command: snapshot.capabilities.command, rooms: session.canManageRooms, members: !snapshot.memberChangesUnsupported, append: snapshot.capabilities['embed:append'] }, mentions);
+		const action = composerAction(draft, { command: snapshot.capabilities.command, rooms: session.canManageRooms, members: !snapshot.memberChangesUnsupported, append: snapshot.capabilities['embed:append'], serves: commands.serves }, mentions);
 		if (action.kind === 'live') {
 			startLive(chat, paneRoom, reply);
 			return;
@@ -2466,6 +2491,8 @@
 			};
 			if (action.kind === 'command') {
 				chat.command(roomId, draft, options).promise.catch(failed);
+				// `/help` lists what the user can use, which may have changed: so may the commands the composer offers.
+				if (/^\/help(?:\s|$)/i.test(draft)) commands.refresh();
 			} else if (action.kind === 'nick') {
 				displayName = action.name;
 				saveDisplayName(action.name);
@@ -3895,6 +3922,7 @@
 					quiet={quietMentions}
 					outsideLabel={activeThread ? 'Not in thread' : 'Not in room'}
 					rooms={roomSuggestions}
+					commands={commands.offer}
 					reply={drafts.reply ? replyPreview(drafts.reply) : undefined}
 					oninput={composerInput} onsend={() => sendMessage()} files={drafts.files} onfiles={stageFiles} onunstage={(id) => { drafts.unstage(id); editorsAsk = undefined; }} onrename={(id, title) => drafts.rename(id, title)} oncancelreply={cancelReply} onescape={dismissMentionAsk} onup={focusNewestMessage}
 					onmention={refreshMembers}
@@ -3930,6 +3958,11 @@
 			canList={session.canManageRooms} {roomSuggestions} initial={paneRoom ? `room:#${paneRoom.id} ` : ''} note={searchNote()} keys={searchKeys}
 			onopen={openFound} onopenroom={openSwitched} kept={historySettings.title} onhistory={showHistoryPreferences} onclose={() => (searchMode = undefined)}
 		/>
+	{/if}
+	{#if commands.shown && commandReference.component}
+		{@const CommandReferenceDialog = commandReference.component}
+		{@const reference = commands.reference}
+		<CommandReferenceDialog sections={reference.sections} loading={reference.loading} error={reference.error} onuse={(name) => commands.use(name)} onclose={() => commands.close()} />
 	{/if}
 	{#if shortcutsOpen && shortcutsDialog.component}
 		{@const ShortcutsDialog = shortcutsDialog.component}

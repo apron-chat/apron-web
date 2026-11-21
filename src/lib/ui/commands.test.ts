@@ -1,7 +1,32 @@
 import { describe, expect, it } from 'vitest';
 import { attachmentLimits, composerAction, isCommand } from './commands';
+import { ownCommands } from './command-autocomplete';
 
 const both = { command: true, rooms: true };
+
+describe('apron-web’s own commands, and the server’s by the same name (ext:command_list)', () => {
+	const all = { command: true, rooms: true, members: true, append: true };
+	/** One draft for each of apron-web's own, as `ownCommands` lists them. */
+	const OWN: Record<string, string> = { nick: '/nick Ada', join: '/join #general', leave: '/leave', topic: '/topic Hi', kick: '/kick @bob', invite: '/invite @bob', live: '/live' };
+
+	it('handles each of the commands it offers as its own (`ownCommands`), and no other', () => {
+		expect(ownCommands(all).map((command) => command.name)).toEqual(Object.keys(OWN));
+		for (const [name, draft] of Object.entries(OWN)) expect(composerAction(draft, all).kind, draft).toBe(name);
+	});
+
+	it('sends one the server lists by the same name to the server, exactly by name, and handles it again once it doesn’t', () => {
+		const serves = (name: string) => ['kick', 'live', 'join'].includes(name);
+		expect(composerAction('/kick @bob', { ...all, serves })).toEqual({ kind: 'command', text: '/kick @bob' });
+		expect(composerAction('/live', { ...all, serves })).toEqual({ kind: 'command', text: '/live' });
+		expect(composerAction('/join #general', { ...all, serves })).toEqual({ kind: 'command', text: '/join #general' });
+		expect(composerAction('/invite @bob', { ...all, serves })).toEqual({ kind: 'invite', user: 'bob' });
+		// Names are case-sensitive: `/KICK` is no name the server lists.
+		expect(composerAction('/KICK @bob', { ...all, serves })).toEqual({ kind: 'kick', user: 'bob' });
+		expect(composerAction('/kick @bob', { ...all, serves: () => false })).toEqual({ kind: 'kick', user: 'bob' });
+		// Without `command`, none goes to the server; `/live` stays apron-web's.
+		expect(composerAction('/live', { command: false, rooms: false, append: true, serves })).toEqual({ kind: 'live' });
+	});
+});
 
 describe('composer commands', () => {
 	it('sends text starting with one slash as a command where the server takes commands, and // as a message with one slash stripped', () => {

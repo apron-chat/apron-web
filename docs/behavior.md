@@ -1018,6 +1018,56 @@ arrive as notices, and a failed command shows its error as a local "System
 message to you" notice and gives the draft back. `//` posts a message starting with one `/`.
 Without the capability, `/` text is an ordinary message.
 
+**Command autocomplete.** Where the server lists its commands
+([EXT.md §13](../EXT.md#13-extcommand_list)), a `/` at the start of the
+composer opens a list of them, with apron-web's own (`/nick`, `/join`,
+`/leave`, `/topic`, `/kick`, `/invite`, `/live`, as the server's capabilities
+allow), each name once: a name the server lists is the server's (`/kick` then goes to
+the server as a command, not as a request apron-web makes, until the server stops
+listing it). Each row shows `/name`, its arguments as the server wrote them, what it does, and what it requires ("Required: attachment"). A
+command with forms (`/emoji add`, `/emoji remove`) shows once, with the words of
+its forms; once its first word and a space are typed, the list shows the
+command and each of its forms as entries of their own, and the next word typed
+narrows them. A command that requires a reply shows only while
+replying; while replying, commands that use the reply come first, and with
+files attached, those that use files. ↑ ↓ move, Tab takes the
+highlighted one, and so does Enter, unless nothing is typed of the word or the
+words typed already name a command, when Enter runs it. Taking one puts in
+`/name ` and nothing else. Once the words typed name a command and its
+arguments are typed (`/server title My server`, `/kick @bob being rude`), the
+card shows that command's entry alone, as the command reference does, and keeps
+it shown while they are typed: it only informs, so Tab and the arrows stay the
+field's, and Enter sends. It goes when the draft is no command or names none,
+and when it's sent. Escape puts the list or the entry away while the same name
+is typed. A command that isn't listed still goes to the
+server. The list is asked for as the first command of the page starts, and
+again after `/help`; it is kept for the `user_id` it was listed for, an
+account's on the device too, so the next visit offers it at once (and asks
+again as a command starts), and an account with none kept asks on connecting,
+at most once a day. Without the extension, there is no list.
+
+**Command reference.** With the same extension, `/help` alone opens a dialog of
+every command instead of going to the server (and asks for the list anew), and
+so does **Browse all commands**, the last row of the `/` list, which leaves the
+draft as it is. It reads as a document, as the keyboard shortcuts do: a heading
+for each group of who may use them, as the server groups them (Everyone, Guests,
+Members, Room owners, Roles, Admins), then the server's others, then apron-web's
+own (Built into the client), empty groups left out; one of apron-web's own that
+the server's takes over is crossed out there, "Replaced by the server's /kick", and
+can't be pressed. Each command is its `/name` and
+arguments as code, what it does, and a label of what it fails without, such as
+"Required: attachment" for `/avatar` (a reply, a mention or an attachment);
+each form, such as `/emoji add`, is an entry of its own. A command's code is a
+button (**Use /emoji add**), still read as the page's text, underlined under the
+pointer: pressing it (click, Enter or Space; Tab goes through them in order)
+closes the dialog and puts `/name ` at the start of the composer, in place of the
+command text there (what was typed before Browse all commands, or the draft's
+first word when it is a command), keeping a reply and files, with the focus at
+its end. Escape, the close button or the backdrop closes it, and the focus goes
+back to the composer. Its body keeps its scrollbar shown while it scrolls, so
+it's plain there's more below. Its code loads on demand, the first time it
+opens.
+
 **Live typing.** With the `embed:append` capability, `/live` alone (with or
 without `command`) is the client's own: it puts the composer in live typing
 mode for the next message

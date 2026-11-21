@@ -10,7 +10,8 @@ import type { MediaTypes, ServerMedia } from '$lib/protocol/client';
  * `command`. `//` posts a message starting with `/`. Without capability `command`,
  * every text is a message. `/live` alone, with capability `embed:append`
  * (`caps.append`), is the client's own, with or without `command`: it puts the
- * composer in live typing mode.
+ * composer in live typing mode. A name the server lists (`caps.serves`, `ext:command_list`; names are
+ * case-sensitive) is the server's: apron-web's own command by that name goes to it as a `command` instead.
  */
 export type ComposerAction =
 	| { kind: 'message'; text: string }
@@ -40,12 +41,14 @@ const USER_ARGUMENT = new RegExp(`^@?(${TEXT_ID.source})[.+@:-]*$`);
  * exact where the text is not: in text, an ID ends with a letter, a digit, or
  * `_` (Appendix A.3), so `/kick @al-` names `al` unless a chip says `al-`.
  */
-export function composerAction(text: string, caps: { command: boolean; rooms: boolean; members?: boolean; append?: boolean }, mentions: readonly string[] = []): ComposerAction {
-	if (caps.append && /^\/live\s*$/i.test(text)) return { kind: 'live' };
+export function composerAction(text: string, caps: { command: boolean; rooms: boolean; members?: boolean; append?: boolean; serves?: (name: string) => boolean }, mentions: readonly string[] = []): ComposerAction {
+	const match = /^\/(\S+)(?:\s+([\s\S]*))?$/.exec(text.trimEnd());
+	// The server's, by this name exactly: none of apron-web's own.
+	const served = caps.command && match !== null && (caps.serves?.(match[1]) ?? false);
+	if (caps.append && !served && /^\/live\s*$/i.test(text)) return { kind: 'live' };
 	if (!caps.command) return { kind: 'message', text };
 	if (text.startsWith('//')) return { kind: 'message', text: text.slice(1) };
-	if (!isCommand(text)) return { kind: 'message', text };
-	const match = /^\/(\S+)(?:\s+([\s\S]*))?$/.exec(text.trimEnd());
+	if (!isCommand(text) || served) return isCommand(text) ? { kind: 'command', text } : { kind: 'message', text };
 	const name = match?.[1].toLowerCase();
 	const argument = match?.[2]?.trim() ?? '';
 	if (name === 'nick' && argument) return { kind: 'nick', name: argument };

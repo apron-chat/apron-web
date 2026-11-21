@@ -3,9 +3,11 @@ import { flushSync } from 'svelte';
 import { describe, expect, it, vi } from 'vitest';
 import type { MentionPerson } from '$lib/protocol/markdown';
 import { DraftField } from './draft-field.svelte';
+import { commandCompletion, commandInfo } from './command-autocomplete';
+import type { OfferedCommand } from './command-query';
 
 /** A field for `@` mentions of Alan, whose picker shows only while `shown` says so (its code loads on demand). */
-function field(shown: { value: boolean }, options: { newlineOnEnter?: boolean; outsiders?: MentionPerson[]; people?: MentionPerson[] } = {}) {
+function field(shown: { value: boolean }, options: { newlineOnEnter?: boolean; outsiders?: MentionPerson[]; people?: MentionPerson[]; commands?: () => readonly OfferedCommand[] | undefined; oncommand?: () => void; onbrowse?: () => void } = {}) {
 	let value = $state('');
 	let mentions = $state<string[]>([]);
 	const submit = vi.fn();
@@ -25,7 +27,15 @@ function field(shown: { value: boolean }, options: { newlineOnEnter?: boolean; o
 			submit,
 			key: (event) => key(event),
 			get pickerShown() { return shown.value; },
-			newlineOnEnter: options.newlineOnEnter
+			newlineOnEnter: options.newlineOnEnter,
+			// A field offers commands where it is told what to do as one starts.
+			commands: options.oncommand ? {
+				get ready() { return options.commands?.() !== undefined; },
+				complete: (found) => commandCompletion(options.commands?.() ?? [], found),
+				describe: (text) => commandInfo(options.commands?.() ?? [], text),
+				started: () => options.oncommand?.(),
+				browse: () => options.onbrowse?.()
+			} : undefined
 		}, 'test-suggestions');
 	});
 	const element = document.createElement('div');
@@ -294,3 +304,142 @@ describe('DraftField', () => {
 		done();
 	});
 });
+
+describe('DraftField: commands', () => {
+	const COMMANDS: OfferedCommand[] = [
+		{ name: 'emoji add', description: 'Add a custom emoji', hint: ':name:' },
+		{ name: 'emoji remove', description: 'Remove a custom emoji', hint: ':name:' },
+		{ name: 'help', description: 'List the commands that you can use' },
+		{ name: 'nick', description: 'Change your display name', hint: '<name>', own: true }
+	];
+	const tab = (f: ReturnType<typeof field>) => {
+		f.draft.keydown(new KeyboardEvent('keydown', { key: 'Tab', cancelable: true }));
+		flushSync();
+	};
+	/** The commands listed, without the Browse all commands row that ends every list. */
+	const listed = (f: ReturnType<typeof field>) => (f.draft.commandPickerOpen ? f.draft.commandMatches.filter((match) => !match.browse).map((match) => match.name) : undefined);
+
+	it('offers the first word of each command, puts in `/name ` as one is picked, and then its forms', () => {
+		const oncommand = vi.fn();
+		const f = field({ value: true }, { commands: () => COMMANDS, oncommand });
+		f.type('/');
+		expect(oncommand).toHaveBeenCalledOnce();
+		expect(listed(f)).toEqual(['emoji', 'help', 'nick']);
+		f.type('em');
+		expect(listed(f)).toEqual(['emoji']);
+		tab(f);
+		expect(f.value()).toBe('/emoji ');
+		expect(listed(f)).toEqual(['emoji add', 'emoji remove']);
+		f.type('r');
+		f.enter();
+		expect(f.value()).toBe('/emoji remove ');
+		// Named in full, its arguments next: its entry alone shows, which takes no keys.
+		expect(f.draft.commandInfo?.name).toBe('emoji remove');
+		expect(f.draft.commandMatches).toEqual([]);
+		expect(f.submit).not.toHaveBeenCalled();
+		// Once a command is started, it isn't asked for again while it is typed.
+		expect(oncommand).toHaveBeenCalledOnce();
+		f.done();
+	});
+
+	it('leaves Enter to send a command named in full, or with nothing typed of the word', () => {
+		const f = field({ value: true }, { commands: () => COMMANDS, oncommand: () => {} });
+		f.type('/help');
+		expect(listed(f)).toEqual(['help']);
+		f.enter();
+		expect(f.submit).toHaveBeenCalledOnce();
+		f.done();
+		const g = field({ value: true }, { commands: () => COMMANDS, oncommand: () => {} });
+		g.type('/he');
+		g.enter();
+		expect(g.value()).toBe('/help ');
+		expect(g.submit).not.toHaveBeenCalled();
+		g.enter();
+		expect(g.submit).toHaveBeenCalledOnce();
+		g.done();
+	});
+
+	it('waits for the commands before it shows any, and offers none where commands aren’t (the message editor)', () => {
+		let commands = $state<readonly OfferedCommand[] | undefined>();
+		const oncommand = vi.fn();
+		const f = field({ value: true }, { commands: () => commands, oncommand });
+		f.type('/ni');
+		expect(oncommand).toHaveBeenCalledOnce();
+		expect(f.draft.commandPickerOpen).toBe(false);
+		commands = COMMANDS;
+		flushSync();
+		expect(listed(f)).toEqual(['nick']);
+		f.done();
+		const editor = field({ value: true }, { commands: () => COMMANDS });
+		editor.type('/ni');
+		expect(editor.draft.commandPickerOpen).toBe(false);
+		editor.done();
+	});
+
+	it('ends with Browse all commands where offered, which Enter takes, leaving the draft as it is', () => {
+		const onbrowse = vi.fn();
+		const f = field({ value: true }, { commands: () => COMMANDS, oncommand: () => {}, onbrowse });
+		f.type('/emoji r');
+		expect(listed(f)).toEqual(['emoji remove']);
+		expect(f.draft.commandMatches.at(-1)?.browse).toBe(true);
+		f.draft.keydown(new KeyboardEvent('keydown', { key: 'ArrowUp', cancelable: true }));
+		flushSync();
+		f.enter();
+		expect(onbrowse).toHaveBeenCalledOnce();
+		expect(f.submit).not.toHaveBeenCalled();
+		expect(f.draft.commandPickerOpen).toBe(false);
+		expect(f.value()).toBe('/emoji r');
+		// A command used from there: `/name ` in place of what was typed of the command, its forms next.
+		f.draft.putCommand('emoji');
+		expect(f.value()).toBe('/emoji ');
+		expect(listed(f)).toEqual(['emoji add', 'emoji remove']);
+		f.done();
+		// Nothing typed that matches: the row is all there is.
+		const g = field({ value: true }, { commands: () => COMMANDS, oncommand: () => {}, onbrowse });
+		g.type('/zap');
+		expect(listed(g)).toEqual([]);
+		expect(g.draft.commandMatches).toHaveLength(1);
+		// Used with no Browse first: the draft's first word, a command's, goes; text that's no command stays after it.
+		g.draft.putCommand('help');
+		expect(g.value()).toBe('/help ');
+		g.lines('hello there');
+		g.draft.putCommand('nick');
+		expect(g.value()).toBe('/nick hello there');
+		g.done();
+	});
+
+	it('keeps the entry of the command named shown while its arguments are typed, which Enter sends and Escape puts away', () => {
+		const f = field({ value: true }, { commands: () => COMMANDS, oncommand: () => {} });
+		f.type('/nick');
+		expect(listed(f)).toEqual(['nick']);
+		f.type(' Ada');
+		expect(f.draft.commandInfo).toEqual({ name: 'nick', hint: '<name>', description: 'Change your display name' });
+		// No list: the card alone.
+		expect(f.draft.commandPickerOpen).toBe(false);
+		// Tab and the arrows are the field's; Enter sends.
+		const tab = new KeyboardEvent('keydown', { key: 'Tab', cancelable: true });
+		f.draft.keydown(tab);
+		expect(tab.defaultPrevented).toBe(false);
+		f.type(' Lovelace');
+		expect(f.draft.commandInfo?.name).toBe('nick');
+		f.enter();
+		expect(f.submit).toHaveBeenCalledOnce();
+		// Escape puts it away for that name, however the arguments go on.
+		f.draft.keydown(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }));
+		flushSync();
+		expect(f.draft.commandInfo).toBeUndefined();
+		f.type(' more');
+		expect(f.draft.commandInfo).toBeUndefined();
+		f.done();
+		// A name that names nothing: the list says so while it is typed, and nothing shows past it.
+		const g = field({ value: true }, { commands: () => COMMANDS, oncommand: () => {} });
+		g.type('/nope');
+		expect(listed(g)).toEqual([]);
+		expect(g.draft.commandPickerOpen).toBe(true);
+		g.type(' arg');
+		expect(g.draft.commandPickerOpen).toBe(false);
+		expect(g.draft.commandInfo).toBeUndefined();
+		g.done();
+	});
+});
+

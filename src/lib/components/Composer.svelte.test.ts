@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
 import { flushSync, tick } from 'svelte';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import Composer from './Composer.svelte';
+import { autocompletePicker } from './lazy';
+import { commandCompletion, commandInfo } from '$lib/ui/command-autocomplete';
+import type { CommandOffer, OfferedCommand } from '$lib/ui/command-query';
 import * as dom from '$lib/test/dom';
 
 function render(props: Record<string, unknown>) {
@@ -9,6 +12,21 @@ function render(props: Record<string, unknown>) {
 	dom.render(Composer, { value: 'Back in a bit', placeholder: 'Message General', disabled: false, canUpload: false, people: [], oninput: vi.fn(), onsend, onfiles: vi.fn(), onunstage: vi.fn(), onrename: vi.fn(), oncancelreply: vi.fn(), ...props } as never);
 	flushSync();
 	return { onsend, field: document.querySelector<HTMLElement>('[data-testid="message-input"]')!, send: document.querySelector<HTMLButtonElement>('[data-testid="send-button"]')! };
+}
+
+// The autocomplete loads on demand (MessageEditor.svelte.test.ts says why it is loaded here, and returns nothing).
+beforeAll(async () => void (await autocompletePicker.load()), 30_000);
+
+/** Types `text` at the end of the field, as one `input` event, the caret after it. */
+function typeAtEnd(field: HTMLElement, text: string) {
+	field.focus();
+	field.append(text);
+	const range = document.createRange();
+	range.setStart(field, field.childNodes.length);
+	document.getSelection()!.removeAllRanges();
+	document.getSelection()!.addRange(range);
+	field.dispatchEvent(new InputEvent('input', { bubbles: true }));
+	flushSync();
 }
 
 describe('Composer', () => {
@@ -206,5 +224,27 @@ describe('Composer', () => {
 			expect(document.querySelector('button[aria-label="Embed as attachment"]')).toBeNull();
 			dom.unmount();
 		}
+	});
+
+	it('offers the server’s commands as one is typed, ending with Browse all commands, and none for live text', () => {
+		const list: OfferedCommand[] = [
+			{ name: 'help', description: 'List the commands that you can use' },
+			{ name: 'approve', description: 'Approve the request that you reply to', uses: ['room_id', 'reply_to'], requires: ['reply_to'] }
+		];
+		const started = vi.fn();
+		const commands: CommandOffer = { ready: true, complete: (found) => commandCompletion(list, found, { replying: true }), describe: (text) => commandInfo(list, text), started, browse: vi.fn() };
+		const { field } = render({ value: '', canCommand: true, commands, reply: { name: 'Bot', text: 'May I deploy?' } });
+		typeAtEnd(field, '/');
+		expect(started).toHaveBeenCalledOnce();
+		const listbox = dom.byRole('listbox', 'Command suggestions');
+		expect([...listbox.querySelectorAll('[role="option"]')].map((row) => row.textContent?.replace(/\s+/g, ' ').trim())).toEqual(['/approve Approve the request that you reply to Required: reply Tab', '/help List the commands that you can use', 'Browse all commands']);
+		dom.press(field, 'Tab');
+		flushSync();
+		expect(field.textContent).toBe('/approve ');
+		dom.unmount();
+		const live = render({ value: '', canCommand: true, live: true, commands });
+		typeAtEnd(live.field, '/');
+		expect(dom.queryByRole('listbox', 'Command suggestions')).toBeNull();
+		expect(started).toHaveBeenCalledOnce();
 	});
 });

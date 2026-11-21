@@ -280,6 +280,37 @@ export interface PickerEmoji {
 	image?: MediaSrc;
 }
 
+/**
+ * A command in the CommandReference and the composer's CommandCard: its words after `/`, its hint (what follows the
+ * name) and description, shown as written; `required`, what it fails without, each a word such as "reply" or
+ * "attachment", shown as "Required: reply, attachment"; and `replaced`, one of apron-web's own that a command the
+ * server lists by the same name takes the place of, crossed out and saying so. A form (`emoji add`) is a command of its
+ * own.
+ */
+export interface ReferenceCommand {
+	name: string;
+	hint?: string;
+	description?: string;
+	required?: string[];
+	replaced?: boolean;
+}
+
+/**
+ * A command a `/` can name, in the MentionPicker, as the reference shows it, and the words its forms go on with (`add`
+ * and `remove` after `emoji`). `browse`: not a command, the row after them that opens every command (a
+ * CommandReference).
+ */
+export interface PickerCommand extends ReferenceCommand {
+	forms?: string[];
+	browse?: boolean;
+}
+
+/** A titled section of the CommandReference, such as the commands everyone can use. */
+export interface ReferenceSection {
+	title: string;
+	commands: ReferenceCommand[];
+}
+
 /** Someone in a MemberList (§4.2.1). */
 export interface MemberListPerson {
 	user_id: string;

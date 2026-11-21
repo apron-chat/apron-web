@@ -61,6 +61,12 @@ const KEY = {
 	 * account's history.
 	 */
 	draftPrefix: 'apron.draft:',
+	/**
+	 * The commands each server listed (`ext:command_list`) for an account, by `notifyAccount` of the server and its
+	 * `user_id`: `{commands?, listed?, asked}`, so the composer offers them at once on the next visit, and a page asks on
+	 * connecting only without them. A guest's aren't kept: its `user_id` lasts one connection.
+	 */
+	commandLists: 'apron.commandLists',
 	/** The emoji you reacted with last, latest first (`rememberReaction`): the toolbar's quick reactions. */
 	recentReactions: 'apron.recentReactions',
 	/** app.html reads this one too, to apply the theme before the app loads. */
@@ -755,4 +761,20 @@ export function draftKeys(): string[] {
 		// No storage: nothing is kept.
 	}
 	return keys;
+}
+
+/**
+ * The command lists kept on this device (`ext:command_list`), by account (`notifyAccount`), as stored: read by
+ * `CommandList`, which loads on demand, the commands of each only as it needs them. Unreadable: null.
+ */
+export function loadCommandLists(): unknown {
+	try {
+		return JSON.parse(read(KEY.commandLists) ?? 'null');
+	} catch {
+		return null;
+	}
+}
+
+export function saveCommandLists(lists: Record<string, unknown>): void {
+	write(KEY.commandLists, JSON.stringify(lists));
 }
