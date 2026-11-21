@@ -58,11 +58,12 @@ Some features have no capability:
   ([§5](#5-connection-status)).
 - apron-web renders the Markdown extensions in [§12](#12-markdown), among
   them spoilers (`||text||`).
-- When the server closes a guest's connection with 1008 (policy), as one that
-  stops taking guests does, apron-web doesn't sign in as a guest again by
-  itself: it shows the server ended the session and waits for the user's Sign
-  in, which connects again and follows the new `server` frame. An account's
-  connection reconnects as usual.
+- apron-web takes a `room_update` `updated` record of a top-level room the
+  user hasn't joined, and that it doesn't list to join yet, as a room the user
+  may now see: it lists it under Other Rooms at once. This goes beyond the
+  edits and threads that [§4.2.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#423-updates)
+  lists for `updated`; servers send such records when they let a user in from
+  a lobby.
 - apron-web writes no `ext` of its own, except `ext.bio` ([§8](#8-extbio)) and
   `ext.editors` ([§11](#11-exteditors)).
 
