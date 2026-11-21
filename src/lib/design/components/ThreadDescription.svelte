@@ -10,10 +10,11 @@
 	 * A room's or thread's `description` (§3.4), its first lines under the header as the conversation opens, until it is
 	 * read whole or put away: rendered + sanitized Markdown as `children` (its own `.ap-msg-text`), or plain `description`,
 	 * set as a document (`.ap-doc`) in the column its DescriptionSheet reads in, on the sheet's raised ground, as the sheet
-	 * folded, the description icon beside its first line. Four lines (six on a phone, which is narrower), faded where it's
-	 * cut. The whole of it is what opens the rest (`onexpand`): it lifts a shade under the pointer, and a click on it (not
-	 * on a link or a mention, nor the end of selecting its text) opens it; its chevron, named Read all, is the keyboard's
-	 * way. × puts it away (`ondismiss`). An edit of it not saved yet says so (`draft`), and takes it up (`ondraft`).
+	 * folded, the description icon in its top left corner as × is in its top right. Four lines (six on a phone, which is
+	 * narrower); cut off, its text runs on under a bar at its foot, fading into it, which holds its chevron. The whole of it
+	 * is what opens the rest (`onexpand`): it lifts a shade under the pointer, and a click on it (not on a link or a
+	 * mention, nor the end of selecting its text) opens it; its chevron, named Read all, is the keyboard's way. × puts it
+	 * away (`ondismiss`). An edit of it not saved yet says so (`draft`), and takes it up (`ondraft`).
 	 */
 	interface Props {
 		description?: string;
@@ -44,9 +45,9 @@
 
 <!-- The pointer opens it from anywhere on it; the keyboard has its chevron, Read all, and the header's Description. -->
 <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
-<section aria-label={label} class={['ap-description', onexpand && 'ap-description-opens', className]} onclick={click}>
+<section aria-label={label} class={['ap-description', onexpand && 'ap-description-opens', clipped && 'ap-description-clipped', className]} onclick={click}>
 	<!-- The region's label already says it's a description; the icon's title says so to the pointer. -->
-	<span class="ap-description-icon" title={label}><TextAlignStart size={16} strokeWidth={2} aria-hidden="true" /></span>
+	<span class="ap-description-icon" title={label}><TextAlignStart size={15} strokeWidth={2} aria-hidden="true" /></span>
 	<div class="ap-description-text ap-doc" {@attach fades((on) => (clipped = on))}>
 		{#if children}{@render children()}{:else}<div class="ap-msg-text"><p>{description}</p></div>{/if}
 	</div>

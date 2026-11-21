@@ -1400,25 +1400,35 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-fade-above.ap-fade-below { mask-image: linear-gradient(to bottom, transparent, #000 var(--ap-fade, 48px), #000 calc(100% - var(--ap-fade, 48px)), transparent); }
 
 /* ThreadDescription — a room's or thread's description, its first lines under the header as the conversation opens: the
-   DescriptionSheet folded, on its raised ground, rounded at its foot and lifted off the conversation, the description
-   icon beside its first line in the gutter. Set as the sheet sets it, in the same column: four lines (six on a phone,
-   which is narrower), faded where they're cut. The whole of it opens the rest, so it lifts a shade under the pointer. */
-.ap-description { position: relative; flex: none; padding: var(--space-4) var(--ap-doc-inset, var(--space-4)) var(--space-3); background: var(--bg-200); border-radius: 0 0 var(--radius-lg) var(--radius-lg); box-shadow: var(--shadow-popover); }
+   DescriptionSheet folded, on its raised ground, rounded at its foot and lifted off the conversation; the description icon
+   in its top left corner as × is in its top right. Set as the sheet sets it, in the same column, but clear of both
+   corners where the column comes nearer the edges (a phone). The whole of it opens the rest, so it lifts a shade under
+   the pointer. */
+.ap-description {
+	--ap-description-ground: var(--bg-200); --ap-description-bar: 48px; --ap-description-lines: 4;
+	--ap-description-corner: calc(var(--space-3) + var(--control-sm) + var(--space-2));
+	position: relative; flex: none; padding: var(--space-4) max(var(--ap-doc-inset, var(--space-4)), var(--ap-description-corner)) var(--space-3);
+	background: var(--ap-description-ground); border-radius: 0 0 var(--radius-lg) var(--radius-lg); box-shadow: var(--shadow-popover);
+}
 .ap-description-opens { cursor: pointer; }
-.ap-description-opens:hover { background: var(--bg-300); }
-.ap-description-icon { position: absolute; top: calc(var(--space-4) + (var(--leading-body) - 16px) / 2); inset-inline-start: calc(var(--ap-doc-inset, var(--space-4)) - var(--space-6) - var(--space-1)); display: grid; color: var(--ink-muted); }
-.ap-description-text { --ap-fade: 32px; max-height: calc(var(--leading-body) * 4); overflow: hidden; }
+.ap-description-opens:hover { --ap-description-ground: var(--bg-300); }
+/* The icon and ×, each in a box of a small control's size, as far in from their corners and level with the first line. */
+:is(.ap-description-icon, .ap-description-close) { position: absolute; top: calc(var(--space-4) + (var(--leading-body) - var(--control-sm)) / 2); width: var(--control-sm); height: var(--control-sm); }
+.ap-description-icon { inset-inline-start: var(--space-3); display: grid; place-items: center; color: var(--ink-muted); }
+.ap-description-close { z-index: var(--z-raised); inset-inline-end: var(--space-3); }
+/* Its text shows to its lines (four, six on a phone, which is narrower) and a bar's height more. Cut off, it runs on to
+   the panel's foot, under a bar that fades from clear to the panel's ground and holds the chevron (and Unsaved draft):
+   the next lines show faintly through it, so the cut reads as more to come. The box is that tall either way, so the bar
+   coming doesn't change what's cut. */
+.ap-description-text { max-height: calc(var(--leading-body) * var(--ap-description-lines) + var(--ap-description-bar)); overflow: hidden; }
 .ap-description-foot { display: flex; justify-content: center; align-items: center; gap: var(--space-2); margin-top: var(--space-1); margin-bottom: calc(-1 * var(--space-2)); }
+.ap-description-clipped { padding-bottom: 0; }
+.ap-description-clipped .ap-description-text { mask-image: none; }
+.ap-description-clipped .ap-description-foot { position: absolute; inset-inline: 0; bottom: 0; box-sizing: border-box; height: var(--ap-description-bar); margin: 0; padding-bottom: var(--space-1); align-items: flex-end; border-radius: inherit; background: linear-gradient(to bottom, transparent, var(--ap-description-ground) 70%); pointer-events: none; }
+.ap-description-clipped .ap-description-foot > * { pointer-events: auto; }
 .ap-description-more { width: var(--control-lg); height: var(--control-sm); color: var(--ink-muted); }
 .ap-description-opens:hover .ap-description-more { color: var(--ink); }
-/* × beside the first line, in the gutter outside the column. */
-.ap-description-close { position: absolute; z-index: var(--z-raised); top: calc(var(--space-4) + (var(--leading-body) - var(--control-sm)) / 2); inset-inline-end: var(--space-3); width: var(--control-sm); height: var(--control-sm); }
-/* A phone's gutter is too narrow for the icon: the text steps in by its width. */
-@container (max-width: 560px) {
-	.ap-description { padding-inline: calc(var(--ap-doc-inset, var(--space-4)) + var(--space-6)) calc(var(--ap-doc-inset, var(--space-4)) + var(--control-sm)); }
-	.ap-description-icon { inset-inline-start: var(--ap-doc-inset, var(--space-4)); }
-	.ap-description-text { max-height: calc(var(--leading-body) * 6); }
-}
+@container (max-width: 560px) { .ap-description { --ap-description-lines: 6; } }
 /* An edit kept as a draft, here and in the header: an accent dot before what says so. */
 :is(.ap-description-draft, .ap-roomhead-draft)::before { content: ''; flex: none; width: 7px; height: 7px; border-radius: var(--radius-full); background: var(--accent); }
 
