@@ -106,7 +106,7 @@ test.describe('a description put away, edited by you', () => {
 test.describe('a description read and edited where it shows', () => {
 	test.use(DEVICES.desktop);
 
-	test('Read all shows the whole; Edit turns it into its editor in the same place, and Save sends it', async ({ preview, page }) => {
+	test('Read all shows the whole; Edit turns it into its editor in the same place, Save sends it, and once read the first lines retire', async ({ preview, page }) => {
 		await preview.open();
 		await preview.describe('general', ['Say hello.', '', ...Array.from({ length: 12 }, (_, n) => `- Rule ${n + 1}`)].join('\n'));
 		const sheet = page.getByTestId('description-sheet');
@@ -138,6 +138,10 @@ test.describe('a description read and edited where it shows', () => {
 		await page.keyboard.press('Escape');
 		await expect(sheet).toHaveCount(0);
 		await expect(page.getByTestId('message-list')).toHaveJSProperty('inert', false);
+		// Read whole, its first lines have done their work: the header's line and Description stand in for them.
+		await expect(pinned(preview)).toHaveCount(0);
+		await expect(button(preview)).toBeVisible();
+		await expect(button(preview)).not.toHaveClass(UPDATED);
 	});
 
 	test('Escape steps back from editing to reading, asking before a draft goes; Save asks before replacing someone else’s edit', async ({ preview, page }) => {

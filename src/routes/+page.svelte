@@ -852,9 +852,15 @@
 	function editDescription(): void {
 		if (editTarget && canEditPane) roomEdit.start(editTarget);
 	}
-	/** Shuts the description; being edited, once discarding a draft is agreed. Returns whether it shut. */
+	/**
+	 * Shuts the description; being edited, once discarding a draft is agreed. Returns whether it shut. Read whole, its first
+	 * lines under the header have done their work: they retire to the header's line and Description, as × puts them away.
+	 */
 	function closeDescription(): boolean {
-		return roomEdit.close(editTarget, Boolean(activeThread));
+		const target = editTarget;
+		if (!roomEdit.close(target, Boolean(activeThread))) return false;
+		if (target?.description && !descriptionPutAway) hiddenDescriptions = hideDescription(hiddenDescriptions, draftKey(target.id), target.description);
+		return true;
 	}
 	/** Back from editing to reading, once discarding a draft is agreed. */
 	function cancelDescriptionEdit(): void {

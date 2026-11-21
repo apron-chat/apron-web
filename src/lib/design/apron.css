@@ -1399,26 +1399,34 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-fade-above { mask-image: linear-gradient(to top, #000 calc(100% - var(--ap-fade, 48px)), transparent); }
 .ap-fade-above.ap-fade-below { mask-image: linear-gradient(to bottom, transparent, #000 var(--ap-fade, 48px), #000 calc(100% - var(--ap-fade, 48px)), transparent); }
 
-/* ThreadDescription — a room's or thread's description, its first lines under the header as the conversation opens:
-   set as its sheet sets it, in the same column, four lines (three on a phone) faded where they're cut. */
-.ap-description { position: relative; flex: none; z-index: var(--z-raised); padding: var(--space-4) var(--ap-doc-inset, var(--space-4)) var(--space-3); background: var(--bg-100); box-shadow: inset 0 -1px var(--line), var(--shadow-float); }
-.ap-description-text { --ap-fade: 32px; max-height: calc(var(--leading-body) * 4); overflow: hidden; }
+/* ThreadDescription — a room's or thread's description, its first lines under the header as the conversation opens: the
+   DescriptionSheet folded, on its raised ground, rounded at its foot and lifted off the conversation, the description
+   icon beside its first line in the gutter. Set as the sheet sets it, in the same column: four lines (six on a phone,
+   which is narrower), faded where they're cut. The whole of it opens the rest, so it lifts a shade under the pointer. */
+.ap-description { position: relative; flex: none; padding: var(--space-4) var(--ap-doc-inset, var(--space-4)) var(--space-3); background: var(--bg-200); border-radius: 0 0 var(--radius-lg) var(--radius-lg); box-shadow: var(--shadow-popover); }
 .ap-description-opens { cursor: pointer; }
-.ap-description-foot { display: flex; justify-content: center; gap: var(--space-2); margin-top: var(--space-1); margin-bottom: calc(-1 * var(--space-2)); }
+.ap-description-opens:hover { background: var(--bg-300); }
+.ap-description-icon { position: absolute; top: calc(var(--space-4) + (var(--leading-body) - 16px) / 2); inset-inline-start: calc(var(--ap-doc-inset, var(--space-4)) - var(--space-6) - var(--space-1)); display: grid; color: var(--ink-muted); }
+.ap-description-text { --ap-fade: 32px; max-height: calc(var(--leading-body) * 4); overflow: hidden; }
+.ap-description-foot { display: flex; justify-content: center; align-items: center; gap: var(--space-2); margin-top: var(--space-1); margin-bottom: calc(-1 * var(--space-2)); }
+.ap-description-more { width: var(--control-lg); height: var(--control-sm); color: var(--ink-muted); }
+.ap-description-opens:hover .ap-description-more { color: var(--ink); }
 /* × beside the first line, in the gutter outside the column. */
 .ap-description-close { position: absolute; z-index: var(--z-raised); top: calc(var(--space-4) + (var(--leading-body) - var(--control-sm)) / 2); inset-inline-end: var(--space-3); width: var(--control-sm); height: var(--control-sm); }
+/* A phone's gutter is too narrow for the icon: the text steps in by its width. */
 @container (max-width: 560px) {
-	.ap-description { padding-inline-end: calc(var(--ap-doc-inset, var(--space-4)) + var(--control-sm)); }
-	.ap-description-text { max-height: calc(var(--leading-body) * 3); }
+	.ap-description { padding-inline: calc(var(--ap-doc-inset, var(--space-4)) + var(--space-6)) calc(var(--ap-doc-inset, var(--space-4)) + var(--control-sm)); }
+	.ap-description-icon { inset-inline-start: var(--ap-doc-inset, var(--space-4)); }
+	.ap-description-text { max-height: calc(var(--leading-body) * 6); }
 }
 /* An edit kept as a draft, here and in the header: an accent dot before what says so. */
 :is(.ap-description-draft, .ap-roomhead-draft)::before { content: ''; flex: none; width: 7px; height: 7px; border-radius: var(--radius-full); background: var(--accent); }
 
-/* DescriptionSheet — the whole description, over the conversation from under its header: as tall as it reads, to 80% of
-   the pane, scrolling within past that, the room dimmed below it, where a click shuts it. Edited, it takes all 80%, the
+/* DescriptionSheet — the whole description, over the conversation from under its header, on the raised ground its first
+   lines are folded on (ThreadDescription): as tall as it reads, to 80% of the pane, scrolling within past that, the room dimmed below it, where a click shuts it. Edited, it takes all 80%, the
    editor filling it. On a phone it is the pane, header and all. */
 .ap-descsheet-scrim { position: absolute; inset: var(--header-h) 0 0; z-index: var(--z-overlay); background: var(--scrim); }
-.ap-descsheet { position: absolute; top: var(--header-h); inset-inline: 0; z-index: var(--z-overlay); display: flex; flex-direction: column; max-height: calc((100% - var(--header-h)) * 0.8); background: var(--bg-100); border-radius: 0 0 var(--radius-lg) var(--radius-lg); box-shadow: var(--shadow-popover); }
+.ap-descsheet { position: absolute; top: var(--header-h); inset-inline: 0; z-index: var(--z-overlay); display: flex; flex-direction: column; max-height: calc((100% - var(--header-h)) * 0.8); background: var(--bg-200); border-radius: 0 0 var(--radius-lg) var(--radius-lg); box-shadow: var(--shadow-popover); }
 .ap-descsheet-editing { height: calc((100% - var(--header-h)) * 0.8); }
 .ap-descsheet-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--space-6) var(--ap-doc-inset) var(--space-8); }
 .ap-descsheet-body:focus { outline: none; }

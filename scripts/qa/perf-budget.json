@@ -28,7 +28,7 @@
 			"domNodes": 532,
 			"layouts": 10,
 			"styleRecalcs": 16,
-			"calls": 183397,
+			"calls": 184350,
 			"heapMB": 8.2
 		},
 		"load-phone-busy": {
@@ -68,7 +68,7 @@
 		"open-thread": {
 			"layouts": 4,
 			"styleRecalcs": 14,
-			"calls": 62969
+			"calls": 64183
 		},
 		"open-preferences": {
 			"layouts": 3,
@@ -92,7 +92,7 @@
 		},
 		"hover-messages": {
 			"layouts": 7,
-			"styleRecalcs": 7,
+			"styleRecalcs": 9,
 			"calls": 6714
 		},
 		"hover-toolbar": {
