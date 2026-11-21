@@ -116,7 +116,16 @@ rather than after the backoff; the network back between attempts also
 connects at once, and starts the backoff over. An explicit server retry window takes precedence, including a
 `retry_after` error about the connection as a whole (`data.retry_after`
 seconds); after such a `denied` error the client stops reconnecting, shows
-**Signed out** with the server's message, and waits for **Sign in**.
+**Signed out** with the server's message, and waits for **Sign in**. So it does
+when the server closes a guest's connection with 1008 (policy), as one that
+stops taking guests does (a lobby that closes, say), after a notice saying so:
+signing in as a guest again would only be refused or ended again. The banner
+says "Signed out: The server ended this guest session (its reason).", and
+**Sign in** connects again and goes by what the server's new `server` frame
+offers: as a guest again where it has guests once more, else the connect
+screen, as for a server without guests (below). An account's connection, a
+guest's closed for any other reason, and a close the client made itself
+reconnect as usual.
 One window or tab of a browser connects to a server at a time
 (`src/lib/ui/server-claim.ts`): the one most recently shown with its client
 running holds a Web Lock named for the server, taken from any other window with
@@ -1387,7 +1396,10 @@ the error.
 `filter: "not_joined"`, the most active visible rooms you haven't joined, each
 with its member count. It starts open, so a newcomer sees what
 else there is without looking for it, and folds as the other sections do;
-unfolding it lists afresh.
+unfolding it lists afresh. A `room_update` `updated` with the record of a
+top-level room you haven't joined and it doesn't list yet, as a server sends
+when it lets you see more (letting you in from its lobby, say), adds that room
+to it at once, without a reload, and the next listing asks the server again.
 Picking one opens it to read through its history (§4.3) without joining it, since joining shows in it for everyone:
 its row shows it open, its threads are listed under it to read too, and the header has **Join**, the primary
 button beside its ⋯ menu, which joins it (`room_join`), as posting there does first. Until then it doesn't
@@ -1837,7 +1849,11 @@ its `description`, and its `server.welcome`
 both rendered as CommonMark and sanitized like a message.
 A server without the `guest` scheme opens this screen by itself once, since
 nothing works before signing in, and so does a session held for a sign-in
-(below) with nothing on screen yet. The server and name
+(below) with nothing on screen yet. It offers only what the server lists, the
+schemes it signs in with and its `signup`, such as a token for an invite link
+(a server that takes members only by invitation), and nothing of the server
+shows behind it: no placeholder rooms or messages, since no session is
+coming up. The server and name
 are stored in local storage, and the last few backends are listed under the
 form, each once by its address normalized by RFC 3986 (lowercase scheme and
 host, no default port, `/` for an empty path, percent-encoding normalized,

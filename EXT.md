@@ -2,7 +2,7 @@
 
 | Protocol Version | 10         |
 |------------------|------------|
-| Last Updated     | 2026-11-19 |
+| Last Updated     | 2026-11-21 |
 
 apron-web is a web client for the
 [Apron Chat Protocol](https://github.com/shazow/apron/blob/main/PROTOCOL.md).
@@ -58,6 +58,11 @@ Some features have no capability:
   ([§5](#5-connection-status)).
 - apron-web renders the Markdown extensions in [§12](#12-markdown), among
   them spoilers (`||text||`).
+- When the server closes a guest's connection with 1008 (policy), as one that
+  stops taking guests does, apron-web doesn't sign in as a guest again by
+  itself: it shows the server ended the session and waits for the user's Sign
+  in, which connects again and follows the new `server` frame. An account's
+  connection reconnects as usual.
 - apron-web writes no `ext` of its own, except `ext.bio` ([§8](#8-extbio)) and
   `ext.editors` ([§11](#11-exteditors)).
 
