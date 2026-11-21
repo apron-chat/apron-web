@@ -719,6 +719,7 @@ a.ap-embed-card:hover { background: var(--hover); }
 @keyframes ap-roomhead-updating-in { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .ap-roomhead-updating { animation: none; } .ap-roomhead-updating::after { width: 100%; opacity: var(--opacity-dim); animation: none; } }
 .ap-roomhead-text { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: var(--space-3); }
+.ap-roomhead-text-opens { cursor: pointer; }
 .ap-roomhead-name { margin: 0; font-size: var(--text-body); line-height: var(--leading-field); font-weight: 600; white-space: nowrap; }
 .ap-roomhead-sub { margin: 0; font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ap-roomhead-typing { color: var(--denim); }

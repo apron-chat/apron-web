@@ -56,6 +56,16 @@ for (const [device, use] of [['desktop', DEVICES.desktop], ['phone', DEVICES.pho
 				expect(await blue(preview)).toBe(false);
 			});
 		});
+
+		test('comes back from a click on the room’s name or its one-line topic', async ({ preview, page }) => {
+			await putAway(preview);
+			await page.getByTestId('room-description').click();
+			await expect(pinned(preview)).toBeVisible();
+			await page.getByRole('button', { name: 'Hide description' }).click();
+			await expect(pinned(preview)).toHaveCount(0);
+			await page.locator('.ap-roomhead-name').click();
+			await expect(pinned(preview)).toBeVisible();
+		});
 	});
 }
 

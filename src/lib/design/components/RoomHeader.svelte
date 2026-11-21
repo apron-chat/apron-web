@@ -82,7 +82,10 @@
 		searchHint?: string;
 		/** Keyboard shortcuts, after Search in the ⋯ menu, with `?` as its hint: it opens their overlay (KeyboardShortcuts). */
 		onshortcuts?: () => void;
-		/** The room's or thread's pinned <ThreadDescription> was put away with its ×: a Description button brings it back. */
+		/**
+		 * The room's or thread's pinned <ThreadDescription> was put away with its ×: a Description button brings it back,
+		 * as does a click anywhere on the name and topic (but not on the thread's crumb back to its room).
+		 */
 		ondescription?: () => void;
 		/** The description put away has been edited since: Description is drawn in the description's blue, quietly enough to leave. */
 		descriptionUpdated?: boolean;
@@ -134,6 +137,13 @@
 	]);
 	const memberLabel = $derived(memberListOpen ? 'Hide member list' : 'Show member list');
 
+	/** A click on the name or topic brings the description back, unless it was on a button in it or ended a selection of its text. */
+	function openDescription(event: MouseEvent): void {
+		if (!ondescription || (event.target as Element).closest('button, a')) return;
+		if (!(window.getSelection()?.isCollapsed ?? true)) return;
+		ondescription();
+	}
+
 	function act(value: string): void {
 		if (value === 'search') onsearch?.();
 		else if (value === 'shortcuts') onshortcuts?.();
@@ -152,7 +162,9 @@
 		</button>
 	{/if}
 	{#if faces?.length && !thread}<Faces people={faces} size="sm" class="ap-roomhead-faces" />{/if}
-	<div class="ap-roomhead-text">
+	<!-- Clicking the name or topic is a shortcut for the mouse; Description is the button for the keyboard and screen readers. -->
+	<!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
+	<div class={['ap-roomhead-text', ondescription && 'ap-roomhead-text-opens']} title={ondescription ? `Show the ${noun} description` : undefined} onclick={ondescription ? openDescription : undefined}>
 		{#if thread}
 			<!-- The spaces around the separator are the title's, in its weight, and the separator's own collapse into them. -->
 			<h1 class="ap-roomhead-name">

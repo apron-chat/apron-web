@@ -160,6 +160,28 @@ describe('RoomHeader', () => {
 		expect(header.querySelector('.ap-faces')).toBeNull();
 	});
 
+	it('brings the description back from a click anywhere on the name or topic, but not from the thread’s crumb', () => {
+		render({ topic: 'Deploys' });
+		expect(document.querySelector('.ap-roomhead-text')?.classList.contains('ap-roomhead-text-opens')).toBe(false);
+		dom.unmount();
+		const ondescription = vi.fn();
+		render({ topic: 'Deploys', ondescription });
+		const text = document.querySelector<HTMLElement>('.ap-roomhead-text')!;
+		expect(text.classList.contains('ap-roomhead-text-opens')).toBe(true);
+		document.querySelector<HTMLElement>('.ap-roomhead-name')!.click();
+		byText('Deploys').click();
+		text.click();
+		expect(ondescription).toHaveBeenCalledTimes(3);
+		dom.unmount();
+		ondescription.mockClear();
+		const onroom = vi.fn();
+		render({ thread: 'deploy', threadName: 'Deploy', onroom, ondescription });
+		dom.button('Back to room').click();
+		expect([onroom, ondescription].map((fn) => fn.mock.calls.length)).toEqual([1, 0]);
+		document.querySelector<HTMLElement>('.ap-roomhead-name bdi')!.click();
+		expect(ondescription).toHaveBeenCalledOnce();
+	});
+
 	it('takes a class on the header beside its own', () => {
 		const header = render({ class: 'mine', private: true });
 		expect([header.classList.contains('ap-roomhead'), header.classList.contains('ap-roomhead-private'), header.classList.contains('mine')]).toEqual([true, true, true]);
