@@ -95,6 +95,17 @@ describe('ProfileCard', () => {
 		expect(dom.byRole('alert', undefined, box).textContent).toBe('Nope');
 	});
 
+	it('leads with Invite where offered, the primary action then, which says when it is in flight', () => {
+		const noop = () => undefined;
+		let box = render({ userId: 'guest_7', oninvite: noop, onmessage: noop, onmention: noop });
+		expect([...box.querySelectorAll('.ap-profcard-actions button')].map((b) => b.textContent)).toEqual(['Invite', 'Message', 'Mention']);
+		expect(dom.button('Invite', box).classList.contains('ap-btn-primary')).toBe(true);
+		expect(dom.button('Message', box).classList.contains('ap-btn-primary')).toBe(false);
+		dom.unmount();
+		box = render({ userId: 'guest_7', oninvite: noop, inviting: true });
+		expect(dom.button('Inviting…', box).disabled).toBe(true);
+	});
+
 	it('leads with Message, the primary action, which says when it is opening', () => {
 		const noop = () => undefined;
 		let box = render({ userId: 'bob', onmessage: noop, onmention: noop, oncopyid: noop });

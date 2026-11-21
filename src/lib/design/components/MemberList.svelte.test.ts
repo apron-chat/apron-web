@@ -94,6 +94,20 @@ describe('MemberList', () => {
 			expect([onmessage.mock.calls, onremove.mock.calls]).toEqual([[['bo']], [['bo']]]);
 		});
 
+		it('offers Invite first on a row marked invitable, where the list offers it, and nowhere else', async () => {
+			const oninvite = vi.fn();
+			const people = [{ user_id: 'guest_7', name: 'Guest 7', invitable: true }, { user_id: 'bo', name: 'Bo' }];
+			render({ sections: [{ key: 'members', label: 'Members', people }], onprofile: vi.fn(), onmessage: vi.fn(), oninvite });
+			rightClick(row('guest_7'));
+			await tick();
+			expect(choices()).toEqual(['Profile', 'Invite', 'Direct message']);
+			dom.byRole('menuitem', 'Invite').click();
+			expect(oninvite.mock.calls).toEqual([['guest_7']]);
+			rightClick(row('bo'));
+			await tick();
+			expect(choices()).toEqual(['Profile', 'Direct message']);
+		});
+
 		it('is put away by a press on its row, which opens no card, or Escape, focus back on the name; ↓ on the name drops it down, its first choice focused', async () => {
 			const onprofile = vi.fn();
 			render({ sections, onprofile, onremove: vi.fn() });

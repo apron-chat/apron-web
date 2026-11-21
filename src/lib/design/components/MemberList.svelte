@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import type { ClassValue } from 'svelte/elements';
+	import DoorOpen from '@lucide/svelte/icons/door-open';
 	import MessageCircle from '@lucide/svelte/icons/message-circle';
 	import Plus from '@lucide/svelte/icons/plus';
 	import UserMinus from '@lucide/svelte/icons/user-minus';
@@ -35,6 +36,8 @@
 		onmessage?: (userId: string) => void;
 		/** Offer removing members (`room_leave` with `user_id`, §4.2.2): Remove from room, in every row's menu but yours. */
 		onremove?: (userId: string) => void;
+		/** Offer Invite, letting someone in from a server's lobby (`/invite`), first in the menu of each row marked `invitable`. */
+		oninvite?: (userId: string) => void;
 		/** Offer adding people (`room_join` with `user_id`): a + after the count, which opens an <AddMembersForm>. */
 		onadd?: () => void;
 		/** A change is under way (a remove, or a direct message being started): the rows' menus offer only Profile. */
@@ -55,15 +58,15 @@
 		class?: ClassValue;
 	}
 	let {
-		open = true, room, count, sections, empty, placeholder = false, shut = [], ontogglesection, onprofile, onmessage, onremove,
+		open = true, room, count, sections, empty, placeholder = false, shut = [], ontogglesection, onprofile, onmessage, onremove, oninvite,
 		onadd, busy = false, note, remark, avatar, roles, countTestid, bodyTestid, truncatedTestid, class: className
 	}: Props = $props();
 
 	const listed = $derived((sections ?? []).reduce((total, section) => total + section.people.length, 0));
 
 	/**
-	 * A row's menu: Profile, then Direct message (not to a system identity) and Remove from room on everyone but you,
-	 * where offered, neither while a change is under way. A right-click, the context menu key or a long press opens it
+	 * A row's menu: Profile, then Invite (for someone `invitable`), Direct message (not to a system identity) and Remove
+	 * from room on everyone but you, where offered, none while a change is under way. A right-click, the context menu key or a long press opens it
 	 * where that was, and ↓ or ↑ on the name beneath the row; a click or tap opens their profile.
 	 */
 	let menu = $state<{ person: MemberListPerson; name: string; x: number; y: number; keyboard?: true; who: HTMLElement; choices: ContextMenuChoice[] } | undefined>();
@@ -78,6 +81,7 @@
 	function choicesFor(person: MemberListPerson): ContextMenuChoice[] {
 		const choices: ContextMenuChoice[] = [{ value: 'profile', label: 'Profile', icon: UserRound }];
 		if (person.you || busy) return choices;
+		if (oninvite && person.invitable && !person.system) choices.push({ value: 'invite', label: 'Invite', icon: DoorOpen });
 		if (onmessage && !person.system) choices.push({ value: 'message', label: 'Direct message', icon: MessageCircle });
 		if (onremove) choices.push({ value: 'remove', label: 'Remove from room', danger: true, icon: UserMinus });
 		return choices;
@@ -140,6 +144,7 @@
 		const { person, who } = menu;
 		if (value === 'profile') onprofile?.(person.user_id, who);
 		else if (value === 'message') onmessage?.(person.user_id);
+		else if (value === 'invite') oninvite?.(person.user_id);
 		else if (value === 'remove') onremove?.(person.user_id);
 	}
 </script>

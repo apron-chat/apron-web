@@ -36,11 +36,13 @@ const USER_ARGUMENT = new RegExp(`^@?(${TEXT_ID.source})[.+@:-]*$`);
 /**
  * `caps.members`: adding and removing other members (`room_join` and
  * `room_leave` with `user_id`) is worth trying; once the server answered it
- * `unsupported`, `/kick` and `/invite` go to the server as commands instead. `mentions`: the `user_id`s the draft's chips name,
+ * `unsupported`, `/kick` and `/invite` go to the server as commands instead. `caps.admits`: the server lets you in
+ * from its lobby with its own `/invite <user_id>` (`ext:permissions` `invite`, `ext.settings.lobby`), so `/invite` goes
+ * to it as a command, rather than adding someone to the room. `mentions`: the `user_id`s the draft's chips name,
  * exact where the text is not: in text, an ID ends with a letter, a digit, or
  * `_` (Appendix A.3), so `/kick @al-` names `al` unless a chip says `al-`.
  */
-export function composerAction(text: string, caps: { command: boolean; rooms: boolean; members?: boolean; append?: boolean }, mentions: readonly string[] = []): ComposerAction {
+export function composerAction(text: string, caps: { command: boolean; rooms: boolean; members?: boolean; append?: boolean; admits?: boolean }, mentions: readonly string[] = []): ComposerAction {
 	if (caps.append && /^\/live\s*$/i.test(text)) return { kind: 'live' };
 	if (!caps.command) return { kind: 'message', text };
 	if (text.startsWith('//')) return { kind: 'message', text: text.slice(1) };
@@ -59,7 +61,7 @@ export function composerAction(text: string, caps: { command: boolean; rooms: bo
 		const user = written === undefined ? undefined : mentions.length === 1 && textId(mentions[0]) === written ? mentions[0] : written;
 		if (caps.members !== false && user) {
 			if (name === 'kick') return { kind: 'kick', user };
-			if (name === 'invite') return { kind: 'invite', user };
+			if (name === 'invite' && !caps.admits) return { kind: 'invite', user };
 		}
 	}
 	return { kind: 'command', text };

@@ -43,6 +43,14 @@ describe('composer commands', () => {
 		expect(composerAction('/kick @ada@example.com', both)).toEqual({ kind: 'kick', user: 'ada@example.com' });
 		expect(composerAction('/invite carol:b.example.', both)).toEqual({ kind: 'invite', user: 'carol:b.example' });
 	});
+
+	it('leaves /invite to a server that lets you in from its lobby, and /kick as it was', () => {
+		const admits = { ...both, admits: true };
+		expect(composerAction('/invite @guest_7', admits)).toEqual({ kind: 'command', text: '/invite @guest_7' });
+		expect(composerAction('/invite guest_7', admits, ['guest_7'])).toEqual({ kind: 'command', text: '/invite guest_7' });
+		expect(composerAction('/kick @guest_7', admits)).toEqual({ kind: 'kick', user: 'guest_7' });
+		expect(composerAction('/toggle lobby', admits)).toEqual({ kind: 'command', text: '/toggle lobby' });
+	});
 });
 
 describe('/live', () => {

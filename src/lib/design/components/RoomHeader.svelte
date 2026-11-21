@@ -3,6 +3,7 @@
 	import BellOff from '@lucide/svelte/icons/bell-off';
 	import ChevronLeft from '@lucide/svelte/icons/chevron-left';
 	import Ellipsis from '@lucide/svelte/icons/ellipsis';
+	import Globe from '@lucide/svelte/icons/globe';
 	import Keyboard from '@lucide/svelte/icons/keyboard';
 	import Link from '@lucide/svelte/icons/link';
 	import Lock from '@lucide/svelte/icons/lock';
@@ -27,6 +28,11 @@
 		topicTitle?: string;
 		/** `private: true` (§4.2.4) on the open room or thread: a lock beside its name, on a plum wash */
 		private?: boolean;
+		/**
+		 * The room's records are visible to people who see nothing else, such as a server's lobby: a globe beside its name
+		 * labelled with this, such as "Visible to everyone", and the words after it where there's room. Also in a thread of it.
+		 */
+		everyone?: string;
 		/** Who a private room is with, before its name (not in a thread): one person's face with their status, or two of a group's (Faces). */
 		faces?: Face[];
 		/** names from live `activity` typing; replaces the subtitle while present, on phones only (wide layouts show a <TypingIndicator> above the composer) */
@@ -103,7 +109,7 @@
 		class?: ClassValue;
 	}
 	let {
-		room, name, topic, topicTitle, private: isPrivate, faces, typing = [], replies, note, onback, unreadElsewhere = 0, mentionsElsewhere = 0,
+		room, name, topic, topicTitle, private: isPrivate, everyone, faces, typing = [], replies, note, onback, unreadElsewhere = 0, mentionsElsewhere = 0,
 		thread, threadName, onroom, canJoin = false, onjoin, onmemberlist, memberListOpen = false, onedit, onleave, oncopylink, muteChoices, onmute, muted, onunmute, mutedWithRoom = false, busy = false, updating = false, onsearch, searchHint, onshortcuts,
 		ondescription, descriptionUpdated = false, tagTestid, topicTestid, joinTestid, descriptionTestid, actionsTestid, editTestid, leaveTestid, copyLinkTestid, searchTestid, muteTestid, unmuteTestid,
 		unmuteButtonTestid, class: className
@@ -158,11 +164,13 @@
 			<h1 class="ap-roomhead-name">
 				<button type="button" class="ap-roomhead-crumb" aria-label="Back to room" onclick={onroom}>{roomName(name, room)}</button>
 				<span class="ap-roomhead-sep" aria-hidden="true"> › </span>
-				<bdi title={roomNameTip(threadName, thread, { thread: true })}>{roomName(threadName, thread, { thread: true })}</bdi>{#if isPrivate}<Lock class="ap-lock ap-inline-icon" role="img" aria-label="Private" />{/if}
+				<bdi title={roomNameTip(threadName, thread, { thread: true })}>{roomName(threadName, thread, { thread: true })}</bdi>{#if isPrivate || everyone}{#if isPrivate}<Lock class="ap-lock ap-inline-icon" role="img" aria-label="Private" />{/if}{#if everyone}<Globe class="ap-everyone ap-inline-icon" role="img" aria-label={everyone} />{/if}{/if}
 			</h1>
 		{:else}
-			<h1 class="ap-roomhead-name">{roomName(name, room)}{#if isPrivate}<Lock class="ap-lock ap-inline-icon" role="img" aria-label="Private" />{/if}</h1>
+			<h1 class="ap-roomhead-name">{roomName(name, room)}{#if isPrivate || everyone}{#if isPrivate}<Lock class="ap-lock ap-inline-icon" role="img" aria-label="Private" />{/if}{#if everyone}<Globe class="ap-everyone ap-inline-icon" role="img" aria-label={everyone} />{/if}{/if}</h1>
 		{/if}
+		<!-- The globe's label in words, where there's room: the globe says it to assistive tech. Hidden, not a block of its own, without one. -->
+		<span class="ap-roomhead-everyone" aria-hidden="true" hidden={!everyone}>{everyone ?? ''}</span>
 		{#if typing.length}
 			<p class="ap-roomhead-sub ap-roomhead-typing">{#if typing.length === 1}<bdi>{typing[0]}</bdi> is typing…{:else}{typing.length} people are typing…{/if}</p>
 		{:else if replies}

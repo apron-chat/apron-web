@@ -1,6 +1,7 @@
 <script lang="ts">
 	import BellOff from '@lucide/svelte/icons/bell-off';
 	import DoorOpen from '@lucide/svelte/icons/door-open';
+	import Globe from '@lucide/svelte/icons/globe';
 	import Lock from '@lucide/svelte/icons/lock';
 	import LogIn from '@lucide/svelte/icons/log-in';
 	import type { Snippet } from 'svelte';
@@ -21,6 +22,8 @@
 		label: string;
 		tip?: string;
 		private?: boolean;
+		/** Its records are visible to people who see nothing else, such as a server's lobby: a globe beside the name, with this as its label, such as "Visible to everyone". */
+		everyone?: string;
 		/** Muted (§4.5 `mute` with its `room_id`): a bell-off at the end of the row, before its count or time. */
 		muted?: boolean;
 		active?: boolean;
@@ -50,7 +53,7 @@
 		/** The keys that act on the row besides picking it, for assistive tech (`aria-keyshortcuts`), such as moving it. */
 		keyshortcuts?: string;
 	}
-	let { room, noun, label, tip, private: isPrivate, muted, active, nested, framed, listed = false, title, onselect, onleave, onjoin, lead, lines, children, start, keyshortcuts, class: className }: Props = $props();
+	let { room, noun, label, tip, private: isPrivate, everyone, muted, active, nested, framed, listed = false, title, onselect, onleave, onjoin, lead, lines, children, start, keyshortcuts, class: className }: Props = $props();
 	const thread = $derived(noun === 'thread');
 </script>
 
@@ -62,7 +65,7 @@
 		class={['ap-room', nested && 'ap-room-nested', active && 'ap-room-active', className]} onclick={onselect}
 	>
 		{@render lead?.()}
-		<span class="ap-room-text"><span class="ap-room-name"><span class="ap-room-label" title={tip}>{label}</span>{#if isPrivate}<Lock class="ap-lock ap-inline-icon" role="img" aria-label="Private" />{/if}</span>{@render lines?.()}</span>
+		<span class="ap-room-text"><span class="ap-room-name"><span class="ap-room-label" title={tip}>{label}</span><!-- One block for both marks, as most rows have neither. -->{#if isPrivate || everyone}{#if isPrivate}<Lock class="ap-lock ap-inline-icon" role="img" aria-label="Private" />{/if}{#if everyone}<Globe class="ap-everyone ap-inline-icon" role="img" aria-label={everyone} />{/if}{/if}</span>{@render lines?.()}</span>
 		{#if muted}<BellOff class="ap-muted" role="img" aria-label="Muted" />{/if}
 		{@render children?.()}
 	</button>

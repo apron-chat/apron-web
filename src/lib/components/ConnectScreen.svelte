@@ -6,7 +6,7 @@
 	import { serverLabel } from '$lib/ui/connection';
 	import { directory } from '$lib/ui/directory.svelte';
 	import type { SessionView } from '$lib/ui/session.svelte';
-	import { versionWarning, type ConnectStep, type Scheme, type SignOutHandler } from '$lib/ui/sign-in';
+	import { versionWarning, type ConnectStep, type PasskeyMode, type Scheme, type SignOutHandler } from '$lib/ui/sign-in';
 	import { forgetServer, starServer, type RecentServer } from '$lib/ui/storage';
 	import ConnectHeader from '$lib/design/components/ConnectHeader.svelte';
 	import ConnectPage from '$lib/design/components/ConnectPage.svelte';
@@ -24,6 +24,8 @@
 		canCancel: boolean;
 		/** Preselects a scheme, e.g. when the profile asks to sign in with a passkey. */
 		initialScheme?: Scheme;
+		/** On Passkey, starts at Sign in or Create account, as a lobby's banner asks to create one. */
+		initialPasskey?: PasskeyMode;
 		/** Prefills the email field. */
 		initialEmail?: string;
 		/** Shows an error to start with, e.g. why a sign-in link failed. */
@@ -42,7 +44,7 @@
 	}
 	let {
 		client, session, serverInput = $bindable(), displayName = $bindable(), passkeyUnavailable, recentServers = $bindable(), canCancel,
-		initialScheme, initialEmail, initialError, initialChoosing, linked, onconnect, onconnected, oncancel, onsignout
+		initialScheme, initialPasskey, initialEmail, initialError, initialChoosing, linked, onconnect, onconnected, oncancel, onsignout
 	}: Props = $props();
 
 	let busy = $state(false);
@@ -77,6 +79,6 @@
 	<SignIn
 		bind:this={signIn}
 		{client} {session} bind:serverInput bind:displayName bind:busy {passkeyUnavailable} {canCancel}
-		{initialScheme} {initialEmail} {initialError} {initialChoosing} {header} {onconnect} {onconnected} {oncancel} {onsignout}
+		{initialScheme} {initialPasskey} {initialEmail} {initialError} {initialChoosing} {header} {onconnect} {onconnected} {oncancel} {onsignout}
 	/>
 </ConnectPage>

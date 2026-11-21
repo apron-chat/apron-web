@@ -14,6 +14,7 @@
 	import { hueOf } from '$lib/ui/messages';
 	import { messageThem, START_FAILED } from '$lib/ui/private-rooms';
 	import { failure, Task } from '$lib/ui/task.svelte';
+	import { inLobby, inviteCommand } from '$lib/ui/lobby';
 
 	/**
 	 * Who a mention, a sender or a member is: the design system's ProfileCard,
@@ -34,13 +35,15 @@
 		canMention: boolean;
 		/** Message is offered: signed in to an account (not a guest) that may create rooms (capability `rooms`). */
 		canMessage?: boolean;
+		/** Invite is offered for someone limited to the server's lobby (`ext:permissions` `invite`): `/invite` with their `user_id`. */
+		canInvite?: boolean;
 		onmention: (userId: string) => void;
 		/** The server named the room Message is starting, before it opens: one you started, not one someone added you to. */
 		onnamed?: (roomId: string) => void;
 		/** Opens a private room: the conversation you already have with them, or the one Message just started. */
 		onopenroom?: (roomId: string) => void;
 	}
-	let { client, session, room, canChange, canMention, canMessage = false, onmention, onnamed, onopenroom }: Props = $props();
+	let { client, session, room, canChange, canMention, canMessage = false, canInvite = false, onmention, onnamed, onopenroom }: Props = $props();
 
 	const WIDTH = 320;
 
@@ -52,7 +55,7 @@
 	 * Adding them to the room, opening a conversation with them, copying their ID: each on its own, as one doesn't
 	 * wait for another, and what came of it, this card's until another opens. The note is the last one used's.
 	 */
-	const tasks = { add: new Task(), message: new Task(), copy: new Task() };
+	const tasks = { add: new Task(), message: new Task(), copy: new Task(), invite: new Task() };
 	let used = $state<keyof typeof tasks>();
 	let note = $derived(used ? tasks[used].note : undefined);
 
@@ -93,6 +96,9 @@
 	let canAdd = $derived(
 		canChange && !session.snapshot.memberChangesUnsupported && Boolean(client) && Boolean(room?.joined) && room?.members !== undefined && !listed && !me && !system
 	);
+
+	/** Invite: someone else limited to the lobby, as far as can be told (`inLobby`), where you may let them in, in a room to send it from. */
+	let canInviteThem = $derived(canInvite && Boolean(client) && Boolean(room) && !me && !system && inLobby(person ?? { user_id: userId }));
 
 	/** Message: for someone else, not a system identity, on a session that may start private rooms. */
 	let canMessageThem = $derived(canMessage && Boolean(client) && Boolean(onopenroom) && !me && !system);
@@ -194,6 +200,20 @@
 		});
 	}
 
+	/** Sends `/invite` with their `user_id` from the open room, where the server's replies land as notices. */
+	async function invite(): Promise<void> {
+		if (!client || !room) return;
+		const chat = client;
+		const target = room;
+		const id = userId;
+		used = 'invite';
+		await tasks.invite.run('busy', () => chat.command(target.id, inviteCommand(id), { mentions: [id] }).promise, {
+			// The server says what came of it in the room (a notice): they may have been a member already.
+			done: () => ({ text: 'Invite sent', error: false }),
+			failed: failure('Unable to invite them')
+		});
+	}
+
 	async function add(): Promise<void> {
 		if (!client || !room) return;
 		const chat = client;
@@ -229,6 +249,8 @@
 		oncopyid={copy}
 		onaddtoroom={canAdd ? add : undefined}
 		adding={tasks.add.busy}
+		oninvite={canInviteThem ? invite : undefined}
+		inviting={tasks.invite.busy}
 		{note}
 		testid="profile-card"
 		statusTestid="profile-status"

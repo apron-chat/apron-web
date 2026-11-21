@@ -33,6 +33,17 @@ describe('RoomHeader', () => {
 		expect(sub()).toEqual(['محمد is typing…']);
 	});
 
+	it('marks a room anyone may see with a globe in its name, and the words beside it, hidden from assistive tech, which the globe tells', () => {
+		const header = render({ everyone: 'Public when the lobby is open', topic: 'Say hi' });
+		expect(header.querySelector('h1 [role="img"]')?.getAttribute('aria-label')).toBe('Public when the lobby is open');
+		const words = header.querySelector('.ap-roomhead-everyone')!;
+		expect([words.textContent, words.getAttribute('aria-hidden')]).toEqual(['Public when the lobby is open', 'true']);
+		dom.unmount();
+		const plain = render({});
+		expect(plain.querySelector('h1 [role="img"]')).toBeNull();
+		expect(plain.querySelector<HTMLElement>('.ap-roomhead-everyone')?.hidden).toBe(true);
+	});
+
 	it('runs a line along its foot while other rooms catch up, which says nothing to a screen reader', () => {
 		const header = render({});
 		expect(header.querySelector('[data-testid="room-updating"]')).toBeNull();

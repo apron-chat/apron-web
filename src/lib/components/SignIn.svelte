@@ -38,6 +38,8 @@
 		canCancel: boolean;
 		/** Preselects a scheme, e.g. when the profile asks to sign in with a passkey. */
 		initialScheme?: Scheme;
+		/** On Passkey, starts at Sign in (the default) or Create account. */
+		initialPasskey?: PasskeyMode;
 		/** Prefills the email field. */
 		initialEmail?: string;
 		/** Shows an error to start with, e.g. why a sign-in link failed. */
@@ -57,7 +59,7 @@
 	}
 	let {
 		client, session, serverInput = $bindable(), displayName = $bindable(), busy = $bindable(false), passkeyUnavailable, canCancel,
-		initialScheme, initialEmail, initialError, header, initialChoosing = false, onconnect, onconnected, oncancel, onsignout
+		initialScheme, initialPasskey, initialEmail, initialError, header, initialChoosing = false, onconnect, onconnected, oncancel, onsignout
 	}: Props = $props();
 
 	// The initial choice follows the request or the current session; the segmented control owns it from then on.
@@ -68,7 +70,7 @@
 	/** Signing out ended this panel's work: what is left is a guest, not a way in to remember. */
 	let signedOut = false;
 	/** On Passkey, Sign in or Create account: the viewer picks, the panel never guesses. */
-	let passkeyChosen = $state<PasskeyMode>('login');
+	let passkeyChosen = $state<PasskeyMode>(untrack(() => initialPasskey ?? 'login'));
 	/** Waiting for the connection this panel opened to the server in the form. */
 	let pending = $state(false);
 	/** That connection signed in as a guest, which the passkey step can leave as it is. */

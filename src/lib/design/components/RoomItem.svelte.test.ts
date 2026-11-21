@@ -58,6 +58,13 @@ describe('RoomItem', () => {
 		expect(onselect).toHaveBeenCalledOnce();
 	});
 
+	it('marks a room anyone may see with a globe beside its name, labelled as given', () => {
+		const row = render({ everyone: 'Visible to everyone' });
+		expect([...row.querySelectorAll('.ap-room-name [role="img"]')].map((icon) => icon.getAttribute('aria-label'))).toEqual(['Visible to everyone']);
+		dom.unmount();
+		expect(render({}).querySelector('.ap-room-name [role="img"]')).toBeNull();
+	});
+
 	it('puts who a private room is with before its name', () => {
 		let row = render({ room: 'p1', name: 'Bob', faces: [{ user_id: 'bob', name: 'Bob', status: 'idle' }] });
 		expect(row.classList.contains('ap-room-faced')).toBe(true);

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { docViewerHost, editorsNudge, fileUpload, installNudge, mentionAddLine, messageEditor, newPrivateDialog, newThreadDialog, profileCardHost, reactorsPopover, roomEditor, searchDialog, selectionBar, serverPaneHost, shortcutsDialog, signInLinkDialog } from '$lib/components/lazy';
+	import { docViewerHost, editorsNudge, fileUpload, installNudge, lobbyNudge, mentionAddLine, messageEditor, newPrivateDialog, newThreadDialog, profileCardHost, reactorsPopover, roomEditor, searchDialog, selectionBar, serverPaneHost, shortcutsDialog, signInLinkDialog } from '$lib/components/lazy';
 	import { onMount, tick, untrack } from 'svelte';
 	import { fromAction } from 'svelte/attachments';
 	import { pushState, replaceState } from '$app/navigation';
@@ -19,7 +19,7 @@
 	import ConnectScreen from '$lib/components/ConnectScreen.svelte';
 	import { SettleFlag } from '$lib/ui/settle-flag';
 	import { onMac } from '$lib/ui/handheld';
-	import { signedInScheme, type Scheme } from '$lib/ui/sign-in';
+	import { signedInScheme, type PasskeyMode, type Scheme } from '$lib/ui/sign-in';
 	import JumpBar from '$lib/components/JumpBar.svelte';
 	import TimelineMessage from '$lib/components/TimelineMessage.svelte';
 	import EmbedItem from '$lib/components/embeds/Embed.svelte';
@@ -55,7 +55,8 @@
 	import { faceOf, roomFaces } from '$lib/ui/faces';
 	import { receiptsByMessage, steadyReceipts } from '$lib/ui/receipts';
 	import { attachmentLimits, composerAction } from '$lib/ui/commands';
-	import { serverLabel, statusLabel } from '$lib/ui/connection';
+	import { schemeUse, serverLabel, statusLabel } from '$lib/ui/connection';
+	import { lobbyMarker } from '$lib/ui/lobby';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { FeedbackState, type Feedback } from '$lib/ui/feedback.svelte';
 	import type { LiveComposer } from '$lib/ui/live-composer.svelte';
@@ -356,6 +357,8 @@
 	let elsewhere = $state<string | undefined>();
 	/** The sign-in scheme the connect screen opens with, when something asked for one. */
 	let connectScheme = $state<Scheme | undefined>();
+	/** On Passkey, whether the connect screen opens at Sign in or Create account (the lobby's banner asks to create one). */
+	let connectPasskey = $state<PasskeyMode | undefined>();
 	/** The connect screen opens at choosing a server (a new one, or a link's), rather than at signing in to the one in it. */
 	let connectChoosing = $state(false);
 	let recentServers = $state<RecentServer[]>([]);
@@ -840,6 +843,20 @@
 	let canStartPrivate = $derived(session.canManageRooms && session.steady && !session.readOnly && session.passkeySession);
 	/** The NewPrivateDialog, from the + beside Private. */
 	let newPrivateOpen = $state(false);
+	/**
+	 * Inviting someone in from the server's lobby (`ext:permissions` `invite`): Invite on their profile card and member
+	 * row, which sends `/invite`, for those who look limited to it; with a command to send it as.
+	 */
+	let canInvite = $derived(session.canInvite && session.capabilities.command && !session.readOnly && session.steady);
+	/**
+	 * A guest in the lobby can keep their place, or finish joining once invited, by signing up another way than a passkey
+	 * where the server offers one this app can use: email or its sign-in page.
+	 */
+	let lobbySignUp = $derived((['email', 'external'] as const).some((scheme) => schemeUse(session.server, scheme).signUp));
+	/** The welcome put away: the `admittedAt` it was for. */
+	let welcomedAt = $state<number | undefined>();
+	/** Let out of the lobby on this session, and not put away yet: the welcome shows. */
+	let welcomeIn = $derived(session.admittedAt !== undefined && session.admittedAt !== welcomedAt && !session.lobbyLimit);
 	/** Notices the private rooms someone else added you to, as they arrive. */
 	const arrivals = new ArrivalWatch();
 	/** Whose added rooms, and the sidebar's folded rooms, are kept: each account on each server. */
@@ -1445,8 +1462,9 @@
 	 * carrying the handle typed there. `signIn` asks for whichever sign-in the
 	 * server offers: a passkey, which starts from a guest session, else email.
 	 */
-	function openConnect(options: { scheme?: Scheme; signIn?: boolean; name?: string } = {}): void {
+	function openConnect(options: { scheme?: Scheme; signIn?: boolean; name?: string; passkey?: PasskeyMode } = {}): void {
 		if (previewMode) return;
+		connectPasskey = options.passkey;
 		const offered = session.server?.auth ?? [];
 		// Signing in is what `auth` lists (§3.1): a passkey first where it signs in and there are guests to
 		// start the ceremony from, or email doesn't sign in; email otherwise (it may be the way to join).
@@ -2428,7 +2446,7 @@
 		const originKey = draftKey(roomId);
 		const mentions = [...new Set([...composerMentions, ...added])];
 		const dismissed = drafts.dismissed;
-		const action = composerAction(draft, { command: snapshot.capabilities.command, rooms: session.canManageRooms, members: !snapshot.memberChangesUnsupported, append: snapshot.capabilities['embed:append'] }, mentions);
+		const action = composerAction(draft, { command: snapshot.capabilities.command, rooms: session.canManageRooms, members: !snapshot.memberChangesUnsupported, append: snapshot.capabilities['embed:append'], admits: session.canInvite }, mentions);
 		if (action.kind === 'live') {
 			startLive(chat, paneRoom, reply);
 			return;
@@ -3656,7 +3674,7 @@
 {:else if connectOpen}
 	<ConnectScreen
 		{client} {session} bind:serverInput bind:displayName {passkeyUnavailable} bind:recentServers
-		canCancel={!disconnected && (session.rooms.length > 0 || session.ready || offeringLink)} initialScheme={connectScheme}
+		canCancel={!disconnected && (session.rooms.length > 0 || session.ready || offeringLink)} initialScheme={connectScheme} initialPasskey={connectPasskey}
 		initialError={links.failure?.error} initialChoosing={connectChoosing} linked={offeringLink && linked ? { server: linked.server, room: linked.room } : undefined}
 		onconnect={leaveBackend} onconnected={connected} oncancel={stayAfterOffer} onsignout={signedOut}
 	/>
@@ -3718,6 +3736,7 @@
 			<RoomHeader
 				room={activeRoom}
 				pane={paneRoom ?? activeRoom}
+				everyone={lobbyMarker(session.lobby, activeRoom.id, Boolean(session.lobbyLimit))}
 				showTopic={!pinnedDescription}
 				ondescription={descriptionPutAway ? () => { if (editTarget) hiddenDescriptions = showDescription(hiddenDescriptions, draftKey(editTarget.id)); } : undefined}
 				descriptionUpdated={descriptionEdited}
@@ -3756,13 +3775,27 @@
 				</div>
 			{/if}
 
-			{#if addedHere && activeRoom}
-				{@const added = activeRoom}
-				<AddedBanner
-					testid="added-banner" busy={addedTask.busy || !paneReady} error={addedTask.note} muted={added.mutedUntil !== undefined}
-					onmute={canMuteRoom ? () => muteAdded(added.id, true) : undefined} onunmute={canMuteRoom ? () => muteAdded(added.id, false) : undefined}
-					onleave={session.canManageRooms && !session.readOnly ? leavePane : undefined} ondismiss={() => keepAdded(addedRooms.filter((id) => id !== added.id))}
-				/>
+			<!--
+				Under the header, the banner that says how you came to be here: added to a private room by someone, or limited
+				to the server's lobby (and welcomed in once let out of it). One block for both, as most rooms show neither.
+			-->
+			{#if (addedHere && activeRoom) || session.lobbyLimit || welcomeIn}
+				{#if addedHere && activeRoom}
+					{@const added = activeRoom}
+					<AddedBanner
+						testid="added-banner" busy={addedTask.busy || !paneReady} error={addedTask.note} muted={added.mutedUntil !== undefined}
+						onmute={canMuteRoom ? () => muteAdded(added.id, true) : undefined} onunmute={canMuteRoom ? () => muteAdded(added.id, false) : undefined}
+						onleave={session.canManageRooms && !session.readOnly ? leavePane : undefined} ondismiss={() => keepAdded(addedRooms.filter((id) => id !== added.id))}
+					/>
+				{:else if lobbyNudge.component}
+					{@const LobbyBanner = lobbyNudge.component}
+					<LobbyBanner
+						limit={session.lobbyLimit} guest={!session.passkeySession} room={(session.lobby && session.room(session.lobby.room_id)?.title) || activeRoom.title}
+						passkey={!passkeyUnavailable && schemeUse(session.server, 'webauthn').signUp} signUp={lobbySignUp}
+						onsignup={(kind) => openConnect(kind === 'passkey' ? { scheme: 'webauthn', passkey: 'register' } : { signIn: true })}
+						welcome={welcomeIn} server={currentLook.title ?? backendLabel} ondismiss={() => (welcomedAt = session.admittedAt)}
+					/>
+				{/if}
 			{/if}
 
 			{#if pinnedDescription && !descriptionMakesWay}
@@ -3906,7 +3939,7 @@
 		{/if}
 	{/snippet}
 	{#snippet members()}
-		<MemberListSidebar {client} {session} room={paneRoom} open={memberListOpen} drawRows={memberRowsDrawn} canChange={canChangeMembers} canAdd={canAddMembers} canMessage={canStartPrivate} onnamed={(roomId) => arrivals.mine(roomId)} onopenroom={openPrivateRoom} />
+		<MemberListSidebar {client} {session} room={paneRoom} open={memberListOpen} drawRows={memberRowsDrawn} canChange={canChangeMembers} canAdd={canAddMembers} canMessage={canStartPrivate} canInvite={canInvite} onnamed={(roomId) => arrivals.mine(roomId)} onopenroom={openPrivateRoom} />
 	{/snippet}
 	<!--
 		Outside the conversation pane, which a phone hides while the room list shows: a modal there doesn't render,
@@ -3950,7 +3983,7 @@
 	{/if}
 	{#if profileCardHost.once(Boolean(profileCard.current), () => profileCard.close(), profileCard.current?.anchor)}
 		{@const ProfileCard = profileCardHost.component!}
-		<ProfileCard {client} {session} room={paneRoom} canChange={canAddMembers} canMention={Boolean(composer) && canCompose && !selection.active} canMessage={canStartPrivate} onmention={(userId) => composer?.mention(userId)} onnamed={(roomId) => arrivals.mine(roomId)} onopenroom={openPrivateRoom} />
+		<ProfileCard {client} {session} room={paneRoom} canChange={canAddMembers} canInvite={canInvite} canMention={Boolean(composer) && canCompose && !selection.active} canMessage={canStartPrivate} onmention={(userId) => composer?.mention(userId)} onnamed={(roomId) => arrivals.mine(roomId)} onopenroom={openPrivateRoom} />
 	{/if}
 	{#if reactorsPopover.once(Boolean(reactorsList.current), () => reactorsList.close(), reactorsList.current?.anchor)}{@const ReactorsPopover = reactorsPopover.component!}<ReactorsPopover />{/if}
 	<!-- An uploaded Markdown file, rendered full screen: opened from its card in the timeline. -->

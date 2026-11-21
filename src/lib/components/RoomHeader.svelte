@@ -14,6 +14,8 @@
 		room: RoomSnapshot;
 		/** The room whose history the header reports on: the open thread, else the room. */
 		pane: RoomSnapshot;
+		/** The room's records are visible to everyone, such as a server's lobby: what marks it so ("Visible to everyone"). */
+		everyone?: string;
 		/** Show the room's description under its title: off while it's pinned under the header as a description. */
 		showTopic?: boolean;
 		/** The open thread's title; undefined in the room view. */
@@ -71,7 +73,7 @@
 		onshortcuts?: () => void;
 	}
 	let {
-		room, pane, showTopic = true, threadTitle, typing, replyCount, moreReplies = false, waiting = false, updating = false, canEdit, editDisabled, canLeave, canJoin = false,
+		room, pane, everyone, showTopic = true, threadTitle, typing, replyCount, moreReplies = false, waiting = false, updating = false, canEdit, editDisabled, canLeave, canJoin = false,
 		memberListOpen, memberListToggle = true, unreadElsewhere = 0, mentionsElsewhere = 0, onback, onroom, onedit, onleave, oncopylink, onjoin, onmute, onmemberlist, ondescription, descriptionUpdated = false, onsearch, searchHint, onshortcuts
 	}: Props = $props();
 
@@ -115,6 +117,7 @@
 	topic={topic || line}
 	topicTitle={topic && room.description ? maskSpoilers(room.description) : undefined}
 	private={pane.private}
+	{everyone}
 	{faces}
 	{typing}
 	replies={replyCount !== undefined ? { count: replyCount, more: moreReplies } : undefined}
