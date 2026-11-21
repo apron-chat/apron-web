@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import type { Page, WebSocketRoute } from '@playwright/test';
 import { NOW } from '../scripts/qa/lib/helpers.js';
 
 /** Any URL off this machine. */
@@ -36,6 +36,12 @@ export type MockOptions = {
 	history?: Record<string, unknown>[];
 	/** Set by `mockServer` once the page connects: sends the page a frame, such as a live `message`. */
 	deliver?: (frame: Record<string, unknown>) => void;
+	/**
+	 * An access mode other than `public` (`MockAccess`): the server answers as one in `lobby` or `private` mode instead,
+	 * and every other option but `sent`, `opened` and `server` is ignored. One `MockAccess` can serve several pages, as
+	 * one server serves several people.
+	 */
+	access?: MockAccess;
 };
 
 /**
@@ -52,6 +58,7 @@ export async function mockServer(page: Page, options: MockOptions = {}): Promise
 	let auths = 0;
 	await page.routeWebSocket(/.*/, (ws) => {
 		options.opened?.push(ws.url());
+		if (options.access) return options.access.serve(ws, options);
 		let you: Record<string, unknown> = { user_id: 'guest_1', name: 'Guest 1', status: 'online', ...options.you };
 		// Complete objects, as the listing carries them: the shown status, and `seen` with a shown `offline`.
 		const ada = { user_id: 'ada', name: 'Ada', status: 'offline', seen: String(NOW.getTime() - 2 * 60 * 60 * 1000) };
@@ -105,4 +112,263 @@ export async function mockServer(page: Page, options: MockOptions = {}): Promise
 		});
 		ws.send(JSON.stringify({ method: 'server', params: { apron: 10, agent: 'apron-e2e-mock', auth: ['guest', 'webauthn', 'email', 'token'], signup: ['guest', 'webauthn'], ping: 60, capabilities: ['history', 'rooms', 'status'], ...options.server, ...options.servers?.[ws.url()] } }));
 	});
+}
+
+/** A user object, as the mock keeps and sends it. */
+type User = Record<string, unknown> & { user_id: string; name?: string };
+
+/**
+ * An account the mock keeps, by its session token: a member, or a waiting account (one made by signing up in `lobby`
+ * mode, which sees only the lobby until welcomed). `general`: it has joined General.
+ */
+type Account = { you: User; waiting: boolean; general: boolean; token: string };
+
+/** One page's connection to the mock: who it signed in as, if anyone. */
+type Connection = { ws: WebSocketRoute; you?: User; account?: Account; welcomed: boolean };
+
+/** What the lobby says to newcomers: the server's instructions are its description, as no protocol key carries them. */
+export const LOBBY_DESCRIPTION = 'Welcome! Introduce yourself here, and an admin or moderator will welcome you in. Add a passkey to keep your place.';
+const LOBBY_ROOM = { room_id: 'lobby', title: 'Public Lobby', log_id: '1', description: LOBBY_DESCRIPTION };
+const GENERAL_ROOM = { room_id: 'general', title: 'General', log_id: '2' };
+const PRIVATE_SENDER = { user_id: '~private', name: 'System message to you' };
+
+/**
+ * A server in an access mode other than `public` (PLAN §4), for `mockServer`'s `access`, with nothing beyond the core
+ * protocol: what a newcomer is told comes from the lobby's description and `~private` notices.
+ *
+ * - `lobby`: guests, and accounts made with a passkey, see only the Public Lobby until an admin runs `/welcome
+ *   <user_id>` (`welcome`). A guest welcomed has the display role `welcomed` until it makes an account on its
+ *   connection, which is then a member; a waiting account is let in at once, its connections told with `room_update`
+ *   `updated` and General's record, now visible to it. `setOpen(false)` closes the lobby: guests get a notice and a
+ *   1008 close, and new connections are offered no guest sign-in.
+ * - `private`: no guests. An invite token (`INVITE_TOKEN`) makes a member account.
+ *
+ * Accounts: `admin-token` signs in as Ada (an admin), `member-token` as Bob. The lobby holds an intro from another
+ * guest, Nina (`guest_9`). Every connection on every page it serves shares its state.
+ */
+export class MockAccess {
+	static readonly INVITE_TOKEN = 'apron_join_e2e';
+	open: boolean;
+	readonly accounts = new Map<string, Account>([
+		['admin-token', { you: { user_id: 'ada', name: 'Ada', roles: ['admin'] }, waiting: false, general: true, token: 'admin-token' }],
+		['member-token', { you: { user_id: 'bob', name: 'Bob' }, waiting: false, general: true, token: 'member-token' }]
+	]);
+	readonly connections: Connection[] = [];
+	/** Every frame a page sent, with the `user_id` it was signed in as. */
+	readonly sent: { from?: string; frame: Record<string, any> }[] = [];
+	#guests = 0;
+	#logId = 100;
+	readonly #lobbyHistory: Record<string, unknown>[] = [
+		{ message_id: '10', log_id: '10', room_id: 'lobby', from: { user_id: 'guest_9', name: 'Nina' }, body: { text: 'Hi! I’m Nina, here for the meetup.' } }
+	];
+
+	constructor(readonly mode: 'lobby' | 'private', options: { open?: boolean } = {}) {
+		this.open = options.open ?? true;
+	}
+
+	/** Seeds a waiting account, as one a passkey made in an earlier visit. */
+	waiting(userId: string, token: string): void {
+		this.accounts.set(token, { you: { user_id: userId, name: userId[0].toUpperCase() + userId.slice(1), roles: ['waiting'] }, waiting: true, general: false, token });
+	}
+
+	/** Sees only the lobby: a guest, or a waiting account. */
+	#restricted(conn: Connection): boolean {
+		return this.mode === 'lobby' && conn.you !== undefined && (conn.account === undefined || conn.account.waiting);
+	}
+
+	/** The `server` frame (§3.1): guests only in `lobby` mode while it's open; tokens for invites in either. */
+	#frame(base: Record<string, unknown>): Record<string, unknown> {
+		const guests = this.mode === 'lobby' && this.open;
+		return {
+			apron: 10, agent: 'apron-e2e-mock', ping: 60, capabilities: ['history', 'rooms', 'status', 'command'], ...base,
+			auth: guests ? ['guest', 'webauthn', 'token'] : ['webauthn', 'token'],
+			signup: guests ? ['webauthn', 'token'] : ['token']
+		};
+	}
+
+	#send(conn: Connection, frame: Record<string, unknown>): void {
+		conn.ws.send(JSON.stringify(frame));
+	}
+
+	#notice(conn: Connection, room: string, text: string): void {
+		this.#send(conn, { method: 'message', params: { room_id: room, from: PRIVATE_SENDER, body: { text } } });
+	}
+
+	#lobby(conn: Connection): Record<string, unknown> {
+		const restricted = this.connections.filter((other) => other.you && this.#restricted(other)).map((other) => other.you!.user_id);
+		const members = [...new Set(['guest_9', ...restricted, ...(conn.you ? [conn.you.user_id] : [])])].map((user_id) => ({ user_id }));
+		return { ...LOBBY_ROOM, latest_log_id: String(this.#lobbyHistory.at(-1)?.log_id ?? '1'), history_log_id: '10', members };
+	}
+
+	#general(conn: Connection): Record<string, unknown> {
+		return { ...GENERAL_ROOM, latest_log_id: '2', history_log_id: null, members: [{ user_id: 'ada' }, { user_id: 'bob' }, ...(conn.account?.general ? [{ user_id: conn.you!.user_id }] : [])] };
+	}
+
+	/** The rooms this connection sees: the lobby alone while restricted; General besides, joined or not, once a member. */
+	#rooms(conn: Connection): { joined: Record<string, unknown>[]; not_joined: Record<string, unknown>[] } {
+		if (this.#restricted(conn)) return { joined: [this.#lobby(conn)], not_joined: [] };
+		return conn.account?.general ? { joined: [this.#general(conn), this.#lobby(conn)], not_joined: [] } : { joined: [this.#lobby(conn)], not_joined: [this.#general(conn)] };
+	}
+
+	#sees(conn: Connection, roomId: unknown): boolean {
+		const rooms = this.#rooms(conn);
+		return [...rooms.joined, ...rooms.not_joined].some((room) => room.room_id === roomId);
+	}
+
+	#users(conn: Connection): User[] {
+		const known: User[] = [{ user_id: 'guest_9', name: 'Nina', status: 'online' }, { user_id: 'ada', name: 'Ada', roles: ['admin'] }, { user_id: 'bob', name: 'Bob' }];
+		for (const other of this.connections) if (other.you && !known.some((user) => user.user_id === other.you!.user_id)) known.push(other.you);
+		return known.filter((user) => user.user_id !== conn.you?.user_id).concat(conn.you ? [conn.you] : []);
+	}
+
+	/**
+	 * The server's `/welcome <user_id>`, as an admin runs it (PLAN §4.4, §4.5, with its new name): a guest's connection is
+	 * welcomed, and a waiting account let in on each of its connections. Returns what the admin is told.
+	 */
+	welcome(userId: string, by = 'Ada'): string {
+		const id = userId.replace(/^@/, '');
+		const conns = this.connections.filter((conn) => conn.you?.user_id === id);
+		if (!conns.length) throw new Error(`no one connected is ${id}`);
+		const account = conns[0].account;
+		if (account && !account.waiting) return `${id} is already a member.`;
+		if (account) {
+			account.waiting = false;
+			account.you = { ...account.you, roles: [] };
+			for (const conn of conns) {
+				conn.you = account.you;
+				this.#send(conn, { method: 'user', params: { you: { user_id: id, roles: [] } } });
+				// The rooms it may see now, which it hasn't joined.
+				this.#send(conn, { method: 'room_update', params: { updated: [this.#general(conn)] } });
+				this.#notice(conn, 'lobby', `${by} welcomed you in.`);
+			}
+			return `You welcomed ${id} in.`;
+		}
+		for (const conn of conns) {
+			conn.welcomed = true;
+			conn.you = { ...conn.you!, roles: ['welcomed'] };
+			this.#send(conn, { method: 'user', params: { you: { user_id: id, roles: ['welcomed'] } } });
+			this.#notice(conn, 'lobby', `${by} welcomed you. Add a passkey to finish joining; until you do, closing this page ends your visit.`);
+		}
+		return `You welcomed ${id}. They join once they add a passkey.`;
+	}
+
+	/** `/toggle lobby` (PLAN §4.7): closing it ends every guest's session, a notice, then 1008. */
+	setOpen(open: boolean): void {
+		this.open = open;
+		if (open) return;
+		for (const conn of [...this.connections]) {
+			if (!conn.you || conn.account) continue;
+			this.#notice(conn, 'lobby', 'The Public Lobby is closed.');
+			void conn.ws.close({ code: 1008, reason: 'The Public Lobby is closed' });
+		}
+	}
+
+	serve(ws: WebSocketRoute, options: MockOptions): void {
+		const conn: Connection = { ws, welcomed: false };
+		const base = { ...options.server };
+		this.connections.push(conn);
+		ws.onClose(() => {
+			const at = this.connections.indexOf(conn);
+			if (at >= 0) this.connections.splice(at, 1);
+		});
+		ws.onMessage((data) => {
+			const frame = JSON.parse(String(data));
+			options.sent?.push(frame);
+			this.sent.push({ from: conn.you?.user_id, frame });
+			const reply = (result: unknown) => frame.id !== undefined && ws.send(JSON.stringify({ id: frame.id, result }));
+			const refuse = (code: number, message: string) => frame.id !== undefined && ws.send(JSON.stringify({ id: frame.id, error: { code, message } }));
+			const params = frame.params ?? {};
+			const signedIn = (you: User, account?: Account) => {
+				conn.you = you;
+				conn.account = account;
+				conn.welcomed = false;
+				reply({ you, ...(account ? { token: account.token } : {}) });
+			};
+			switch (frame.method) {
+				case 'ping': return ws.send(JSON.stringify({ method: 'pong' }));
+				case 'auth': {
+					if (params.scheme === 'guest') {
+						if (this.mode === 'private' || !this.open) return refuse(-32001, 'This server is invite-only; ask for an invite link');
+						this.#guests++;
+						return signedIn({ user_id: `guest_${this.#guests}`, name: `Guest ${this.#guests}`, status: 'online' });
+					}
+					if (params.scheme === 'token') {
+						if (params.token === MockAccess.INVITE_TOKEN) {
+							const account = { you: { user_id: 'iris', name: typeof params.name === 'string' && params.name ? params.name : 'Iris', status: 'online' }, waiting: false, general: true, token: 'iris-token' };
+							this.accounts.set(account.token, account);
+							return signedIn(account.you, account);
+						}
+						const account = this.accounts.get(params.token);
+						if (!account) return refuse(-32001, 'Unknown token');
+						return signedIn({ ...account.you, status: 'online' }, account);
+					}
+					if (params.scheme === 'webauthn' && params.action === 'register') {
+						if (this.mode === 'private' || (!this.open && !conn.you)) return refuse(-32001, 'This server is invite-only; ask for an invite link');
+						if (params.step === 'begin') {
+							const rpId = new URL(ws.url()).hostname;
+							return reply({ challenge_id: 'challenge_1', public_key: { challenge: 'AAAA', rp: { id: rpId, name: 'Mock' }, user: { id: 'AAAA', name: params.name ?? 'guest', displayName: params.name ?? 'guest' }, pubKeyCredParams: [{ type: 'public-key', alg: -7 }] } });
+						}
+						// A welcomed guest's passkey makes a member; any other sign-up, a waiting account.
+						const member = conn.welcomed;
+						const account: Account = member
+							? { you: { user_id: 'grace', name: 'Grace', status: 'online' }, waiting: false, general: true, token: 'grace-token' }
+							: { you: { user_id: 'wanda', name: 'Wanda', roles: ['waiting'], status: 'online' }, waiting: true, general: false, token: 'wanda-token' };
+						this.accounts.set(account.token, account);
+						return signedIn(account.you, account);
+					}
+					return refuse(-32602, 'Not in the mock');
+				}
+				case 'me': {
+					if (!conn.you) return refuse(-32001, 'Sign in first');
+					conn.you = { ...conn.you, ...(typeof params.name === 'string' ? { name: params.name } : {}) };
+					return reply({ you: conn.you });
+				}
+				case 'room_list': {
+					if (!conn.you) return refuse(-32001, 'Sign in first');
+					const rooms = this.#rooms(conn);
+					if (typeof params.room_id === 'string') {
+						const joined = rooms.joined.filter((room) => room.room_id === params.room_id);
+						const notJoined = rooms.not_joined.filter((room) => room.room_id === params.room_id);
+						if (!joined.length && !notJoined.length) return refuse(-32602, 'No such room');
+						return reply({ joined, not_joined: notJoined, users: this.#users(conn) });
+					}
+					return reply(params.filter === 'not_joined' ? { joined: [], not_joined: rooms.not_joined, users: this.#users(conn) } : { joined: rooms.joined, users: this.#users(conn) });
+				}
+				case 'status': return reply({});
+				case 'history': {
+					if (!conn.you || !this.#sees(conn, params.room_id)) return refuse(-32602, 'No such room');
+					const lobby = params.room_id === 'lobby';
+					const messages = lobby ? this.#lobbyHistory : [];
+					return reply({ messages, more: false, latest_log_id: lobby ? String(messages.at(-1)?.log_id ?? '1') : '2', history_log_id: lobby ? '10' : null });
+				}
+				case 'message': {
+					if (!conn.you || !this.#sees(conn, params.room_id)) return refuse(-32602, 'No such room');
+					const id = String(++this.#logId);
+					const message = { message_id: id, log_id: id, room_id: params.room_id, from: { user_id: conn.you.user_id, name: conn.you.name }, body: params.body };
+					if (params.room_id === 'lobby') this.#lobbyHistory.push(message);
+					reply({ message_id: id });
+					for (const other of this.connections) if (other.you && this.#rooms(other).joined.some((room) => room.room_id === params.room_id)) this.#send(other, { method: 'message', params: message });
+					return;
+				}
+				case 'command': {
+					const text = String(params.body?.text ?? '');
+					const welcome = /^\/welcome\s+(\S+)\s*$/.exec(text);
+					if (welcome && conn.account?.you.user_id === 'ada') {
+						let said: string;
+						try {
+							said = this.welcome(welcome[1]);
+						} catch {
+							return refuse(-32602, 'No such user');
+						}
+						this.#notice(conn, params.room_id ?? 'lobby', said);
+						return reply({});
+					}
+					return refuse(-32001, 'Not allowed');
+				}
+				default:
+					if (frame.id !== undefined) refuse(-32601, `Not in the mock: ${frame.method}`);
+			}
+		});
+		ws.send(JSON.stringify({ method: 'server', params: this.#frame(base) }));
+	}
 }
