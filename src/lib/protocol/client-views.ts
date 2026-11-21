@@ -2,11 +2,13 @@
 import { parseOrigins, safeAvatar, serverOrigin } from './embeds';
 import { cleanPlainText, withoutBidiOverrides } from './plain-text';
 import { timelineEvents } from './reducer';
-import { isJsonObject, isString } from './types';
+import { isJsonObject, isOpaqueId, isString } from './types';
 import type {
 	JsonObject,
 	Capability,
 	Identity,
+	LobbyLimit,
+	LobbySetting,
 	MessageRecord,
 	ServerParams
 } from './types';
@@ -158,18 +160,20 @@ export const hasHistory = (server: ServerParams | undefined) => hasCapability(se
  * `read_cursors` is `true` unless the server says `false`, also without the
  * extension; `read_receipts` is `'private'` only where the server says so
  * (members of a private room see each other's read cursors), else `false`;
- * `private_rooms` only as a count. A value of the wrong type takes its
- * default.
+ * `private_rooms` only as a count; `lobby` only with a `room_id`, open unless
+ * it says `open: false`. A value of the wrong type takes its default.
  */
-export function serverSettings(server: ServerParams | undefined): { read_cursors: boolean; read_receipts: 'private' | false; private_rooms?: number } {
+export function serverSettings(server: ServerParams | undefined): { read_cursors: boolean; read_receipts: 'private' | false; private_rooms?: number; lobby?: LobbySetting } {
 	const ext = hasCapability(server, 'ext:settings') ? server?.ext : undefined;
 	const settings = isJsonObject(ext) && isJsonObject(ext.settings) ? ext.settings : {};
 	// The most private rooms one user may be a member of. Absent (or not a count) states no limit.
 	const limit = settings.private_rooms;
+	const lobby = isJsonObject(settings.lobby) && isOpaqueId(settings.lobby.room_id) ? { room_id: settings.lobby.room_id, open: settings.lobby.open !== false } : undefined;
 	return {
 		read_cursors: settings.read_cursors !== false,
 		read_receipts: settings.read_receipts === 'private' ? 'private' : false,
-		...(typeof limit === 'number' && Number.isInteger(limit) && limit >= 0 ? { private_rooms: limit } : {})
+		...(typeof limit === 'number' && Number.isInteger(limit) && limit >= 0 ? { private_rooms: limit } : {}),
+		...(lobby ? { lobby } : {})
 	};
 }
 
@@ -207,10 +211,16 @@ export interface Permissions {
 	add_members: boolean;
 	/** May move other users' messages; without it, only their own. */
 	move_any: boolean;
+	/** May admit a user limited to the lobby (`ext.settings.lobby`) with the command `/invite <user_id>`. */
+	invite: boolean;
+	/** Sees only the lobby and its threads, waiting to be admitted or invited (`LobbyLimit`); absent when not limited. */
+	lobby?: LobbyLimit;
 }
 
+type PermissionFlag = 'write' | 'add_members' | 'move_any' | 'invite';
+
 /** The extension's defaults, for each key that is absent. */
-const DEFAULT_PERMISSIONS: Permissions = { write: true, add_members: false, move_any: false };
+const DEFAULT_PERMISSIONS: Pick<Permissions, PermissionFlag> = { write: true, add_members: false, move_any: false, invite: false };
 
 /**
  * Without the extension: what PROTOCOL.md allows. Any member may ask to add
@@ -218,13 +228,14 @@ const DEFAULT_PERMISSIONS: Permissions = { write: true, add_members: false, move
  * `unsupported` where it doesn't let them; moves stay with your own
  * messages.
  */
-const CORE_PERMISSIONS: Permissions = { write: true, add_members: true, move_any: false };
+const CORE_PERMISSIONS: Permissions = { write: true, add_members: true, move_any: false, invite: false };
 
 /**
  * What the signed-in user may do that the core leaves to the server
  * (extension `ext:permissions`, `you.ext.permissions`), read from `you`
  * only. Each key that is absent or not a boolean takes its default (`write`
  * on, the rest off); so does every key when `permissions` isn't an object.
+ * `lobby` is kept only as one of its values, `waiting` or `invited`.
  * Without the extension the client offers what PROTOCOL.md allows instead
  * (CORE_PERMISSIONS), and handles the server's refusals.
  */
@@ -232,8 +243,14 @@ export function yourPermissions(server: ServerParams | undefined, you: Identity 
 	if (!hasCapability(server, 'ext:permissions')) return { ...CORE_PERMISSIONS };
 	const ext = you?.ext;
 	const granted = isJsonObject(ext) && isJsonObject(ext.permissions) ? ext.permissions : {};
-	const flag = (key: keyof Permissions) => (typeof granted[key] === 'boolean' ? (granted[key] as boolean) : DEFAULT_PERMISSIONS[key]);
-	return { write: flag('write'), add_members: flag('add_members'), move_any: flag('move_any') };
+	const flag = (key: PermissionFlag) => (typeof granted[key] === 'boolean' ? (granted[key] as boolean) : DEFAULT_PERMISSIONS[key]);
+	const lobby = granted.lobby === 'waiting' || granted.lobby === 'invited' ? granted.lobby : undefined;
+	return { write: flag('write'), add_members: flag('add_members'), move_any: flag('move_any'), invite: flag('invite'), ...(lobby ? { lobby } : {}) };
+}
+
+/** How you are limited to the server's lobby (`ext:permissions` `lobby`), or undefined: read from `you`, as `yourPermissions`. */
+export function lobbyLimit(server: ServerParams | undefined, you: Identity | undefined): LobbyLimit | undefined {
+	return yourPermissions(server, you).lobby;
 }
 
 /** The longest bio (extension `ext:bio`), in characters (code points). */

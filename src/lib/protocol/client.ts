@@ -33,6 +33,7 @@ import {
 	type JsonValue,
 	type Capability,
 	type Identity,
+	type LobbyLimit,
 	type MessageBody,
 	type Embed,
 	type MessageRecord,
@@ -138,7 +139,7 @@ import {
 	type TypingState,
 	type ValidHistoryResponse
 } from './client-internals';
-import { capabilitiesOf, parseServerParams, peopleTitle, PRIVATE_ROOM, sameRoomSnapshot, serverAddress, serverSettings, yourPermissions } from './client-views';
+import { capabilitiesOf, lobbyLimit, parseServerParams, peopleTitle, PRIVATE_ROOM, sameRoomSnapshot, serverAddress, serverSettings, yourPermissions, type Permissions } from './client-views';
 import { reactionKey } from './custom-emoji';
 import { HistoryQueue } from './history-queue';
 import { toggleTask } from './task-list';
@@ -160,6 +161,7 @@ export {
 	findMessage,
 	hasHistory,
 	keepsBio,
+	lobbyLimit,
 	MAX_BIO_CHARS,
 	mediaLimit,
 	normalizeWebSocketUrl,
@@ -476,6 +478,15 @@ export class ChatClient {
 	private signInNeeded?: Exclude<SignInMethod, 'link'>;
 	/** The current socket carried an error about the connection; its message outlives the close. */
 	private connectionErrored = false;
+	/** This client is closing the current socket itself, with a code of its own: the close says nothing of the server's. */
+	private closingHere = false;
+	/** `permissions()`'s last answer, and what it was read from. */
+	private keptPermissions?: { server?: ServerParams; you?: Identity; permissions: Permissions };
+	/**
+	 * When this session was let out of the server's lobby (`ext:permissions` `lobby` went away while signed in): the
+	 * rest of the server is listed again, and the page says so. Gone with the session.
+	 */
+	private admittedAt?: number;
 	private disconnectedAt?: number;
 	/**
 	 * When this reconnect began where someone could see it: the drop, on a page
@@ -510,7 +521,7 @@ export class ChatClient {
 			opened: () => this.socketOpened(),
 			frame: (data) => this.handleMessage(data),
 			errored: (current) => this.socketErrored(current),
-			closed: () => this.socketClosed(),
+			closed: (code, reason) => this.socketClosed(code, reason),
 			failed: (message) => this.handleConnectionFailure(message),
 			refused: (message, until) => this.connectionRefused(message, until),
 			visibilityChanged: () => this.visibilityChanged(),
@@ -738,6 +749,8 @@ export class ChatClient {
 		const history = this.hasCap('history');
 		const roomMutes = this.pausedRooms();
 		const heldStatuses = this.showingHeldStatuses();
+		// What you may do (`ext:permissions`): signed in only.
+		const permissions = this.authenticated ? this.permissions() : undefined;
 		return {
 			status: this.status,
 			authenticated: this.authenticated,
@@ -747,7 +760,9 @@ export class ChatClient {
 			...(this.registeredSession && this.authenticated && this.signedInWith ? { signedInWith: this.signedInWith, signInMethods: [this.signedInWith, ...[...this.addedMethods].filter((method) => method !== this.signedInWith)] } : {}),
 			...(this.sessionToken !== undefined && this.registeredSession ? { keptSession: true } : {}),
 			...(this.passkeyAbort ? { passkeyBusy: !this.adding } : {}),
-			readOnly: this.authenticated && !yourPermissions(this.server, this.you).write,
+			readOnly: permissions !== undefined && !permissions.write,
+			...(permissions?.lobby ? { lobby: permissions.lobby } : {}),
+			...(this.admittedAt !== undefined ? { admittedAt: this.admittedAt } : {}),
 			roomsListed: this.authenticated && (this.joinedComplete || !this.hasCap('rooms')),
 			...(this.mutedUntil !== undefined ? { mutedUntil: this.mutedUntil } : {}),
 			...(roomMutes.length ? { roomMutes: Object.fromEntries(roomMutes) } : {}),
@@ -833,6 +848,18 @@ export class ChatClient {
 			...(this.disconnectedAt !== undefined ? { disconnectedAt: this.disconnectedAt } : {}),
 			...(this.retryingSince !== undefined ? { retryingSince: this.retryingSince } : {})
 		};
+	}
+
+	/**
+	 * What you may do (`yourPermissions`), read again only when the server's frame or your identity is another object:
+	 * each snapshot asks, and they seldom change.
+	 */
+	private permissions(): Permissions {
+		const kept = this.keptPermissions;
+		if (kept && kept.server === this.server && kept.you === this.you) return kept.permissions;
+		const permissions = yourPermissions(this.server, this.you);
+		this.keptPermissions = { server: this.server, you: this.you, permissions };
+		return permissions;
 	}
 
 	/**
@@ -3156,6 +3183,7 @@ export class ChatClient {
 		this.status = reconnecting ? 'reconnecting' : 'connecting';
 		this.error = undefined;
 		this.connectionErrored = false;
+		this.closingHere = false;
 		this.emit();
 	}
 
@@ -3174,8 +3202,19 @@ export class ChatClient {
 		this.emit();
 	}
 
-	/** The current socket closed, or was dropped as if it had (`Transport`): its connection ends, and a reconnect follows while running. */
-	private socketClosed(): void {
+	/**
+	 * The current socket closed, or was dropped as if it had (`Transport`): its connection ends, and a reconnect follows
+	 * while running. `code` and `reason`: the close's, where the socket closed.
+	 */
+	private socketClosed(code?: number, reason?: string): void {
+		if (code === 1008 && !this.closingHere && this.authenticated && !this.registeredSession) {
+			// The server ended a guest's session for its policy (1008), as one does when its lobby closes
+			// (ext:settings `lobby`): a guest sign-in again would be refused or ended again, so nothing reconnects on its
+			// own. The banner's Sign in connects again, and the server's new `server` frame says what it offers now.
+			this.reconnectHeld = true;
+			const why = reason?.trim().slice(0, 300);
+			this.error = `The server ended this guest session${why ? ` (${why})` : ''}.`;
+		}
 		// Only a session-only scrollback (no capability `history`) has a gap to mark; recovery fills any other.
 		this.showReconnectDivider = (this.rooms.size > 0 || this.showReconnectDivider) && !this.hasCap('history');
 		// The protocol view is rebuilt from the next connection's room_list
@@ -3441,10 +3480,13 @@ export class ChatClient {
 		// as they arrive like any other (§4.5).
 		if (signIn) this.resetMutes();
 		const previousUserId = this.you?.user_id ?? this.resumingUserId;
+		const limited = this.authenticated ? lobbyLimit(this.server, this.you) : undefined;
 		// What a restore brought in is for the account it was kept for: anyone else sees none of it.
 		if (this.restoredUserId !== undefined && signIn && identity.user_id !== this.restoredUserId) this.dropRestored();
 		this.restoredUserId = undefined;
 		this.setYou(cloneJson(identity as Identity), true);
+		// Let out of the lobby by this result, such as an invited guest's new account (an addition, or the same user): welcomed in.
+		const admitted = this.noteAdmission(limited, added || previousUserId === identity.user_id);
 		if (signIn) this.dropKeptStatuses(identity.user_id === this.resumingUserId);
 		// The listings made for who was signed in, on this connection or before a drop: another identity lists its own.
 		// So do read cursors still waiting to go out: they are the previous identity's.
@@ -3514,7 +3556,9 @@ export class ChatClient {
 		// Rooms come by request (§4.2.1), usually already sent behind `auth`;
 		// without capability `rooms` there is the default room.
 		if (this.hasCap('rooms')) {
-			if (!this.joinedListing) this.requestRooms(false);
+			// Let out of the lobby: a listing under way was made for what it saw before.
+			if (admitted) this.listJoinedRooms();
+			else if (!this.joinedListing) this.requestRooms(false);
 		} else {
 			// No joined listing will come to settle the statuses held through a resume: what arrives stands now.
 			this.settleHeldStatuses();
@@ -3781,6 +3825,19 @@ export class ChatClient {
 	}
 
 	/**
+	 * After `you` changed on a signed-in connection: whether it was let out of the server's lobby (`ext:permissions`
+	 * `lobby`, `limited` before the change, gone after), and so sees the rest of the server. The listings of rooms to join
+	 * made for what it saw before go; `welcome`: the page says it was let in (`admittedAt`), as for the same user, or an
+	 * account made on this connection, rather than another account signed in to.
+	 */
+	private noteAdmission(limited: LobbyLimit | undefined, welcome: boolean): boolean {
+		if (limited === undefined || lobbyLimit(this.server, this.you) !== undefined) return false;
+		this.forgetListedRooms();
+		if (welcome) this.admittedAt = this.now();
+		return true;
+	}
+
+	/**
 	 * A `user` notification (§3.3), about identity only: `you` merges into
 	 * this connection's identity, and a new `user_id` there brings its own
 	 * rooms; `new` is another user's current object, and with `old` the old
@@ -3791,9 +3848,12 @@ export class ChatClient {
 		if (!params) return;
 		if (isIdentity(params.you)) {
 			const previous = this.you?.user_id;
+			const limited = this.authenticated ? lobbyLimit(this.server, this.you) : undefined;
 			this.setYou(cloneJson(params.you), false);
-			// The connection now acts as another identity, with its own rooms (§3.3).
-			if (previous !== undefined && previous !== params.you.user_id && this.authenticated && this.hasCap('rooms')) this.listJoinedRooms();
+			const admitted = this.noteAdmission(limited, true);
+			// The connection now acts as another identity, with its own rooms (§3.3); or the same one, let out of the lobby,
+			// sees the rest of the server: the rooms are listed again, a listing under way made for what it saw before.
+			if ((admitted || (previous !== undefined && previous !== params.you.user_id)) && this.authenticated && this.hasCap('rooms')) this.listJoinedRooms();
 		} else if (isIdentity(params.new)) {
 			const current = this.noteUser(cloneJson(params.new));
 			if (isIdentity(params.old) && params.old.user_id !== current.user_id) this.retireUserId(params.old.user_id, current.user_id);
@@ -4695,7 +4755,10 @@ export class ChatClient {
 		this.startRecovery(room, head, true);
 		this.error = 'History is arriving faster than the client can recover; reconnecting.';
 		this.transport.scheduleReconnect();
-		if (this.socket && this.socket.readyState === WebSocket.OPEN) this.socket.close(1008, 'history recovery overflow');
+		if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+			this.closingHere = true;
+			this.socket.close(1008, 'history recovery overflow');
+		}
 	}
 
 	private abortRecovery(room: RoomState, message: string): void {
@@ -4824,6 +4887,7 @@ export class ChatClient {
 		this.fresh = true;
 		// A restore taken for the session discarded isn't the next one's to drop (`dropRestored`).
 		this.restoredUserId = undefined;
+		this.admittedAt = undefined;
 		this.forgetListedRooms();
 		this.resetMutes();
 		this.forgetConnectionState();
