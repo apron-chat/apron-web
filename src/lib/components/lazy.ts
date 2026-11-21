@@ -10,6 +10,8 @@ export const newThreadDialog = part((m) => m.NewThreadDialog);
 export const roomEditor = part((m) => m.RoomEditor);
 export const searchDialog = part((m) => m.SearchDialog);
 export const shortcutsDialog = part((m) => m.ShortcutsDialog);
+/** Every command the user can use (`ext:command_list`), opened by `/help` or the composer's Browse all commands. */
+export const commandPalette = part((m) => m.CommandPaletteDialog);
 export const signInLinkDialog = part((m) => m.SignInLinkDialog);
 /** Preferences, with Profile's form (ProfileBar's), which mounts the first time it opens. */
 export const profilePreferences = part((m) => m.ProfilePreferences);

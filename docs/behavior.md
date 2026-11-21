@@ -1018,6 +1018,39 @@ arrive as notices, and a failed command shows its error as a local "System
 message to you" notice and gives the draft back. `//` posts a message starting with one `/`.
 Without the capability, `/` text is an ordinary message.
 
+**Command autocomplete.** Where the server lists its commands
+([EXT.md §13](../EXT.md#13-extcommand_list)), a `/` at the start of the
+composer opens a list of them, with apron-web's own (`/nick`, `/join`,
+`/leave`, `/topic`, `/kick`, `/invite`, `/live`, as the server's capabilities
+allow), each name once, apron-web's own where both have one: each row shows `/name`, its arguments as the server
+wrote them, and what it does. A command with forms (`/emoji add`,
+`/emoji remove`) shows once, with the words of its forms, which the list offers
+once its first word is typed. A command that requires a reply shows only while
+replying; while replying, commands that use the reply come first, and with
+files attached, those that use files. ↑ ↓ move, Tab takes the
+highlighted one, and so does Enter, unless nothing is typed of the word or the
+words typed already name a command, when Enter runs it. Taking one puts in
+`/name ` and nothing else; once the words typed are arguments, the list
+closes. Escape dismisses it. A command that isn't listed still goes to the
+server. The list is asked for as the first command of the page starts, and
+again after `/help`; it is kept for the `user_id` it was listed for, an
+account's on the device too, so the next visit offers it at once (and asks
+again as a command starts), and an account with none kept asks on connecting,
+at most once a day. Without the extension, there is no list.
+
+**Command palette.** With the same extension, `/help` alone opens the command
+palette instead of going to the server (and asks for the list anew), and so does
+**Browse all commands**, the last row of the `/` list, its field holding what was
+typed of the command. It lists every command in sections by who may use it, as
+the server groups them: Everyone, Guests, Members, Room owners, Roles, Admins,
+then the server's others, then apron-web's own (Built in). Each row is `/name`,
+its arguments and what it does, a command's forms set in under its first word;
+one that needs a reply or files you haven't given is greyed and says so. The
+field narrows them by name or description; ↑ ↓ move, Enter or a click picks,
+Escape closes. Picking one closes it and puts `/name ` at the start of the
+composer, in place of what was typed of a command, with the focus there. Its
+code loads on demand, the first time it opens.
+
 **Live typing.** With the `embed:append` capability, `/live` alone (with or
 without `command`) is the client's own: it puts the composer in live typing
 mode for the next message

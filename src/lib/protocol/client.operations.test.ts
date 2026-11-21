@@ -68,6 +68,21 @@ describe('posts and commands', () => {
 	expect(socket.sent).toHaveLength(before);
 	});
 
+	it('lists the commands only from a server that advertises ext:command_list, with the result as it came', async () => {
+		await socket.greet(['command', 'ext:command_list']);
+		const listed = client.listCommands();
+		expect(socket.request('ext:command_list').params).toEqual({});
+		const result = { commands: [{ name: 'emoji add', description: 'Add an emoji', hint: ':<name>:', uses: ['body.embeds'], requires: ['body.embeds'], group: 'role' }, { name: 7 }] };
+		await socket.reply('ext:command_list', result);
+		// Read (`parseCommandList`) where it is kept, which loads on demand.
+		await expect(listed).resolves.toEqual(result);
+		// The next server frame doesn't list it: nothing is asked.
+		socket.receive({ method: 'server', params: { apron: 10, agent: 'fake', auth: ['guest'], capabilities: ['command', 'rooms'] } });
+		const before = socket.sent.length;
+		await expect(client.listCommands()).rejects.toThrow('This server lists no commands');
+		expect(socket.sent).toHaveLength(before);
+	});
+
 	it('takes what a request caused before its result (§1): posts, uploads, saves, and new rooms', async () => {
 		await connect(['edit', 'rooms', 'reactions', 'embed:upload']);
 		const writes: string[] = [];

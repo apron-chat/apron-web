@@ -10,7 +10,8 @@ import type { MediaTypes, ServerMedia } from '$lib/protocol/client';
  * `command`. `//` posts a message starting with `/`. Without capability `command`,
  * every text is a message. `/live` alone, with capability `embed:append`
  * (`caps.append`), is the client's own, with or without `command`: it puts the
- * composer in live typing mode.
+ * composer in live typing mode. `/help` alone, where the server lists its commands (`caps.palette`, `ext:command_list`),
+ * opens apron-web's command palette rather than going to the server.
  */
 export type ComposerAction =
 	| { kind: 'message'; text: string }
@@ -25,7 +26,9 @@ export type ComposerAction =
 	/** `room_join` with the `user_id` of the user to add (§4.2.2). */
 	| { kind: 'invite'; user: string }
 	/** `/live`, apron-web's own: the composer types its next message live, as an `append` embed (§4.8.5). */
-	| { kind: 'live' };
+	| { kind: 'live' }
+	/** `/help` alone, with `ext:command_list`: the command palette opens, listing what `/help` would. */
+	| { kind: 'palette' };
 
 /** Composer text that is a command: one leading `/`, not `//`. The design system's Composer reads it the same way. */
 export { isCommand };
@@ -40,9 +43,11 @@ const USER_ARGUMENT = new RegExp(`^@?(${TEXT_ID.source})[.+@:-]*$`);
  * exact where the text is not: in text, an ID ends with a letter, a digit, or
  * `_` (Appendix A.3), so `/kick @al-` names `al` unless a chip says `al-`.
  */
-export function composerAction(text: string, caps: { command: boolean; rooms: boolean; members?: boolean; append?: boolean }, mentions: readonly string[] = []): ComposerAction {
+export function composerAction(text: string, caps: { command: boolean; rooms: boolean; members?: boolean; append?: boolean; palette?: boolean }, mentions: readonly string[] = []): ComposerAction {
 	if (caps.append && /^\/live\s*$/i.test(text)) return { kind: 'live' };
 	if (!caps.command) return { kind: 'message', text };
+	// Names are case-sensitive (`ext:command_list`): only `/help` itself, with nothing after it.
+	if (caps.palette && text.trim() === '/help') return { kind: 'palette' };
 	if (text.startsWith('//')) return { kind: 'message', text: text.slice(1) };
 	if (!isCommand(text)) return { kind: 'message', text };
 	const match = /^\/(\S+)(?:\s+([\s\S]*))?$/.exec(text.trimEnd());

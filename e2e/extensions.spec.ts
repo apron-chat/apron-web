@@ -450,3 +450,103 @@ test.describe('text direction (§3.5.2)', () => {
 		expect(await overridesShown(page)).toEqual([]);
 	});
 });
+
+test.describe('commands (ext:command_list)', () => {
+	const COMMANDS = [
+		{ name: 'help', group: 'all', description: 'List the commands that you can use' },
+		{ name: 'emoji add', group: 'role', description: 'Add a custom emoji', hint: ':<name>:', uses: ['body.embeds'], requires: ['body.embeds'] },
+		{ name: 'emoji remove', group: 'role', description: 'Remove a custom emoji', hint: ':<name>:' },
+		{ name: 'embed-terminal', group: 'all', description: 'Stream a terminal into this room', hint: '[<title>]', uses: ['room_id', 'reply_to'] },
+		{ name: 'approve', group: 'member', description: 'Approve the request that you reply to', uses: ['room_id', 'reply_to'], requires: ['reply_to'] },
+		{ name: 'ban', group: 'admin', description: 'Ban a user from the server', hint: '@user' }
+	];
+
+	test.describe('listed', () => {
+		test.use({ knobs: { capabilities: ['ext:command_list'], commands: COMMANDS, account: true } });
+
+		test('are offered with apron-web’s own as a command is typed, forms after their first word, and all of them in the palette', async ({ preview, page }) => {
+			await preview.open();
+			const field = page.getByTestId('message-input');
+			const picker = page.getByRole('listbox', { name: 'Command suggestions', exact: true });
+			const palette = page.getByRole('dialog', { name: 'Commands', exact: true });
+
+			await test.step('the list is asked for on connecting, and offered as a command is typed', async () => {
+				// Signed in to an account with nothing kept on this device: the list is asked for on connecting, once. A
+				// command that requires a reply isn't offered outside one.
+				await preview.waitForSent('ext:command_list');
+				await field.click();
+				await page.keyboard.type('/');
+				await expect(picker.getByRole('option')).toHaveText([
+					/^\/help\s*List the commands/, /^\/emoji\s*add · remove\s*$/, /^\/embed-terminal\s*\[<title>\]\s*Stream/, /^\/ban\s*@user/,
+					/^\/nick\s*<name>/, /^\/join\s/, /^\/leave\s/, /^\/topic\s/, /^\/kick\s/, /^\/invite\s/, /^\/live\s/, /^Browse all commands/
+				]);
+				await page.keyboard.type('emo');
+				await page.keyboard.press('Tab');
+				await expect(field).toHaveText('/emoji ');
+				await expect(picker.getByRole('option')).toHaveText([/^\/emoji add\s*:<name>:\s*Add a custom emoji/, /^\/emoji remove\s*:<name>:\s*Remove/, /^Browse all commands/]);
+				await page.keyboard.type('r');
+				await page.keyboard.press('Enter');
+				await expect(field).toHaveText('/emoji remove ');
+				await expect(picker).toHaveCount(0);
+			});
+
+			await test.step('/help opens the palette, by who may use each, and asks for the list again', async () => {
+				await page.keyboard.press('ControlOrMeta+a');
+				await page.keyboard.press('Backspace');
+				await page.keyboard.type('/help');
+				await page.keyboard.press('Enter');
+				await expect(palette).toBeVisible();
+				await expect(palette.locator('[role="listbox"] > [role="presentation"]')).toHaveText(['Everyone', 'Members', 'Roles', 'Admins', 'Built in']);
+				await expect(palette.getByRole('option').first()).toHaveText(/^\/help/);
+				// Not replying: the command that requires a reply is there, greyed, saying why.
+				await expect(palette.getByRole('option', { name: /^\/approve/ })).toContainText('Reply to a message first');
+				await expect.poll(async () => (await preview.sent('ext:command_list')).length).toBe(2);
+				expect((await preview.sent('command')).filter((params) => params.body?.text === '/help')).toEqual([]);
+				await expect(field).toHaveText('');
+				// The field narrows them; Enter picks, closing it, and the composer has `/name `, focused.
+				await page.keyboard.type('ban');
+				await expect(palette.getByRole('option')).toHaveText([/^\/ban\s*@user\s*Ban a user/]);
+				await page.keyboard.press('Enter');
+				await expect(palette).toHaveCount(0);
+				await expect(field).toHaveText('/ban ');
+				await expect(field).toBeFocused();
+			});
+
+			await test.step('Browse all commands opens it from what was typed, and a pick replaces that', async () => {
+				await page.keyboard.press('ControlOrMeta+a');
+				await page.keyboard.press('Backspace');
+				await page.keyboard.type('/emo');
+				await picker.getByRole('option', { name: 'Browse all commands' }).click();
+				await expect(palette).toBeVisible();
+				await expect(palette.getByRole('combobox')).toHaveValue('emo');
+				// It finds descriptions too: "Remove" has "emo".
+				await expect(palette.getByRole('option')).toHaveText([/^\/emoji\s*$/, /^\/emoji add/, /^\/emoji remove/, /^\/kick/]);
+				await palette.getByRole('option', { name: /^\/emoji remove/ }).click();
+				await expect(palette).toHaveCount(0);
+				await expect(field).toHaveText('/emoji remove ');
+			});
+		});
+	});
+
+	test.describe('to a guest', () => {
+		test.use({ knobs: { capabilities: ['ext:command_list'], commands: COMMANDS } });
+
+		test('are asked for as the first command starts, not on connecting', async ({ preview, page }) => {
+			await preview.open();
+			await page.getByTestId('message-input').click();
+			expect(await preview.sent('ext:command_list')).toEqual([]);
+			await page.keyboard.type('/em');
+			await expect(page.getByRole('listbox', { name: 'Command suggestions', exact: true }).getByRole('option')).toHaveText([/^\/emoji\s/, /^\/embed-terminal\s/, /^Browse all commands/]);
+			expect(await preview.sent('ext:command_list')).toHaveLength(1);
+		});
+	});
+
+	test('without the extension, none are offered or asked for', async ({ preview, page }) => {
+		await preview.open();
+		await page.getByTestId('message-input').click();
+		await page.keyboard.type('/he');
+		await expect(page.getByTestId('message-input')).toHaveText('/he');
+		await expect(page.getByRole('listbox', { name: 'Command suggestions', exact: true })).toHaveCount(0);
+		expect(await preview.sent('ext:command_list')).toEqual([]);
+	});
+});

@@ -54,4 +54,33 @@ describe('MentionPicker', () => {
 		dom.unmount();
 		expect(render({ query: 'zz', emoji: [] }).textContent).toBe('No emoji match “zz”');
 	});
+
+	it('lists commands as their /name, hint as written and the words of their forms, the description under them', () => {
+		const onpick = vi.fn();
+		const commands = [
+			{ name: 'emoji add', hint: ':name:', description: 'Add a custom emoji' },
+			{ name: 'emoji remove', hint: ':name:', description: 'Remove a custom emoji' }
+		];
+		let list = render({ query: 'emoji r', active: 1, commands, onpick });
+		expect(list.getAttribute('aria-label')).toBe('Command suggestions');
+		expect(rows(list)).toEqual(['/emoji add :name: Add a custom emoji', '/emoji remove :name: Remove a custom emoji Tab']);
+		// The word at the caret reads in accent, as far as it was typed.
+		expect([...list.querySelectorAll('mark')].map((mark) => mark.textContent)).toEqual(['r']);
+		list.querySelectorAll('[role="option"]')[0].dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+		expect(onpick).toHaveBeenCalledWith(commands[0], 0);
+		dom.unmount();
+		list = render({ query: 'se', commands: [{ name: 'server', description: 'Show this server', forms: ['avatar', 'title'] }, { name: 'emoji', forms: ['add', 'remove'] }] });
+		expect(rows(list)).toEqual(['/server avatar · title Show this server Tab', '/emoji add · remove']);
+		dom.unmount();
+		expect(render({ query: 'nope', commands: [] }).textContent).toBe('No command matches “/nope”');
+	});
+
+	it('ends a command’s suggestions with a row that opens every command, saying first when nothing matches', () => {
+		const browse = { name: '', browse: 'Browse all commands' };
+		let list = render({ query: 'he', active: 1, commands: [{ name: 'help', description: 'List the commands' }, browse] });
+		expect(rows(list)).toEqual(['/help List the commands', 'Browse all commands Tab']);
+		dom.unmount();
+		list = render({ query: 'zap', commands: [browse] });
+		expect(rows(list)).toEqual(['No command matches “/zap”Browse all commands Tab']);
+	});
 });

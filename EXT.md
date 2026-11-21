@@ -2,7 +2,7 @@
 
 | Protocol Version | 10         |
 |------------------|------------|
-| Last Updated     | 2026-11-19 |
+| Last Updated     | 2026-11-21 |
 
 apron-web is a web client for the
 [Apron Chat Protocol](https://github.com/shazow/apron/blob/main/PROTOCOL.md).
@@ -41,6 +41,7 @@ the fallback of that capability:
 | `ext:emoji`    | shows the server's custom emoji in reactions and text, and offers them to pick ([§9](#9-extemoji)) | shows keys as text, and in reactions as a placeholder |
 | `ext:archive`  | says whose archive it reads, and when it was written ([§10](#10-extarchive))                    | says only that you read            |
 | `ext:editors`  | asks whether those a message with a checklist mentions may edit its text, lets you edit a message that shares its text with you, and shows who edited it ([§11](#11-exteditors)) | edits only your own messages |
+| `ext:command_list` | offers the server's commands, with its own, as a command is typed ([§13](#13-extcommand_list)); with `command` | offers no commands as they are typed |
 
 Some features have no capability:
 
@@ -60,6 +61,8 @@ Some features have no capability:
   them spoilers (`||text||`).
 - apron-web writes no `ext` of its own, except `ext.bio` ([§8](#8-extbio)) and
   `ext.editors` ([§11](#11-exteditors)).
+- apron-web sends one request outside PROTOCOL.md, `ext:command_list`
+  ([§13](#13-extcommand_list)), and only to a server that lists it.
 
 ## 2. The boundary
 
@@ -393,3 +396,63 @@ footnotes, definition lists, `==highlight==`, math, or typographic quotes.
   a checkbox in its place. One with nothing after its marker stays text.
 - Where the viewer may edit the message (`edit`, and [§11](#11-exteditors)),
   checking a box edits the message's text: it rewrites that one marker.
+
+---
+
+## 13. `ext:command_list`
+
+Defined in [EXTENSIONS.md](https://github.com/shazow/apron/blob/main/extensions/ext_command_list.md):
+the `ext:command_list` request, which returns the commands that the user can
+use, as `/help` lists them.
+
+### 13.1 apron-web
+
+- apron-web sends `ext:command_list` only while the server advertises it and
+  `command`. Without both, it offers no commands as they are typed. It still
+  sends a command that isn't listed, as without the extension.
+- It asks when the user first starts a command on the page (a `/` at the start
+  of the composer, or the command palette), and again after a day; whenever
+  the user sends `/help`;
+  and on connecting, signed in to an account, only while it keeps no list for
+  it, at most once a day. A guest's list is asked for as its first command
+  starts. A refused or lost request is asked again, as a command starts, a
+  minute later.
+- It keeps a list for the `user_id` it was listed for, by server and
+  `user_id`. An account's is kept on the device too, for the ten accounts asked
+  latest, so the next visit offers it at once, while the first command started
+  there asks for it anew. A guest's, whose `user_id` lasts one connection, is
+  kept for that connection only.
+- A `/` at the start of the composer lists the commands: the first word of
+  each name once, and its forms once that word and a space are typed. Each row
+  shows `/name`, `hint` as written, the words of its forms, and `description`.
+  Picking one puts in `/name ` and nothing else. The last row, Browse all
+  commands, opens the command palette with what was typed of the command.
+- `/help` alone opens the command palette rather than going to the server, and
+  asks for the list anew. Any other `/help`, such as `/help kick`, goes to the
+  server, and so does `/help` without the extension.
+- The command palette lists every command in sections by `group`, widest
+  first: Everyone (`all`), Guests (`guest`), Members (`member`), Room owners
+  (`room`), Roles (`role`) and Admins (`admin`), each in the server's order;
+  then the server's commands without a `group` that it knows (Other, or Server
+  when none has one); then its own (Built in). A command's forms are set in
+  under its first word. A field narrows them by name or description. A command
+  whose `requires` doesn't fit now (`reply_to` while the user isn't replying,
+  `body.embeds` without files attached) is greyed, with why, and can still be
+  picked. Picking one closes the palette and puts in `/name ` in place of what
+  was typed of the command, focused.
+- It adds its own commands, which it handles itself (`/nick`, and with `rooms`,
+  `/join`, `/leave`, `/topic`, and while the server takes member changes,
+  `/kick` and `/invite`; `/live` with `embed:append`). Where the server lists
+  the same name, apron-web's own takes its place, as it is what runs.
+- It offers a command that requires `reply_to` only while the user replies.
+  Every other command it offers whatever its `requires`, since mentions and
+  files can come after the name. While the user replies, commands that use
+  `reply_to` come first, and while files are attached, those that use
+  `body.embeds`.
+- Names are case-sensitive: the words typed before the caret match a name's
+  exactly, and the word at the caret suggests the names it starts in any case,
+  which a pick puts in as listed.
+- It ignores an entry without a `name`, with a name listed before, or one that
+  starts with `/`, and a field of `uses` or `requires`, or a `group`, that it
+  doesn't know. A field of the wrong type takes its default, and a field in
+  `requires` counts in `uses` too.

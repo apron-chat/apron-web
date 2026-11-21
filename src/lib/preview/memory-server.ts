@@ -125,7 +125,19 @@ export interface PreviewKnobs {
 	rooms?: Record<string, { title?: string; description?: string }>;
 	/** `off`: `/embed-terminal` and `/embed-append` wait for a `PUT` (`fetchLive`, or `liveWrite`) rather than playing their demo. */
 	liveDemo?: 'off';
+	/**
+	 * The `commands` of an `ext:command_list` result, in place of the preview's own (`PREVIEW_COMMANDS`): it answers
+	 * the request only while `capabilities` lists the extension.
+	 */
+	commands?: JsonObject[];
 }
+
+/** The commands the preview takes (`command`), as `ext:command_list` lists them: what its `/help` lists. */
+const PREVIEW_COMMANDS: JsonObject[] = [
+	{ name: 'help', description: 'List the commands that you can use' },
+	{ name: 'embed-terminal', description: 'Get a terminal to stream a program’s output into this room (80×40)', hint: '[<title>]', uses: ['room_id', 'reply_to'] },
+	{ name: 'embed-append', description: 'Post a message whose text streams in after the Markdown you give', hint: '[<markdown>]', uses: ['room_id', 'reply_to'] }
+];
 
 /**
  * The `rich` seed, for layout and contract checks: people whose names and roles push the message header and
@@ -754,6 +766,10 @@ export class MemoryProtocolServer {
 				case 'me': this.updateMe(socket, params, reply); return;
 				case 'activity': this.activity(socket, params); return;
 				case 'command': this.command(socket, params, reply, fail); return;
+				case 'ext:command_list':
+					if (!this.knobs.capabilities?.includes('ext:command_list')) fail(`Unsupported preview method: ${frame.method}`, -32601);
+					else reply({ commands: structuredClone(this.knobs.commands ?? PREVIEW_COMMANDS) });
+					return;
 				// `idle` and mutes (§4.5), for a server given the `status` capability: taken, and kept nowhere. A mute
 				// comes back as a `status` before the result, as a server tells each connection of the user.
 				case 'status':

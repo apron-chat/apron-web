@@ -1,0 +1,32 @@
+<!-- @dsCard group="Input" height=700 subtitle="Every command (ext:command_list), opened by /help: a field that narrows them, sections by who may use each, a command's forms set in under it, one that won't work now greyed with why" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>CommandPalette</title></head>
+<body>
+<div id="root"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  A.render(A.CommandPalette, root, {
+    open: true,
+    sections: [
+      { title: 'Everyone', rows: [
+        { name: 'embed-terminal', hint: '[<title>]', description: 'Get a link to stream a terminal into this room, such as a build' },
+        { name: 'help', description: 'List the commands that you can use' }
+      ] },
+      { title: 'Members', rows: [
+        { name: 'approve', description: 'Approve the agent’s request that you reply to', unfit: 'Reply to a message first' }
+      ] },
+      { title: 'Roles', rows: [
+        { name: 'emoji' },
+        { name: 'emoji add', hint: ':<name>:', description: 'Add a custom emoji, or replace its image, from one attached image', form: true, unfit: 'Attach a file first' },
+        { name: 'emoji remove', hint: ':<name>:', description: 'Remove a custom emoji', form: true }
+      ] },
+      { title: 'Built in', rows: [
+        { name: 'nick', hint: '<name>', description: 'Change your display name' },
+        { name: 'join', hint: '#room', description: 'Join a room, or open one you’re in' }
+      ] }
+    ]
+  });
+</script>
+</body>
+</html>

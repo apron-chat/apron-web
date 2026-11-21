@@ -61,6 +61,12 @@ const KEY = {
 	 * account's history.
 	 */
 	draftPrefix: 'apron.draft:',
+	/**
+	 * The commands each server listed (`ext:command_list`) for an account, by `notifyAccount` of the server and its
+	 * `user_id`: `{commands?, listed?, asked}`, so the composer offers them at once on the next visit, and a page asks on
+	 * connecting only without them. A guest's aren't kept: its `user_id` lasts one connection.
+	 */
+	commandLists: 'apron.commandLists',
 	/** The emoji you reacted with last, latest first (`rememberReaction`): the toolbar's quick reactions. */
 	recentReactions: 'apron.recentReactions',
 	/** app.html reads this one too, to apply the theme before the app loads. */
@@ -755,4 +761,21 @@ export function draftKeys(): string[] {
 		// No storage: nothing is kept.
 	}
 	return keys;
+}
+
+/** Where command lists are kept (`ext:command_list`): `$lib/ui/command-list.svelte`, loaded on demand, reads and writes it. */
+export const COMMAND_LISTS_KEY = KEY.commandLists;
+
+/** The stored JSON under `key`, for a module that loads on demand and keeps its own key here (`COMMAND_LISTS_KEY`); unreadable is null. */
+export function loadStored(key: string): unknown {
+	try {
+		return JSON.parse(read(key) ?? 'null');
+	} catch {
+		return null;
+	}
+}
+
+/** Stores `value` as JSON under `key`, as `loadStored` reads it: not for `/__preview` (`keepSettingsInMemory`). */
+export function saveStored(key: string, value: unknown): void {
+	write(key, JSON.stringify(value));
 }

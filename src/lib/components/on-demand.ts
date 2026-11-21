@@ -11,6 +11,7 @@ export { default as ProfilePreferences } from './ProfilePreferences.svelte';
 export { default as RoomEditor } from './RoomEditor.svelte';
 export { default as SearchDialog } from './SearchDialog.svelte';
 export { default as ShortcutsDialog } from './ShortcutsDialog.svelte';
+export { default as CommandPaletteDialog } from './CommandPaletteDialog.svelte';
 export { default as SignInLinkDialog } from './SignInLinkDialog.svelte';
 // Hosts that draw nothing until their state (eager) asks, rendered from then on (`Lazy.once`): the page's popovers.
 export { default as ProfileCard } from './ProfileCard.svelte';
