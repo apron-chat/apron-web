@@ -1009,7 +1009,11 @@ new `description`), and `/kick @user` and `/invite @user` (`room_leave` and
 `room_join` with that `user_id`), with the `rooms` capability, are handled by the
 client. `/kick` with a reason goes to the server, which alone can carry one,
 and so do `/kick` and `/invite` once the server has answered them
-`unsupported` (the one that got that answer is sent on as a command); anything
+`unsupported` (the one that got that answer is sent on as a command). On a
+server with a lobby where you may let people in from it (`ext:permissions`
+`invite`, below), `/invite` is the server's own and always goes to it as a
+command, `/invite <user_id>` admitting that user; adding someone to a room is
+then the member list's **+** or a profile card's **Add to room**. Anything
 else goes out
 as a `command` request with the params a message would have — `room_id`, the
 text as typed, `mentions`, `reply_to`, and attached files as `upload` embeds —
@@ -2033,7 +2037,7 @@ servers' denials show as errors as usual.
 
 The client understands `ext:settings` ([EXT.md §3](../EXT.md#3-extsettings)):
 a server that advertises it in `capabilities` describes how it runs in its
-`server` frame's `ext.settings`, `{read_cursors?, private_rooms?}`; without
+`server` frame's `ext.settings`, `{read_cursors?, private_rooms?, lobby?}`; without
 the capability the client reads none of them. `read_cursors: false` says the
 server keeps no read cursors, so the client doesn't send `read_message_id`.
 A guest who only reads (`write: false`, above) sees it in the connect screen's
@@ -2042,6 +2046,59 @@ extension data (`ext`, [PROTOCOL.md §4.13](https://github.com/shazow/apron/blob
 on users, messages and rooms is kept as the server sends it, and the client
 writes `ext` (with `me`, a message, or `room_set`) only to a server with the
 capability `ext`, which keeps it; the app itself writes none.
+
+**A server's lobby.** A server may keep everything but one room, its lobby,
+from people it hasn't admitted (`ext.settings.lobby`, `{room_id, open}`, with
+`ext:settings`; [EXT.md §3](../EXT.md#3-extsettings)). Who is limited to it says
+so in their own `you`, `ext.permissions.lobby`, `waiting` or `invited` (with
+`ext:permissions`, [EXT.md §7](../EXT.md#7-extpermissions)): the server lists
+them only the lobby, so the rooms list holds only it. Above its messages a
+banner tells them where they are, by the lobby's title:
+
+- A guest waiting there: "You’re in the Public Lobby. Introduce yourself; an
+  admin or moderator can invite you in. Add a passkey to keep your place.",
+  with **Add a passkey**, which opens the sign-in panel at Passkey's **Create
+  account**: the passkey is added to the guest's connection, making it an
+  account that keeps its place. Where this browser can't make a passkey for
+  the server, or the server doesn't sign up with one, it offers **Create
+  account** with a way the server does sign up with (email, its sign-in page)
+  instead, or nothing.
+- An account waiting there: the same, without the passkey.
+- A guest someone invited: "You’ve been invited. Create a passkey to finish
+  joining. Until you do, closing this page ends your visit.", with **Create
+  passkey** as its primary action, into the same panel.
+
+When `lobby` goes away, by a `user` notification or the result of a sign-in or
+a passkey added on the connection, the client lists the joined rooms again
+(and forgets what it had listed to join), without reconnecting, and the banner
+gives way to "Welcome in" with **Dismiss**. Signing in to another account
+lists that account's rooms as any sign-in does, with no welcome.
+
+To someone who sees more than the lobby, the lobby's row in the rooms list
+(also under Other Rooms) and its header carry a globe: "Visible to everyone"
+while it is open, and "Public when the lobby is open" while it's closed
+(`open: false`), since what is posted then shows to everyone once it opens
+again. The header says the words beside the globe where there's room. A
+`server` frame mid-session that changes or drops `lobby` changes the marks at
+once. Where the server lets you admit people (`ext.permissions.invite`), a
+profile card offers **Invite** first, and a member row's menu offers it, for
+someone who looks limited to the lobby: a `waiting` or `invited` role, or a
+guest (`roles` are only labels, and the server answers that a member is one
+already). It sends the command `/invite <user_id>` from the open room, where
+the server's answer arrives as a notice. Commands aren't listed in the
+composer, so `/invite` and `/toggle lobby` are typed as any command is.
+
+A server whose `auth` has no `guest` (a closed lobby, or one only members may
+use) opens the connect screen by itself, as above, offering only the schemes it
+signs in with and its `signup`, typically a token for an invite link; nothing of
+the server shows behind it (no placeholder rooms or messages, since the
+session isn't coming up). When the server closes a guest's connection with 1008
+(policy), as one does when its lobby closes, after a notice saying so, the
+client doesn't reconnect as a guest by itself: it holds the connection, the
+banner says "Signed out: The server ended this guest session (…)." with **Sign
+in**, which connects again and goes by what the server's new `server` frame
+offers. An account's connection, or a guest's closed for any other reason,
+reconnects as usual.
 
 A refusal with `retry_after` holds back further requests of its method when
 that is `history` or `message`, and fails only itself otherwise. A server that
