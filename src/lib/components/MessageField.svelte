@@ -5,6 +5,7 @@
 	import type { MentionPerson } from '$lib/protocol/markdown';
 	import { DraftField } from '$lib/ui/draft-field.svelte';
 	import type { RoomSuggestion } from '$lib/ui/room-autocomplete';
+	import type { CommandOffer } from '$lib/ui/command-query';
 	import type { TextEdit } from '$lib/ui/text-edit';
 	import { autocompletePicker } from './lazy';
 
@@ -12,7 +13,7 @@
 	 * Where a message is written, in the composer and in the message editor
 	 * alike: the design system's `ComposerEditable` with mentions as chips
 	 * (`@user_id` in the text, Appendix A.3), and the autocomplete for `@`
-	 * people, `#` rooms and `:` emoji, its picker anchored to the nearest
+	 * people, `#` rooms, `:` emoji and, given `commands`, `/` commands, its picker anchored to the nearest
 	 * positioned box around the field (`DraftField` does the work).
 	 */
 	interface Props extends Omit<ComponentProps<typeof ComposerEditable>, 'element' | 'empty' | 'onbeforeinput' | 'oninput' | 'oncompositionend' | 'onkeydown' | 'onkeyup' | 'onclick' | 'onblur'> {
@@ -46,8 +47,10 @@
 		outsideLabel?: string;
 		/** A `data-testid` for the people's picker. */
 		pickerTestid?: string;
+		/** The commands a `/` at the start can name (`ext:command_list`): set where they are offered, the composer. */
+		commands?: CommandOffer;
 	}
-	let { value = $bindable(), mentions = $bindable([]), people, outsiders, quiet, rooms = [], known, disabled = false, onsubmit, newlineOnEnter = false, onkey, oninput, oncleared, onmention, outsideLabel, pickerTestid, ...rest }: Props = $props();
+	let { value = $bindable(), mentions = $bindable([]), people, outsiders, quiet, rooms = [], known, disabled = false, onsubmit, newlineOnEnter = false, onkey, oninput, oncleared, onmention, outsideLabel, pickerTestid, commands, ...rest }: Props = $props();
 
 	/** Unique per field, for its picker's ID. */
 	const uid = $props.id();
@@ -61,6 +64,8 @@
 		get quiet() { return quiet; },
 		get rooms() { return rooms; },
 		get known() { return known; },
+		// Set only where commands are offered: the message editor's field has none.
+		get commands() { return commands; },
 		get disabled() { return disabled; },
 		get newlineOnEnter() { return newlineOnEnter; },
 		submit: () => onsubmit(),
@@ -97,6 +102,11 @@
 		return draft.facts;
 	}
 
+	/** Puts `/name ` at the draft's start, in place of the command the palette was opened from (`DraftField.putCommand`). */
+	export function putCommand(name: string): void {
+		draft.putCommand(name);
+	}
+
 	/** Makes a formatting change to the draft and its selection, as typing it would (`DraftField.apply`). */
 	export function apply(change: (edit: TextEdit) => TextEdit | undefined): boolean {
 		return draft.apply(change);
@@ -114,7 +124,7 @@
 </script>
 
 <!-- Loaded on demand: the first picker opened before the on-demand chunk's prefetch waits on its request. -->
-{#if (draft.pickerOpen || draft.roomPickerOpen || draft.emojiPickerOpen) && autocompletePicker.component}
+{#if (draft.pickerOpen || draft.roomPickerOpen || draft.emojiPickerOpen || draft.commandPickerOpen) && autocompletePicker.component}
 {@const AutocompletePicker = autocompletePicker.component}
 {#if draft.pickerOpen}
 	<AutocompletePicker id={draft.pickerId} query={draft.query ?? ''} people={draft.matches} active={draft.activeIndex} testid={pickerTestid} outside={outsideLabel} onpick={(index) => draft.pick(draft.matches[index])} onhover={(index) => draft.hover(index)} />
@@ -122,6 +132,8 @@
 	<AutocompletePicker id={draft.pickerId} query={draft.roomFound?.query ?? ''} rooms={draft.roomMatches} active={draft.activeIndex} onpick={(index) => draft.pickRoom(draft.roomMatches[index])} onhover={(index) => draft.hover(index)} />
 {:else if draft.emojiPickerOpen}
 	<AutocompletePicker id={draft.pickerId} query={draft.emojiFound?.query ?? ''} emoji={draft.emojiMatches} active={draft.activeIndex} onpick={(index) => draft.pickEmoji(draft.emojiMatches[index])} onhover={(index) => draft.hover(index)} />
+{:else if draft.commandPickerOpen}
+	<AutocompletePicker id={draft.pickerId} query={draft.commandFound ? [...draft.commandFound.words, draft.commandFound.query].join(' ') : ''} commands={draft.commandMatches} active={draft.activeIndex} onpick={(index) => draft.pickCommand(draft.commandMatches[index])} onhover={(index) => draft.hover(index)} />
 {/if}
 {/if}
 <!-- spread: the field's own attributes (an `id`, a `data-testid`, its label and class, `onpaste`), which the caller decides -->

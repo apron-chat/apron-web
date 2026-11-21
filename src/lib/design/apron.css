@@ -1876,6 +1876,17 @@ button.ap-mention, a.ap-linkchip { max-width: 100%; white-space: normal; overflo
 .ap-mpick-kbd { margin-inline-start: auto; font: inherit; font-size: var(--text-xs); line-height: var(--leading-sm); padding: 0 var(--space-1_5); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); color: var(--ink-muted); }
 .ap-mpick-empty { padding: var(--space-2) var(--space-3); font-size: var(--text-ui); color: var(--ink-muted); }
 .ap-mpick-emoji-glyph { width: 24px; text-align: center; font-size: 20px; line-height: 24px; }
+/* A command (`ext:command_list`): its `/name`, hint and forms on one line, set as the composer sets a command, and its
+   description under them in muted text; each part cut short to the list's width. The server writes the hint and
+   description: each takes its own direction. */
+.ap-mpick-cmd { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; }
+.ap-mpick-cmd-line { display: flex; align-items: baseline; gap: var(--space-2); min-width: 0; }
+.ap-mpick-cmd-name { flex: none; font-family: var(--font-mono); }
+.ap-mpick-cmd-args, .ap-mpick-cmd-forms, .ap-mpick-cmd-desc { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); unicode-bidi: plaintext; }
+.ap-mpick-cmd-args { font-family: var(--font-mono); }
+/* The last row of a command's suggestions, which opens every command: in the accent, as a link. */
+.ap-mpick-browse { display: flex; flex-direction: column; color: var(--accent); font-weight: 600; }
+.ap-mpick-browse-none { color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 400; }
 
 /* Mention counts: an @ badge in accent beside the room, and in the jump bar */
 .ap-count-at { font-weight: 600; }
@@ -2210,6 +2221,20 @@ a.ap-linkchip-elsewhere:hover { background: var(--hover); }
 .ap-search-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-top: var(--space-2); }
 .ap-search-footnote { margin: 0; color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); }
 .ap-search-foot .ap-btn { flex: none; margin-inline-start: auto; }
+/* CommandPalette: the field, then titled sections of commands, each row `/name` and its hint (set as the composer sets a
+   command) over its description; a form set in under its command; one that won't work now greyed, with why. */
+.ap-palette-list { display: flex; flex-direction: column; gap: var(--space-0_5); max-height: min(420px, calc(100dvh - 240px)); overflow-y: auto; margin: var(--space-3) calc(-1 * var(--space-3)) 0; padding: 0; list-style: none; }
+.ap-palette-section { padding: var(--space-3) var(--space-3) var(--space-0_5); color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 600; }
+.ap-palette-section:first-child { padding-top: 0; }
+.ap-palette-row { display: flex; flex-direction: column; gap: var(--space-0_5); padding: var(--space-1_5) var(--space-3); border-radius: var(--radius-md); color: var(--ink); cursor: pointer; }
+.ap-palette-row-active { background: var(--hover); }
+.ap-palette-form { padding-inline-start: calc(var(--space-3) + var(--space-4)); }
+.ap-palette-line { display: flex; align-items: baseline; gap: var(--space-2); min-width: 0; }
+.ap-palette-name { flex: none; font-family: var(--font-mono); font-size: var(--text-ui); line-height: var(--leading-ui); font-weight: 600; }
+.ap-palette-args, .ap-palette-desc { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); unicode-bidi: plaintext; }
+.ap-palette-args { font-family: var(--font-mono); }
+.ap-palette-tag { flex: none; margin-inline-start: auto; color: var(--ink-muted); font-size: var(--text-xs); line-height: var(--leading-sm); white-space: nowrap; }
+.ap-palette-unfit :is(.ap-palette-name, .ap-palette-args, .ap-palette-desc) { opacity: var(--opacity-dim); }
 /* KeyboardShortcuts: titled groups in as many columns as fit, each row what a shortcut does and, at its end, its keys. */
 .ap-keys { --dialog-w: 760px; }
 /* Columns, not a grid: each group sits under the one before it in its column, so a tall group leaves no gap beside it. */
@@ -2243,7 +2268,7 @@ a.ap-linkchip-elsewhere:hover { background: var(--hover); }
  */
 @media (forced-colors: active) {
 	/* The focus ring's own outline, inset: forced colors draw it in the system's color. */
-	.ap-msg:focus-visible, :is(.ap-mpick-active, .ap-font-option-active, .ap-pick-row-active, .ap-search-row-active, .ap-seg-on, .ap-choice-on, .ap-preferences-nav button[aria-current='page']) { outline: var(--focus-ring); outline-offset: var(--focus-offset-inset); }
+	.ap-msg:focus-visible, :is(.ap-mpick-active, .ap-font-option-active, .ap-pick-row-active, .ap-search-row-active, .ap-palette-row-active, .ap-seg-on, .ap-choice-on, .ap-preferences-nav button[aria-current='page']) { outline: var(--focus-ring); outline-offset: var(--focus-offset-inset); }
 	:is(.ap-room-active, .ap-msg-mention)::before, .ap-msg:focus-visible::before, .ap-shell-handle::after { forced-color-adjust: none; background: CanvasText; }
 	.ap-shell-handle:is(:hover, :focus-visible)::after, .ap-shell-handle-resizing::after { background: Highlight; }
 	.ap-switch { border: 1px solid ButtonText; }

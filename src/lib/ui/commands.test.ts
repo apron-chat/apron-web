@@ -3,6 +3,17 @@ import { attachmentLimits, composerAction, isCommand } from './commands';
 
 const both = { command: true, rooms: true };
 
+describe('/help with ext:command_list', () => {
+	it('opens the command palette for /help alone, and sends any other /help to the server', () => {
+		const caps = { command: true, rooms: true, palette: true };
+		expect(composerAction('/help', caps)).toEqual({ kind: 'palette' });
+		expect(composerAction('/help  ', caps)).toEqual({ kind: 'palette' });
+		expect(composerAction('/help kick', caps)).toEqual({ kind: 'command', text: '/help kick' });
+		expect(composerAction('/HELP', caps)).toEqual({ kind: 'command', text: '/HELP' });
+		expect(composerAction('/help', { command: true, rooms: true })).toEqual({ kind: 'command', text: '/help' });
+	});
+});
+
 describe('composer commands', () => {
 	it('sends text starting with one slash as a command where the server takes commands, and // as a message with one slash stripped', () => {
 		expect(isCommand('/help')).toBe(true);

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { docViewerHost, editorsNudge, fileUpload, installNudge, mentionAddLine, messageEditor, newPrivateDialog, newThreadDialog, profileCardHost, reactorsPopover, roomEditor, searchDialog, selectionBar, serverPaneHost, shortcutsDialog, signInLinkDialog } from '$lib/components/lazy';
+	import { commandPalette, docViewerHost, editorsNudge, fileUpload, installNudge, mentionAddLine, messageEditor, newPrivateDialog, newThreadDialog, profileCardHost, reactorsPopover, roomEditor, searchDialog, selectionBar, serverPaneHost, shortcutsDialog, signInLinkDialog } from '$lib/components/lazy';
 	import { onMount, tick, untrack } from 'svelte';
 	import { fromAction } from 'svelte/attachments';
 	import { pushState, replaceState } from '$app/navigation';
@@ -55,6 +55,10 @@
 	import { faceOf, roomFaces } from '$lib/ui/faces';
 	import { receiptsByMessage, steadyReceipts } from '$lib/ui/receipts';
 	import { attachmentLimits, composerAction } from '$lib/ui/commands';
+	import type { CommandContext, CommandQuery } from '$lib/ui/command-query';
+	type CommandTools = typeof import('$lib/ui/command-tools');
+	/** The command tools, with the list they keep for the page (`CommandList`). */
+	type LoadedCommandTools = CommandTools & { commandList: InstanceType<CommandTools['CommandList']> };
 	import { serverLabel, statusLabel } from '$lib/ui/connection';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { FeedbackState, type Feedback } from '$lib/ui/feedback.svelte';
@@ -75,7 +79,7 @@
 	import { MEMBER_LIST_WIDTHS, ROOMS_LIST_WIDTHS, SidebarLayout } from '$lib/ui/sidebar.svelte';
 	import { NARROW_MAX, WIDE_MIN } from '$lib/ui/breakpoints';
 	import { closedTerminals } from '$lib/ui/terminal-closed.svelte';
-	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, installOfferAnswered, answerInstallOffer, loadRecentReactions, saveRecentReactions, loadRecentServers, loadServerUrl, loadSidebarPrefs, refreshRecentServer, rememberServer, saveDisplayName, saveLastSignIn, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, HIDDEN_DESCRIPTIONS_KEY, INSTALL_OFFER_KEY, loadAddedRooms, saveAddedRooms, loadHiddenDescriptions, hideDescription, showDescription, descriptionHidden, descriptionUpdated, type RecentServer } from '$lib/ui/storage';
+	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, installOfferAnswered, answerInstallOffer, loadRecentReactions, saveRecentReactions, loadRecentServers, loadServerUrl, loadSidebarPrefs, refreshRecentServer, rememberServer, saveDisplayName, saveLastSignIn, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, HIDDEN_DESCRIPTIONS_KEY, INSTALL_OFFER_KEY, loadAddedRooms, saveAddedRooms, loadHiddenDescriptions, hideDescription, showDescription, descriptionHidden, descriptionUpdated, loadStored, saveStored, COMMAND_LISTS_KEY, type RecentServer } from '$lib/ui/storage';
 	import TimelineLoading from '$lib/design/components/TimelineLoading.svelte';
 	import RateLimitNotice from '$lib/design/components/RateLimitNotice.svelte';
 	import SystemLine from '$lib/design/components/SystemLine.svelte';
@@ -869,6 +873,102 @@
 			drafts.recallWhere(here, claim !== 'same');
 		});
 	});
+	/**
+	 * The server's commands (`ext:command_list`, which comes with `command`) are followed by plain code, not effects:
+	 * nothing of them runs as the session changes until a command is typed, so a page without them costs nothing more.
+	 * `commandsFor` is whose list the page follows (`followCommands`), compared on each snapshot as a string: empty
+	 * without the extension.
+	 */
+	let commandsFor = '';
+	/**
+	 * What offers the commands (`command-tools.ts`: the list and its autocomplete), loaded on demand the first time a
+	 * server advertises the extension, so that a page on any other loads none of it.
+	 */
+	let commandTools = $state.raw<LoadedCommandTools | undefined>();
+	let loadingCommandTools: Promise<LoadedCommandTools> | undefined;
+
+	/**
+	 * Runs `then` with the command tools, once they have loaded: in order, as asked. The list they keep is made as
+	 * they load, kept where `storage.ts` keeps its key.
+	 */
+	function withCommandTools(then: (tools: LoadedCommandTools) => void): void {
+		loadingCommandTools ??= import('$lib/ui/command-tools').then((tools) => {
+			const commandList = new tools.CommandList(tools.keptLists({ read: () => loadStored(COMMAND_LISTS_KEY), write: (value) => saveStored(COMMAND_LISTS_KEY, value) }));
+			return (commandTools = { ...tools, commandList });
+		});
+		loadingCommandTools.then(then, () => (loadingCommandTools = undefined));
+	}
+
+	/**
+	 * Follows the list of the server and `user_id` a signed-in snapshot is for (one `user_id` only, as the extension
+	 * says), kept on this device for an account (`directory.account`'s rule), and asks for it on connecting only for an
+	 * account with none kept and none asked for in a day (`CommandList.connected`). Without the extension, none.
+	 */
+	function followCommands(chat: ChatClient, next: ClientSnapshot, key: string): void {
+		commandsFor = key;
+		const userId = next.you?.user_id;
+		if (!key || userId === undefined) {
+			commandTools?.commandList.apply(undefined);
+			return;
+		}
+		const source = { key: notifyAccount(chat.url, userId), keep: Boolean(next.passkeySession || next.keptSession), list: () => chat.listCommands() };
+		withCommandTools(({ commandList }) => {
+			// A later snapshot may have followed another list meanwhile.
+			if (commandsFor !== key) return;
+			commandList.apply(source);
+			commandList.connected();
+		});
+	}
+
+	/** A command was started in the composer: a moment to ask for the list (`CommandList.need`), if there is one. */
+	const commandStarted = (): void => {
+		if (commandsFor) withCommandTools(({ commandList }) => commandList.need());
+	};
+
+	/** `/help` was sent: what it lists may have changed, so the list is asked for anew (`CommandList.refresh`). */
+	function refreshCommands(): void {
+		if (commandsFor) withCommandTools(({ commandList }) => commandList.refresh());
+	}
+
+	/**
+	 * The command palette (`ext:command_list`), while open: what its field starts with, and the command picked. Its
+	 * code loads on demand, the first time it opens.
+	 */
+	let palette = $state<{ filter: string; picked?: string } | undefined>();
+
+	/**
+	 * The palette closed, picked from or not: once it has (a modal dialog keeps the focus till then), the composer takes
+	 * the focus back, with `/name ` at its start for a command picked.
+	 */
+	function closePalette(): void {
+		const picked = palette?.picked;
+		palette = undefined;
+		if (picked !== undefined) composer?.putCommand(picked);
+		else composer?.focus();
+	}
+
+	/** Opens the command palette, its field holding `filter` (what was typed of a command, from Browse all commands). */
+	function openPalette(filter: string): void {
+		commandStarted();
+		palette = { filter };
+		void commandPalette.load().catch((cause: unknown) => {
+			palette = undefined;
+			feedback.error(cause, 'Unable to show the commands');
+		});
+	}
+
+	/**
+	 * The commands the composer offers: the server's with apron-web's own (`mergeCommands`); undefined while the
+	 * server's are on their way (or the tools that offer them), and without the extension, which offers none. Read
+	 * only once a command is typed, or the palette opens.
+	 */
+	let composerCommands = $derived(commandTools && session.capabilities['ext:command_list'] && session.capabilities.command ? commandTools.mergeCommands(commandTools.commandList.commands, commandTools.ownCommands({ command: true, rooms: session.canManageRooms, members: memberChangesOk, append: session.capabilities['embed:append'] }), commandTools.commandList.failed) : undefined);
+	/** How the composer completes a command being typed (`commandCompletion` over `composerCommands`), once they're here. */
+	let completeCommand = $derived.by(() => {
+		const commands = composerCommands;
+		const tools = commandTools;
+		return commands && tools ? (found: CommandQuery, context: CommandContext) => tools.commandCompletion(commands, found, context) : undefined;
+	});
 	/** The order of the sidebar's top-level rooms, kept on this device for the account. */
 	const roomOrder = new RoomOrder();
 	$effect(() => roomOrder.load(addedAccount));
@@ -1376,6 +1476,13 @@
 			session.apply(next, chat);
 			showDirectory(chat);
 			noteArrivals(next);
+			// Whose command list to follow, signed in: the same `notifyAccount` key, and whether it is kept. Built in
+			// place, as this runs on every snapshot, and followed only as it changes.
+			if (next.authenticated) {
+				const lists = next.capabilities['ext:command_list'] && next.capabilities.command && next.you;
+				const key = lists ? `${chat.url}\n${next.you!.user_id}\n${next.passkeySession || next.keptSession ? 'kept' : ''}` : '';
+				if (key !== commandsFor) followCommands(chat, next, key);
+			}
 		});
 		// Each session the client begins goes on from what this device kept for its server.
 		keeper?.watch(chat);
@@ -2399,6 +2506,14 @@
 			feedback.error('Send or remove the attached files before typing live');
 			return;
 		}
+		// `/help` where the server lists its commands opens the palette instead, and asks for the list anew (the
+		// extension's suggested convention): the text goes, and a reply or files stay, for what is picked.
+		if (composerAction(drafts.text, { command: snapshot.capabilities.command, rooms: false, palette: snapshot.capabilities['ext:command_list'] }).kind === 'palette') {
+			drafts.text = '';
+			refreshCommands();
+			openPalette('');
+			return;
+		}
 		// Sending waits as the server asked, files or not (the client holds back any message meanwhile): Send
 		// counts down, the draft and its files stay, and nothing goes by itself. A notice put away shows again.
 		if (sendWait && sendWait.until > Date.now()) {
@@ -2466,6 +2581,8 @@
 			};
 			if (action.kind === 'command') {
 				chat.command(roomId, draft, options).promise.catch(failed);
+				// `/help` lists what the user can use, which may have changed: so may the commands the composer offers.
+				if (/^\/help(?:\s|$)/i.test(draft)) refreshCommands();
 			} else if (action.kind === 'nick') {
 				displayName = action.name;
 				saveDisplayName(action.name);
@@ -2478,6 +2595,9 @@
 				chat.leaveRoom(leaving).promise.catch(failed);
 			} else if (action.kind === 'topic') {
 				chat.updateRoom(roomId, { description: action.description }).promise.then(() => acknowledgeDescription(roomId), failed);
+			} else if (action.kind === 'palette') {
+				// Not asked for here (`palette` above takes it first): opened all the same.
+				openPalette('');
 			} else {
 				// `/kick @user` and `/invite @user` as `room_leave`/`room_join` with `user_id` (§4.2.2). A server
 				// that answers `unsupported` may still have the command itself (§4.1): it gets the text as typed.
@@ -3895,6 +4015,9 @@
 					quiet={quietMentions}
 					outsideLabel={activeThread ? 'Not in thread' : 'Not in room'}
 					rooms={roomSuggestions}
+					complete={completeCommand}
+					oncommand={commandStarted}
+					onbrowse={openPalette}
 					reply={drafts.reply ? replyPreview(drafts.reply) : undefined}
 					oninput={composerInput} onsend={() => sendMessage()} files={drafts.files} onfiles={stageFiles} onunstage={(id) => { drafts.unstage(id); editorsAsk = undefined; }} onrename={(id, title) => drafts.rename(id, title)} oncancelreply={cancelReply} onescape={dismissMentionAsk} onup={focusNewestMessage}
 					onmention={refreshMembers}
@@ -3930,6 +4053,10 @@
 			canList={session.canManageRooms} {roomSuggestions} initial={paneRoom ? `room:#${paneRoom.id} ` : ''} note={searchNote()} keys={searchKeys}
 			onopen={openFound} onopenroom={openSwitched} kept={historySettings.title} onhistory={showHistoryPreferences} onclose={() => (searchMode = undefined)}
 		/>
+	{/if}
+	{#if palette && commandPalette.component}
+		{@const CommandPaletteDialog = commandPalette.component}
+		<CommandPaletteDialog commands={composerCommands} filter={palette.filter} replying={drafts.reply !== undefined} attaching={drafts.files.length > 0} onpick={(name) => { if (palette) palette.picked = name; }} onclose={closePalette} />
 	{/if}
 	{#if shortcutsOpen && shortcutsDialog.component}
 		{@const ShortcutsDialog = shortcutsDialog.component}

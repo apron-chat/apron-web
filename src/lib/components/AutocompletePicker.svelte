@@ -4,24 +4,26 @@
 	import MentionPicker from '$lib/design/components/MentionPicker.svelte';
 	import type { EmojiSuggestion } from '$lib/ui/emoji-autocomplete';
 	import type { RoomSuggestion } from '$lib/ui/room-autocomplete';
+	import type { CommandSuggestion } from '$lib/ui/command-autocomplete';
 	import type { MentionMatch } from '$lib/ui/draft-field.svelte';
 	import Avatar from '$lib/design/components/Avatar.svelte';
 	import { hueOf } from '$lib/ui/messages';
 
 	/**
 	 * The composer's autocomplete (the design system's `MentionPicker`): the
-	 * people and roles an `@` can name, the rooms a `#` can, or the emoji a `:shortcode`
-	 * can put in, whichever is given, each person's face tinted by their ID.
+	 * people and roles an `@` can name, the rooms a `#` can, the emoji a `:shortcode`
+	 * can put in, or the commands a `/` can name, whichever is given, each person's face tinted by their ID.
 	 */
 	interface Props {
 		/** The list's ID, which the field names in `aria-controls`; option `i` is `${id}-${i}`, its `aria-activedescendant`. */
 		id: string;
-		/** What has been typed after the `@`, `#` or `:`. */
+		/** What has been typed after the `@`, `#`, `:` or `/`. */
 		query: string;
 		/** People, and roles (`@&role`). */
 		people?: MentionMatch[];
 		rooms?: RoomSuggestion[];
 		emoji?: EmojiSuggestion[];
+		commands?: CommandSuggestion[];
 		active: number;
 		/** A pick, by its index in the list. */
 		onpick: (index: number) => void;
@@ -31,7 +33,7 @@
 		/** What a person who isn't here reads beside their name, such as "Not in room". */
 		outside?: string;
 	}
-	let { id, query, people, rooms, emoji, active, onpick, onhover, testid, outside = 'Not in room' }: Props = $props();
+	let { id, query, people, rooms, emoji, commands, active, onpick, onhover, testid, outside = 'Not in room' }: Props = $props();
 
 	let senders = $derived(people?.map((item) => ('role' in item ? { role: item.role, count: item.members.length, ...(item.outside ? { outside } : {}) } : { user_id: item.id, name: item.name, avatar: directory.avatarGate.src(item.avatar), ...(item.outside ? { outside } : {}) })));
 </script>
@@ -40,4 +42,4 @@
 	<Avatar name={person.name?.trim() || person.user_id} hue={hueOf(person.user_id)} src={person.avatar} size="sm" />
 {/snippet}
 
-<MentionPicker {id} {query} people={senders} {rooms} {emoji} {active} avatar={face} {testid} onpick={(_, index) => onpick(index)} {onhover} />
+<MentionPicker {id} {query} people={senders} {rooms} {emoji} {commands} {active} avatar={face} {testid} onpick={(_, index) => onpick(index)} {onhover} />

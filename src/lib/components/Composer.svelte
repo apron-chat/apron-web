@@ -2,6 +2,7 @@
 	import { tick, untrack } from 'svelte';
 	import type { MentionPerson } from '$lib/protocol/markdown';
 	import type { RoomSuggestion } from '$lib/ui/room-autocomplete';
+	import type { CommandCompletion, CommandContext, CommandOffer, CommandQuery } from '$lib/ui/command-query';
 	import { emojiAnchor, emojiPicker } from '$lib/ui/emoji-picker.svelte';
 	import { draftFacts } from '$lib/design/components/compose';
 	import { mediaLimit, type MediaTypes } from '$lib/protocol/client';
@@ -86,6 +87,16 @@
 		quiet?: ReadonlySet<string>;
 		/** Rooms and threads available for `#room` mentions. */
 		rooms?: RoomSuggestion[];
+		/**
+		 * The suggestions for a command being typed (`commandCompletion` over the server's commands, `ext:command_list`,
+		 * with apron-web's own), given what the composer is doing; undefined while they are on their way. Only with
+		 * `oncommand`.
+		 */
+		complete?: (found: CommandQuery, context: CommandContext) => CommandCompletion | undefined;
+		/** A `/` started a command: set where the server lists its commands (`ext:command_list`), a moment to ask for them. */
+		oncommand?: () => void;
+		/** Browse all commands, at the end of the suggestions: open the command palette, its field holding `filter`. */
+		onbrowse?: (filter: string) => void;
 		/** The message being replied to, when there is one: its sender and first line, or why it can't be shown. */
 		reply?: { name?: string; text: string };
 		oninput: () => void;
@@ -111,7 +122,7 @@
 		/** A message sent from here is still on its way (waiting for its link previews): Send spins, and holds. */
 		sending?: boolean;
 	}
-	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled = false, holdSend = false, canUpload, files = [], uploadLimits, canCommand = false, live, people, outsiders, quiet, rooms = [], reply, oninput, onsend, onfiles, onunstage, onrename, oncancelreply, onescape, onup, onmention, outsideLabel, waitUntil, sending = false }: Props = $props();
+	let { value = $bindable(), mentions = $bindable([]), dismissed = $bindable([]), placeholder, disabled = false, holdSend = false, canUpload, files = [], uploadLimits, canCommand = false, live, people, outsiders, quiet, rooms = [], complete, oncommand, onbrowse, reply, oninput, onsend, onfiles, onunstage, onrename, oncancelreply, onescape, onup, onmention, outsideLabel, waitUntil, sending = false }: Props = $props();
 
 	/** The field: chips and autocomplete, as in the message editor. */
 	let field = $state<MessageField | undefined>();
@@ -157,6 +168,17 @@
 	/** What the field tells of the draft as it changes (`DraftField.facts`), where reading it would ask again on every key; the draft's own until the field is drawn. */
 	let facts = $derived(field?.facts() ?? draftFacts(value));
 	let command = $derived(canCommand && facts.command && !live);
+	/** Commands are offered as they're typed only where they're sent as commands, and not while the draft is live text. */
+	let offersCommands = $derived(canCommand && !live && oncommand !== undefined);
+	/** What the field reads of them, as it reads it (`CommandOffer`): one object, made once. */
+	const commandOffer: CommandOffer = {
+		get complete() {
+			const completing = complete;
+			return completing && ((found: CommandQuery) => completing(found, { replying: reply !== undefined, attaching: files.length > 0 }));
+		},
+		started: () => oncommand?.(),
+		get browse() { return onbrowse; }
+	};
 	let emojiOpen = $derived(emojiPicker.isOpenFor(emojiButton));
 	/**
 	 * Expand is offered once the draft has a second line and can be written; the design system's Composer leaves it
@@ -207,6 +229,11 @@
 	/** The draft is past one line, to make room for it. Reactive, as it changes with every key: read it only where that matters. */
 	export function isGrown(): boolean {
 		return design?.isGrown() ?? false;
+	}
+
+	/** Puts `/name ` at the draft's start (a command picked in the palette), and focuses the field. */
+	export function putCommand(name: string): void {
+		field?.putCommand(name);
 	}
 
 	/** Puts a mention chip for this user where the caret was (else at the end), as picking them would, and focuses the field. */
@@ -375,7 +402,7 @@
 />
 
 {#snippet editable({ placeholder, disabled }: ComposerField)}
-	<MessageField bind:this={field} bind:value bind:mentions {people} {outsiders} {quiet} {rooms} {placeholder} {disabled} newlineOnEnter={expanded} id="message-input" data-testid="message-input" pickerTestid="mention-picker" onsubmit={send} onkey={key} {oninput} oncleared={cleared} {onmention} {outsideLabel} onpaste={paste} />
+	<MessageField bind:this={field} bind:value bind:mentions {people} {outsiders} {quiet} {rooms} {placeholder} {disabled} newlineOnEnter={expanded} id="message-input" data-testid="message-input" pickerTestid="mention-picker" onsubmit={send} onkey={key} {oninput} oncleared={cleared} {onmention} {outsideLabel} onpaste={paste} commands={offersCommands ? commandOffer : undefined} />
 {/snippet}
 <!-- The full panel's parts, loaded on demand as it first opens: until they come, it is a tall field with Send. -->
 {#snippet formatting()}{#if formatToolbar.component}{@const FormatToolbar = formatToolbar.component}<FormatToolbar apply={(change) => field?.apply(change) ?? false} {disabled} />{/if}{/snippet}

@@ -280,6 +280,39 @@ export interface PickerEmoji {
 	image?: MediaSrc;
 }
 
+/**
+ * A command a `/` can name, in the MentionPicker: its words after the `/`; the hint (its arguments) and description of
+ * the command those words name, shown as written; and the words its forms go on with (`add` and `remove` after `emoji`).
+ */
+export interface PickerCommand {
+	name: string;
+	hint?: string;
+	description?: string;
+	forms?: string[];
+	/** Not a command: the row after them that opens every command (a CommandPalette), labelled so. */
+	browse?: string;
+}
+
+/**
+ * A row of the CommandPalette: a command's words after `/`, its hint (what follows the name) and description, shown as
+ * written. `form`: one form of the command named by the row before it whose first word it shares (`emoji add` under
+ * `emoji`), set in under it. `unfit`: why it won't work right now, such as "Reply to a message first": the row is
+ * greyed and says so, and can still be picked.
+ */
+export interface PaletteRow {
+	name: string;
+	hint?: string;
+	description?: string;
+	form?: boolean;
+	unfit?: string;
+}
+
+/** A titled section of the CommandPalette, such as the commands everyone can use. */
+export interface PaletteSection {
+	title: string;
+	rows: PaletteRow[];
+}
+
 /** Someone in a MemberList (§4.2.1). */
 export interface MemberListPerson {
 	user_id: string;

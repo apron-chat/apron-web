@@ -91,4 +91,5 @@ export { default as FloatingDay } from './FloatingDay.svelte';
 export { default as DropZone } from './DropZone.svelte';
 export { default as SearchPanel } from './SearchPanel.svelte';
 export { default as KeyboardShortcuts } from './KeyboardShortcuts.svelte';
+export { default as CommandPalette } from './CommandPalette.svelte';
 export type * from './types';
