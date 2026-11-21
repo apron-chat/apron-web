@@ -58,20 +58,45 @@ test.describe('a server with a lobby', () => {
 		await expect(other.message('Hello, I’m new here')).toBeVisible();
 	});
 
-	test('an admin’s /welcome goes to the server as typed, which tells the guest', async ({ page, browser }) => {
+	/** Ada's `command` requests, as the server received them. */
+	const commands = (access: MockAccess) => access.sent.filter(({ from, frame }) => from === 'ada' && frame.method === 'command').map(({ frame }) => frame.params);
+
+	test('an admin’s /welcome goes to the server as typed, a user picked from the mention picker named in it, which tells the guest', async ({ page, browser }) => {
 		const access = new MockAccess('lobby');
 		const guest = await open(await someoneElse(browser), access);
 		const admin = await open(page, access, { token: 'admin-token' });
 		await admin.openRoom('lobby');
-		await admin.composer().fill('/welcome @guest_1');
-		// The mention picker offers the guest; Escape keeps the text as typed.
-		await admin.composer().press('Escape');
+		await admin.composer().click();
+		await page.keyboard.type('/welcome @Gue');
+		await page.getByTestId('mention-picker').getByRole('option', { name: /Guest 1/ }).click();
 		await admin.composer().press('Enter');
-		await expect.poll(() => access.sent.filter(({ from, frame }) => from === 'ada' && frame.method === 'command').map(({ frame }) => frame.params.body.text)).toEqual(['/welcome @guest_1']);
+		await expect.poll(() => commands(access)).toHaveLength(1);
+		const [sent] = commands(access);
+		expect(sent).toMatchObject({ room_id: 'lobby', body: { text: expect.stringMatching(/^\/welcome @guest_1\s*$/), mentions: ['guest_1'] } });
+		expect(sent.reply_to).toBeUndefined();
 		// Not taken for a request of the client's own.
 		expect(access.sent.some(({ from, frame }) => from === 'ada' && frame.method === 'room_join')).toBe(false);
 		await expect(page.getByTestId('message-list')).toContainText('You welcomed guest_1.');
 		await expect(guest.page.getByTestId('message-list')).toContainText('Ada welcomed you. Add a passkey to finish joining');
+	});
+
+	test('an admin’s /welcome in reply to a guest’s introduction carries the reply, which names them', async ({ page, browser }) => {
+		const access = new MockAccess('lobby');
+		const guest = await open(await someoneElse(browser), access);
+		await guest.composer().fill('Hi, I’m new here');
+		await guest.composer().press('Enter');
+		const admin = await open(page, access, { token: 'admin-token' });
+		await admin.openRoom('lobby');
+		const intro = admin.message('Hi, I’m new here');
+		await intro.hover();
+		await intro.getByRole('button', { name: 'Reply to message', exact: true }).click();
+		await admin.composer().fill('/welcome');
+		await admin.composer().press('Enter');
+		await expect.poll(() => commands(access)).toHaveLength(1);
+		const introId = await intro.getAttribute('data-message-id');
+		expect(commands(access)[0]).toMatchObject({ room_id: 'lobby', body: { text: '/welcome' }, reply_to: { message_id: introId } });
+		await expect(page.getByTestId('message-list')).toContainText('You welcomed guest_1.');
+		await expect(guest.page.getByTestId('message-list')).toContainText('Ada welcomed you.');
 	});
 
 	test('a waiting account let in sees the rooms the server now shows it, without a reload', async ({ page }) => {

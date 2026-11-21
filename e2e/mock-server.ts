@@ -352,11 +352,17 @@ export class MockAccess {
 				}
 				case 'command': {
 					const text = String(params.body?.text ?? '');
-					const welcome = /^\/welcome\s+(\S+)\s*$/.exec(text);
+					const welcome = /^\/welcome(?:\s+(\S+))?\s*$/.exec(text);
 					if (welcome && conn.account?.you.user_id === 'ada') {
+						// Its target, as the servers find it: a typed user_id (with or without `@`), else the one mention,
+						// else the author of the message replied to.
+						const mentions: unknown[] = Array.isArray(params.body?.mentions) ? params.body.mentions : [];
+						const replied = this.#lobbyHistory.find((message) => message.message_id === params.reply_to?.message_id);
+						const target = welcome[1] ?? (mentions.length === 1 ? String(mentions[0]) : (replied?.from as User | undefined)?.user_id);
+						if (!target) return refuse(-32602, 'Welcome whom? Name them, or reply to their message');
 						let said: string;
 						try {
-							said = this.welcome(welcome[1]);
+							said = this.welcome(target);
 						} catch {
 							return refuse(-32602, 'No such user');
 						}
