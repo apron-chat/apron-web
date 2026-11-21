@@ -99,7 +99,7 @@
 				{#if failed && href}<a class="ap-btn ap-btn-quiet ap-docviewer-download" {href} download={title} target="_blank" rel="noreferrer noopener">{@render downloadIcon()}Download</a>{/if}
 			</div>
 		{:else}
-			<article class="ap-docviewer-page" style:zoom={zoom === undefined ? undefined : String(zoom)}>{@render children?.()}</article>
+			<article class="ap-docviewer-page ap-doc" style:zoom={zoom === undefined ? undefined : String(zoom)}>{@render children?.()}</article>
 		{/if}
 	</div>
 </ViewerDialog>

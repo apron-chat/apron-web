@@ -18,10 +18,16 @@ export function draftServer(key: string): string | undefined {
 	}
 }
 
-/** The draft as kept: without what says nothing (an empty reply or list), and none at all without text or a reply. */
+/**
+ * The draft as kept: without what says nothing (an empty reply or list), and none at all without text or a reply. A
+ * room's edit (a `title`) is kept whatever its text, which may be a description being cleared.
+ */
 function keepable(draft: SavedDraft): SavedDraft | undefined {
-	if (!draft.text.trim() && !draft.reply) return undefined;
-	return { text: draft.text, ...(draft.reply ? { reply: draft.reply } : {}), ...(draft.dismissed?.length ? { dismissed: draft.dismissed } : {}) };
+	if (!draft.text.trim() && !draft.reply && draft.title === undefined) return undefined;
+	return {
+		text: draft.text, ...(draft.reply ? { reply: draft.reply } : {}), ...(draft.dismissed?.length ? { dismissed: draft.dismissed } : {}),
+		...(draft.title !== undefined ? { title: draft.title } : {}), ...(draft.base !== undefined ? { base: draft.base } : {})
+	};
 }
 
 /** What `written` notes of a draft: whose and what, or empty for none. */
@@ -86,8 +92,8 @@ export class DraftKeeper implements DraftStore {
 	 */
 	#atRisk = $state(false);
 	#timer: ReturnType<typeof setTimeout> | undefined;
-	/** The page's drafts (`attach`), all written again as keeping resumes. */
-	#all: { keys: () => Iterable<string>; read: (key: string) => SavedDraft } | undefined;
+	/** The page's drafts, each holder's (`attach`): all written again as keeping resumes. */
+	readonly #all: { keys: () => Iterable<string>; read: (key: string) => SavedDraft }[] = [];
 	/** Whether drafts were kept at the last write: turned back on since, every one is written again. */
 	#kept: boolean;
 
@@ -98,7 +104,7 @@ export class DraftKeeper implements DraftStore {
 	}
 
 	attach(keys: () => Iterable<string>, read: (key: string) => SavedDraft): void {
-		this.#all = { keys, read };
+		this.#all.push({ keys, read });
 	}
 
 	keeps(): boolean {
@@ -134,7 +140,7 @@ export class DraftKeeper implements DraftStore {
 		this.#timer = undefined;
 		const keeping = this.#keeps();
 		// Kept again (local history turned back on): what was written before went with it, so all of it is written.
-		if (keeping && !this.#kept && this.#all) for (const key of this.#all.keys()) this.#dirty.set(key, this.#all.read);
+		if (keeping && !this.#kept) for (const { keys, read } of this.#all) for (const key of keys()) this.#dirty.set(key, read);
 		this.#kept = keeping;
 		if (!keeping) {
 			this.#dirty.clear();

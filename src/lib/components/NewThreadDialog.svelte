@@ -46,7 +46,7 @@
 	}
 </script>
 
-<RoomForm bind:open kind="thread" mode="create" subtitle="In {room.title}" private={room.private === true} {moving} bind:showDescription bind:name={title} field={descriptionField} status={task.busy ? 'saving' : 'idle'} error={task.note} disabled={!enabled} onsubmit={start} {onclose} />
+<RoomForm bind:open kind="thread" subtitle="In {room.title}" private={room.private === true} {moving} bind:showDescription bind:name={title} field={descriptionField} status={task.busy ? 'saving' : 'idle'} error={task.note} disabled={!enabled} onsubmit={start} {onclose} />
 
 {#snippet descriptionField(form: RoomFormField)}
 	<DescriptionField bind:value={description} {form} {people} {rooms} {onmention} />

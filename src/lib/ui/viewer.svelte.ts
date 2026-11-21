@@ -9,7 +9,7 @@ import { pushState } from '$app/navigation';
 import { page } from '$app/state';
 
 /** The `page.state` keys a full-screen viewer marks its history entry with. */
-export type ViewerEntry = 'media' | 'terminal' | 'doc';
+export type ViewerEntry = 'media' | 'terminal' | 'doc' | 'description';
 
 /** A viewer of `V`: open on one at a time, and focus back on what opened it once it closes. */
 export class Viewer<V> {
