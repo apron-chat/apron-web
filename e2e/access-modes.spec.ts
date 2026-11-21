@@ -102,11 +102,10 @@ test.describe('a server with a lobby', () => {
 	test('a waiting account let in sees the rooms the server now shows it, without a reload', async ({ page }) => {
 		const access = new MockAccess('lobby');
 		access.waiting('wanda', 'wanda-token');
-		const sockets: string[] = [];
 		await open(page, access, { token: 'wanda-token' });
 		await expect(rows(page)).toHaveCount(1);
 		await expect(page.getByTestId('room-directory')).toHaveCount(0);
-		page.on('websocket', (ws) => sockets.push(ws.url()));
+		const opened = access.opened;
 		access.welcome('wanda');
 		await expect(page.getByTestId('message-list')).toContainText('Ada welcomed you in.');
 		// General, now visible: under Other Rooms, to read or join.
@@ -114,34 +113,47 @@ test.describe('a server with a lobby', () => {
 		await expect(general).toBeVisible();
 		await general.click();
 		await expect(page.getByRole('main', { name: 'Conversation' }).getByRole('heading', { level: 1 }).first()).toHaveText('General');
-		expect(sockets).toEqual([]);
+		// On the same connection.
+		expect(access.opened).toBe(opened);
 	});
 
-	test('a guest whose session the server ends (1008) isn’t signed in as a guest again by itself; a newcomer is offered only sign-in', async ({ page, browser }) => {
+	test('a guest the server denies as its lobby closes isn’t signed in again by itself, and Sign in then offers only the ways in left', async ({ page, browser }) => {
 		const access = new MockAccess('lobby');
 		const preview = await open(page, access);
 		await expect(preview.message('I’m Nina, here for the meetup')).toBeVisible();
+		const guestAuths = () => access.sent.filter(({ frame }) => frame.method === 'auth' && frame.params?.scheme === 'guest').length;
+		// Counted by the server: the page's sockets are routed to it, which the page's own `websocket` events don't show.
+		const opened = access.opened;
 		access.setOpen(false);
-		await expect(page.getByTestId('message-list')).toContainText('The Public Lobby is closed.');
-		await expect(page.getByTestId('connection-status')).toContainText('The server ended this guest session (The Public Lobby is closed).');
-		const auths = () => access.sent.filter(({ frame }) => frame.method === 'auth').length;
-		const before = auths();
-		await page.waitForTimeout(1_500);
-		expect(auths()).toBe(before);
+		const status = page.getByTestId('connection-status');
+		await expect(status).toContainText(MockAccess.CLOSED);
+		// No reconnect of its own (§1.1, after `denied`), however long it waits, and the server's words stay.
+		await page.waitForTimeout(5_000);
+		expect(access.opened).toBe(opened);
+		await expect(status).toContainText(MockAccess.CLOSED);
 
-		// Meanwhile a newcomer gets the sign-in screen, without Guest, and nothing of the server behind it.
+		// Sign in while the lobby is still closed: the connect screen, with only what the server offers now, and no guest sign-in.
+		const before = guestAuths();
+		await page.getByRole('main').getByRole('button', { name: 'Sign in', exact: true }).click();
+		const form = page.getByRole('form', { name: 'Sign in' });
+		await expect(form).toBeVisible();
+		await expect(form.getByRole('radiogroup', { name: 'Sign in with' }).getByRole('radio')).toHaveText(['Passkey', 'Token']);
+		expect(access.opened).toBe(opened + 1);
+		expect(guestAuths()).toBe(before);
+
+		// A newcomer meanwhile gets the same, and nothing of the server behind it.
 		const newcomer = await someoneElse(browser);
 		await open(newcomer, access, { connected: false });
-		const form = newcomer.getByRole('form', { name: 'Sign in' });
-		await expect(form.getByRole('radiogroup', { name: 'Sign in with' }).getByRole('radio')).toHaveText(['Passkey', 'Token']);
+		const theirs = newcomer.getByRole('form', { name: 'Sign in' });
+		await expect(theirs.getByRole('radiogroup', { name: 'Sign in with' }).getByRole('radio')).toHaveText(['Passkey', 'Token']);
 		await expect(newcomer.getByTestId('message-list')).toHaveCount(0);
 		await expect(newcomer.getByTestId('room-list')).toHaveCount(0);
 
-		// Taking guests again, the guest's Sign in connects, as a guest again.
+		// Open again, a reload is a guest in the lobby once more.
 		access.setOpen(true);
-		await page.getByRole('main').getByRole('button', { name: 'Sign in', exact: true }).click();
+		await page.reload();
 		await expect(page.getByTestId('connection-status')).toHaveText('Connected');
-		expect(auths()).toBe(before + 1);
+		expect(guestAuths()).toBe(before + 1);
 	});
 });
 

@@ -139,8 +139,9 @@ const PRIVATE_SENDER = { user_id: '~private', name: 'System message to you' };
  * - `lobby`: guests, and accounts made with a passkey, see only the Public Lobby until an admin runs `/welcome
  *   <user_id>` (`welcome`). A guest welcomed has the display role `welcomed` until it makes an account on its
  *   connection, which is then a member; a waiting account is let in at once, its connections told with `room_update`
- *   `updated` and General's record, now visible to it. `setOpen(false)` closes the lobby: guests get a notice and a
- *   1008 close, and new connections are offered no guest sign-in.
+ *   `updated` and General's record, now visible to it. `setOpen(false)` closes the lobby: each guest gets a `denied`
+ *   error without `id` (§1.1) and its connection closes, and new connections are offered no guest sign-in.
+ *   `opened` counts the connections every page opened.
  * - `private`: no guests. An invite token (`INVITE_TOKEN`) makes a member account.
  *
  * Accounts: `admin-token` signs in as Ada (an admin), `member-token` as Bob. The lobby holds an intro from another
@@ -154,6 +155,8 @@ export class MockAccess {
 		['member-token', { you: { user_id: 'bob', name: 'Bob' }, waiting: false, general: true, token: 'member-token' }]
 	]);
 	readonly connections: Connection[] = [];
+	/** How many connections the pages it serves have opened. */
+	opened = 0;
 	/** Every frame a page sent, with the `user_id` it was signed in as. */
 	readonly sent: { from?: string; frame: Record<string, any> }[] = [];
 	#guests = 0;
@@ -252,13 +255,19 @@ export class MockAccess {
 		return `You welcomed ${id}. They join once they add a passkey.`;
 	}
 
-	/** `/toggle lobby` (PLAN §4.7): closing it ends every guest's session, a notice, then 1008. */
+	/** The message a guest is denied with as the lobby closes. */
+	static readonly CLOSED = 'The Public Lobby is closed. Ask for an invite link.';
+
+	/**
+	 * `/toggle lobby` (PLAN §4.7): closing it ends every guest's session, as §1.1 has it: an error without `id`, `denied`,
+	 * after which clients don't reconnect by themselves, then the close.
+	 */
 	setOpen(open: boolean): void {
 		this.open = open;
 		if (open) return;
 		for (const conn of [...this.connections]) {
 			if (!conn.you || conn.account) continue;
-			this.#notice(conn, 'lobby', 'The Public Lobby is closed.');
+			this.#send(conn, { error: { code: -32001, message: MockAccess.CLOSED } });
 			void conn.ws.close({ code: 1008, reason: 'The Public Lobby is closed' });
 		}
 	}
@@ -266,6 +275,7 @@ export class MockAccess {
 	serve(ws: WebSocketRoute, options: MockOptions): void {
 		const conn: Connection = { ws, welcomed: false };
 		const base = { ...options.server };
+		this.opened++;
 		this.connections.push(conn);
 		ws.onClose(() => {
 			const at = this.connections.indexOf(conn);
