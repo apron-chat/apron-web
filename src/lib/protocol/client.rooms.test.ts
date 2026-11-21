@@ -634,6 +634,21 @@ describe('room records and membership', () => {
 		expect(snapshot.directory?.find((listing) => listing.id === 'huge')?.record.description).toBe('Everyone');
 	});
 
+	it('lists a top-level room new to the user, from an update, among the rooms to join', async () => {
+		const listed = client.listRooms();
+		await socket.reply('room_list', { not_joined: [] });
+		await listed;
+		expect(snapshot.directory).toEqual([]);
+		const before = socket.sent.filter((frame) => frame.method === 'room_list').length;
+		// A server that lets the user see more, such as letting them in from its lobby, says so with the rooms' records.
+		socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'random', log_id: '50', title: 'Random', latest_log_id: '50' }] } });
+		expect(snapshot.directory?.map((listing) => [listing.id, listing.title, listing.joined])).toEqual([['random', 'Random', false]]);
+		expect(ids()).not.toContain('random');
+		// The listing reused until now is forgotten: the next asks again.
+		void client.listRooms().catch(() => undefined);
+		expect(socket.sent.filter((frame) => frame.method === 'room_list')).toHaveLength(before + 1);
+	});
+
 	it('adds and removes other members with user_id, and stops offering it once unsupported', async () => {
 		const added = client.joinRoom('general', 'bob');
 		expect(socket.request('room_join').params).toEqual({ room_id: 'general', user_id: 'bob' });

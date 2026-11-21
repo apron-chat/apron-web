@@ -94,6 +94,7 @@ Aim for 3–8 entries a week; a week that shipped many features can have more.
 - **Improved:** Sign-in choices use the server's own names for them, such as "Acme SSO". ([#278](https://github.com/apron-chat/apron-web/pull/278))
 - **Improved:** Links that could mislead you about where they go stand out in their own colour: a label that hides the address, lookalike letters, punycode, or a name before the host such as `bank.example@evil.example`. ([#286](https://github.com/apron-chat/apron-web/pull/286))
 - **Improved:** YouTube previews show the video's thumbnail, so you can see what a link is before opening it. ([#282](https://github.com/apron-chat/apron-web/pull/282))
+- **Improved:** Servers that keep newcomers in a lobby work more smoothly: once you're let in, the rooms you can now see appear under Other Rooms at once instead of after a reload. ([#297](https://github.com/apron-chat/apron-web/pull/297))
 - **Fixed:** An emailed sign-in code stopped working if the page reconnected while you checked your email, for example after a phone slept. ([#278](https://github.com/apron-chat/apron-web/pull/278))
 - **Fixed:** Opening a link to another server in a new tab took over the server from the window you were using, which then showed "Apron is open in another window". ([#280](https://github.com/apron-chat/apron-web/pull/280))
 
