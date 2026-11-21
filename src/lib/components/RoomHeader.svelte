@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { ComponentProps } from 'svelte';
 	import type { RoomSnapshot } from '$lib/protocol/client';
 	import { markdownText } from '$lib/protocol/markdown';
 	import { maskSpoilers } from '$lib/protocol/spoiler';
@@ -64,6 +65,11 @@
 		ondescription?: () => void;
 		/** The description put away has been edited since: Description is drawn in the description's blue. */
 		descriptionUpdated?: boolean;
+		/** An edit of the description is kept as a draft: Description, or Edit, is marked. */
+		descriptionDraft?: boolean;
+		/** The description shows over the pane (DescriptionSheet), read or edited: the design RoomHeader's `reading` and `editing`. */
+		reading?: ComponentProps<typeof DesignRoomHeader>['reading'];
+		editing?: ComponentProps<typeof DesignRoomHeader>['editing'];
 		/** Opens Search local history; `searchHint` names its shortcut. */
 		onsearch?: () => void;
 		searchHint?: string;
@@ -72,7 +78,7 @@
 	}
 	let {
 		room, pane, showTopic = true, threadTitle, typing, replyCount, moreReplies = false, waiting = false, updating = false, canEdit, editDisabled, canLeave, canJoin = false,
-		memberListOpen, memberListToggle = true, unreadElsewhere = 0, mentionsElsewhere = 0, onback, onroom, onedit, onleave, oncopylink, onjoin, onmute, onmemberlist, ondescription, descriptionUpdated = false, onsearch, searchHint, onshortcuts
+		memberListOpen, memberListToggle = true, unreadElsewhere = 0, mentionsElsewhere = 0, onback, onroom, onedit, onleave, oncopylink, onjoin, onmute, onmemberlist, ondescription, descriptionUpdated = false, descriptionDraft = false, reading, editing, onsearch, searchHint, onshortcuts
 	}: Props = $props();
 
 	/** Mutes the pane for the chosen while, from when it's chosen. */
@@ -141,6 +147,9 @@
 	{updating}
 	{ondescription}
 	{descriptionUpdated}
+	{descriptionDraft}
+	{reading}
+	{editing}
 	{onsearch}
 	{searchHint}
 	{onshortcuts}

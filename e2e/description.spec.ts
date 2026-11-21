@@ -1,8 +1,9 @@
 import { DEVICES, expect, test, type Preview } from './fixtures';
 
 /**
- * A room's description put away with its ×: it stays away when someone edits it, and the header's Description is drawn
- * in the description's blue until it's brought back (`descriptionUpdated` in `src/lib/ui/storage.ts`). Your own edit isn't news to you.
+ * A room's description: its first lines under the header, the whole over the conversation (DescriptionSheet), read and
+ * edited there. Put away with its ×, it stays away when someone edits it, and the header's Description is drawn in the
+ * description's blue until it's read (`descriptionUpdated` in `src/lib/ui/storage.ts`). Your own edit isn't news to you.
  */
 
 const pinned = (preview: Preview) => preview.page.getByTestId('pane-description');
@@ -32,8 +33,9 @@ for (const [device, use] of [['desktop', DEVICES.desktop], ['phone', DEVICES.pho
 	test.describe(`a description put away, on ${device}`, () => {
 		test.use(use);
 
-		test('stays away when someone edits it, Description marked until it is brought back, and put away again unmarked', async ({ preview }) => {
+		test('stays away when someone edits it, Description marked until it is read, and read again unmarked', async ({ preview }) => {
 			await putAway(preview);
+			const sheet = preview.page.getByTestId('description-sheet');
 
 			await test.step('someone edits it: still away, and Description turns blue and says why', async () => {
 				await preview.describe('general', 'Say hello, and read the **rules**.');
@@ -43,28 +45,40 @@ for (const [device, use] of [['desktop', DEVICES.desktop], ['phone', DEVICES.pho
 				await expect(pinned(preview)).toHaveCount(0);
 			});
 
-			await test.step('brought back, it shows the new text', async () => {
+			await test.step('Description shows the whole of it, as it now reads, over the conversation; still put away', async () => {
 				await button(preview).click();
-				await expect(pinned(preview).locator('strong')).toHaveText('rules');
-				await expect(button(preview)).toHaveCount(0);
+				await expect(sheet.getByTestId('sheet-description').locator('strong')).toHaveText('rules');
+				await expect(pinned(preview)).toHaveCount(0);
 			});
 
-			await test.step('put away again, it is recorded as it now reads: no longer blue', async () => {
-				await preview.page.getByRole('button', { name: 'Hide description' }).click();
+			await test.step('shut again, it is recorded as read: no longer blue', async () => {
+				await preview.page.getByRole('button', { name: 'Close description', exact: true }).click();
+				await expect(sheet).toHaveCount(0);
 				await expect(button(preview)).toBeVisible();
 				await expect(button(preview)).not.toHaveClass(UPDATED);
 				expect(await blue(preview)).toBe(false);
 			});
 		});
 
-		test('comes back from a click on the room’s name or its one-line topic', async ({ preview, page }) => {
+		test('shows whole from a click on the room’s name or its one-line topic, and shuts on Escape, Back or a click on the room below', async ({ preview, page }) => {
 			await putAway(preview);
+			const sheet = page.getByTestId('description-sheet');
 			await page.getByTestId('room-description').click();
-			await expect(pinned(preview)).toBeVisible();
-			await page.getByRole('button', { name: 'Hide description' }).click();
-			await expect(pinned(preview)).toHaveCount(0);
+			await expect(sheet).toBeVisible();
+			await page.keyboard.press('Escape');
+			await expect(sheet).toHaveCount(0);
 			await page.locator('.ap-roomhead-name').click();
-			await expect(pinned(preview)).toBeVisible();
+			await expect(sheet).toBeVisible();
+			await page.goBack();
+			await expect(sheet).toHaveCount(0);
+			await expect(page.getByTestId('message-list')).toBeVisible();
+			if (device === 'desktop') {
+				await button(preview).click();
+				await expect(sheet).toBeVisible();
+				const pane = (await page.locator('main.ap-shell-main').boundingBox())!;
+				await page.mouse.click(pane.x + pane.width / 2, pane.y + pane.height - 20);
+				await expect(sheet).toHaveCount(0);
+			}
 		});
 	});
 }
@@ -86,5 +100,67 @@ test.describe('a description put away, edited by you', () => {
 
 		await preview.describe('general', 'Their words');
 		await expect(button(preview)).toHaveClass(UPDATED);
+	});
+});
+
+test.describe('a description read and edited where it shows', () => {
+	test.use(DEVICES.desktop);
+
+	test('Read all shows the whole; Edit turns it into its editor in the same place, and Save sends it', async ({ preview, page }) => {
+		await preview.open();
+		await preview.describe('general', ['Say hello.', '', ...Array.from({ length: 12 }, (_, n) => `- Rule ${n + 1}`)].join('\n'));
+		const sheet = page.getByTestId('description-sheet');
+		await page.getByRole('button', { name: 'Read all', exact: true }).click();
+		await expect(sheet.getByTestId('sheet-description').locator('li')).toHaveCount(12);
+		// Under the sheet, the conversation is out of reach until it shuts.
+		await expect(page.getByTestId('message-list')).toHaveJSProperty('inert', true);
+
+		await page.getByRole('button', { name: 'Edit room', exact: true }).click();
+		const field = sheet.getByRole('textbox', { name: 'Room description', exact: true });
+		await expect(field).toBeFocused();
+		const title = page.getByRole('textbox', { name: 'Room title', exact: true });
+		await expect(title).toHaveValue('general');
+		// The title is on the editor's column: their left edges line up.
+		const [titleBox, editorBox] = [await title.boundingBox(), await sheet.locator('.ap-mdedit').boundingBox()];
+		expect(Math.abs(titleBox!.x - editorBox!.x)).toBeLessThanOrEqual(1);
+		await expect(page.locator('.ap-roomhead-draft')).toHaveCount(0);
+		await page.keyboard.press('ControlOrMeta+End');
+		await page.keyboard.type(' Then read the rules.');
+		await expect(page.locator('.ap-roomhead-draft')).toHaveText('Unsaved draft');
+		await page.getByRole('button', { name: 'Save', exact: true }).click();
+		const saved = await preview.waitForSent('room_set', (p) => p.room_id === 'general');
+		// The title unchanged goes back as written (the client resends the record whole).
+		expect(saved.title).toBe('general');
+		expect(saved.description).toMatch(/Rule 12 Then read the rules\.$/);
+		// Saved, it reads again, as saved.
+		await expect(sheet.getByTestId('sheet-description')).toContainText('Then read the rules.');
+		await expect(title).toHaveCount(0);
+		await page.keyboard.press('Escape');
+		await expect(sheet).toHaveCount(0);
+		await expect(page.getByTestId('message-list')).toHaveJSProperty('inert', false);
+	});
+
+	test('Escape steps back from editing to reading, asking before a draft goes; Save asks before replacing someone else’s edit', async ({ preview, page }) => {
+		await preview.open();
+		const sheet = page.getByTestId('description-sheet');
+		await page.getByTestId('room-actions').click();
+		await page.getByTestId('edit-room').click();
+		await expect(sheet.getByTestId('description-input')).toBeFocused();
+		await page.keyboard.press('ControlOrMeta+End');
+		await page.keyboard.type(' Mine.');
+		const asked: string[] = [];
+		page.on('dialog', (dialog) => {
+			asked.push(dialog.message());
+			void (asked.length === 1 ? dialog.dismiss() : dialog.accept());
+		});
+		await page.keyboard.press('Escape');
+		await expect(sheet.getByTestId('description-input')).toBeVisible();
+		expect(asked).toEqual(['Discard your changes to this room?']);
+
+		await preview.describe('general', 'Theirs.');
+		await page.getByRole('button', { name: 'Save', exact: true }).click();
+		const saved = await preview.waitForSent('room_set', (p) => p.room_id === 'general');
+		expect(asked[1]).toBe('Someone changed this room since you started editing it. Replace their changes with yours?');
+		expect(saved.description).toMatch(/ Mine\.$/);
 	});
 });

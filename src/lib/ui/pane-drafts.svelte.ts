@@ -27,7 +27,10 @@ export interface DraftStore {
 	load(key: string): SavedDraft | undefined;
 	/** `key`'s draft changed: the store reads it with `read` when it writes, so a change costs no more than saying so. */
 	changed(key: string, read: (key: string) => SavedDraft): void;
-	/** Every key with a draft here, and how to read each: for the store to write them all again, as keeping resumes. */
+	/**
+	 * Every key with a draft here, and how to read each: for the store to write them all again, as keeping resumes. Each
+	 * holder of drafts (the composer's, a room's edit) attaches its own.
+	 */
 	attach?(keys: () => Iterable<string>, read: (key: string) => SavedDraft): void;
 }
 

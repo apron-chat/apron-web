@@ -454,7 +454,8 @@ test.describe('a room’s description', () => {
 		await preview.open();
 		await page.getByTestId('room-actions').click();
 		await page.getByTestId('edit-room').click();
-		const dialog = page.getByRole('dialog', { name: 'Edit room', exact: true });
+		// Edited where it reads: over the conversation, from under the header.
+		const dialog = page.getByTestId('description-sheet');
 		const field = dialog.getByRole('textbox', { name: 'Room description', exact: true });
 		await field.click();
 		await page.keyboard.press('ControlOrMeta+a');
@@ -462,11 +463,11 @@ test.describe('a room’s description', () => {
 		await page.keyboard.type('Ask @ad');
 		const list = page.getByTestId('description-picker');
 		await expect(list.getByRole('option').first()).toHaveText(/Ada Lovelace/);
-		// The picker shows whole, in the window, over the dialog rather than cut off by it.
+		// The picker shows whole, in the window, over the sheet rather than cut off by it.
 		const [box, viewport] = [await list.boundingBox(), page.viewportSize()!];
 		expect(box!.y).toBeGreaterThanOrEqual(0);
 		expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
-		// Escape closes the picker, not the dialog.
+		// Escape closes the picker, not the editor.
 		await page.keyboard.press('Escape');
 		await expect(list).toHaveCount(0);
 		await expect(dialog).toBeVisible();
@@ -491,8 +492,9 @@ test.describe('a room’s description', () => {
 		await page.keyboard.press('ControlOrMeta+Enter');
 		const saved = await preview.waitForSent('room_set', (p) => p.room_id === 'general');
 		expect(saved.description).toBe('Ask @ada about deploys\n- canary\n- **fleet**');
-		await expect(dialog).toHaveCount(0);
-		await expect(page.getByTestId('pane-description').locator('strong')).toHaveText('fleet');
+		// Saved, the sheet reads it, as saved.
+		await expect(dialog.getByTestId('sheet-description').locator('strong')).toHaveText('fleet');
+		await expect(field).toHaveCount(0);
 		expect(errors).toEqual([]);
 	});
 });

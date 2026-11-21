@@ -429,11 +429,10 @@ test.describe('text direction (§3.5.2)', () => {
 			// The room's description changed alone: its title goes back as written.
 			await page.getByTestId('room-actions').click();
 			await page.getByTestId('edit-room').click();
-			const dialog = page.getByRole('dialog', { name: 'Edit room', exact: true });
 			// The editor starts from the title as written.
-			await expect(dialog.getByRole('textbox', { name: 'Room title', exact: true })).toHaveValue(`engi${RLO}neering`);
-			await dialog.getByRole('textbox', { name: /description/i }).fill('About builds, and releases');
-			await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+			await expect(page.getByRole('textbox', { name: 'Room title', exact: true })).toHaveValue(`engi${RLO}neering`);
+			await page.getByTestId('description-sheet').getByRole('textbox', { name: /description/i }).fill('About builds, and releases');
+			await page.getByRole('button', { name: 'Save', exact: true }).click();
 			const saved = await preview.waitForSent('room_set', (p) => p.room_id === 'engineering');
 			expect(saved.description).toBe('About builds, and releases');
 			expect(saved.title ?? `engi${RLO}neering`).toBe(`engi${RLO}neering`);
