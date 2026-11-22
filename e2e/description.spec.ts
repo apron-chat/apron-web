@@ -308,6 +308,37 @@ test.describe('the description read whole', () => {
 		expect(await ringed()).toBe(true);
 	});
 
+	test('shut from the keyboard, gives the keyboard back to what opens it again; shut by the pointer, leaves focus be', async ({ preview, page }) => {
+		await preview.open();
+		const sheet = page.getByTestId('description-sheet');
+		const readAll = page.getByRole('button', { name: 'Read all', exact: true });
+		const open = async (from: typeof readAll) => {
+			await from.focus();
+			await page.keyboard.press('Enter');
+			await expect(sheet).toBeVisible();
+		};
+		// ⌃ pressed: folded back, to the first lines' Read all.
+		await open(readAll);
+		await sheet.getByRole('button', { name: 'Fold into preview' }).focus();
+		await page.keyboard.press('Enter');
+		await expect(readAll).toBeFocused();
+		// Escape: read, the first lines retire, so to Description.
+		await open(readAll);
+		await page.keyboard.press('Escape');
+		await expect(button(preview)).toBeFocused();
+		// × pressed: to Description again.
+		await open(button(preview));
+		await page.getByRole('button', { name: 'Close description' }).focus();
+		await page.keyboard.press('Enter');
+		await expect(button(preview)).toBeFocused();
+		// A click on the room below: focus stays where it was.
+		await button(preview).click();
+		const pane = (await page.locator('main.ap-shell-main').boundingBox())!;
+		await page.mouse.click(pane.x + pane.width / 2, pane.y + pane.height - 20);
+		await expect(sheet).toHaveCount(0);
+		await expect(button(preview)).not.toBeFocused();
+	});
+
 	test('pointing at the room’s name, which opens it, lights Description as pointing at Description does', async ({ preview, page }) => {
 		await putAway(preview);
 		const background = () => button(preview).evaluate((el) => getComputedStyle(el).backgroundColor);

@@ -23,7 +23,7 @@
 		onclose: () => void;
 		onescape: () => void;
 		/** Read, fold it back into its first lines under the header. */
-		onfold?: () => void;
+		onfold?: (event: MouseEvent) => void;
 		/** Opened by the pointer: no focus ring. */
 		pointer?: boolean;
 	}

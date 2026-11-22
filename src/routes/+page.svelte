@@ -865,21 +865,34 @@
 	 * Shuts the description; being edited, once discarding a draft is agreed. Returns whether it shut. Read whole, its first
 	 * lines under the header have done their work: they retire to the header's line and Description, as × puts them away.
 	 */
-	function closeDescription(): boolean {
+	function closeDescription(event?: MouseEvent): boolean {
 		// Only the room or thread it shows: the pane may have moved on already (another room opened over it, `leave`).
 		const shown = roomEdit.shown;
 		if (!shown) return true;
 		const target = editTarget?.id === shown.id ? editTarget : undefined;
 		if (!roomEdit.close(target, Boolean(activeThread))) return false;
 		if (target?.description && !descriptionPutAway) hiddenDescriptions = hideDescription(hiddenDescriptions, draftKey(target.id), target.description);
+		if (event?.detail === 0) refocusDescription();
 		return true;
 	}
+	/**
+	 * Shut from the keyboard (Escape, or × or ⌃ pressed with Enter), the keyboard goes back to what opens the description
+	 * again, as a dialog's goes back to what opened it: its first lines' Read all, or the header's Description. Shut by the
+	 * pointer, focus stays put, so no ring is drawn where nobody is typing.
+	 */
+	function refocusDescription(): void {
+		void tick().then(() => {
+			const pane = document.querySelector('.ap-shell-main');
+			(pane?.querySelector<HTMLElement>('.ap-description-more') ?? pane?.querySelector<HTMLElement>('.ap-roomhead-show'))?.focus();
+		});
+	}
 	/** Read, folds the description back into its first lines under the header, there again as when it was new. */
-	function foldDescription(): void {
+	function foldDescription(event?: MouseEvent): void {
 		const shown = roomEdit.shown;
 		if (!shown || shown.editing) return;
 		roomEdit.close(undefined, Boolean(activeThread));
 		if (editTarget?.id === shown.id) hiddenDescriptions = showDescription(hiddenDescriptions, draftKey(shown.id));
+		if (event?.detail === 0) refocusDescription();
 	}
 	/** Back from editing to reading, once discarding a draft is agreed. */
 	function cancelDescriptionEdit(): void {
@@ -888,7 +901,7 @@
 	/** Escape over the description: a step back, from editing to reading, from reading to shut. */
 	function descriptionEscape(): void {
 		if (editingDescription) cancelDescriptionEdit();
-		else closeDescription();
+		else if (closeDescription()) refocusDescription();
 	}
 	/** The title as typed in the header. */
 	function editDescriptionTitle(title: string): void {

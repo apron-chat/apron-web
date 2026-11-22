@@ -29,7 +29,7 @@
 		/** Escape that nothing in it took: a step back (from editing to reading, say); shutting it, without. */
 		onescape?: () => void;
 		/** Read, ⌃ at its foot: fold it back into its first lines under the header. */
-		onfold?: () => void;
+		onfold?: (event: MouseEvent) => void;
 		/** Read, opened by the pointer: no focus ring as it takes focus (the browser draws one after a click on what takes none). */
 		pointer?: boolean;
 		/** Classes for its `<section>`, added to its own. */

@@ -98,7 +98,7 @@
 		 * place of the topic, Description, Join, the member list's toggle, the bell-off button and the ⋯ menu. A click on
 		 * the name shuts it too, as one there opened it (`ondescription`, which the caller then passes as what shuts it).
 		 */
-		reading?: { onedit?: () => void; onclose: () => void };
+		reading?: { onedit?: () => void; onclose: (event: MouseEvent) => void };
 		/**
 		 * The description shows over the pane being edited: the title is a field (`title`, typed through `ontitle`), on the
 		 * left edge of the editor's column below it and half its width, a name not a paragraph; Unsaved draft beside it while
