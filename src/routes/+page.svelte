@@ -3805,7 +3805,7 @@
 				room={activeRoom}
 				pane={paneRoom ?? activeRoom}
 				showTopic={!pinnedDescription}
-				ondescription={sheetShown ? undefined : descriptionPutAway ? openDescription : descriptionDrafted && !pinnedDescription && canEditPane ? editDescription : undefined}
+				ondescription={sheetShown ? (editingDescription ? undefined : closeDescription) : descriptionPutAway ? openDescription : descriptionDrafted && !pinnedDescription && canEditPane ? editDescription : undefined}
 				descriptionUpdated={descriptionEdited}
 				descriptionDraft={descriptionDrafted && canEditPane}
 				reading={sheetShown && !editingDescription ? { onedit: canEditPane ? editDescription : undefined, onclose: closeDescription } : undefined}

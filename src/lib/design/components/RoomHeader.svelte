@@ -94,7 +94,8 @@
 		descriptionDraft?: boolean;
 		/**
 		 * The description shows over the pane (DescriptionSheet), to read: Edit (`onedit`, cap `rooms`) and × (`onclose`) in
-		 * place of the topic, Description, Join, the member list's toggle, the bell-off button and the ⋯ menu.
+		 * place of the topic, Description, Join, the member list's toggle, the bell-off button and the ⋯ menu. A click on
+		 * the name shuts it too, as one there opened it (`ondescription`, which the caller then passes as what shuts it).
 		 */
 		reading?: { onedit?: () => void; onclose: () => void };
 		/**
@@ -154,6 +155,11 @@
 	const memberLabel = $derived(memberListOpen ? 'Hide member list' : 'Show member list');
 
 	/** A click on the name or topic brings the description back, unless it was on a button in it or ended a selection of its text. */
+	/**
+	 * A click on the name or topic is `ondescription`'s: it shows the description, and, while it reads over the pane, the
+	 * caller passes what shuts it. Not a click on a button or link in it (a thread's crumb back to its room), nor one
+	 * that ends a selection of its text.
+	 */
 	function openDescription(event: MouseEvent): void {
 		if (!ondescription || (event.target as Element).closest('button, a')) return;
 		if (!(window.getSelection()?.isCollapsed ?? true)) return;
@@ -204,9 +210,9 @@
 			{:else if editing.draft}<span class="ap-roomhead-draft" title="Kept on this device until you save or discard it"><span class="ap-roomhead-draft-word">Unsaved draft</span></span>{/if}
 		</div>
 	{:else}
-	<!-- Clicking the name or topic is a shortcut for the mouse; Description is the button for the keyboard and screen readers. -->
+	<!-- Clicking the name or topic opens the description, and shuts it again: a shortcut for the mouse; Description and × are the buttons for the keyboard and screen readers. -->
 	<!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
-	<div class={['ap-roomhead-text', ondescription && 'ap-roomhead-text-opens']} title={ondescription ? `Show the ${noun} description` : undefined} onclick={ondescription ? openDescription : undefined}>
+	<div class={['ap-roomhead-text', ondescription && 'ap-roomhead-text-opens']} title={ondescription ? `${sheet ? 'Close' : 'Show'} the ${noun} description` : undefined} onclick={ondescription ? openDescription : undefined}>
 		{#if thread}
 			<!-- The spaces around the separator are the title's, in its weight, and the separator's own collapse into them. -->
 			<h1 class="ap-roomhead-name">

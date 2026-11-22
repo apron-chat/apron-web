@@ -60,7 +60,7 @@ for (const [device, use] of [['desktop', DEVICES.desktop], ['phone', DEVICES.pho
 			});
 		});
 
-		test('shows whole from a click on the room’s name or its one-line topic, and shuts on Escape, Back or a click on the room below', async ({ preview, page }) => {
+		test('shows whole from a click on the room’s name or its one-line topic, and shuts on Escape, Back, the name again or a click on the room below', async ({ preview, page }) => {
 			await putAway(preview);
 			const sheet = page.getByTestId('description-sheet');
 			await page.getByTestId('room-description').click();
@@ -72,6 +72,11 @@ for (const [device, use] of [['desktop', DEVICES.desktop], ['phone', DEVICES.pho
 			await page.goBack();
 			await expect(sheet).toHaveCount(0);
 			await expect(page.getByTestId('message-list')).toBeVisible();
+			// The name that opened it shuts it again.
+			await page.locator('.ap-roomhead-name').click();
+			await expect(sheet).toBeVisible();
+			await page.locator('.ap-roomhead-name').click();
+			await expect(sheet).toHaveCount(0);
 			if (device === 'desktop') {
 				await button(preview).click();
 				await expect(sheet).toBeVisible();
