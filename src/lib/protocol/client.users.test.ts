@@ -199,3 +199,60 @@ describe('a guest that signs in to an existing account, as others see it', () =>
 		expect(snapshot.userAliases).toEqual({});
 	});
 });
+
+describe('a guest that is gone', () => {
+	const membership = (logId: string, userId: string, joined: boolean, name?: string) => ({
+		method: 'room_update',
+		params: { memberships: [{ log_id: logId, room_id: 'general', members: [{ user: { user_id: userId, ...(name ? { name } : {}) }, joined }] }] }
+	});
+
+	it('loses the roles only its current objects gave it once it has left every room shown, so its messages show the ones they were recorded with', async () => {
+		await connect();
+		socket.receive(membership('11', 'guest_5', true, 'Robin'));
+		socket.receive({ method: 'message', params: { message_id: '12', log_id: '12', room_id: 'general', from: { user_id: 'guest_5', name: 'Robin' }, body: { text: 'hi' } } });
+		socket.receive({ method: 'user', params: { new: { user_id: 'guest_5', name: 'Robin', roles: ['welcomed'] } } });
+		expect(userIn(snapshot, { user_id: 'guest_5', name: 'Robin' }).roles).toEqual(['welcomed']);
+		socket.receive(membership('13', 'guest_5', false, 'Robin'));
+		expect(snapshot.users.guest_5).toEqual({ user_id: 'guest_5', name: 'Robin' });
+		expect(userIn(snapshot, { user_id: 'guest_5', name: 'Robin' }).roles).toBeUndefined();
+		// As recorded, roles a message carried still show.
+		expect(userIn(snapshot, { user_id: 'guest_5', name: 'Robin', roles: ['guest'] }).roles).toEqual(['guest']);
+	});
+
+	it('keeps a member’s roles when they leave, and a guest’s while it is in another room shown', async () => {
+		await connect();
+		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'ops', log_id: '20', title: 'Ops', latest_log_id: '20', history_log_id: '20', members: [{ user_id: 'guest_1' }, { user_id: 'guest_6' }] }] } });
+		socket.receive(membership('21', 'bob', true));
+		socket.receive(membership('22', 'guest_6', true));
+		socket.receive({ method: 'user', params: { new: { user_id: 'bob', roles: ['moderator'] } } });
+		socket.receive({ method: 'user', params: { new: { user_id: 'guest_6', roles: ['welcomed'] } } });
+		socket.receive(membership('23', 'bob', false));
+		socket.receive(membership('24', 'guest_6', false));
+		expect(snapshot.users.bob.roles).toEqual(['moderator']);
+		expect(snapshot.users.guest_6.roles).toEqual(['welcomed']);
+	});
+
+	it('loses its roles here when this connection signs up as an account', async () => {
+		({ client, socket } = startClient({ onSnapshot: (next) => (snapshot = next) }));
+		await socket.greet(['rooms', 'ext:permissions'], { auth: ['guest', 'token'], you: { user_id: 'guest_2', name: 'Robin', roles: ['welcomed'] } });
+		expect(snapshot.users.guest_2.roles).toEqual(['welcomed']);
+		// Its own sign-up's new `you`, as any change of this connection's identity brings.
+		socket.receive({ method: 'user', params: { you: { user_id: 'user_2', name: 'Robin' } } });
+		expect(snapshot.you?.user_id).toBe('user_2');
+		expect(snapshot.users.guest_2).toEqual({ user_id: 'guest_2', name: 'Robin' });
+	});
+});
+
+describe('the name a user was last recorded with', () => {
+	it('is a message’s before any membership’s, whatever their order, and the newer of the same kind', async () => {
+		await connect();
+		// A membership logged with the name the guest joined under, then a message after a rename, then a leave.
+		socket.receive({ method: 'room_update', params: { memberships: [{ log_id: '11', room_id: 'general', members: [{ user: { user_id: 'guest_2', name: 'Guest 2' }, joined: true }] }] } });
+		expect(snapshot.recordedUsers.guest_2.name).toBe('Guest 2');
+		socket.receive({ method: 'message', params: { message_id: '12', log_id: '12', room_id: 'general', from: { user_id: 'guest_2', name: 'Robin' }, body: { text: 'hi' } } });
+		socket.receive({ method: 'room_update', params: { memberships: [{ log_id: '13', room_id: 'general', members: [{ user: { user_id: 'guest_2', name: 'Guest 2' }, joined: false }] }] } });
+		expect(snapshot.recordedUsers.guest_2.name).toBe('Robin');
+		socket.receive({ method: 'message', params: { message_id: '14', log_id: '14', room_id: 'general', from: { user_id: 'guest_2', name: 'Robin B' }, body: { text: 'hi' } } });
+		expect(snapshot.recordedUsers.guest_2.name).toBe('Robin B');
+	});
+});

@@ -189,6 +189,17 @@ class Directory {
 	}
 
 	/**
+	 * The name for a membership's `user` (§4.2.2), a joined or left line's: the kept name, else the one the user was
+	 * last recorded with (a message's `from` before any membership's: a server may log a membership with the name the
+	 * user joined under, or none), else the membership's own, else the `user_id`. The line then names them as their
+	 * messages do.
+	 */
+	memberName(user: Identity): string {
+		const latest = this.users.recordedUsers[this.person(user)?.user_id ?? user.user_id];
+		return this.name(latest?.name ? latest : user);
+	}
+
+	/**
 	 * An avatar this client will load, if the user has one where avatars may load from (`mediaOrigins`, §4.8.6):
 	 * from anywhere else, only `https:`, as ever.
 	 */

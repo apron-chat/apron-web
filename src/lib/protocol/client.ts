@@ -220,8 +220,12 @@ export class ChatClient {
 	private readonly pendingRoomSaves = new Map<string, PendingSave>();
 	/** One kept user object per `user_id` (§3.3), merged from current objects only. */
 	private readonly users = new KeptUsers();
-	/** The latest recorded object per `user_id` and the `log_id` of the record that carried it. */
-	private readonly recordedUsers = new Map<string, { identity: Identity; log_id: string }>();
+	/**
+	 * The latest recorded object per `user_id` and the `log_id` of the record that carried it. One a membership carried
+	 * (`membership`) gives way to one a message or reaction carried, whatever their order: a server may log a
+	 * membership with the name the user joined under, or none (§4.2.2), where a message's `from` names them as they were.
+	 */
+	private readonly recordedUsers = new Map<string, { identity: Identity; log_id: string; membership?: true }>();
 	private readonly userAliases = new CountedMap<string, string>();
 	/** The greatest `log_id` this client has received: where a notice sits in its room's timeline. */
 	private greatestLogId?: string;
@@ -951,7 +955,7 @@ export class ChatClient {
 		}
 		for (const entry of memberships) {
 			this.store.putMembership(entry);
-			this.noteRecorded(entry.user, entry.log_id);
+			this.noteRecorded(entry.user, entry.log_id, true);
 		}
 		for (const user of state.users) this.noteUser(cloneJson(user));
 		for (const [old, next] of Object.entries(state.aliases ?? {})) this.userAliases.set(old, next);
@@ -3793,10 +3797,13 @@ export class ChatClient {
 	 */
 	private setYou(identity: Identity, complete: boolean): void {
 		const changed = this.you?.user_id !== identity.user_id;
+		// A guest this connection was, now another identity (signed in or up): that guest is gone, and its roles with it.
+		const departed = changed && this.you && this.isGuest(this.you.user_id) ? this.you.user_id : undefined;
 		// A pending addition belongs to the account that proposed it (§4.11.3): another identity needs a new code. The
 		// same account again, after a reconnect, keeps it: its code works there with its state (§4.11.2).
 		if (this.addition && this.addition.account !== identity.user_id) this.addition = undefined;
 		this.you = this.noteUser(identity, { own: true, complete });
+		if (departed !== undefined) this.forgetRoles(departed);
 		// `mine` in every reaction summary depends on the viewer.
 		if (changed) for (const room of this.rooms.values()) room.dirty = true;
 	}
@@ -3840,9 +3847,35 @@ export class ChatClient {
 			this.noteLive(room, logId);
 		}
 		for (const entry of entries) {
-			this.noteRecorded(entry.user, logId);
+			this.noteRecorded(entry.user, logId, true);
 			this.store.putMembership(entry);
 		}
+		// A guest that left every room shown here is gone (§3.2: a guest lasts as long as its connection, as a guest
+		// signing up does): its roles go with it (`forgetRoles`).
+		for (const entry of entries) {
+			const userId = entry.user.user_id;
+			if (entry.joined || !this.isGuest(userId) || userId === this.you?.user_id) continue;
+			if (![...this.rooms.keys()].some((id) => this.store.members(id)?.some((member) => member.user_id === userId))) this.forgetRoles(userId);
+		}
+	}
+
+	/** Whether a `user_id` is a guest's, as clients tell (§3.2's `guest_` convention, or a `guest` role on its kept object). */
+	private isGuest(userId: string): boolean {
+		const roles = this.users.get(userId)?.roles;
+		return userId.startsWith('guest_') || (Array.isArray(roles) && roles.includes('guest'));
+	}
+
+	/**
+	 * A guest that is gone: the display roles kept for it, which only its current objects gave it (such as
+	 * `welcomed`), are left out of its kept object, so its messages show the roles they were recorded with rather than
+	 * one it had last. Not cleared (an empty value is kept as cleared, §3.3): left out, so the recorded ones show.
+	 */
+	private forgetRoles(userId: string): void {
+		const kept = this.users.get(userId);
+		if (!kept || !Object.hasOwn(kept, 'roles')) return;
+		const { roles: _gone, ...rest } = kept;
+		this.users.set(userId, rest as Identity);
+		for (const room of this.rooms.values()) room.dirty = true;
 	}
 
 	/**
@@ -4010,11 +4043,15 @@ export class ChatClient {
 	 * `user`) by its record's `log_id`, apart from the kept one: a fallback
 	 * where no frame carries one, and what tells apart users sharing a name.
 	 */
-	private noteRecorded(identity: Identity, logId: string): void {
+	private noteRecorded(identity: Identity, logId: string, membership = false): void {
 		const current = this.recordedUsers.get(identity.user_id);
-		if (current && compareLogIds(logId, current.log_id) <= 0) return;
+		if (current) {
+			// A membership's object never replaces a message's; a message's always replaces a membership's; else the newer.
+			if (membership && !current.membership) return;
+			if (membership === Boolean(current.membership) && compareLogIds(logId, current.log_id) <= 0) return;
+		}
 		const same = current !== undefined && canonicalJson(current.identity) === canonicalJson(identity);
-		this.recordedUsers.set(identity.user_id, { identity: same ? current.identity : identity, log_id: logId });
+		this.recordedUsers.set(identity.user_id, { identity: same ? current.identity : identity, log_id: logId, ...(membership ? { membership: true as const } : {}) });
 	}
 
 	/** Remembers the greatest `log_id` received: where a notice sits in its room's timeline. */
@@ -4618,7 +4655,7 @@ export class ChatClient {
 		const records: DecodedRecords = decodeHistoryRecords(page);
 		for (const record of [...records.rooms, ...records.messages, ...records.embedded, ...records.reactions, ...records.memberships]) this.observeLogId(record.log_id);
 		for (const record of [...records.messages, ...records.embedded, ...records.reactions]) this.noteRecorded(record.from, record.log_id);
-		for (const record of records.memberships) this.noteRecorded(record.user, record.log_id);
+		for (const record of records.memberships) this.noteRecorded(record.user, record.log_id, true);
 		const retained = room
 			? (record: { log_id: string }) => room.floor === undefined || compareLogIds(record.log_id, room.floor) >= 0
 			: (record: { room_id?: string; log_id: string }) => {

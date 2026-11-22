@@ -147,6 +147,18 @@ describe('directory', () => {
 		expect([directory.showsHandle({ user_id: 'guest_9' }), directory.showsHandle(maya)]).toEqual([true, true]);
 	});
 
+	it('names a membership’s user as their messages do: the kept name, else the one last recorded, else the membership’s, else the user_id', () => {
+		directory.apply(snapshot([ada, { user_id: 'guest_2' }], { recordedUsers: { guest_2: { user_id: 'guest_2', name: 'Robin' }, guest_3: { user_id: 'guest_3' } } }), undefined);
+		// Logged under the name it joined with, or none: the name its messages carry.
+		expect(directory.memberName({ user_id: 'guest_2', name: 'Guest 2' })).toBe('Robin');
+		expect(directory.memberName({ user_id: 'guest_2' })).toBe('Robin');
+		// The kept name first.
+		expect(directory.memberName({ user_id: 'ada', name: 'Ada L' })).toBe('Ada');
+		// Nothing better known: the membership's name, else the user_id.
+		expect(directory.memberName({ user_id: 'guest_3', name: 'Three' })).toBe('Three');
+		expect(directory.memberName({ user_id: 'guest_4' })).toBe('guest_4');
+	});
+
 	it('shows names and roles without bidi embeddings and overrides, and tells names alike once they are dropped (§3.5.2)', () => {
 		// Built, not written: the Svelte compiler warns of a bidi override in a string literal.
 		const rlo = String.fromCodePoint(0x202e);

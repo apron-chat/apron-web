@@ -14,7 +14,7 @@
 
 	/** A user as every other row renders them (§3.3), with the handle when someone else shows under the same name. */
 	function label(user: Identity): string {
-		const name = directory.name(user);
+		const name = directory.memberName(user);
 		return directory.showsHandle(user) ? `${name} (@${directory.person(user)?.user_id ?? user.user_id})` : name;
 	}
 
