@@ -19,10 +19,10 @@
 	import MessageField from './MessageField.svelte';
 
 	/**
-	 * A room's or thread's description being written, in its RoomForm (`field`): written as in the composer, with
-	 * mentions as chips, the same autocomplete and lists that carry on (`MessageField`), the full panel's formatting
-	 * buttons, and Preview, drawn as the description will be. Enter starts a line; Ctrl+Enter (⌘+Enter) submits the form.
-	 * Leaving the field (for Save, Preview or the title) finishes it, as sending does a message: a name typed out in full
+	 * A room's or thread's description being written, in its RoomForm (`field`) or its DescriptionSheet: written as in
+	 * the composer, with mentions as chips, the same autocomplete and lists that carry on (`MessageField`), the full
+	 * panel's formatting buttons, and Preview, drawn as the description will read (`.ap-doc`, as the sheet sets it).
+	 * Enter starts a line; Ctrl+Enter (⌘+Enter) submits the form. Leaving the field (for Save, Preview or the title) finishes it, as sending does a message: a name typed out in full
 	 * after `@` at its end becomes its mention.
 	 * A description has no list of who it mentions, so its chips are only how its `@user_id`s show: no one is notified.
 	 */
@@ -43,4 +43,5 @@
 	<MessageField bind:this={field} bind:value {people} {rooms} {placeholder} {disabled} newlineOnEnter class={className} aria-label={label} data-testid="description-input" pickerTestid="description-picker" onsubmit={() => { field?.finish(); form.submit(); }} onfocusout={() => field?.finish()} {onmention} />
 {/snippet}
 {#snippet formatting()}<FormatToolbar apply={(change) => field?.apply(change) ?? false} disabled={form.disabled} />{/snippet}
-{#snippet preview()}<DraftPreview text={value} />{/snippet}
+<!-- Preview sets it as a description reads (`.ap-doc`: its headings, lists and spacing), in the sheet and its first lines alike. -->
+{#snippet preview()}<div class="ap-doc"><DraftPreview text={value} /></div>{/snippet}

@@ -224,3 +224,22 @@ test.describe('a description’s first lines, at the lengths where they just get
 		expect(await page.evaluate(() => (window as unknown as { seenErrors: string[] }).seenErrors)).toEqual([]);
 	});
 });
+
+test.describe('the description’s Preview while it’s edited', () => {
+	test.use(DEVICES.desktop);
+
+	test('is set as the description reads, its headings and spacing the same', async ({ preview, page }) => {
+		await preview.open();
+		await preview.describe('general', 'Say hello.\n\n## House rules\n\n1. Be kind.\n2. Stay on topic.');
+		await page.getByTestId('pane-description').click();
+		const sheet = page.getByTestId('description-sheet');
+		const look = (heading: import('@playwright/test').Locator) => heading.evaluate((el) => {
+			const style = getComputedStyle(el);
+			return [style.fontSize, style.lineHeight, style.marginTop, style.borderBottomWidth];
+		});
+		const read = await look(sheet.getByTestId('sheet-description').getByRole('heading', { name: 'House rules' }));
+		await page.getByRole('button', { name: 'Edit room', exact: true }).click();
+		await sheet.getByRole('radio', { name: 'Preview', exact: true }).click();
+		expect(await look(sheet.getByTestId('draft-preview').getByRole('heading', { name: 'House rules' }))).toEqual(read);
+	});
+});
