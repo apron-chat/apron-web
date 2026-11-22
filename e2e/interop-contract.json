@@ -9,7 +9,7 @@
 			"reference.spec.ts:224"
 		],
 		"browse-rooms": [
-			"test-helpers.ts:256"
+			"test-helpers.ts:297"
 		],
 		"command-tag": [
 			"reference.spec.ts:246",
@@ -19,63 +19,67 @@
 			"webauthn.spec.ts:150"
 		],
 		"connect-server": [
-			"reference.spec.ts:366"
+			"reference.spec.ts:367",
+			"test-helpers.ts:134",
+			"webauthn.spec.ts:179"
 		],
 		"connection-status": [
-			"chat.spec.ts:577",
-			"chat.spec.ts:671",
+			"chat.spec.ts:582",
+			"chat.spec.ts:676",
+			"passkey-page.spec.ts:291",
+			"passkey-page.spec.ts:308",
 			"test-helpers.ts:11",
 			"webauthn.spec.ts:49",
 			"webauthn.spec.ts:92",
 			"webauthn.spec.ts:99",
 			"webauthn.spec.ts:105",
-			"webauthn.spec.ts:178"
+			"webauthn.spec.ts:183"
 		],
 		"display-name-input": [
 			"test-helpers.ts:106",
-			"test-helpers.ts:140",
+			"test-helpers.ts:149",
 			"webauthn.spec.ts:146"
 		],
 		"edit-room": [
-			"chat.spec.ts:80",
-			"chat.spec.ts:87",
-			"chat.spec.ts:112",
+			"chat.spec.ts:82",
+			"chat.spec.ts:89",
+			"chat.spec.ts:114",
 			"responsive.spec.ts:25"
 		],
 		"floating-day": [
-			"chat.spec.ts:243"
+			"chat.spec.ts:245"
 		],
 		"join-room": [
-			"chat.spec.ts:640",
-			"chat.spec.ts:705",
-			"chat.spec.ts:723",
-			"test-helpers.ts:261",
-			"test-helpers.ts:276"
+			"chat.spec.ts:645",
+			"chat.spec.ts:710",
+			"chat.spec.ts:728",
+			"test-helpers.ts:302",
+			"test-helpers.ts:317"
 		],
 		"jump-button": [
-			"chat.spec.ts:868",
 			"chat.spec.ts:876",
-			"chat.spec.ts:984",
-			"chat.spec.ts:989"
+			"chat.spec.ts:884",
+			"chat.spec.ts:992",
+			"chat.spec.ts:997"
 		],
 		"leave-room": [
-			"chat.spec.ts:706",
-			"chat.spec.ts:724",
+			"chat.spec.ts:711",
+			"chat.spec.ts:729",
 			"reference.spec.ts:295",
 			"reference.spec.ts:309",
-			"test-helpers.ts:281"
+			"test-helpers.ts:322"
 		],
 		"membership-line": [
-			"chat.spec.ts:432"
+			"chat.spec.ts:437"
 		],
 		"mention-picker": [
-			"chat.spec.ts:809"
+			"chat.spec.ts:817"
 		],
 		"message-list": [
-			"chat.spec.ts:210",
-			"chat.spec.ts:232",
-			"chat.spec.ts:867",
-			"chat.spec.ts:981"
+			"chat.spec.ts:212",
+			"chat.spec.ts:234",
+			"chat.spec.ts:875",
+			"chat.spec.ts:989"
 		],
 		"message-writing": [
 			"reference.spec.ts:131",
@@ -89,16 +93,16 @@
 			"reference.spec.ts:338"
 		],
 		"new-thread": [
-			"chat.spec.ts:1035"
+			"chat.spec.ts:1043"
 		],
 		"notice": [
 			"reference.spec.ts:250",
 			"reference.spec.ts:259"
 		],
 		"pane-description": [
-			"chat.spec.ts:45",
-			"chat.spec.ts:116 (absent)",
-			"chat.spec.ts:161",
+			"chat.spec.ts:47",
+			"chat.spec.ts:118 (absent)",
+			"chat.spec.ts:163",
 			"responsive.spec.ts:44",
 			"responsive.spec.ts:61",
 			"responsive.spec.ts:80"
@@ -122,14 +126,14 @@
 			"seen.spec.ts:207"
 		],
 		"reaction-chip": [
-			"chat.spec.ts:783 (absent)",
-			"chat.spec.ts:784 (absent)",
-			"chat.spec.ts:785 (absent)",
-			"chat.spec.ts:1152",
-			"reference.spec.ts:386",
-			"reference.spec.ts:394",
+			"chat.spec.ts:791 (absent)",
+			"chat.spec.ts:792 (absent)",
+			"chat.spec.ts:793 (absent)",
+			"chat.spec.ts:1160",
+			"reference.spec.ts:387",
+			"reference.spec.ts:395",
 			"responsive.spec.ts:106",
-			"test-helpers.ts:209"
+			"test-helpers.ts:218"
 		],
 		"reactions": [
 			"responsive.spec.ts:107"
@@ -139,69 +143,69 @@
 			"reference.spec.ts:233"
 		],
 		"reply-draft": [
-			"chat.spec.ts:47",
-			"chat.spec.ts:288",
-			"chat.spec.ts:290 (absent)",
-			"chat.spec.ts:297 (absent)",
-			"chat.spec.ts:330",
-			"chat.spec.ts:363",
-			"chat.spec.ts:366 (absent)",
-			"chat.spec.ts:369",
-			"chat.spec.ts:387",
+			"chat.spec.ts:49",
+			"chat.spec.ts:293",
+			"chat.spec.ts:295 (absent)",
+			"chat.spec.ts:302 (absent)",
+			"chat.spec.ts:335",
+			"chat.spec.ts:368",
+			"chat.spec.ts:371 (absent)",
+			"chat.spec.ts:374",
+			"chat.spec.ts:392",
 			"responsive.spec.ts:62"
 		],
 		"reply-reference": [
-			"chat.spec.ts:67",
-			"chat.spec.ts:155",
-			"chat.spec.ts:156 (absent)",
-			"chat.spec.ts:296",
-			"chat.spec.ts:300",
-			"chat.spec.ts:302",
+			"chat.spec.ts:69",
+			"chat.spec.ts:157",
+			"chat.spec.ts:158 (absent)",
+			"chat.spec.ts:301",
+			"chat.spec.ts:305",
 			"chat.spec.ts:307",
-			"chat.spec.ts:309 (absent)",
-			"chat.spec.ts:310 (absent)",
-			"chat.spec.ts:333",
-			"chat.spec.ts:340",
-			"chat.spec.ts:342",
+			"chat.spec.ts:312",
+			"chat.spec.ts:314 (absent)",
+			"chat.spec.ts:315 (absent)",
+			"chat.spec.ts:338",
 			"chat.spec.ts:345",
-			"chat.spec.ts:349",
-			"chat.spec.ts:373",
-			"chat.spec.ts:386",
-			"chat.spec.ts:390",
-			"chat.spec.ts:399",
+			"chat.spec.ts:347",
+			"chat.spec.ts:350",
+			"chat.spec.ts:354",
+			"chat.spec.ts:378",
+			"chat.spec.ts:391",
+			"chat.spec.ts:395",
+			"chat.spec.ts:404",
 			"responsive.spec.ts:66",
 			"responsive.spec.ts:79"
 		],
 		"room-actions": [
-			"test-helpers.ts:244"
+			"test-helpers.ts:257"
 		],
 		"room-directory": [
-			"test-helpers.ts:258"
+			"test-helpers.ts:299"
 		],
 		"room-list": [
 			"perf.spec.ts:140",
 			"perf.spec.ts:142",
 			"reference.spec.ts:310 (absent)",
 			"reference.spec.ts:311",
-			"test-helpers.ts:260"
+			"test-helpers.ts:301"
 		],
 		"room-member-list": [
 			"seen.spec.ts:36"
 		],
 		"selection-bar": [
-			"chat.spec.ts:1018",
-			"chat.spec.ts:1045 (absent)",
-			"test-helpers.ts:189"
+			"chat.spec.ts:1026",
+			"chat.spec.ts:1053 (absent)",
+			"test-helpers.ts:198"
 		],
 		"send-button": [
 			"reference.spec.ts:76",
 			"reference.spec.ts:90"
 		],
 		"server-pane": [
-			"test-helpers.ts:124"
+			"test-helpers.ts:129"
 		],
 		"server-url-input": [
-			"webauthn.spec.ts:176"
+			"webauthn.spec.ts:177"
 		],
 		"staged-files": [
 			"reference.spec.ts:75",
@@ -214,55 +218,55 @@
 			"reference.spec.ts:161"
 		],
 		"thread-card": [
-			"chat.spec.ts:48",
-			"chat.spec.ts:49",
-			"chat.spec.ts:166",
-			"chat.spec.ts:202",
-			"chat.spec.ts:235",
-			"chat.spec.ts:612",
-			"chat.spec.ts:672",
-			"chat.spec.ts:1051",
+			"chat.spec.ts:50",
+			"chat.spec.ts:51",
+			"chat.spec.ts:168",
+			"chat.spec.ts:204",
+			"chat.spec.ts:237",
+			"chat.spec.ts:617",
+			"chat.spec.ts:677",
+			"chat.spec.ts:1059",
 			"reference.spec.ts:291",
 			"responsive.spec.ts:37",
 			"responsive.spec.ts:73",
-			"test-helpers.ts:269"
+			"test-helpers.ts:310"
 		],
 		"thread-last-reply": [
-			"chat.spec.ts:70"
+			"chat.spec.ts:72"
 		],
 		"thread-list": [
-			"chat.spec.ts:343 (absent)",
-			"chat.spec.ts:360",
-			"chat.spec.ts:609",
-			"chat.spec.ts:634",
-			"chat.spec.ts:941",
-			"chat.spec.ts:1040",
-			"chat.spec.ts:1053",
+			"chat.spec.ts:348 (absent)",
+			"chat.spec.ts:365",
+			"chat.spec.ts:614",
+			"chat.spec.ts:639",
+			"chat.spec.ts:949",
+			"chat.spec.ts:1048",
+			"chat.spec.ts:1061",
 			"reference.spec.ts:290",
 			"reference.spec.ts:305",
 			"responsive.spec.ts:58",
 			"responsive.spec.ts:59",
 			"responsive.spec.ts:77",
-			"test-helpers.ts:224",
-			"test-helpers.ts:268",
-			"test-helpers.ts:273"
+			"test-helpers.ts:233",
+			"test-helpers.ts:309",
+			"test-helpers.ts:314"
 		],
 		"thread-preview-description": [
-			"chat.spec.ts:50",
-			"chat.spec.ts:51",
-			"chat.spec.ts:166",
+			"chat.spec.ts:52",
+			"chat.spec.ts:53",
+			"chat.spec.ts:168",
 			"responsive.spec.ts:39"
 		],
 		"thread-preview-latest": [
-			"chat.spec.ts:52",
-			"chat.spec.ts:72"
+			"chat.spec.ts:54",
+			"chat.spec.ts:74"
 		],
 		"thread-renamed": [
-			"chat.spec.ts:95",
-			"chat.spec.ts:99"
+			"chat.spec.ts:97",
+			"chat.spec.ts:101"
 		],
 		"thread-unread": [
-			"chat.spec.ts:943"
+			"chat.spec.ts:951"
 		]
 	},
 	"names": {
@@ -273,7 +277,7 @@
 			"name": "Alert when it’s closed, too",
 			"exact": false,
 			"at": [
-				"push.spec.ts:525"
+				"push.spec.ts:528"
 			]
 		},
 		"button \"Back to room\"": {
@@ -283,29 +287,29 @@
 			"name": "Back to room",
 			"exact": true,
 			"at": [
-				"chat.spec.ts:68",
-				"chat.spec.ts:100",
-				"chat.spec.ts:164",
-				"chat.spec.ts:179",
-				"chat.spec.ts:230",
-				"chat.spec.ts:272",
-				"chat.spec.ts:331",
-				"chat.spec.ts:365",
-				"chat.spec.ts:393 (absent)",
-				"chat.spec.ts:620",
-				"chat.spec.ts:643",
-				"chat.spec.ts:663",
-				"chat.spec.ts:708",
-				"chat.spec.ts:711",
-				"chat.spec.ts:715",
-				"chat.spec.ts:940",
-				"chat.spec.ts:1049",
+				"chat.spec.ts:70",
+				"chat.spec.ts:102",
+				"chat.spec.ts:166",
+				"chat.spec.ts:181",
+				"chat.spec.ts:232",
+				"chat.spec.ts:274",
+				"chat.spec.ts:336",
+				"chat.spec.ts:370",
+				"chat.spec.ts:398 (absent)",
+				"chat.spec.ts:625",
+				"chat.spec.ts:648",
+				"chat.spec.ts:668",
+				"chat.spec.ts:713",
+				"chat.spec.ts:716",
+				"chat.spec.ts:720",
+				"chat.spec.ts:948",
+				"chat.spec.ts:1057",
 				"reference.spec.ts:306",
 				"reference.spec.ts:334",
 				"reference.spec.ts:336",
 				"responsive.spec.ts:36",
 				"responsive.spec.ts:69",
-				"test-helpers.ts:222"
+				"test-helpers.ts:231"
 			]
 		},
 		"button \"Back to rooms\"": {
@@ -326,7 +330,7 @@
 			"name": "Cancel reply",
 			"exact": true,
 			"at": [
-				"chat.spec.ts:289"
+				"chat.spec.ts:294"
 			]
 		},
 		"button \"Cancel\"": {
@@ -336,9 +340,29 @@
 			"name": "Cancel",
 			"exact": true,
 			"at": [
-				"chat.spec.ts:85",
+				"test-helpers.ts:284",
 				"webauthn.spec.ts:129",
 				"webauthn.spec.ts:173"
+			]
+		},
+		"button \"Cancel\" (substring)": {
+			"roles": [
+				"button"
+			],
+			"name": "Cancel",
+			"exact": false,
+			"at": [
+				"passkey-page.spec.ts:238"
+			]
+		},
+		"button \"Close description\"": {
+			"roles": [
+				"button"
+			],
+			"name": "Close description",
+			"exact": true,
+			"at": [
+				"test-helpers.ts:255"
 			]
 		},
 		"button \"Close preferences\"": {
@@ -358,17 +382,32 @@
 			"name": "Connect to another server…",
 			"exact": true,
 			"at": [
-				"test-helpers.ts:124"
+				"test-helpers.ts:129"
 			]
 		},
-		"button \"Connect\"": {
+		"button \"Continue with passkey\" (substring)": {
 			"roles": [
 				"button"
 			],
-			"name": "Connect",
+			"name": "Continue with passkey",
+			"exact": false,
+			"at": [
+				"passkey-page.spec.ts:121",
+				"passkey-page.spec.ts:231",
+				"passkey-page.spec.ts:237",
+				"passkey-page.spec.ts:306"
+			]
+		},
+		"button \"Continue\"": {
+			"roles": [
+				"button"
+			],
+			"name": "Continue",
 			"exact": true,
 			"at": [
-				"webauthn.spec.ts:177"
+				"passkey-page.spec.ts:264",
+				"test-helpers.ts:133",
+				"webauthn.spec.ts:178"
 			]
 		},
 		"button \"Create account with passkey\"": {
@@ -378,8 +417,21 @@
 			"name": "Create account with passkey",
 			"exact": true,
 			"at": [
-				"test-helpers.ts:181",
+				"passkey-page.spec.ts:283",
+				"test-helpers.ts:190",
 				"webauthn.spec.ts:30"
+			]
+		},
+		"button \"Create passkey\" (substring)": {
+			"roles": [
+				"button"
+			],
+			"name": "Create passkey",
+			"exact": false,
+			"at": [
+				"passkey-page.spec.ts:103",
+				"passkey-page.spec.ts:163",
+				"passkey-page.spec.ts:288"
 			]
 		},
 		"button \"Delete message\"": {
@@ -400,8 +452,8 @@
 			"name": "Edit message",
 			"exact": true,
 			"at": [
-				"chat.spec.ts:501",
-				"chat.spec.ts:1026 (absent)",
+				"chat.spec.ts:506",
+				"chat.spec.ts:1034 (absent)",
 				"test-helpers.ts:64"
 			]
 		},
@@ -412,8 +464,18 @@
 			"name": "Insert emoji",
 			"exact": true,
 			"at": [
-				"chat.spec.ts:1076",
+				"chat.spec.ts:1084",
 				"responsive.spec.ts:144"
+			]
+		},
+		"button \"Join\"": {
+			"roles": [
+				"button"
+			],
+			"name": "Join",
+			"exact": true,
+			"at": [
+				"webauthn.spec.ts:181"
 			]
 		},
 		"button \"Load live view\"": {
@@ -443,7 +505,7 @@
 			"name": "Move 3 messages",
 			"exact": true,
 			"at": [
-				"chat.spec.ts:1038"
+				"chat.spec.ts:1046"
 			]
 		},
 		"button \"Move to thread ▾\"": {
@@ -453,7 +515,7 @@
 			"name": "Move to thread ▾",
 			"exact": true,
 			"at": [
-				"test-helpers.ts:191"
+				"test-helpers.ts:200"
 			]
 		},
 		"button \"Notifications\"": {
@@ -466,9 +528,9 @@
 				"push.spec.ts:284",
 				"push.spec.ts:409",
 				"push.spec.ts:424",
-				"push.spec.ts:522",
-				"push.spec.ts:628",
-				"push.spec.ts:645"
+				"push.spec.ts:525",
+				"push.spec.ts:631",
+				"push.spec.ts:648"
 			]
 		},
 		"button \"React\"": {
@@ -478,12 +540,12 @@
 			"name": "React",
 			"exact": true,
 			"at": [
-				"chat.spec.ts:787 (absent)",
-				"chat.spec.ts:1130",
-				"chat.spec.ts:1144",
-				"chat.spec.ts:1153",
+				"chat.spec.ts:795 (absent)",
+				"chat.spec.ts:1138",
+				"chat.spec.ts:1152",
+				"chat.spec.ts:1161",
 				"responsive.spec.ts:98",
-				"test-helpers.ts:203"
+				"test-helpers.ts:212"
 			]
 		},
 		"button \"Remove reply reference\"": {
@@ -493,7 +555,7 @@
 			"name": "Remove reply reference",
 			"exact": true,
 			"at": [
-				"chat.spec.ts:308",
+				"chat.spec.ts:313",
 				"responsive.spec.ts:127",
 				"responsive.spec.ts:136",
 				"responsive.spec.ts:137 (absent)"
@@ -506,12 +568,12 @@
 			"name": "Reply to message",
 			"exact": true,
 			"at": [
-				"chat.spec.ts:151",
-				"chat.spec.ts:287",
-				"chat.spec.ts:291",
-				"chat.spec.ts:322",
-				"chat.spec.ts:379",
-				"chat.spec.ts:382",
+				"chat.spec.ts:153",
+				"chat.spec.ts:292",
+				"chat.spec.ts:296",
+				"chat.spec.ts:327",
+				"chat.spec.ts:384",
+				"chat.spec.ts:387",
 				"reference.spec.ts:350",
 				"responsive.spec.ts:122"
 			]
@@ -524,7 +586,7 @@
 			"exact": true,
 			"at": [
 				"push.spec.ts:425",
-				"push.spec.ts:646"
+				"push.spec.ts:649"
 			]
 		},
 		"button \"Run command\"": {
@@ -544,7 +606,7 @@
 			"name": "Save changes",
 			"exact": true,
 			"at": [
-				"chat.spec.ts:511 (absent)",
+				"chat.spec.ts:516 (absent)",
 				"test-helpers.ts:68"
 			]
 		},
@@ -555,10 +617,10 @@
 			"name": "Save",
 			"exact": true,
 			"at": [
-				"chat.spec.ts:89",
-				"chat.spec.ts:115",
+				"chat.spec.ts:91",
+				"chat.spec.ts:117",
 				"responsive.spec.ts:34",
-				"test-helpers.ts:141"
+				"test-helpers.ts:150"
 			]
 		},
 		"button \"Send message\"": {
@@ -568,11 +630,11 @@
 			"name": "Send message",
 			"exact": true,
 			"at": [
-				"chat.spec.ts:371",
-				"chat.spec.ts:388",
-				"chat.spec.ts:397",
-				"chat.spec.ts:832",
-				"chat.spec.ts:1114",
+				"chat.spec.ts:376",
+				"chat.spec.ts:393",
+				"chat.spec.ts:402",
+				"chat.spec.ts:840",
+				"chat.spec.ts:1122",
 				"reference.spec.ts:266",
 				"test-helpers.ts:18"
 			]
@@ -584,7 +646,7 @@
 			"name": "Show member list",
 			"exact": false,
 			"at": [
-				"push.spec.ts:583",
+				"push.spec.ts:586",
 				"seen.spec.ts:37"
 			]
 		},
@@ -595,6 +657,7 @@
 			"name": "Sign in with passkey",
 			"exact": true,
 			"at": [
+				"passkey-page.spec.ts:303",
 				"push.spec.ts:155",
 				"webauthn.spec.ts:31"
 			]
@@ -607,7 +670,7 @@
 			"exact": true,
 			"at": [
 				"push.spec.ts:153",
-				"test-helpers.ts:178",
+				"test-helpers.ts:187",
 				"webauthn.spec.ts:18",
 				"webauthn.spec.ts:50",
 				"webauthn.spec.ts:147"
@@ -620,7 +683,7 @@
 			"name": "Sign out",
 			"exact": true,
 			"at": [
-				"push.spec.ts:478",
+				"push.spec.ts:481",
 				"webauthn.spec.ts:48"
 			]
 		},
@@ -641,8 +704,8 @@
 			"name": "Start thread",
 			"exact": true,
 			"at": [
-				"test-helpers.ts:218",
-				"test-helpers.ts:220"
+				"test-helpers.ts:227",
+				"test-helpers.ts:229"
 			]
 		},
 		"button \"🎉\"": {
@@ -652,7 +715,7 @@
 			"name": "🎉",
 			"exact": true,
 			"at": [
-				"chat.spec.ts:1096",
+				"chat.spec.ts:1104",
 				"responsive.spec.ts:151"
 			]
 		},
@@ -673,8 +736,8 @@
 			"name": "🥑",
 			"exact": true,
 			"at": [
-				"chat.spec.ts:1145",
-				"chat.spec.ts:1154"
+				"chat.spec.ts:1153",
+				"chat.spec.ts:1162"
 			]
 		},
 		"button /^Open preferences/": {
@@ -700,7 +763,20 @@
 			},
 			"exact": false,
 			"at": [
-				"push.spec.ts:644"
+				"push.spec.ts:647"
+			]
+		},
+		"button /^Open preferences\\..*: Lin(,|$)/": {
+			"roles": [
+				"button"
+			],
+			"name": {
+				"regex": "^Open preferences\\..*: Lin(,|$)",
+				"flags": ""
+			},
+			"exact": false,
+			"at": [
+				"passkey-page.spec.ts:309"
 			]
 		},
 		"button /^Pause/": {
@@ -714,7 +790,7 @@
 			"exact": false,
 			"at": [
 				"push.spec.ts:410",
-				"push.spec.ts:629"
+				"push.spec.ts:632"
 			]
 		},
 		"button /^Server: /": {
@@ -727,7 +803,7 @@
 			},
 			"exact": false,
 			"at": [
-				"test-helpers.ts:123"
+				"test-helpers.ts:128"
 			]
 		},
 		"button /^Status: /": {
@@ -753,7 +829,7 @@
 			},
 			"exact": false,
 			"at": [
-				"chat.spec.ts:231"
+				"chat.spec.ts:233"
 			]
 		},
 		"button /status/i": {
@@ -766,7 +842,7 @@
 			},
 			"exact": false,
 			"at": [
-				"push.spec.ts:543"
+				"push.spec.ts:546"
 			]
 		},
 		"combobox /status/i": {
@@ -779,7 +855,7 @@
 			},
 			"exact": false,
 			"at": [
-				"push.spec.ts:543"
+				"push.spec.ts:546"
 			]
 		},
 		"complementary \"Room member list\"": {
@@ -789,7 +865,7 @@
 			"name": "Room member list",
 			"exact": true,
 			"at": [
-				"push.spec.ts:585"
+				"push.spec.ts:588"
 			]
 		},
 		"complementary \"Rooms\"": {
@@ -802,18 +878,6 @@
 				"reference.spec.ts:359"
 			]
 		},
-		"dialog \"Edit thread\"": {
-			"roles": [
-				"dialog"
-			],
-			"name": "Edit thread",
-			"exact": true,
-			"at": [
-				"chat.spec.ts:81",
-				"chat.spec.ts:113",
-				"responsive.spec.ts:34"
-			]
-		},
 		"dialog \"Emoji picker\"": {
 			"roles": [
 				"dialog"
@@ -821,7 +885,7 @@
 			"name": "Emoji picker",
 			"exact": true,
 			"at": [
-				"test-helpers.ts:287"
+				"test-helpers.ts:328"
 			]
 		},
 		"dialog \"Move to a new thread\"": {
@@ -831,7 +895,7 @@
 			"name": "Move to a new thread",
 			"exact": true,
 			"at": [
-				"chat.spec.ts:1036"
+				"chat.spec.ts:1044"
 			]
 		},
 		"dialog \"Preferences\" (substring)": {
@@ -851,7 +915,7 @@
 			"name": "Start thread",
 			"exact": true,
 			"at": [
-				"test-helpers.ts:219"
+				"test-helpers.ts:228"
 			]
 		},
 		"form \"Sign in\" (substring)": {
@@ -861,10 +925,22 @@
 			"name": "Sign in",
 			"exact": false,
 			"at": [
+				"passkey-page.spec.ts:259",
 				"push.spec.ts:154",
-				"test-helpers.ts:125",
-				"test-helpers.ts:179",
+				"test-helpers.ts:130",
+				"test-helpers.ts:188",
 				"webauthn.spec.ts:6"
+			]
+		},
+		"heading \"Add a passkey\" (substring)": {
+			"roles": [
+				"heading"
+			],
+			"name": "Add a passkey",
+			"exact": false,
+			"at": [
+				"passkey-page.spec.ts:100",
+				"passkey-page.spec.ts:285"
 			]
 		},
 		"heading \"General\"": {
@@ -874,7 +950,7 @@
 			"name": "General",
 			"exact": true,
 			"at": [
-				"chat.spec.ts:1111",
+				"chat.spec.ts:1119",
 				"reference.spec.ts:313",
 				"test-helpers.ts:10"
 			]
@@ -889,6 +965,16 @@
 				"push.spec.ts:286"
 			]
 		},
+		"label \"Display name\" (substring)": {
+			"roles": [
+				"label"
+			],
+			"name": "Display name",
+			"exact": false,
+			"at": [
+				"passkey-page.spec.ts:281"
+			]
+		},
 		"main \"Conversation\" (substring)": {
 			"roles": [
 				"main"
@@ -896,8 +982,8 @@
 			"name": "Conversation",
 			"exact": false,
 			"at": [
-				"chat.spec.ts:614",
-				"chat.spec.ts:1111",
+				"chat.spec.ts:619",
+				"chat.spec.ts:1119",
 				"reference.spec.ts:313",
 				"test-helpers.ts:10"
 			]
@@ -922,7 +1008,7 @@
 			},
 			"exact": false,
 			"at": [
-				"push.spec.ts:630"
+				"push.spec.ts:633"
 			]
 		},
 		"menuitem /Until I resume/": {
@@ -981,7 +1067,7 @@
 			"name": "Move to room",
 			"exact": true,
 			"at": [
-				"test-helpers.ts:192"
+				"test-helpers.ts:201"
 			]
 		},
 		"option /For 1 hour/": {
@@ -994,7 +1080,7 @@
 			},
 			"exact": false,
 			"at": [
-				"push.spec.ts:630"
+				"push.spec.ts:633"
 			]
 		},
 		"option /Until I resume/": {
@@ -1008,6 +1094,16 @@
 			"exact": false,
 			"at": [
 				"push.spec.ts:411"
+			]
+		},
+		"radio \"Guest\"": {
+			"roles": [
+				"radio"
+			],
+			"name": "Guest",
+			"exact": true,
+			"at": [
+				"webauthn.spec.ts:180"
 			]
 		},
 		"radio \"Passkey\"": {
@@ -1030,7 +1126,8 @@
 			},
 			"exact": false,
 			"at": [
-				"test-helpers.ts:180",
+				"passkey-page.spec.ts:280",
+				"test-helpers.ts:189",
 				"webauthn.spec.ts:28"
 			]
 		},
@@ -1041,8 +1138,19 @@
 			"name": "Passkey",
 			"exact": true,
 			"at": [
-				"test-helpers.ts:180",
+				"passkey-page.spec.ts:280",
+				"test-helpers.ts:189",
 				"webauthn.spec.ts:28"
+			]
+		},
+		"radiogroup \"Sign in with\"": {
+			"roles": [
+				"radiogroup"
+			],
+			"name": "Sign in with",
+			"exact": true,
+			"at": [
+				"webauthn.spec.ts:180"
 			]
 		},
 		"radio|menuitemradio|menuitem|option /do not disturb/i": {
@@ -1058,7 +1166,7 @@
 			},
 			"exact": false,
 			"at": [
-				"push.spec.ts:545"
+				"push.spec.ts:548"
 			]
 		},
 		"switch \"Notifications\"": {
@@ -1069,7 +1177,7 @@
 			"exact": true,
 			"at": [
 				"push.spec.ts:285",
-				"push.spec.ts:523"
+				"push.spec.ts:526"
 			]
 		},
 		"textbox \"Edit message\"": {
@@ -1079,7 +1187,7 @@
 			"name": "Edit message",
 			"exact": true,
 			"at": [
-				"chat.spec.ts:502",
+				"chat.spec.ts:507",
 				"test-helpers.ts:65"
 			]
 		},
@@ -1100,7 +1208,7 @@
 			"name": "Thread description",
 			"exact": true,
 			"at": [
-				"chat.spec.ts:114",
+				"chat.spec.ts:116",
 				"responsive.spec.ts:28"
 			]
 		},
@@ -1111,18 +1219,18 @@
 			"name": "Thread title",
 			"exact": true,
 			"at": [
-				"chat.spec.ts:82",
-				"chat.spec.ts:1037",
+				"chat.spec.ts:84",
+				"chat.spec.ts:1045",
 				"responsive.spec.ts:26"
 			]
 		}
 	},
 	"selectors": {
 		"#ap-pref-notifications-note": [
-			"push.spec.ts:524"
+			"push.spec.ts:527"
 		],
 		".ap-divider-date": [
-			"chat.spec.ts:255"
+			"chat.spec.ts:257"
 		],
 		".ap-embed-detail": [
 			"reference.spec.ts:177"
@@ -1148,32 +1256,32 @@
 			"reference.spec.ts:162"
 		],
 		".ap-jumpbar-at": [
-			"chat.spec.ts:991"
+			"chat.spec.ts:999"
 		],
 		".ap-jumpfab": [
-			"chat.spec.ts:985"
+			"chat.spec.ts:993"
 		],
 		".ap-mention": [
-			"chat.spec.ts:813",
-			"chat.spec.ts:822",
-			"chat.spec.ts:826 (absent)",
-			"chat.spec.ts:831",
-			"chat.spec.ts:846 (absent)",
-			"chat.spec.ts:1072",
-			"chat.spec.ts:1101",
-			"chat.spec.ts:1117"
+			"chat.spec.ts:821",
+			"chat.spec.ts:830",
+			"chat.spec.ts:834 (absent)",
+			"chat.spec.ts:839",
+			"chat.spec.ts:854 (absent)",
+			"chat.spec.ts:1080",
+			"chat.spec.ts:1109",
+			"chat.spec.ts:1125"
 		],
 		".ap-mention-me": [
-			"chat.spec.ts:837 (absent)",
-			"chat.spec.ts:840",
+			"chat.spec.ts:845 (absent)",
+			"chat.spec.ts:848",
 			"reference.spec.ts:349"
 		],
 		".ap-mention[data-user-id]": [
-			"chat.spec.ts:823",
-			"chat.spec.ts:836"
+			"chat.spec.ts:831",
+			"chat.spec.ts:844"
 		],
 		".ap-mpick-hit": [
-			"chat.spec.ts:811"
+			"chat.spec.ts:819"
 		],
 		".ap-msg-embeds": [
 			"reference.spec.ts:60",
@@ -1187,20 +1295,20 @@
 			"reference.spec.ts:235"
 		],
 		".ap-msg-meta time": [
-			"chat.spec.ts:874"
+			"chat.spec.ts:882"
 		],
 		".ap-msg-sender": [
 			"reference.spec.ts:231"
 		],
 		".ap-msg-system-body": [
-			"chat.spec.ts:440",
-			"chat.spec.ts:446",
-			"chat.spec.ts:453",
-			"chat.spec.ts:462"
+			"chat.spec.ts:445",
+			"chat.spec.ts:451",
+			"chat.spec.ts:458",
+			"chat.spec.ts:467"
 		],
 		".ap-msg-text": [
-			"chat.spec.ts:147",
-			"chat.spec.ts:1116",
+			"chat.spec.ts:149",
+			"chat.spec.ts:1124",
 			"reference.spec.ts:130",
 			"reference.spec.ts:141"
 		],
@@ -1212,11 +1320,11 @@
 			"reference.spec.ts:253"
 		],
 		".ap-profedit-hint code": [
-			"test-helpers.ts:150",
+			"test-helpers.ts:159",
 			"webauthn.spec.ts:11"
 		],
 		".ap-roomhead-sub": [
-			"chat.spec.ts:203"
+			"chat.spec.ts:205"
 		],
 		".ap-shell-sidehead-host": [
 			"reference.spec.ts:361"
@@ -1225,10 +1333,10 @@
 			"reference.spec.ts:360"
 		],
 		".ap-tline-text": [
-			"chat.spec.ts:58",
-			"chat.spec.ts:118",
-			"chat.spec.ts:123",
-			"chat.spec.ts:166",
+			"chat.spec.ts:60",
+			"chat.spec.ts:120",
+			"chat.spec.ts:125",
+			"chat.spec.ts:168",
 			"responsive.spec.ts:39"
 		],
 		".xterm-rows > div": [
@@ -1236,13 +1344,13 @@
 		],
 		"[data-join]": [
 			"reference.spec.ts:298",
-			"test-helpers.ts:258"
+			"test-helpers.ts:299"
 		],
 		"[data-other-thread]": [
 			"reference.spec.ts:303"
 		],
 		"[data-testid=\"reaction-chip\"][data-emoji]": [
-			"test-helpers.ts:209"
+			"test-helpers.ts:218"
 		],
 		"[data-testid=\"room-list\"] button[data-room=\"general\"]": [
 			"perf.spec.ts:142"
@@ -1251,84 +1359,84 @@
 			"perf.spec.ts:140"
 		],
 		"[data-testid=\"thread-card\"][data-thread]": [
-			"chat.spec.ts:48",
-			"chat.spec.ts:49",
-			"chat.spec.ts:166",
-			"chat.spec.ts:202",
-			"chat.spec.ts:235",
-			"chat.spec.ts:612",
-			"chat.spec.ts:672",
-			"chat.spec.ts:1051",
+			"chat.spec.ts:50",
+			"chat.spec.ts:51",
+			"chat.spec.ts:168",
+			"chat.spec.ts:204",
+			"chat.spec.ts:237",
+			"chat.spec.ts:617",
+			"chat.spec.ts:677",
+			"chat.spec.ts:1059",
 			"reference.spec.ts:291",
 			"responsive.spec.ts:73",
-			"test-helpers.ts:269"
+			"test-helpers.ts:310"
 		],
 		"[data-testid=\"thread-list\"] button[data-thread]": [
-			"chat.spec.ts:360",
-			"chat.spec.ts:609",
-			"chat.spec.ts:634",
-			"chat.spec.ts:941",
-			"chat.spec.ts:1053",
+			"chat.spec.ts:365",
+			"chat.spec.ts:614",
+			"chat.spec.ts:639",
+			"chat.spec.ts:949",
+			"chat.spec.ts:1061",
 			"reference.spec.ts:290",
 			"responsive.spec.ts:58",
 			"responsive.spec.ts:59",
 			"responsive.spec.ts:77",
-			"test-helpers.ts:268"
+			"test-helpers.ts:309"
 		],
 		"[data-testid=\"thread-list\"] button[data-thread][aria-current=\"page\"]": [
-			"chat.spec.ts:343 (absent)",
-			"chat.spec.ts:1040",
+			"chat.spec.ts:348 (absent)",
+			"chat.spec.ts:1048",
 			"reference.spec.ts:305",
-			"test-helpers.ts:224",
-			"test-helpers.ts:273"
+			"test-helpers.ts:233",
+			"test-helpers.ts:314"
 		],
 		"[data-user]": [
-			"push.spec.ts:585"
+			"push.spec.ts:588"
 		],
 		"a.ap-embed-file": [
 			"reference.spec.ts:91"
 		],
 		"article.ap-msg-selected": [
-			"chat.spec.ts:1023"
+			"chat.spec.ts:1031"
 		],
 		"article[data-message-id]": [
-			"chat.spec.ts:54",
-			"chat.spec.ts:104",
-			"chat.spec.ts:119",
-			"chat.spec.ts:158",
-			"chat.spec.ts:204",
-			"chat.spec.ts:295",
-			"chat.spec.ts:305",
-			"chat.spec.ts:325",
-			"chat.spec.ts:326",
-			"chat.spec.ts:349",
-			"chat.spec.ts:358",
-			"chat.spec.ts:378",
-			"chat.spec.ts:490",
-			"chat.spec.ts:578",
-			"chat.spec.ts:610",
+			"chat.spec.ts:56",
+			"chat.spec.ts:106",
+			"chat.spec.ts:121",
+			"chat.spec.ts:160",
+			"chat.spec.ts:206",
+			"chat.spec.ts:300",
+			"chat.spec.ts:310",
+			"chat.spec.ts:330",
+			"chat.spec.ts:331",
+			"chat.spec.ts:354",
+			"chat.spec.ts:363",
+			"chat.spec.ts:383",
+			"chat.spec.ts:495",
+			"chat.spec.ts:583",
 			"chat.spec.ts:615",
-			"chat.spec.ts:618 (absent)",
-			"chat.spec.ts:628",
-			"chat.spec.ts:629 (absent)",
-			"chat.spec.ts:630",
-			"chat.spec.ts:647",
-			"chat.spec.ts:648",
-			"chat.spec.ts:674",
-			"chat.spec.ts:679 (absent)",
-			"chat.spec.ts:720 (absent)",
-			"chat.spec.ts:726",
-			"chat.spec.ts:745",
-			"chat.spec.ts:746",
-			"chat.spec.ts:772",
-			"chat.spec.ts:1050 (absent)",
-			"chat.spec.ts:1052 (absent)",
-			"chat.spec.ts:1127",
+			"chat.spec.ts:620",
+			"chat.spec.ts:623 (absent)",
+			"chat.spec.ts:633",
+			"chat.spec.ts:634 (absent)",
+			"chat.spec.ts:635",
+			"chat.spec.ts:652",
+			"chat.spec.ts:653",
+			"chat.spec.ts:679",
+			"chat.spec.ts:684 (absent)",
+			"chat.spec.ts:725 (absent)",
+			"chat.spec.ts:731",
+			"chat.spec.ts:753",
+			"chat.spec.ts:754",
+			"chat.spec.ts:780",
+			"chat.spec.ts:1058 (absent)",
+			"chat.spec.ts:1060 (absent)",
+			"chat.spec.ts:1135",
 			"perf.spec.ts:141",
 			"perf.spec.ts:143",
 			"reference.spec.ts:60",
-			"reference.spec.ts:375",
-			"reference.spec.ts:393",
+			"reference.spec.ts:376",
+			"reference.spec.ts:394",
 			"responsive.spec.ts:70",
 			"responsive.spec.ts:74 (absent)",
 			"responsive.spec.ts:79",
@@ -1339,28 +1447,29 @@
 			"webauthn.spec.ts:72"
 		],
 		"article[data-message-id] + [data-testid=\"membership-line\"]": [
-			"chat.spec.ts:432"
+			"chat.spec.ts:437"
 		],
 		"body": [
-			"push.spec.ts:560"
+			"push.spec.ts:563",
+			"test-helpers.ts:273"
 		],
 		"button.ap-mention-room[data-room-id=\"general\"]": [
 			"reference.spec.ts:342"
 		],
 		"button[data-room]": [
 			"reference.spec.ts:311",
-			"test-helpers.ts:260"
+			"test-helpers.ts:301"
 		],
 		"button[data-user-id]": [
 			"seen.spec.ts:56",
 			"seen.spec.ts:128"
 		],
 		"em-emoji-picker": [
-			"chat.spec.ts:1094"
+			"chat.spec.ts:1102"
 		],
 		"em-emoji-picker input[type=\"search\"]": [
-			"chat.spec.ts:1084",
-			"test-helpers.ts:294"
+			"chat.spec.ts:1092",
+			"test-helpers.ts:335"
 		],
 		"figcaption": [
 			"reference.spec.ts:83"
@@ -1378,20 +1487,20 @@
 			"seen.spec.ts:43"
 		],
 		"option": [
-			"push.spec.ts:554"
+			"push.spec.ts:557"
 		],
 		"small": [
-			"chat.spec.ts:639",
-			"chat.spec.ts:656",
-			"chat.spec.ts:662",
-			"chat.spec.ts:681",
-			"chat.spec.ts:1056"
+			"chat.spec.ts:644",
+			"chat.spec.ts:661",
+			"chat.spec.ts:667",
+			"chat.spec.ts:686",
+			"chat.spec.ts:1064"
 		],
 		"time": [
-			"chat.spec.ts:441"
+			"chat.spec.ts:446"
 		],
 		"time.ap-msg-hovertime": [
-			"chat.spec.ts:875"
+			"chat.spec.ts:883"
 		]
 	},
 	"readme": [
@@ -1406,11 +1515,11 @@
 	"absent": {
 		"testIds": {
 			"message-input": [
-				"chat.spec.ts:1020 (absent)"
+				"chat.spec.ts:1028 (absent)"
 			],
 			"reconnect-divider": [
-				"chat.spec.ts:57 (absent)",
-				"chat.spec.ts:78 (absent)"
+				"chat.spec.ts:59 (absent)",
+				"chat.spec.ts:80 (absent)"
 			]
 		},
 		"names": {
@@ -1429,7 +1538,7 @@
 		},
 		"selectors": {
 			".ap-avatar, button": [
-				"chat.spec.ts:442 (absent)"
+				"chat.spec.ts:447 (absent)"
 			],
 			".ap-embed-html script": [
 				"reference.spec.ts:202 (absent)"
@@ -1438,8 +1547,8 @@
 				"reference.spec.ts:310 (absent)"
 			],
 			"em": [
-				"chat.spec.ts:150 (absent)",
-				"chat.spec.ts:163 (absent)"
+				"chat.spec.ts:152 (absent)",
+				"chat.spec.ts:165 (absent)"
 			]
 		}
 	},
@@ -1448,17 +1557,29 @@
 			"reference.spec.ts:279"
 		],
 		"button named new RegExp(`^Open preferences\\\\..* Your profile on .*: ${escapeRegExp(name)}(,|$)`)": [
-			"test-helpers.ts:134"
+			"test-helpers.ts:143"
 		],
 		"choices(…, label)": [
-			"push.spec.ts:551",
-			"push.spec.ts:560"
+			"push.spec.ts:554",
+			"push.spec.ts:563"
+		],
+		"dialog named `Edit ${kind}`": [
+			"test-helpers.ts:272"
+		],
+		"heading named `Sign in to ${SERVER_TITLE} on an app on this device?`": [
+			"passkey-page.spec.ts:305"
+		],
+		"heading named `Sign in to ${SERVER_TITLE} on app.example?`": [
+			"passkey-page.spec.ts:117"
 		],
 		"option named new RegExp(handle)": [
-			"chat.spec.ts:810"
+			"chat.spec.ts:818"
 		],
 		"pickFromEmojiPicker(…, emoji)": [
-			"test-helpers.ts:204"
+			"test-helpers.ts:213"
+		],
+		"textbox named `${noun} title`": [
+			"test-helpers.ts:271"
 		]
 	}
 }

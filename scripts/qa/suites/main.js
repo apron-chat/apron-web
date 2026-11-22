@@ -20,6 +20,13 @@ import {
 	wait
 } from '../lib/helpers.js';
 
+/** How far down from the timeline's top hover-messages steps, scrolled to its start: within it on the probes' desktop. */
+const HOVER_REACH = 520;
+/** scroll-timeline's wheel steps of 120px, up from the timeline's end: short of its start, so no step is clamped. */
+const SCROLL_STEPS = 12;
+/** How far up from the timeline's foot scroll-timeline's pointer rests. */
+const SCROLL_POINTER_RISE = 200;
+
 /** A busy account, for the `-busy` perf probes: 40 more rooms, and a long history in general. */
 const BUSY = { manyRooms: 40, filler: { general: 1500 } };
 
@@ -346,14 +353,24 @@ export default {
 		{ name: 'open-thread', settle: 1000, action: (p) => roomList(p).getByText('Deploy checklist', { exact: true }).first().click() },
 		{ name: 'open-preferences', settle: 800, action: (p) => button(p, /^Open preferences/).click() },
 		{
+			// Up the timeline from its end by wheel, the pointer resting over it as the messages pass under it. Measured from
+			// the timeline's own edges, not the window's, so what sits above it (the header, a description's first lines)
+			// doesn't change what passes under the pointer: it rests a fixed way up from the timeline's foot, where the
+			// scroll starts, and the scroll stops short of the top, whose clamp would make the last steps depend on how
+			// tall the timeline is.
 			name: 'scroll-timeline',
 			settle: 500,
-			setup: (p) => timeline(p).hover(),
+			setup: async (p) => {
+				const box = await timeline(p).boundingBox();
+				if (!box) throw new Error('scroll-timeline: no timeline');
+				await p.mouse.move(box.x + box.width / 2, box.y + box.height - SCROLL_POINTER_RISE);
+			},
 			action: async (p) => {
-				for (let i = 0; i < 20; i++) {
+				for (let i = 0; i < SCROLL_STEPS; i++) {
 					await p.mouse.wheel(0, -120);
 					await p.waitForTimeout(16);
 				}
+				if ((await timeline(p).evaluate((el) => el.scrollTop)) <= 0) throw new Error('scroll-timeline: reached the top, so its last steps depend on the timeline\'s height: take fewer steps');
 			}
 		},
 		{
@@ -375,11 +392,17 @@ export default {
 			action: async (p) => {
 				await timeline(p).evaluate((el) => (el.scrollTop = 0));
 				await p.waitForTimeout(200);
+				const box = await timeline(p).boundingBox();
+				if (!box) throw new Error('hover-messages: no timeline');
+				if (box.height < HOVER_REACH) throw new Error(`hover-messages: the timeline is ${box.height}px tall, short of the ${HOVER_REACH}px it steps down`);
 				// Down the messages' gutter (avatars, hover times), whose sizes are fixed: not through their text or their
 				// toolbars, whose widths follow the system font, so a line there would cross different links and buttons on
 				// one machine than on another (a toolbar's words reach x 640 with DejaVu Sans, CI's, and not with Inter).
-				for (let y = 80; y < 720; y += 16) {
-					await p.mouse.move(300, y);
+				// Measured from the timeline's own top, scrolled to its start, not the window's: what sits above it (the
+				// header, a description's first lines) doesn't move where the steps land against the messages and the gaps
+				// between them.
+				for (let y = 8; y < HOVER_REACH; y += 16) {
+					await p.mouse.move(box.x + 52, box.y + y);
 					await p.waitForTimeout(16);
 				}
 			}
