@@ -173,6 +173,11 @@ export class RoomEdit {
 		return Object.keys(patch).length ? patch : undefined;
 	}
 
+	/** Writes the edits whose keys pass `goes` again, as the account they're kept for changes (a guest's, signing in). */
+	keepWhere(goes: (key: string) => boolean): void {
+		for (const key of this.#edits.keys()) if (goes(key)) this.#store?.changed(key, this.#read);
+	}
+
 	/** Forgets the edits whose keys pass `goes`, as the page drops another account's drafts. */
 	forgetWhere(goes: (key: string) => boolean): void {
 		for (const key of [...this.#edits.keys()]) if (goes(key)) this.#edits.delete(key);

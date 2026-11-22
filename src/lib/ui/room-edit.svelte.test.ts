@@ -148,4 +148,21 @@ describe('RoomEdit', () => {
 		expect(edit.shown?.editing).toBe(true);
 		expect(edit.drafted('general')).toBe(true);
 	});
+
+	it('writes its edits again for the account they become, as a guest signs in', () => {
+		const guest = notifyAccount(server, undefined);
+		const ada = notifyAccount(server, 'ada');
+		const keeper = new DraftKeeper(() => true, () => guest);
+		const edit = new RoomEdit(keyOf, keeper, () => false);
+		edit.start(room);
+		edit.setText('general', 'Hello, all.');
+		keeper.flush();
+		expect(loadDraft(keyOf('general'))?.owner).toBe(guest);
+		// Signing in clears what the guest kept there; the edit held here goes back to storage as the account's.
+		expect(keeper.claim(server, ada)).toBe('carried');
+		expect(loadDraft(keyOf('general'))).toBeUndefined();
+		edit.keepWhere(() => true);
+		keeper.flush();
+		expect(loadDraft(keyOf('general'))).toMatchObject({ owner: ada, draft: { text: 'Hello, all.' } });
+	});
 });

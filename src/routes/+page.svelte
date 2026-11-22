@@ -831,9 +831,11 @@
 	let editingDescription = $derived(sheetShown && Boolean(roomEdit.shown?.editing));
 	/** An edit of the open room's or thread's title and description is kept as a draft, not saved yet. */
 	let descriptionDrafted = $derived(editTargetId !== undefined && roomEdit.drafted(editTargetId));
+	/** The open room's or thread's record is known (it may come after its id, as a thread not joined does). */
+	let editTargetKnown = $derived(editTarget !== undefined);
 	// What an earlier visit kept of the open pane's edit shows as a draft before Edit takes it up, once whose it is is known.
 	$effect(() => {
-		if (editTargetId !== undefined && session.ready) untrack(() => editTarget && roomEdit.recall(editTarget));
+		if (editTargetId !== undefined && editTargetKnown && session.ready) untrack(() => editTarget && roomEdit.recall(editTarget));
 	});
 	/** Back shuts the description, as it does a viewer; shut another way, it goes Back off the entry it pushed. */
 	const leaveDescription = backCloses('description', () => Boolean(roomEdit.shown), () => closeDescription());
@@ -857,7 +859,10 @@
 	 * lines under the header have done their work: they retire to the header's line and Description, as × puts them away.
 	 */
 	function closeDescription(): boolean {
-		const target = editTarget;
+		// Only the room or thread it shows: the pane may have moved on already (another room opened over it, `leave`).
+		const shown = roomEdit.shown;
+		if (!shown) return true;
+		const target = editTarget?.id === shown.id ? editTarget : undefined;
 		if (!roomEdit.close(target, Boolean(activeThread))) return false;
 		if (target?.description && !descriptionPutAway) hiddenDescriptions = hideDescription(hiddenDescriptions, draftKey(target.id), target.description);
 		return true;
@@ -934,6 +939,8 @@
 				drafts.forgetWhere(here);
 				roomEdit.forgetWhere(here);
 			}
+			// A guest's edits become the account's: written again as its, as the composer's are (`recallWhere`).
+			if (claim === 'carried') roomEdit.keepWhere(here);
 			drafts.recallWhere(here, claim !== 'same');
 		});
 	});
@@ -3800,7 +3807,7 @@
 				showTopic={!pinnedDescription}
 				ondescription={sheetShown ? undefined : descriptionPutAway ? openDescription : descriptionDrafted && !pinnedDescription && canEditPane ? editDescription : undefined}
 				descriptionUpdated={descriptionEdited}
-				descriptionDraft={descriptionDrafted}
+				descriptionDraft={descriptionDrafted && canEditPane}
 				reading={sheetShown && !editingDescription ? { onedit: canEditPane ? editDescription : undefined, onclose: closeDescription } : undefined}
 				editing={editingDescription && roomEdit.editing ? {
 					title: roomEdit.editing.title, ontitle: editDescriptionTitle, draft: descriptionDrafted, saving: roomEdit.task.busy, disabled: !canCompose, error: roomEdit.task.note,

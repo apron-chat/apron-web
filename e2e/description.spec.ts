@@ -168,3 +168,41 @@ test.describe('a description read and edited where it shows', () => {
 		expect(saved.description).toMatch(/ Mine\.$/);
 	});
 });
+
+test.describe('the description over the conversation, as the pane moves on', () => {
+	test.use(DEVICES.desktop);
+
+	test('opening another room shuts it without counting that room’s description as read', async ({ preview, page }) => {
+		await preview.open();
+		await preview.describe('engineering', 'Builds, deploys and the on-call rotation.');
+		await page.getByTestId('pane-description').click();
+		await expect(page.getByTestId('description-sheet')).toBeVisible();
+		await preview.openRoom('engineering');
+		await expect(page.getByTestId('description-sheet')).toHaveCount(0);
+		// Its first lines show, unread, and general's, shut without reading, stay as they were.
+		await expect(pinned(preview)).toHaveText('Builds, deploys and the on-call rotation.');
+		await preview.openRoom('general');
+		await expect(pinned(preview)).toBeVisible();
+	});
+});
+
+test.describe('the description edited on a phone', () => {
+	test.use(DEVICES.phone);
+
+	test('Back asks before a draft goes; told to stay, Back still shuts it next', async ({ preview, page }) => {
+		await preview.open();
+		await page.getByTestId('room-actions').click();
+		await page.getByTestId('edit-room').click();
+		const field = page.getByTestId('description-sheet').getByTestId('description-input');
+		await expect(field).toBeFocused();
+		await page.keyboard.type('Mine. ');
+		let answers = [false, true];
+		page.on('dialog', (dialog) => void (answers.shift() ? dialog.accept() : dialog.dismiss()));
+		await page.goBack();
+		await expect(field).toBeVisible();
+		await page.goBack();
+		await expect(page.getByTestId('description-sheet')).toHaveCount(0);
+		await expect(page.getByTestId('message-list')).toBeVisible();
+		expect(answers).toEqual([]);
+	});
+});

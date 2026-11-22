@@ -50,7 +50,8 @@ let goingBack = $state.raw<{ key: ViewerEntry; mark: number }>();
  * A full-screen viewer as a history entry of its own, so Back closes it, as a phone's Back is expected to. Call it
  * while a component initializes: it sets up an effect. Once `isOpen` turns true, it pushes an entry marked under
  * `key` in `page.state` (with when it opened, each mark later than the last); leaving that entry, by Back or anything
- * else, calls `close`. It returns what to call once the viewer has closed, however it did: closed another way
+ * else, calls `close`; one that stays open even so (it asked, and was told to stay) pushes an entry again. It returns
+ * what to call once the viewer has closed, however it did: closed another way
  * (Escape, Close) while still on its entry, it goes Back off it, so Back later doesn't land on a viewer that's gone.
  * That Back lands a moment later: a viewer opened meanwhile, this one or another, waits for it before pushing its
  * own entry, which the Back would otherwise leave, closing it.
@@ -69,13 +70,12 @@ export function backCloses(key: ViewerEntry, isOpen: () => boolean, close: () =>
 		untrack(() => {
 			if (pending && !waiting) goingBack = undefined;
 			if (entry) {
-				if (here !== entry) {
-					entry = 0;
-					close();
-				}
-				return;
-			}
-			if (!open || waiting) return;
+				if (here === entry) return;
+				entry = 0;
+				close();
+				// Still open (it asked first, and was told to stay: a draft not to discard), it is an entry again.
+				if (!isOpen()) return;
+			} else if (!open || waiting) return;
 			const mark = (marked = Math.max(Date.now(), marked + 1));
 			try {
 				pushState('', { ...page.state, [key]: mark });

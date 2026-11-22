@@ -41,12 +41,25 @@
 
 	/**
 	 * While it shows, what else is in its pane (the timeline, the composer, banners) is out of reach of the keyboard and
-	 * screen readers as of the pointer, as under a dialog; the header stays, as it holds the sheet's buttons.
+	 * screen readers as of the pointer, as under a dialog, and so is what comes into it meanwhile (a banner, the composer
+	 * in place of a read-only bar); the header stays, as it holds the sheet's buttons.
 	 */
 	const quiets: Attachment<HTMLElement> = (sheet) => {
-		const muted = [...(sheet.parentElement?.children ?? [])].filter((each): each is HTMLElement => each instanceof HTMLElement && each !== sheet && !each.matches('.ap-roomhead, .ap-descsheet-scrim') && !each.inert);
-		for (const each of muted) each.inert = true;
+		const pane = sheet.parentElement;
+		if (!pane) return;
+		const muted = new Set<HTMLElement>();
+		const quiet = (each: Element) => {
+			if (!(each instanceof HTMLElement) || each === sheet || each.inert || each.matches('.ap-roomhead, .ap-descsheet-scrim')) return;
+			each.inert = true;
+			muted.add(each);
+		};
+		for (const each of pane.children) quiet(each);
+		const arrivals = typeof MutationObserver === 'undefined' ? undefined : new MutationObserver((changes) => {
+			for (const change of changes) for (const node of change.addedNodes) if (node instanceof Element) quiet(node);
+		});
+		arrivals?.observe(pane, { childList: true });
 		return () => {
+			arrivals?.disconnect();
 			for (const each of muted) each.inert = false;
 		};
 	};
