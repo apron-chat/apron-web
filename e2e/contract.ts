@@ -442,6 +442,17 @@ export const SCENES: Scene[] = [
 			// Another server: its address alone until Continue.
 			await page.getByTestId('server-url-input').fill('ws://127.0.0.1:9/ws');
 			await look();
+			// Disconnected, the connect screen joins anew: its guest, chosen among the ways in, joins with Join (where,
+			// connected, switching servers says Done).
+			await card.getByRole('button', { name: 'Cancel', exact: true }).click();
+			await expect(card).toBeHidden();
+			await page.getByRole('button', { name: /^Server: / }).click();
+			await page.getByTestId('server-pane').getByRole('button', { name: 'Disconnect', exact: true }).click();
+			await expect(card).toBeVisible();
+			await card.getByRole('button', { name: 'Continue', exact: true }).click();
+			await card.getByRole('radiogroup', { name: 'Sign in with', exact: true }).getByRole('radio', { name: 'Guest', exact: true }).click();
+			await expect(card.getByRole('button', { name: 'Join', exact: true })).toBeVisible();
+			await look();
 		}
 	}
 ];

@@ -445,7 +445,7 @@ export class TimelineViewport {
 		this.#latestWatch = undefined;
 	}
 
-	/** The latest row was measured on screen or off it, in the pane `pane`: the one write of what `latestVisible` says. */
+	/** The latest row was measured on screen or off it, in the pane `pane`: every write of what `latestVisible` says goes here. */
 	#measured(visible: boolean, pane: string | undefined): void {
 		this.#latestVisible = visible;
 		this.#latestVisibleIn = pane;
@@ -585,6 +585,15 @@ export class TimelineViewport {
 		}
 		this.#stickToBottom = atBottom;
 		this.floatingDay.update(scroller, atBottom);
+		// Scrolled off the latest row: said in this frame, so the jump to it shows with the scroll, not a frame after it
+		// with the observer's word (which reports a frame on). The floating day has just read the rows' boxes, so this
+		// lays nothing out of its own. Only off: back in view is the observer's to say, as it also marks the latest seen.
+		const watched = this.#latestWatch;
+		if (!atBottom && this.#latestVisible && watched && watched.pane === this.#paneId) {
+			const at = watched.row.getBoundingClientRect();
+			const box = scroller.getBoundingClientRect();
+			if (!(at.bottom > box.top && at.top < box.bottom)) this.#measured(false, watched.pane);
+		}
 	};
 
 	/**

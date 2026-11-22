@@ -324,4 +324,42 @@ describe('TimelineViewport', () => {
 		expect(viewport.latestVisible).toBe(false);
 		stop();
 	});
+
+	it('says the latest is off screen as the scroll takes it off, not a frame after with the observer', () => {
+		const frames: FrameRequestCallback[] = [];
+		vi.stubGlobal('requestAnimationFrame', (run: FrameRequestCallback) => frames.push(run));
+		vi.stubGlobal('IntersectionObserver', class {
+			observe(): void {}
+			disconnect(): void {}
+		});
+		const { viewport } = setup(roomSnapshot('general'), [messageRecord(1)]);
+		// A list 400px tall over 1000px of rows, its latest a long message, 200px tall at the end.
+		const list = document.createElement('div');
+		const latest = document.createElement('div');
+		latest.setAttribute('data-timeline-item', '');
+		list.append(latest);
+		let top = 600;
+		Object.defineProperties(list, {
+			scrollHeight: { value: 1000 },
+			clientHeight: { value: 400 },
+			scrollTop: { get: () => top, set: (value: number) => (top = value) }
+		});
+		list.getBoundingClientRect = () => ({ top: 0, bottom: 400 }) as DOMRect;
+		latest.getBoundingClientRect = () => ({ top: 800 - top, bottom: 1000 - top }) as DOMRect;
+		viewport.messageScroll = list as HTMLDivElement;
+		const stop = $effect.root(() => viewport.watchLatest());
+		flushSync();
+		for (const run of frames.splice(0)) run(0);
+		expect(viewport.latestVisible).toBe(true);
+
+		// Up past where the latest counts as reached, its head still showing at the foot: still on screen.
+		top = 450;
+		viewport.trackScroll();
+		expect(viewport.latestVisible).toBe(true);
+		// Up past it: off screen at once, with no word from the observer.
+		top = 100;
+		viewport.trackScroll();
+		expect(viewport.latestVisible).toBe(false);
+		stop();
+	});
 });

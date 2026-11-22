@@ -26,6 +26,7 @@ const OUT_OF_REACH: Record<string, string> = {
 	'option /Until I resume/': `Pausing notifications. ${SIGNED_IN}`,
 	'button "Sign out"': SIGNED_IN,
 	'button "Signing in…"': 'Shown only during a passkey ceremony, which needs an authenticator and a server that verifies it.',
+	'button /^Open preferences\\..*: Lin(,|$)/': `The profile bar of the account a passkey made, named Lin; the preview's is Preview User's, the same label (seen as button /^Open preferences/) with another name. ${SIGNED_IN}`,
 	// push.spec's statusChooser takes a status control as a menu button or a select: this app has the button.
 	'combobox /status/i': 'The alternative to `button /status/i` (seen): interop accepts a select or a menu button.',
 	option: 'The options of that select, the alternative to the menu this app shows.'
@@ -35,9 +36,22 @@ const OUT_OF_REACH: Record<string, string> = {
  * Entries the interop suite uses that this app no longer renders: real breaks, reported to fix on one side
  * or the other, and tested (as fixme) below rather than failing every run.
  */
-const KNOWN_BREAKS: Record<string, string> = {
-	'button "Connect"': 'The connect screen reads a server’s greeting before it offers a way in: fill server-url-input, press Continue, then the guest’s button, now Join. webauthn.spec.ts:176–177 fills the field and presses Connect in one step: it needs Continue, then Join.',
-	'dialog "Edit thread"': 'A room or thread is edited where its description reads (DescriptionSheet), not in a dialog: ⋯ → Edit thread (edit-room) makes the header’s title a field, textbox "Thread title", with Cancel and Save, button "Save", beside it. chat.spec.ts:81–89 and :113–115, and responsive.spec.ts:34, look for both inside the dialog: they need the page’s instead.'
+const KNOWN_BREAKS: Record<string, string> = {};
+
+/** For an OUT_OF_REACH name holding an account's data (a person's name), the part this app writes: what the bundle is searched for. */
+const WRITTEN_PART: Record<string, string> = {
+	'button /^Open preferences\\..*: Lin(,|$)/': 'Open preferences.'
+};
+
+/**
+ * Names the interop suite uses on a page the server serves itself, not on this app's: the passkey page (apron-server-go's
+ * SERVER.md, "The passkey page"), which it opens in a popup or a tab of its own. No scene here can show them, and the
+ * app doesn't render them: they are checked only to be still in use.
+ */
+const SERVER_PAGES: Record<string, string> = {
+	'heading "Add a passkey" (substring)': 'The passkey page adding a passkey (passkey-page.spec.ts), in the popup the app opens.',
+	'button "Create passkey" (substring)': 'The passkey page adding a passkey (passkey-page.spec.ts).',
+	'button "Continue with passkey" (substring)': 'The passkey page signing in (passkey-page.spec.ts), in a tab of its own where popups are blocked.'
 };
 
 const seen: Seen[] = existsSync(SEEN_DIR) ? readdirSync(SEEN_DIR).map((f) => JSON.parse(readFileSync(join(SEEN_DIR, f), 'utf8'))) : [];
@@ -53,7 +67,7 @@ test.beforeEach(() => {
 function missing(kind: 'testIds' | 'names' | 'selectors', entries: Record<string, string[]>): string[] {
 	const found = shown(kind);
 	return Object.entries(entries)
-		.filter(([key]) => !found.has(key) && !(key in OUT_OF_REACH) && !(key in KNOWN_BREAKS))
+		.filter(([key]) => !found.has(key) && !(key in OUT_OF_REACH) && !(key in KNOWN_BREAKS) && !(key in SERVER_PAGES))
 		.map(([key, at]) => `${key}  (used at ${at.join(', ')})`);
 }
 
@@ -78,13 +92,14 @@ test('the README’s UI contract holds', () => {
 
 test('what no scene reaches is still in the bundle, and is still out of reach', () => {
 	const all = new Set([...Object.keys(contract.testIds), ...Object.keys(contract.names), ...Object.keys(contract.selectors)]);
-	expect(Object.keys(OUT_OF_REACH).filter((key) => !all.has(key)), 'OUT_OF_REACH or KNOWN_BREAKS lists entries the interop suite no longer uses').toEqual([]);
+	const listed = [...Object.keys(OUT_OF_REACH), ...Object.keys(KNOWN_BREAKS), ...Object.keys(SERVER_PAGES)];
+	expect(listed.filter((key) => !all.has(key)), 'OUT_OF_REACH, KNOWN_BREAKS or SERVER_PAGES lists entries the interop suite no longer uses').toEqual([]);
 	const reached = new Set([...shown('testIds'), ...shown('names'), ...shown('selectors')]);
 	expect(Object.keys(OUT_OF_REACH).filter((key) => reached.has(key)), 'a scene shows these now: take them off OUT_OF_REACH').toEqual([]);
 	const dir = process.env.E2E_BUILD_DIR;
 	test.skip(!dir, 'no build directory to read (E2E_URL was given)');
 	const bundle = files(join(dir!, '_app')).filter((f) => /\.(js|css)$/.test(f)).map((f) => readFileSync(f, 'utf8')).join('\n');
-	const absent = Object.keys(OUT_OF_REACH).filter((key) => !inBundle(key, bundle));
+	const absent = Object.keys(OUT_OF_REACH).filter((key) => (key in WRITTEN_PART ? !bundle.includes(WRITTEN_PART[key]) : !inBundle(key, bundle)));
 	expect(absent, 'out of reach, and not in the built bundle either: renamed or removed?').toEqual([]);
 });
 
