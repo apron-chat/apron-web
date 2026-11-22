@@ -99,7 +99,8 @@ class SnapshotParts {
 		this.error = next.error;
 		this.server = next.server;
 		const capabilities = this.capabilities;
-		if ((Object.keys(next.capabilities) as (keyof typeof capabilities)[]).some((key) => next.capabilities[key] !== capabilities[key])) this.capabilities = next.capabilities;
+		// The same object while the server's frame is (`capabilitiesOf`); a new frame's is compared.
+		if (next.capabilities !== capabilities && (Object.keys(next.capabilities) as (keyof typeof capabilities)[]).some((key) => next.capabilities[key] !== capabilities[key])) this.capabilities = next.capabilities;
 		if (!sameItems(this.rooms, next.rooms)) {
 			const listed = new Set<string>();
 			for (const room of next.rooms) {

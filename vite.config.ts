@@ -91,6 +91,34 @@ function markdownItUnusedRules(): Plugin {
 }
 
 /**
+ * markdown-it's class fields as plain assignments. Its dist sets each field through oxc's `_defineProperty` helper,
+ * which goes through `toPropertyKey`, `toPrimitive` and `_typeof` (two calls of it) before assigning: five calls per
+ * field, eleven fields per `Token`, so about 12,000 calls to render the messages the app opens with (6% of a phone's
+ * load). Every key is a string literal, and none is ever already on the object it's set on (no prototype has one), so
+ * the helper always takes its `e[r] = t` branch: `obj.key = value` does the same. That holds for the file as checked
+ * (`sha`, markdown-it 15.0.3's, less its last line: the source map's comment, which Vitest blanks), so the build fails
+ * after an upgrade that changed it: check again that no field's key is on its object when set (wrap the helper to
+ * report `r in e`), then record its new `sha`. Each call keeps its lines.
+ */
+function markdownItPlainFields(): Plugin {
+	const sha = 'c9efb7b1fe655d9d';
+	const call = /_defineProperty\(\s*(this|\w+),\s*(?:\/\*[\s\S]*?\*\/\s*)?"([\w$]+)",\s*([\s\S]*?)\s*\);(?=\n)/g;
+	return {
+		name: 'apron:markdown-it-plain-fields',
+		enforce: 'pre',
+		transform(code, id) {
+			if (!id.split('?')[0].endsWith('/markdown-it/dist/markdown-it.mjs')) return;
+			if (createHash('sha256').update(code.slice(0, code.lastIndexOf('\n'))).digest('hex').slice(0, 16) !== sha) {
+				throw new Error("apron:markdown-it-plain-fields: markdown-it's dist isn't as checked; see that no class field's key is already on its object when set, then record its sha");
+			}
+			code = code.replace(call, (whole, object, key, value) => `${object}.${key} = ${value};${'\n'.repeat(whole.split('\n').length - 1)}`);
+			if (code.match(/_defineProperty\(/g)?.length !== 1) throw new Error('apron:markdown-it-plain-fields: a call of _defineProperty is left');
+			return { code, map: null };
+		}
+	};
+}
+
+/**
  * Each lucide icon (`@lucide/svelte/icons/<name>`) is a component of its own that passes its shape and its props on
  * to lucide's `Icon`, compiled once per icon. Here each is its shape handed to one shared component that does the
  * same, written once: its props, with its shape as `icon`, spread onto `Icon` as Svelte compiles each icon's
@@ -151,6 +179,8 @@ export default defineConfig(({ command }) => {
 		},
 		plugins: [
 			emojiDataNativeOnly(),
+			// Before markdownItUnusedRules, which changes the file this checks.
+			markdownItPlainFields(),
 			markdownItUnusedRules(),
 			lucideSharedIcon(),
 			sveltekit({

@@ -138,8 +138,15 @@ function hasCapability(server: ServerParams | undefined, cap: Capability): boole
 	return server?.capabilities?.includes(cap) === true;
 }
 
+/** Each `server` frame's capabilities, worked out once: the client's snapshot asks again with every message, of the same frame. */
+const capabilitiesByServer = new WeakMap<ServerParams, Capabilities>();
+
 export function capabilitiesOf(server: ServerParams | undefined): Capabilities {
-	return Object.fromEntries(CAPABILITIES.map((cap) => [cap, hasCapability(server, cap)])) as Capabilities;
+	const known = server && capabilitiesByServer.get(server);
+	if (known) return known;
+	const capabilities = Object.fromEntries(CAPABILITIES.map((cap) => [cap, hasCapability(server, cap)])) as Capabilities;
+	if (server) capabilitiesByServer.set(server, capabilities);
+	return capabilities;
 }
 
 /** Edit, move, and delete controls (capability `edit`). */

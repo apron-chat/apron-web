@@ -10,7 +10,7 @@
 			"domNodes": 540,
 			"layouts": 10,
 			"styleRecalcs": 18,
-			"calls": 210190,
+			"calls": 197184,
 			"heapMB": 8.4
 		},
 		"load-busy": {
@@ -19,7 +19,7 @@
 			"domNodes": 1149,
 			"layouts": 13,
 			"styleRecalcs": 16,
-			"calls": 1507671,
+			"calls": 1470361,
 			"heapMB": 10.9
 		},
 		"load-phone": {
@@ -28,7 +28,7 @@
 			"domNodes": 541,
 			"layouts": 10,
 			"styleRecalcs": 16,
-			"calls": 185617,
+			"calls": 171790,
 			"heapMB": 8.2
 		},
 		"load-phone-busy": {
@@ -37,7 +37,7 @@
 			"domNodes": 1150,
 			"layouts": 9,
 			"styleRecalcs": 15,
-			"calls": 1166967,
+			"calls": 1129042,
 			"heapMB": 10.6
 		},
 		"switch-room-busy": {
@@ -112,7 +112,7 @@
 	},
 	"production": {
 		"startupFiles": 13,
-		"startupJsKB": 874,
-		"startupJsBrotliKB": 246
+		"startupJsKB": 872,
+		"startupJsBrotliKB": 245.4
 	}
 }
