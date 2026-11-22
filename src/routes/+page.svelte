@@ -588,7 +588,8 @@
 	 * The open pane is catching up: its history is recovering or loading, or it shows a copy held from before
 	 * (a reconnect, or a reload) until the live one replaces it. The timeline says so at its foot.
 	 */
-	let paneCatchingUp = $derived(Boolean(paneRoom && (paneRoom.recovering || paneRoom.loading || historyWait || session.showingHeld || (activeThread ? shownThreadRoom !== threadRoom : session.activeRoomHeld || awaitingThreads))));
+	// Not while held (`denied`, §1.1): nothing reconnects to catch up, so the pane shows what it had, disconnected.
+	let paneCatchingUp = $derived(!session.signedOut && Boolean(paneRoom && (paneRoom.recovering || paneRoom.loading || historyWait || session.showingHeld || (activeThread ? shownThreadRoom !== threadRoom : session.activeRoomHeld || awaitingThreads))));
 	/** `paneCatchingUp` or a quiet reconnect, as the floating pill shows it: only once it outlasts a moment, then for a moment at least. */
 	let checkingShown = $state(false);
 	const checking = new SettleFlag((on) => (checkingShown = on));
@@ -3981,6 +3982,9 @@
 						oncancel={() => { selection.cancel(); composer?.focus(); }}
 					/>
 				{/if}
+			{:else if session.signedOut}
+				<!-- Held (`denied`, or waiting for a sign-in): nothing typed could be sent, so no composer, and the banner's Sign in. -->
+				<ReadOnlyBar signedOut guest={!session.passkeySession} onsignin={signInAgain} />
 			{:else if session.readOnly}
 				<ReadOnlyBar guest={!session.passkeySession} {passkeyUnavailable} archive={archiveNote} onsignin={() => openConnect({ signIn: true })} />
 			{:else}
