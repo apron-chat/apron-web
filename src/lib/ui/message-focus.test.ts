@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest';
-import { articleOf, isMessageRow, MESSAGE_STEPS, messageRows, stepMessage, timelineItems } from './message-focus';
+import { articleOf, isMessageRow, isTimelineItem, MESSAGE_STEPS, messageRows, stepMessage, timelineItems } from './message-focus';
 
 afterEach(() => (document.body.innerHTML = ''));
 
@@ -60,5 +60,12 @@ describe('timelineItems', () => {
 		expect(timelineItems(list).map((item) => item.dataset.messageId ?? item.textContent)).toEqual(['0', '1', 'thread 2', '4']);
 		expect(articleOf(list.querySelector('article.ap-msg button')!)?.dataset.messageId).toBe('0');
 		expect(articleOf(list.querySelector('.ap-thread')!)).toBeUndefined();
+	});
+
+	it('says of one element what listing them all would', () => {
+		const list = timeline('mntsm');
+		const items = timelineItems(list);
+		for (const element of [list, ...list.querySelectorAll<HTMLElement>('*')]) expect(isTimelineItem(list, element)).toBe(items.includes(element));
+		expect(isTimelineItem(list, document.body)).toBe(false);
 	});
 });

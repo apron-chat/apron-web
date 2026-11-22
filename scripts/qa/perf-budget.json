@@ -10,7 +10,7 @@
 			"domNodes": 540,
 			"layouts": 10,
 			"styleRecalcs": 18,
-			"calls": 197184,
+			"calls": 194770,
 			"heapMB": 8.4
 		},
 		"load-busy": {
@@ -19,7 +19,7 @@
 			"domNodes": 1149,
 			"layouts": 13,
 			"styleRecalcs": 16,
-			"calls": 1470361,
+			"calls": 1368953,
 			"heapMB": 10.9
 		},
 		"load-phone": {
@@ -28,7 +28,7 @@
 			"domNodes": 541,
 			"layouts": 10,
 			"styleRecalcs": 16,
-			"calls": 171790,
+			"calls": 169398,
 			"heapMB": 8.2
 		},
 		"load-phone-busy": {
@@ -37,18 +37,18 @@
 			"domNodes": 1150,
 			"layouts": 9,
 			"styleRecalcs": 15,
-			"calls": 1129042,
+			"calls": 1027634,
 			"heapMB": 10.6
 		},
 		"switch-room-busy": {
 			"layouts": 2,
 			"styleRecalcs": 12,
-			"calls": 86156
+			"calls": 83480
 		},
 		"send-message-busy": {
 			"layouts": 38,
 			"styleRecalcs": 13,
-			"calls": 274559
+			"calls": 254376
 		},
 		"sidebar-collapse": {
 			"layouts": 3,
@@ -68,7 +68,7 @@
 		"open-thread": {
 			"layouts": 4,
 			"styleRecalcs": 14,
-			"calls": 65317
+			"calls": 64258
 		},
 		"open-preferences": {
 			"layouts": 3,
@@ -83,12 +83,12 @@
 		"type-composer-role": {
 			"layouts": 46,
 			"styleRecalcs": 1,
-			"calls": 32148
+			"calls": 28468
 		},
 		"type-composer": {
 			"layouts": 36,
 			"styleRecalcs": 6,
-			"calls": 30483
+			"calls": 30270
 		},
 		"hover-messages": {
 			"layouts": 7,
@@ -103,7 +103,7 @@
 		"message-menu": {
 			"layouts": 4,
 			"styleRecalcs": 11,
-			"calls": 2679
+			"calls": 2528
 		}
 	},
 	"bundle": {

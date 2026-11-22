@@ -100,7 +100,7 @@
 	import { receiptSettings } from '$lib/ui/receipt-settings.svelte';
 	import { onlyPreferencesDiffer, preferencesOpener } from '$lib/ui/preferences.svelte';
 	import { nextRoomRow } from '$lib/ui/room-steps';
-	import { articleOf, isMessageRow, MESSAGE_STEPS, messageRows, rowControls, stepMessage, tabbableOutside, timelineItems } from '$lib/ui/message-focus';
+	import { articleOf, isMessageRow, isTimelineItem, MESSAGE_STEPS, messageRows, rowControls, stepMessage, tabbableOutside, timelineItems } from '$lib/ui/message-focus';
 	import { buildRoomTimeline, steady, threadEntries, threadStartedFrom, threadDescriptionFor, threadTitleFor, type ThreadEntry, type TimelineItem } from '$lib/ui/timeline';
 	import { takeSignInLink } from '$lib/ui/sign-in-link';
 	import { returnedWaiting } from '$lib/ui/sign-in-window';
@@ -113,7 +113,7 @@
 	import { carriesFiles, fileDrop, pastedFiles } from '$lib/ui/file-transfer';
 	import { PaneDrafts, pageDrafts, type StagedFile } from '$lib/ui/pane-drafts.svelte';
 	import { DraftKeeper, draftServer } from '$lib/ui/draft-keeper.svelte';
-	import { RoomEdit } from '$lib/ui/room-edit.svelte';
+	import { RoomEdit, type EditedRoom } from '$lib/ui/room-edit.svelte';
 	import { backCloses } from '$lib/ui/viewer.svelte';
 	import { loadKeptSessionUser } from '$lib/protocol/client-internals';
 	import { PagePresence } from '$lib/ui/presence.svelte';
@@ -802,10 +802,17 @@
 	let canStartThreads = $derived(session.canManageRooms && !session.readOnly && Boolean(activeRoom) && activeRoom?.parentRoomId === undefined);
 	/** Editing the open room's or thread's title and description (capability `rooms`); the server decides who may. */
 	let canEditPane = $derived(session.canManageRooms && !session.readOnly && Boolean(activeThread ? activeThreadEntry : activeRoom));
+	// The edit target last worked out, which `editTarget` keeps while it says the same; not state, only a memo.
+	let lastEditTarget: EditedRoom | undefined;
 	/** What the Edit form edits: the open thread, else the room; its title as written (`editableTitle`), so saving sends back every character. */
-	let editTarget = $derived(activeThread
-		? (activeThreadEntry ? { id: activeThreadEntry.id, title: editableTitle(session.room(activeThreadEntry.id) ?? activeThreadEntry), description: activeThreadEntry.description } : undefined)
-		: (activeRoom ? { id: activeRoom.id, title: editableTitle(activeRoom), description: activeRoom.description } : undefined));
+	let editTarget = $derived.by(() => {
+		const next: EditedRoom | undefined = activeThread
+			? (activeThreadEntry ? { id: activeThreadEntry.id, title: editableTitle(session.room(activeThreadEntry.id) ?? activeThreadEntry), description: activeThreadEntry.description } : undefined)
+			: (activeRoom ? { id: activeRoom.id, title: editableTitle(activeRoom), description: activeRoom.description } : undefined);
+		const last = lastEditTarget;
+		// Kept while it says the same, so what reads it isn't worked out again as each snapshot comes (perf budget).
+		return (lastEditTarget = last && next && last.id === next.id && last.title === next.title && last.description === next.description ? last : next);
+	});
 	/** Room and thread descriptions put away with their ×, on this device. */
 	let hiddenDescriptions = $state(loadHiddenDescriptions());
 	/** Whether the open room's or thread's description is put away: the header's Description brings it back. */
@@ -3214,7 +3221,7 @@
 		const target = event.target;
 		const list = viewport.messageScroll;
 		if (!(target instanceof HTMLElement) || !list) return;
-		if (timelineItems(list).includes(target)) lastItem = target;
+		if (isTimelineItem(list, target)) lastItem = target;
 		const from = event.relatedTarget;
 		if (!tabbing || (from instanceof Node && list.contains(from)) || target.closest('[data-testid="message-editor"]')) return;
 		if (lastItem === target) return;
@@ -3283,7 +3290,7 @@
 			}
 			return;
 		}
-		if (!timelineItems(list).includes(target)) return;
+		if (!isTimelineItem(list, target)) return;
 		if (event.key === 'Escape') {
 			// In select mode Escape ends it (windowKeydown); the composer is the selection bar then.
 			if (selection.active) return;

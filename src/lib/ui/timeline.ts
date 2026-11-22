@@ -467,13 +467,18 @@ function sameShallow(a: object, b: object): boolean {
 	const left = a as Record<string, unknown>, right = b as Record<string, unknown>;
 	const keys = Object.keys(left);
 	if (keys.length !== Object.keys(right).length) return false;
-	return keys.every((key) => {
+	// A loop rather than `every`: asked of each row with every snapshot, a call per field adds up (perf budget).
+	for (const key of keys) {
 		const x = left[key], y = right[key];
-		if (x === y) return true;
-		if (Array.isArray(x) && Array.isArray(y)) return x.length === y.length && x.every((item, index) => item === y[index]);
+		if (x === y) continue;
+		if (Array.isArray(x) && Array.isArray(y)) {
+			if (x.length === y.length && x.every((item, index) => item === y[index])) continue;
+			return false;
+		}
 		// A thread card's entry, worked out afresh with each snapshot.
-		return key === 'entry' && typeof x === 'object' && typeof y === 'object' && x !== null && y !== null && sameShallow(x, y);
-	});
+		if (!(key === 'entry' && typeof x === 'object' && typeof y === 'object' && x !== null && y !== null && sameShallow(x, y))) return false;
+	}
+	return true;
 }
 
 /**
