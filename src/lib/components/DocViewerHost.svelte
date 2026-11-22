@@ -2,7 +2,7 @@
 	import DocViewer from '$lib/design/components/DocViewer.svelte';
 	import { renderDocument } from '$lib/protocol/markdown';
 	import { directory } from '$lib/ui/directory.svelte';
-	import { loadDocZoom, saveDocZoom } from '$lib/ui/storage';
+	import { loadDocWrap, loadDocZoom, saveDocWrap, saveDocZoom } from '$lib/ui/storage';
 	import { headingFor, readDoc, type DocText } from '$lib/ui/doc-text';
 	import { docViewer, type DocView } from '$lib/ui/doc-viewer.svelte';
 	import { highlightCode } from '$lib/ui/highlight';
@@ -13,7 +13,8 @@
 	 * or plain text file's card opens it (`docViewer.show`). Each open reads the file anew (`readDoc`). Markdown it
 	 * renders (`renderDocument`): CommonMark, sanitized, its code highlighted, its pictures loading only where the
 	 * timeline's would (`directory.mediaGate`); a link to one of its headings scrolls there. Plain text it shows as
-	 * written: monospace, its spaces and line breaks kept, long lines wrapped. Where the file can't be read, it says so
+	 * written: monospace, its spaces and line breaks kept, a long line on one line, scrolling sideways, unless Wrap
+	 * lines is on (as last set on this device). Where the file can't be read, it says so
 	 * and offers Download. Open, it is a history entry of its own (`page.state.doc`), so Back closes it.
 	 */
 	let view = $derived(docViewer.view);
@@ -46,6 +47,8 @@
 
 	/** How large the page is drawn, as last chosen on this device. */
 	let zoom = $state(loadDocZoom());
+	/** Whether a plain text file's long lines wrap, as last chosen on this device: off unless chosen. */
+	let wrapLines = $state(loadDocWrap());
 
 	/** Back closes it; closing it otherwise goes Back off its entry. */
 	const leave = backCloses('doc', () => docViewer.open, () => (docViewer.open = false));
@@ -65,7 +68,7 @@
 </script>
 
 {#if view}
-	<DocViewer bind:open={docViewer.open} title={view.title} detail={view.detail} href={view.url} {status} failed={Boolean(doc && 'error' in doc)} bind:zoom={() => zoom, (value) => { zoom = value; if (value !== undefined) saveDocZoom(value); }} onclose={closed} testid="doc-viewer">
+	<DocViewer bind:open={docViewer.open} title={view.title} detail={view.detail} href={view.url} {status} failed={Boolean(doc && 'error' in doc)} bind:zoom={() => zoom, (value) => { zoom = value; if (value !== undefined) saveDocZoom(value); }} bind:wrap={() => (plain ? wrapLines : undefined), (value) => { if (value === undefined) return; wrapLines = value; saveDocWrap(value); }} onclose={closed} testid="doc-viewer">
 		{#if plain}
 			<pre class="ap-doc-plain" data-testid="doc-viewer-text">{text}</pre>
 		{:else}

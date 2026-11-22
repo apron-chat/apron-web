@@ -120,6 +120,30 @@ describe('DocViewerHost', () => {
 		expect(document.querySelector('button[aria-label="Larger text"]')).not.toBeNull();
 	});
 
+	it('leaves a plain text file\'s lines unwrapped until Wrap lines, kept on this device; a Markdown file has none', async () => {
+		try {
+			render(DocViewerHost);
+			docViewer.show({ url: 'https://files.example/notes.txt', title: 'notes.txt', kind: 'text' });
+			flushSync();
+			await reads[0].answer({ text: 'a long line' });
+			const wrap = () => document.querySelector<HTMLButtonElement>('button[aria-label="Wrap lines"]');
+			const wide = () => document.querySelector('article.ap-docviewer-page')?.classList.contains('ap-docviewer-page-wide');
+			expect([wrap()?.getAttribute('aria-pressed'), wide()]).toEqual(['false', true]);
+			wrap()!.click();
+			flushSync();
+			await tick();
+			expect([wrap()?.getAttribute('aria-pressed'), wide(), localStorage.getItem('apron.docWrap')]).toEqual(['true', false, 'on']);
+
+			docViewer.closed();
+			flushSync();
+			open();
+			await reads[1].answer({ text: '# Plan' });
+			expect([wrap(), wide()]).toEqual([null, false]);
+		} finally {
+			localStorage.removeItem('apron.docWrap');
+		}
+	});
+
 	it('says an empty plain text file is empty', async () => {
 		render(DocViewerHost);
 		docViewer.show({ url: 'https://files.example/blank.txt', title: 'blank.txt', kind: 'text' });
