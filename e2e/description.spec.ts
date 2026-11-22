@@ -266,3 +266,58 @@ test.describe('the description read on a phone', () => {
 		await expect(page.getByRole('button', { name: /member list$/ })).toBeVisible();
 	});
 });
+
+test.describe('the description read whole', () => {
+	test.use(DEVICES.desktop);
+
+	test('folds back into its first lines with ⌃ at its foot, there again once read and on the next visit', async ({ preview, page }) => {
+		await preview.open();
+		const sheet = page.getByTestId('description-sheet');
+		await pinned(preview).click();
+		await expect(sheet).toBeVisible();
+		await sheet.getByRole('button', { name: 'Fold into preview' }).click();
+		await expect(sheet).toHaveCount(0);
+		await expect(pinned(preview)).toBeVisible();
+		// Shut with × instead, the first lines retire; Description opens it, and ⌃ brings them back.
+		await pinned(preview).click();
+		await page.getByRole('button', { name: 'Close description' }).click();
+		await expect(pinned(preview)).toHaveCount(0);
+		await button(preview).click();
+		await sheet.getByRole('button', { name: 'Fold into preview' }).click();
+		await expect(pinned(preview)).toBeVisible();
+		await page.reload();
+		await expect(pinned(preview)).toBeVisible();
+	});
+
+	test('wears the focus ring opened from the keyboard, not from the pointer', async ({ preview, page }) => {
+		await preview.open();
+		const body = page.getByTestId('description-sheet').locator('.ap-descsheet-body');
+		const ringed = () => body.evaluate((el) => el === document.activeElement && getComputedStyle(el).outlineStyle !== 'none');
+		await pinned(preview).click();
+		await expect(body).toBeFocused();
+		expect(await ringed()).toBe(false);
+		// Shut, read: Description opens it from here.
+		await page.keyboard.press('Escape');
+		// Tabbed to, as the keyboard comes to it.
+		await button(preview).focus();
+		await page.keyboard.press('Tab');
+		await page.keyboard.press('Shift+Tab');
+		await expect(button(preview)).toBeFocused();
+		await page.keyboard.press('Enter');
+		await expect(body).toBeFocused();
+		expect(await ringed()).toBe(true);
+	});
+
+	test('pointing at the room’s name, which opens it, lights Description as pointing at Description does', async ({ preview, page }) => {
+		await putAway(preview);
+		const background = () => button(preview).evaluate((el) => getComputedStyle(el).backgroundColor);
+		const resting = await background();
+		await button(preview).hover();
+		const hovered = await background();
+		expect(hovered).not.toBe(resting);
+		await page.locator('.ap-roomhead-name').hover();
+		await expect.poll(background).toBe(hovered);
+		await page.getByTestId('message-list').hover();
+		await expect.poll(background).toBe(resting);
+	});
+});

@@ -12,7 +12,7 @@
 		thread: boolean;
 		onopenroom: (roomId: string) => void;
 		ondismiss: () => void;
-		onexpand: () => void;
+		onexpand: (event: MouseEvent) => void;
 		draft?: boolean;
 		ondraft?: () => void;
 	}

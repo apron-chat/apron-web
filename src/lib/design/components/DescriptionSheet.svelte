@@ -1,7 +1,8 @@
 <script lang="ts">
-	import type { Snippet } from 'svelte';
+	import { untrack, type Snippet } from 'svelte';
 	import type { Attachment } from 'svelte/attachments';
 	import type { ClassValue } from 'svelte/elements';
+	import ChevronUp from '@lucide/svelte/icons/chevron-up';
 	import { fades } from './fades';
 
 	/**
@@ -13,7 +14,9 @@
 	 * phone it is the whole pane under the header.
 	 *
 	 * Read, the description (`children`: rendered Markdown with its own `.ap-msg-text`) is set as a document (`.ap-doc`)
-	 * and has focus as it opens, so the keys that scroll a page scroll it.
+	 * and has focus as it opens, so the keys that scroll a page scroll it: with the focus ring if the keyboard opened it,
+	 * without if the pointer did. ⌃ at its foot folds it back into its first lines under the header (`onfold`), the
+	 * ThreadDescription whose ⌄ opens it.
 	 */
 	interface Props {
 		/** Names the region: "Room description" or "Thread description". */
@@ -25,12 +28,16 @@
 		onclose: () => void;
 		/** Escape that nothing in it took: a step back (from editing to reading, say); shutting it, without. */
 		onescape?: () => void;
+		/** Read, ⌃ at its foot: fold it back into its first lines under the header. */
+		onfold?: () => void;
+		/** Read, opened by the pointer: no focus ring as it takes focus (the browser draws one after a click on what takes none). */
+		pointer?: boolean;
 		/** Classes for its `<section>`, added to its own. */
 		class?: ClassValue;
 		/** A `data-testid` for its `<section>`. */
 		testid?: string;
 	}
-	let { label, editing = false, children, onclose, onescape, class: className, testid }: Props = $props();
+	let { label, editing = false, children, onclose, onescape, onfold, pointer = false, class: className, testid }: Props = $props();
 
 	/** Escape that no picker or field inside took (they prevent its default): a step back. */
 	function keydown(event: KeyboardEvent): void {
@@ -64,9 +71,16 @@
 		};
 	};
 
-	/** Read, the description has focus as it opens. */
+	/**
+	 * Read, the description has focus as it opens; opened by the pointer, without the ring the browser would draw after a
+	 * click on what takes no focus (the preview, the name), until it leaves.
+	 */
 	const focused: Attachment<HTMLElement> = (body) => {
+		if (untrack(() => pointer)) body.dataset.pointer = '';
 		body.focus({ preventScroll: true });
+		const keyed = () => delete body.dataset.pointer;
+		body.addEventListener('blur', keyed, { once: true });
+		return () => body.removeEventListener('blur', keyed);
 	};
 </script>
 
@@ -74,12 +88,17 @@
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 <div class="ap-descsheet-scrim" aria-hidden="true" onclick={onclose}></div>
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-<section class={['ap-descsheet', editing && 'ap-descsheet-editing', className]} aria-label={label} data-testid={testid} onkeydown={keydown} {@attach quiets}>
+<section class={['ap-descsheet', editing && 'ap-descsheet-editing', !editing && onfold && 'ap-descsheet-folds', className]} aria-label={label} data-testid={testid} onkeydown={keydown} {@attach quiets}>
 	{#if editing}
 		<div class="ap-descsheet-body">{@render children()}</div>
 	{:else}
 		<!-- The description has focus, so Space, the arrows and Page Up and Down scroll it. -->
 		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 		<div class="ap-descsheet-body ap-doc" tabindex="0" {@attach fades()} {@attach focused}>{@render children()}</div>
+		{#if onfold}
+			<div class="ap-descsheet-foot">
+				<button class="ap-iconbtn ap-description-more" type="button" aria-label="Fold into preview" title="Fold into preview" onclick={onfold}><ChevronUp size={18} strokeWidth={2} aria-hidden="true" /></button>
+			</div>
+		{/if}
 	{/if}
 </section>

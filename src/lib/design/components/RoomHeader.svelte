@@ -85,9 +85,10 @@
 		onshortcuts?: () => void;
 		/**
 		 * The room's or thread's pinned <ThreadDescription> was put away with its ×: a Description button brings it back,
-		 * as does a click anywhere on the name and topic (but not on the thread's crumb back to its room).
+		 * as does a click anywhere on the name and topic (but not on the thread's crumb back to its room). Called with the
+		 * click, whose `detail` is 0 when the keyboard pressed Description.
 		 */
-		ondescription?: () => void;
+		ondescription?: (event: MouseEvent) => void;
 		/** The description put away has been edited since: Description is drawn in the description's blue, quietly enough to leave. */
 		descriptionUpdated?: boolean;
 		/** An edit of the description is kept as a draft, not saved yet: Description (or Edit, reading it) carries a dot. */
@@ -163,7 +164,7 @@
 	function openDescription(event: MouseEvent): void {
 		if (!ondescription || (event.target as Element).closest('button, a')) return;
 		if (!(window.getSelection()?.isCollapsed ?? true)) return;
-		ondescription();
+		ondescription(event);
 	}
 
 	/** In the title being edited, Enter saves and Escape cancels, as in a form. */
@@ -249,7 +250,7 @@
 		{/if}
 	{/if}
 	{#if ondescription && !sheet}
-		<button type="button" class={['ap-btn', 'ap-btn-sm', 'ap-btn-ghost', 'ap-roomhead-description', descriptionUpdated && 'ap-roomhead-description-updated']} data-testid={descriptionTestid} aria-label="Show the {noun} description{descriptionUpdated ? ', updated since you hid it' : ''}{descriptionDraft ? ', unsaved draft' : ''}" title="Show the {noun} description{descriptionUpdated ? ' (updated since you hid it)' : ''}" onclick={ondescription}>
+		<button type="button" class={['ap-btn', 'ap-btn-sm', 'ap-btn-ghost', 'ap-roomhead-description', 'ap-roomhead-show', descriptionUpdated && 'ap-roomhead-description-updated']} data-testid={descriptionTestid} aria-label="Show the {noun} description{descriptionUpdated ? ', updated since you hid it' : ''}{descriptionDraft ? ', unsaved draft' : ''}" title="Show the {noun} description{descriptionUpdated ? ' (updated since you hid it)' : ''}" onclick={ondescription}>
 			<TextAlignStart size={15} strokeWidth={2} aria-hidden="true" /><span class="ap-roomhead-description-word">Description</span>{#if descriptionDraft}<span class="ap-roomhead-dot" aria-hidden="true"></span>{/if}
 		</button>
 	{/if}

@@ -77,7 +77,7 @@
 	import { MEMBER_LIST_WIDTHS, ROOMS_LIST_WIDTHS, SidebarLayout } from '$lib/ui/sidebar.svelte';
 	import { NARROW_MAX, WIDE_MIN } from '$lib/ui/breakpoints';
 	import { closedTerminals } from '$lib/ui/terminal-closed.svelte';
-	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, installOfferAnswered, answerInstallOffer, loadRecentReactions, saveRecentReactions, loadRecentServers, loadServerUrl, loadSidebarPrefs, refreshRecentServer, rememberServer, saveDisplayName, saveLastSignIn, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, HIDDEN_DESCRIPTIONS_KEY, INSTALL_OFFER_KEY, loadAddedRooms, saveAddedRooms, loadHiddenDescriptions, hideDescription, descriptionHidden, descriptionUpdated, type RecentServer } from '$lib/ui/storage';
+	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, installOfferAnswered, answerInstallOffer, loadRecentReactions, saveRecentReactions, loadRecentServers, loadServerUrl, loadSidebarPrefs, refreshRecentServer, rememberServer, saveDisplayName, saveLastSignIn, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, HIDDEN_DESCRIPTIONS_KEY, INSTALL_OFFER_KEY, loadAddedRooms, saveAddedRooms, loadHiddenDescriptions, hideDescription, showDescription, descriptionHidden, descriptionUpdated, type RecentServer } from '$lib/ui/storage';
 	import TimelineLoading from '$lib/design/components/TimelineLoading.svelte';
 	import RateLimitNotice from '$lib/design/components/RateLimitNotice.svelte';
 	import SystemLine from '$lib/design/components/SystemLine.svelte';
@@ -845,16 +845,21 @@
 		if (!roomEdit.shown) untrack(leaveDescription);
 	});
 
+	/** The description was opened by the pointer, not the keyboard (whose click has `detail` 0): it takes focus unringed. */
+	let descriptionByPointer = $state(false);
 	/** Shows the description over the pane, to read; put away and edited since, it is news no more. */
-	function openDescription(): void {
+	function openDescription(event?: MouseEvent): void {
 		const target = editTarget;
 		if (!target) return;
+		descriptionByPointer = event?.detail !== 0;
 		roomEdit.open(target);
 		if (target.description && descriptionPutAway) hiddenDescriptions = hideDescription(hiddenDescriptions, draftKey(target.id), target.description);
 	}
 	/** Edits the open room's or thread's title and description over its pane, from its draft where one is kept. */
 	function editDescription(): void {
-		if (editTarget && canEditPane) roomEdit.start(editTarget);
+		if (!editTarget || !canEditPane) return;
+		descriptionByPointer = false;
+		roomEdit.start(editTarget);
 	}
 	/**
 	 * Shuts the description; being edited, once discarding a draft is agreed. Returns whether it shut. Read whole, its first
@@ -868,6 +873,13 @@
 		if (!roomEdit.close(target, Boolean(activeThread))) return false;
 		if (target?.description && !descriptionPutAway) hiddenDescriptions = hideDescription(hiddenDescriptions, draftKey(target.id), target.description);
 		return true;
+	}
+	/** Read, folds the description back into its first lines under the header, there again as when it was new. */
+	function foldDescription(): void {
+		const shown = roomEdit.shown;
+		if (!shown || shown.editing) return;
+		roomEdit.close(undefined, Boolean(activeThread));
+		if (editTarget?.id === shown.id) hiddenDescriptions = showDescription(hiddenDescriptions, draftKey(shown.id));
 	}
 	/** Back from editing to reading, once discarding a draft is agreed. */
 	function cancelDescriptionEdit(): void {
@@ -3868,7 +3880,7 @@
 			{#if sheetShown && editTarget && descriptionSheet.component}
 				{@const DescriptionSheet = descriptionSheet.component}
 				{#key editTarget.id}
-					<DescriptionSheet room={editTarget} thread={Boolean(activeThread)} edit={roomEdit} {people} rooms={roomSuggestions} onmention={refreshMembers} onopenroom={openMentionedRoom} onsave={saveDescription} onclose={closeDescription} onescape={descriptionEscape} />
+					<DescriptionSheet room={editTarget} thread={Boolean(activeThread)} edit={roomEdit} {people} rooms={roomSuggestions} onmention={refreshMembers} onopenroom={openMentionedRoom} onsave={saveDescription} onclose={closeDescription} onescape={descriptionEscape} onfold={foldDescription} pointer={descriptionByPointer} />
 				{/key}
 			{/if}
 

@@ -23,8 +23,8 @@
 		label?: string;
 		/** Offer × to put the description away. */
 		ondismiss?: () => void;
-		/** Open the whole description, from Read all or a click on it. */
-		onexpand?: () => void;
+		/** Open the whole description, from Read all or a click on it: called with the click (`detail` 0 from the keyboard). */
+		onexpand?: (event: MouseEvent) => void;
 		/** An edit of the description is kept as a draft: Unsaved draft, which takes it up (`ondraft`). */
 		draft?: boolean;
 		ondraft?: () => void;
@@ -39,7 +39,7 @@
 	function click(event: MouseEvent): void {
 		if (!onexpand || (event.target as Element | null)?.closest('a, button, [data-room-id]')) return;
 		if (window.getSelection()?.toString()) return;
-		onexpand();
+		onexpand(event);
 	}
 </script>
 

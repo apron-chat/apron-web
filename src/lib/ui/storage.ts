@@ -383,6 +383,12 @@ export function hideDescription(hidden: Record<string, string>, key: string, des
 	return next;
 }
 
+/** Brings a room's or thread's first lines back under its header, folded from the whole. Returns the ones still put away. */
+export function showDescription(hidden: Record<string, string>, key: string): Record<string, string> {
+	const next = Object.fromEntries(Object.entries(savedDescriptions(hidden)).filter(([entry]) => entry !== key));
+	write(KEY.hiddenDescriptions, JSON.stringify(next));
+	return next;
+}
 
 /** The storage key of the closed terminal embeds: other tabs follow its `storage` events. */
 export const CLOSED_TERMINALS_KEY = KEY.closedTerminals;
