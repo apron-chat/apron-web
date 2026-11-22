@@ -56,19 +56,29 @@ describe('MediaViewer', () => {
 	it('closes on no press of two fingers (a pinch), even one let go beside the image', () => {
 		const props = $state({ open: true, items, index: 0 });
 		render(MediaViewer, props);
-		const stage = document.querySelector('.ap-viewer-stage')!;
-		const pointer = (type: string, pointerId: number) => stage.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId }));
+		// Drawn anew each time it opens.
+		const stage = () => document.querySelector('.ap-viewer-stage')!;
+		const pointer = (type: string, pointerId: number) => stage().dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId }));
 		pointer('pointerdown', 1);
 		pointer('pointerdown', 2);
 		pointer('pointerup', 2);
 		pointer('pointerup', 1);
-		stage.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+		stage().dispatchEvent(new MouseEvent('click', { bubbles: true }));
 		flushSync();
 		expect(props.open).toBe(true);
+		// A first finger starts anew, though one was never let go here (the viewer closed under it): a press of it closes.
+		pointer('pointerdown', 4);
+		stage().dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 5, isPrimary: true }));
+		stage().dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 5, isPrimary: true }));
+		stage().dispatchEvent(new MouseEvent('click', { bubbles: true }));
+		flushSync();
+		expect(props.open).toBe(false);
+		props.open = true;
+		flushSync();
 		// A press of one, after, still does.
 		pointer('pointerdown', 3);
 		pointer('pointerup', 3);
-		stage.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+		stage().dispatchEvent(new MouseEvent('click', { bubbles: true }));
 		flushSync();
 		expect(props.open).toBe(false);
 	});

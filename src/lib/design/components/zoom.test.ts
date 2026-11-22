@@ -34,7 +34,7 @@ describe('clampZoom', () => {
 });
 
 describe('maxScale', () => {
-	it('zooms to four times, or until a pixel of the image is one on the screen', () => {
+	it('zooms to four times, or until a pixel of the image is drawn a CSS pixel across', () => {
 		expect(maxScale(frame, 600)).toBe(4);
 		expect(maxScale(frame, 3000)).toBe(10);
 	});

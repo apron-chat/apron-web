@@ -6,9 +6,10 @@
 
 	/**
 	 * An image full screen, paged through with ← and → and the arrow buttons. It zooms in place: two fingers pinch it
-	 * (or Ctrl and the wheel, as a trackpad's pinch is), a double tap or click zooms in where it lands and back out,
-	 * and zoomed, one finger or the mouse drags it about (or the wheel), never past an edge it could fill the screen
-	 * with. A click beside it closes the viewer, only while it isn't zoomed; another image, or a resize, shows it whole.
+	 * (or a trackpad's pinch, or Ctrl and the wheel), a double tap or click zooms in where it lands and back out, + and
+	 * − zoom about the middle and 0 shows it whole; and zoomed, one finger or the mouse drags it about (or the wheel),
+	 * never past an edge it could fill the screen with. A click beside it closes the viewer, only while it isn't zoomed;
+	 * another image, or a resize, shows it whole.
 	 */
 
 	interface Props {
@@ -31,22 +32,25 @@
 	/** How the image is drawn: zoomed and moved, or whole. */
 	let zoom = $state.raw<Zoom>(UNZOOMED);
 	let zoomed = $derived(zoom.scale > 1);
-	/** Eased to its next zoom (a double tap's), rather than following a finger. */
+	/** Eased to its next zoom (a double tap's, a key's), rather than following a finger; never where motion is reduced. */
 	let easing = $state(false);
+	/** Clipped to the stage, and no ground to close on: while zoomed, and while easing back out, still larger than it. */
+	let framed = $derived(zoomed || easing);
 	let stage = $state<HTMLElement | undefined>();
 	let media = $state<HTMLImageElement | undefined>();
 
-	/** Each image, and each open, starts whole. */
-	$effect(() => {
-		void item?.src;
-		void open;
-		zoom = UNZOOMED;
-		easing = false;
-	});
+	/** Zooms to `next`, eased where motion may be. */
+	function ease(next: Zoom): void {
+		const changes = next.scale !== zoom.scale || next.x !== zoom.x || next.y !== zoom.y;
+		easing = changes && !globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+		zoom = next;
+	}
 
-	/** Where the image sits in its stage, and where the stage is on screen: read when a gesture starts, not as it moves. */
+	/** Where the image sits in its stage, and where the stage is on screen: read once for each image and size, not as it moves. */
 	interface Geometry { frame: Frame; max: number; left: number; top: number }
-	function measure(): Geometry | undefined {
+	let geometry: Geometry | undefined;
+	function measured(): Geometry | undefined {
+		if (geometry) return geometry;
 		if (!stage || !media || !media.offsetWidth) return undefined;
 		const box = stage.getBoundingClientRect();
 		const frame = {
@@ -57,17 +61,34 @@
 			width: stage.clientWidth,
 			height: stage.clientHeight
 		};
-		return { frame, max: maxScale(frame, media.naturalWidth), left: box.left + stage.clientLeft, top: box.top + stage.clientTop };
+		return (geometry = { frame, max: maxScale(frame, media.naturalWidth), left: box.left + stage.clientLeft, top: box.top + stage.clientTop });
 	}
 
-	/** The pointers down on the stage, where each is in it; and the gesture they make. */
+	/** The pointers down on the stage, where each is in it. */
 	const pointers = new Map<number, { x: number; y: number }>();
-	let geometry: Geometry | undefined;
 	/** Where the gesture's first pointer went down, and whether on the image; `moved` once it is more than a tap. */
 	let start: { x: number; y: number; onImage: boolean } | undefined;
 	let moved = false;
 	/** The last tap, for a second one soon after and near it to make a double tap. */
 	let lastTap: { time: number; x: number; y: number } | undefined;
+	/** The zoom a Safari trackpad pinch (its `gesture` events) started from. */
+	let gestureFrom: number | undefined;
+
+	/** Whole again, and nothing kept of what was measured or pressed: for each image, each open and each size. */
+	function reset(): void {
+		zoom = UNZOOMED;
+		easing = false;
+		geometry = undefined;
+		pointers.clear();
+		lastTap = undefined;
+		gestureFrom = undefined;
+	}
+
+	$effect(() => {
+		void item?.src;
+		void open;
+		reset();
+	});
 
 	function at(event: { clientX: number; clientY: number }, where: Geometry): { x: number; y: number } {
 		return { x: event.clientX - where.left, y: event.clientY - where.top };
@@ -75,9 +96,12 @@
 
 	function pointerdown(event: PointerEvent): void {
 		if ((event.pointerType === 'mouse' && event.button !== 0) || (event.target as Element | null)?.closest('button, a')) return;
-		if (!pointers.size) geometry = measure();
-		if (!geometry) return;
-		const point = at(event, geometry);
+		// A first finger starts a new gesture: any pointer kept from one whose end went elsewhere (the viewer closed
+		// under it) is gone.
+		if (event.isPrimary) pointers.clear();
+		const where = measured();
+		if (!where) return;
+		const point = at(event, where);
 		pointers.set(event.pointerId, point);
 		easing = false;
 		try {
@@ -122,36 +146,73 @@
 		const now = event.timeStamp;
 		if (lastTap && now - lastTap.time < 350 && Math.hypot(point.x - lastTap.x, point.y - lastTap.y) < 30) {
 			lastTap = undefined;
-			easing = true;
-			zoom = zoomed ? UNZOOMED : zoomAt(zoom, geometry.frame, geometry.max, point.x, point.y, TAP_ZOOM);
+			ease(zoomed ? UNZOOMED : zoomAt(zoom, geometry.frame, geometry.max, point.x, point.y, TAP_ZOOM));
 		} else lastTap = { time: now, ...point };
 	}
 
-	function pointercancel(event: PointerEvent): void {
-		pointers.delete(event.pointerId);
-		moved = true;
+	/** A pointer gone without its `pointerup` here (cancelled, or its capture lost): its gesture is no tap. */
+	function pointergone(event: PointerEvent): void {
+		if (pointers.delete(event.pointerId)) moved = true;
 	}
 
-	/** Ctrl and the wheel (a trackpad's pinch) zooms about the pointer; zoomed, the wheel alone moves it. Not passive: it takes the page's zoom and scroll. */
+	/**
+	 * Ctrl and the wheel (a trackpad's pinch, in most browsers) zooms about the pointer, a mouse's notch a step at a time;
+	 * zoomed, the wheel alone moves it. Not passive: it takes the page's zoom and scroll.
+	 */
 	function wheel(event: WheelEvent): void {
 		if (!event.ctrlKey && !zoomed) return;
-		const where = measure();
+		const where = measured();
 		if (!where) return;
 		event.preventDefault();
 		easing = false;
 		const unit = event.deltaMode === 1 ? 16 : 1;
 		if (event.ctrlKey) {
 			const point = at(event, where);
-			zoom = zoomAt(zoom, where.frame, where.max, point.x, point.y, zoom.scale * Math.exp((-event.deltaY * unit) / 100));
+			const by = Math.min(Math.max(-event.deltaY * unit, -25), 25);
+			zoom = zoomAt(zoom, where.frame, where.max, point.x, point.y, zoom.scale * Math.exp(by / 100));
 		} else zoom = clampZoom({ scale: zoom.scale, x: zoom.x - event.deltaX * unit, y: zoom.y - event.deltaY * unit }, where.frame, where.max);
+	}
+
+	/**
+	 * A Safari trackpad's pinch, which comes as `gesture` events rather than the wheel: zooms about the pointer, by its
+	 * `scale` from where it started. A touch pinch also sends them there, but its pointers zoom it already.
+	 */
+	function gesture(event: Event & { scale?: number; clientX?: number; clientY?: number }): void {
+		event.preventDefault();
+		if (event.type === 'gestureend' || pointers.size) {
+			gestureFrom = undefined;
+			return;
+		}
+		const where = measured();
+		if (!where) return;
+		if (event.type === 'gesturestart') gestureFrom = zoom.scale;
+		else if (gestureFrom !== undefined && event.scale) {
+			const point = at({ clientX: event.clientX ?? where.left + where.frame.cx, clientY: event.clientY ?? where.top + where.frame.cy }, where);
+			easing = false;
+			zoom = zoomAt(zoom, where.frame, where.max, point.x, point.y, gestureFrom * event.scale);
+		}
 	}
 
 	$effect(() => {
 		const shown = stage;
 		if (!shown) return;
+		const types = ['gesturestart', 'gesturechange', 'gestureend'];
 		shown.addEventListener('wheel', wheel, { passive: false });
-		return () => shown.removeEventListener('wheel', wheel);
+		for (const type of types) shown.addEventListener(type, gesture);
+		return () => {
+			shown.removeEventListener('wheel', wheel);
+			for (const type of types) shown.removeEventListener(type, gesture);
+		};
 	});
+
+	/** + and − (or =) zoom about the middle of the screen, 0 shows it whole; with Ctrl or ⌘ they stay the browser's own. */
+	function zoomByKey(key: string): boolean {
+		const by = key === '+' || key === '=' ? 1.5 : key === '-' ? 1 / 1.5 : key === '0' ? 0 : undefined;
+		const where = by === undefined ? undefined : measured();
+		if (!where) return false;
+		ease(by ? zoomAt(zoom, where.frame, where.max, where.frame.width / 2, where.frame.height / 2, zoom.scale * by) : UNZOOMED);
+		return true;
+	}
 
 	function step(by: number): void {
 		const next = index + by;
@@ -161,12 +222,12 @@
 	function keydown(event: KeyboardEvent): void {
 		if (event.key === 'ArrowLeft') step(-1);
 		else if (event.key === 'ArrowRight') step(1);
-		else return;
+		else if (event.ctrlKey || event.metaKey || event.altKey || !zoomByKey(event.key)) return;
 		event.preventDefault();
 	}
 </script>
 
-<svelte:window onresize={() => (zoom = UNZOOMED)} />
+<svelte:window onresize={reset} />
 
 <ViewerDialog bind:open={() => open && Boolean(item), (value) => (open = value)} title={item?.title ?? ''} detail={item?.detail} {onclose} onkeydown={keydown} class={className}>
 	{#snippet actions()}
@@ -179,13 +240,14 @@
 	{/snippet}
 	{#if item}
 		<!-- The ground around the image: a click there closes it, while the image isn't zoomed. It takes the touches that
-		     pinch and drag the image, wherever they start: a pointer's gestures, as zooming is; from the keyboard, the
-		     arrows page and the browser's own zoom zooms. -->
+		     pinch and drag the image, wherever they start: a pointer's gestures; from the keyboard, the arrows page and
+		     + and − zoom. -->
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div class={['ap-viewer-stage', zoomed && 'ap-viewer-zoomed']} data-viewer-ground={zoomed ? undefined : ''} bind:this={stage}
-			onpointerdown={pointerdown} onpointermove={pointermove} onpointerup={pointerup} onpointercancel={pointercancel}>
+		<div class={['ap-viewer-stage', framed && 'ap-viewer-zoomed']} data-viewer-ground={framed ? undefined : ''} bind:this={stage}
+			onpointerdown={pointerdown} onpointermove={pointermove} onpointerup={pointerup} onpointercancel={pointergone} onlostpointercapture={pointergone}>
 			{#key item.src}<img bind:this={media} class={['ap-viewer-media', easing && 'ap-viewer-media-ease']} src={item.src} alt={item.alt ?? ''} width={item.width} height={item.height} draggable="false"
-				style:transform={zoomed ? `translate(${zoom.x}px, ${zoom.y}px) scale(${zoom.scale})` : undefined} ontransitionend={() => (easing = false)} />{/key}
+				style:transform={zoomed ? `translate(${zoom.x}px, ${zoom.y}px) scale(${zoom.scale})` : undefined} onload={() => (geometry = undefined)}
+				ontransitionend={() => (easing = false)} ontransitioncancel={() => (easing = false)} />{/key}
 			{#if many}
 				<button class="ap-viewer-btn ap-viewer-nav ap-viewer-prev" type="button" aria-label="Previous image" title="Previous (←)" disabled={index === 0} onclick={() => step(-1)}>
 					<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>

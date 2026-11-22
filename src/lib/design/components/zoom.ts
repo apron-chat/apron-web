@@ -25,7 +25,7 @@ export const UNZOOMED: Zoom = { scale: 1, x: 0, y: 0 };
 /** How far in a double tap zooms. */
 export const TAP_ZOOM = 2.5;
 
-/** The most it zooms: four times, or until a pixel of the image is a pixel on the screen, whichever is more. */
+/** The most it zooms: four times, or until a pixel of the image is drawn a CSS pixel across, whichever is more. */
 export function maxScale(frame: Frame, naturalWidth: number): number {
 	return Math.max(4, frame.w > 0 ? naturalWidth / frame.w : 0);
 }

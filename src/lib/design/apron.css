@@ -1650,12 +1650,13 @@ dialog:modal { overscroll-behavior: contain; }
 /* On the viewer's dark ground, whatever the theme, the ring is in its ink. */
 .ap-viewer-btn:focus-visible { outline-color: var(--viewer-ink); }
 .ap-viewer-stage { position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 calc(var(--space-4) + var(--touch-target) + var(--space-3)) calc(var(--space-6) + env(safe-area-inset-bottom, 0px)); }
-.ap-viewer-media { display: block; max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; border-radius: var(--radius-sm); -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.ap-viewer-media { display: block; max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; border-radius: var(--radius-sm); -webkit-user-select: none; user-select: none; }
 /* The stage takes every touch on it (MediaViewer pinches and drags the image itself, rather than the browser the page).
-   Zoomed, the image fills it and is clipped to it, and the mouse grabs it; a double tap's zoom eases. */
+   Zoomed, the image fills it and is clipped to it, the mouse grabs it, and a long press drags it rather than offering to
+   save it (as it does unzoomed); a double tap's zoom eases. */
 .ap-viewer-stage { touch-action: none; }
 .ap-viewer-zoomed { overflow: hidden; }
-.ap-viewer-zoomed .ap-viewer-media { cursor: grab; border-radius: 0; }
+.ap-viewer-zoomed .ap-viewer-media { cursor: grab; border-radius: 0; -webkit-touch-callout: none; }
 .ap-viewer-zoomed .ap-viewer-media:active { cursor: grabbing; }
 .ap-viewer-media-ease { transition: transform var(--duration-medium) ease; }
 .ap-viewer-nav { position: absolute; top: 50%; width: var(--touch-target); height: var(--touch-target); transform: translateY(-50%); }

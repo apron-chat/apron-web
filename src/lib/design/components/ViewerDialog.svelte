@@ -41,6 +41,7 @@
 	$effect(() => {
 		if (!dialog) return;
 		if (open && !dialog.open) {
+			down.clear();
 			dialog.showModal();
 			(dialog.querySelector<HTMLElement>('[data-viewer-focus]') ?? closeButton)?.focus();
 		} else if (!open && dialog.open) dialog.close();
@@ -76,6 +77,8 @@
 		return x >= 0 && x <= target.clientWidth && y >= 0 && y <= target.clientHeight;
 	}
 	function pointerdown(event: PointerEvent): void {
+		// A first finger starts anew: a pointer whose end went elsewhere (it closed under it) isn't still down.
+		if (event.isPrimary) down.clear();
 		down.add(event.pointerId);
 		const selection = getSelection();
 		const selecting = Boolean(selection && !selection.isCollapsed && dialog?.contains(selection.anchorNode));

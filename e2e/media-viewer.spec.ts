@@ -94,6 +94,34 @@ test.describe('the image viewer, zoomed on a phone', () => {
 			await expect.poll(async () => Math.round((await image.boundingBox())!.width / whole.width * 10) / 10).toBe(2.5);
 		});
 
+		await test.step('a finger left down as the viewer closes leaves nothing behind: opened again, one finger drags no zoom, a double tap zooms, and a tap beside it closes it', async () => {
+			// A finger down on the image as it closes, whose lift then goes elsewhere: played as the pointer events the
+			// viewer sees, as the browser's own touches would go on to tap whatever is under them by then.
+			await image.evaluate((node, at) => {
+				node.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, isPrimary: true, pointerId: 77, pointerType: 'touch', clientX: at.x, clientY: at.y }));
+			}, centre);
+			await page.goBack();
+			await expect(viewer).toBeHidden();
+			await preview.press(page.locator('a.ap-embed-imagelink').first());
+			await expect(viewer).toBeVisible();
+			await expect.poll(() => image.evaluate((node: HTMLImageElement) => node.complete && node.naturalWidth > 0)).toBe(true);
+			await touch('touchStart', [{ x: centre.x, y: centre.y }]);
+			for (let step = 1; step <= 5; step++) await touch('touchMove', [{ x: centre.x + step * 20, y: centre.y }]);
+			await touch('touchEnd', []);
+			expect(Math.round((await image.boundingBox())!.width)).toBe(Math.round(whole.width));
+			await page.waitForTimeout(400);
+			for (let tap = 0; tap < 2; tap++) {
+				await touch('touchStart', [{ x: centre.x, y: centre.y }]);
+				await touch('touchEnd', []);
+			}
+			await expect.poll(async () => Math.round((await image.boundingBox())!.width / whole.width * 10) / 10).toBe(2.5);
+			for (let tap = 0; tap < 2; tap++) {
+				await touch('touchStart', [{ x: centre.x, y: centre.y }]);
+				await touch('touchEnd', []);
+			}
+			await expect.poll(async () => Math.round((await image.boundingBox())!.width)).toBe(Math.round(whole.width));
+		});
+
 		await test.step('another image starts whole, and unzoomed, a tap beside the image still closes the viewer', async () => {
 			await preview.press(viewer.getByRole('button', { name: 'Next image' }));
 			const next = page.getByRole('dialog', { name: DAWN });
@@ -131,11 +159,11 @@ test.describe('the image viewer, zoomed with a mouse', () => {
 		const dragged = (await image.boundingBox())!;
 		expect([Math.round(dragged.x - zoomed.x), Math.round(dragged.y - zoomed.y)]).toEqual([-60, -20]);
 
+		// A mouse wheel's notch is a step (e^0.25, about 1.28 times), not a leap to the most it zooms.
 		await page.keyboard.down('Control');
 		await page.mouse.wheel(0, -100);
 		await page.keyboard.up('Control');
-		// As far in as it goes: four times, as a pixel of this photo is already one on the screen by then.
-		await expect.poll(async () => Math.round((await image.boundingBox())!.width / whole.width * 10) / 10).toBe(4);
+		await expect.poll(async () => Math.round((await image.boundingBox())!.width / whole.width * 10) / 10).toBe(3.2);
 		// The page itself didn't zoom.
 		expect(await page.evaluate(() => visualViewport!.scale)).toBe(1);
 
@@ -143,6 +171,49 @@ test.describe('the image viewer, zoomed with a mouse', () => {
 		await page.mouse.click(whole.x - 40, centre.y);
 		await page.waitForTimeout(300);
 		await expect(viewer).toBeVisible();
+
+		// From the keyboard: 0 shows it whole, + and − zoom about the middle, by half again each.
+		await page.keyboard.press('0');
+		await expect.poll(async () => Math.round((await image.boundingBox())!.width)).toBe(Math.round(whole.width));
+		await page.keyboard.press('+');
+		await page.keyboard.press('+');
+		await expect.poll(async () => Math.round((await image.boundingBox())!.width / whole.width * 100) / 100).toBe(2.25);
+		await page.keyboard.press('-');
+		await expect.poll(async () => Math.round((await image.boundingBox())!.width / whole.width * 100) / 100).toBe(1.5);
+		await page.keyboard.press('ArrowRight');
+		await expect(page.getByRole('dialog', { name: DAWN }).locator('.ap-viewer-stage')).not.toHaveClass(/ap-viewer-zoomed/);
+	});
+
+	test('eased back out with motion allowed, it stays clipped below the bar until it is whole, and then closes on a click beside it', async ({ preview, page }) => {
+		await page.emulateMedia({ reducedMotion: 'no-preference' });
+		await preview.open();
+		await page.locator('a.ap-embed-imagelink').first().click();
+		const viewer = page.getByRole('dialog', { name: DUSK });
+		const image = viewer.locator('img.ap-viewer-media');
+		await expect.poll(() => image.evaluate((node: HTMLImageElement) => node.complete && node.naturalWidth > 0)).toBe(true);
+		const whole = (await image.boundingBox())!;
+		const centre = { x: whole.x + whole.width / 2, y: whole.y + whole.height / 2 };
+		await page.mouse.dblclick(centre.x, centre.y);
+		await expect.poll(async () => Math.round((await image.boundingBox())!.width / whole.width * 10) / 10).toBe(2.5);
+		// While it eases back out, whatever is at the bar is the bar's, never the image.
+		const bar = (await viewer.locator('.ap-viewer-bar').boundingBox())!;
+		const atBar = await page.evaluate(async ({ x, y, cx, cy }) => {
+			const seen: string[] = [];
+			const target = document.elementFromPoint(cx, cy)!;
+			for (const type of ['pointerdown', 'pointerup']) target.dispatchEvent(new PointerEvent(type, { bubbles: true, clientX: cx, clientY: cy, isPrimary: true, pointerId: 9 }));
+			await new Promise((settle) => setTimeout(settle, 120));
+			for (const type of ['pointerdown', 'pointerup']) target.dispatchEvent(new PointerEvent(type, { bubbles: true, clientX: cx, clientY: cy, isPrimary: true, pointerId: 9 }));
+			for (let frame = 0; frame < 12; frame++) {
+				await new Promise((settle) => requestAnimationFrame(settle));
+				seen.push(document.elementFromPoint(x, y)!.tagName);
+			}
+			return seen;
+		}, { x: bar.x + bar.width / 2, y: bar.y + bar.height / 2, cx: centre.x, cy: centre.y });
+		expect(atBar).not.toContain('IMG');
+		await expect.poll(async () => Math.round((await image.boundingBox())!.width)).toBe(Math.round(whole.width));
+		await expect(viewer.locator('.ap-viewer-stage')).not.toHaveClass(/ap-viewer-zoomed/);
+		await page.mouse.click(whole.x - 40, centre.y);
+		await expect(viewer).toBeHidden();
 	});
 });
 
