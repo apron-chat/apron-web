@@ -42,6 +42,9 @@ for (const [device, use] of [['desktop', DEVICES.desktop], ['phone', DEVICES.pho
 				await expect(button(preview)).toHaveClass(UPDATED);
 				await expect(button(preview)).toHaveAccessibleName('Show the room description, updated since you hid it');
 				expect(await blue(preview)).toBe(true);
+				// Pointing at the name, which opens it too, lights Description but keeps it blue.
+				await preview.page.locator('.ap-roomhead-name').hover();
+				expect(await blue(preview)).toBe(true);
 				await expect(pinned(preview)).toHaveCount(0);
 			});
 

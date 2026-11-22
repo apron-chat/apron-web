@@ -831,8 +831,9 @@
 	/** The open pane's description, its first lines under the header until its × puts it away. */
 	let pinnedDescription = $derived(editTarget?.description && !descriptionPutAway ? { id: editTarget.id, description: editTarget.description } : undefined);
 	/**
-	 * The open room's or thread's `room_id`, from what the page chose, not `editTarget`, a new object with each snapshot (each
-	 * key typed): what follows the edit reads this, so it isn't asked again as messages come and go (perf budget).
+	 * The open room's or thread's `room_id`, from what the page chose: what follows the edit reads this, not `editTarget`
+	 * (worked out again with each snapshot, each key typed, if kept while it reads the same), so it isn't asked again as
+	 * messages come and go (perf budget).
 	 */
 	let editTargetId = $derived(activeThread ?? selectedRoomId);
 	/** The open pane's description shows over it (DescriptionSheet), and whether it is being edited. */
@@ -890,7 +891,7 @@
 	function refocusDescription(): void {
 		void tick().then(() => {
 			const pane = document.querySelector('.ap-shell-main');
-			(pane?.querySelector<HTMLElement>('.ap-description-more') ?? pane?.querySelector<HTMLElement>('.ap-roomhead-show'))?.focus();
+			(pane?.querySelector<HTMLElement>('.ap-description .ap-description-more') ?? pane?.querySelector<HTMLElement>('.ap-roomhead-show'))?.focus();
 		});
 	}
 	/** Read, folds the description back into its first lines under the header, there again as when it was new. */
