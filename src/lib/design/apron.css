@@ -1408,6 +1408,7 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
    the pointer. */
 .ap-description {
 	--ap-description-ground: var(--bg-200); --ap-description-bar: 48px; --ap-description-lines: 4;
+	--ap-description-foot: calc(var(--control-md) + var(--space-2));
 	--ap-description-corner: calc(var(--space-3) + var(--control-sm) + var(--space-2));
 	position: relative; flex: none; padding: var(--space-4) max(var(--ap-doc-inset, var(--space-4)), var(--ap-description-corner)) var(--space-3);
 	background: var(--ap-description-ground); border-radius: 0 0 var(--radius-lg) var(--radius-lg); box-shadow: var(--shadow-popover);
@@ -1418,16 +1419,18 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 :is(.ap-description-icon, .ap-description-close) { position: absolute; top: calc(var(--space-4) + (var(--leading-body) - var(--control-sm)) / 2); width: var(--control-sm); height: var(--control-sm); }
 .ap-description-icon { inset-inline-start: var(--space-3); display: grid; place-items: center; color: var(--ink-muted); }
 .ap-description-close { z-index: var(--z-raised); inset-inline-end: var(--space-3); }
-/* Its text shows to its lines (four, six on a phone, which is narrower) and a bar's height more. Cut off, it runs on to
-   the panel's foot, under a bar that fades from clear to the panel's ground and holds the chevron (and Unsaved draft):
-   the next lines show faintly through it, so the cut reads as more to come. The box, and the panel, are as tall either
-   way: the bar coming changes no size, so neither what's cut nor the conversation under it, which its measure would
-   otherwise move within the same frame (a ResizeObserver loop). */
+/* Its text shows to its lines (four, six on a phone, which is narrower) and a bar's height more. Its foot, holding the
+   chevron (and Unsaved draft), lies over the panel's last row, kept for it (`--ap-description-foot`). Cut off, the text
+   runs on into that row, and the foot reaches up as a bar that fades from clear to the panel's ground: the next lines
+   show faintly through it, so the cut reads as more to come. The box, and the panel, are as tall either way: the bar
+   coming changes no size, so neither what's cut nor the conversation under it, which its measure would otherwise move
+   within the same frame (a ResizeObserver loop). */
 .ap-description-text { max-height: calc(var(--leading-body) * var(--ap-description-lines) + var(--ap-description-bar)); overflow: hidden; }
-.ap-description-foot { display: flex; justify-content: center; align-items: center; gap: var(--space-2); margin-top: var(--space-1); margin-bottom: calc(-1 * var(--space-2)); }
+.ap-description-footed { padding-bottom: var(--ap-description-foot); }
+.ap-description-foot { position: absolute; inset-inline: 0; bottom: 0; box-sizing: border-box; height: var(--ap-description-foot); padding-bottom: var(--space-1); display: flex; justify-content: center; align-items: flex-end; gap: var(--space-2); border-radius: inherit; pointer-events: none; }
+.ap-description-foot > * { pointer-events: auto; }
 .ap-description-clipped .ap-description-text { mask-image: none; }
-.ap-description-clipped .ap-description-foot { position: absolute; inset-inline: 0; bottom: 0; box-sizing: border-box; height: var(--ap-description-bar); margin: 0; padding-bottom: var(--space-1); align-items: flex-end; border-radius: inherit; background: linear-gradient(to bottom, transparent, var(--ap-description-ground) 70%); pointer-events: none; }
-.ap-description-clipped .ap-description-foot > * { pointer-events: auto; }
+.ap-description-clipped .ap-description-foot { height: calc(var(--ap-description-bar) - var(--space-3) + var(--ap-description-foot)); background: linear-gradient(to bottom, transparent, var(--ap-description-ground) calc(var(--ap-description-bar) - var(--space-3))); }
 .ap-description-more { width: var(--control-lg); height: var(--control-sm); color: var(--ink-muted); }
 .ap-description-opens:hover .ap-description-more { color: var(--ink); }
 @container (max-width: 560px) { .ap-description { --ap-description-lines: 6; } }

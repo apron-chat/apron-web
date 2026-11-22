@@ -7,7 +7,7 @@
 		"load": {
 			"requests": 22,
 			"startupJsKB": 965.4,
-			"domNodes": 531,
+			"domNodes": 540,
 			"layouts": 10,
 			"styleRecalcs": 18,
 			"calls": 210190,
@@ -25,10 +25,10 @@
 		"load-phone": {
 			"requests": 22,
 			"startupJsKB": 965.4,
-			"domNodes": 532,
+			"domNodes": 541,
 			"layouts": 10,
 			"styleRecalcs": 16,
-			"calls": 184350,
+			"calls": 185617,
 			"heapMB": 8.2
 		},
 		"load-phone-busy": {
@@ -68,7 +68,7 @@
 		"open-thread": {
 			"layouts": 4,
 			"styleRecalcs": 14,
-			"calls": 64183
+			"calls": 65317
 		},
 		"open-preferences": {
 			"layouts": 3,
@@ -77,8 +77,8 @@
 		},
 		"scroll-timeline": {
 			"layouts": 9,
-			"styleRecalcs": 9,
-			"calls": 5255
+			"styleRecalcs": 11,
+			"calls": 5923
 		},
 		"type-composer-role": {
 			"layouts": 46,
@@ -92,7 +92,7 @@
 		},
 		"hover-messages": {
 			"layouts": 7,
-			"styleRecalcs": 9,
+			"styleRecalcs": 13,
 			"calls": 6714
 		},
 		"hover-toolbar": {

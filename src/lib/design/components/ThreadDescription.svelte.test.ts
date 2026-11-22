@@ -27,7 +27,14 @@ describe('ThreadDescription', () => {
 		expect(document.querySelector('.ap-msg-text')?.textContent).toBe('Say hello.');
 		dom.button('Unsaved draft').click();
 		expect(ondraft).toHaveBeenCalledOnce();
-		// Nothing cut off here (no layout): no Read all.
+		// Nothing to open it with: no Read all.
 		expect(dom.queryByRole('button', 'Read all')).toBeNull();
+	});
+
+	it('offers Read all however short it is, as the whole has more to it (Edit, and ⌃ to fold it back)', () => {
+		const onexpand = vi.fn();
+		dom.render(ThreadDescription, { description: 'Say hello.', onexpand });
+		dom.button('Read all').click();
+		expect(onexpand).toHaveBeenCalledOnce();
 	});
 });
