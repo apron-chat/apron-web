@@ -61,10 +61,12 @@
 	 * A click on the ground closes it: one that went down and came up there, barely moved. So selecting text from beside
 	 * a page doesn't, nor a press beside a button let go on it (Next pages), nor a press on a stage's scrollbar (inside
 	 * the element, outside its padding box, on either side), nor a click beside a selection, which clears it. A touch
-	 * that scrolls is cancelled, and makes no click.
+	 * that scrolls is cancelled, and makes no click; nor does one with two fingers or more (a pinch).
 	 */
 	let pressed: { x: number; y: number } | undefined;
 	let released = false;
+	/** The pointers down now: a second one makes the press a gesture, not a click. */
+	const down = new Set<number>();
 	function onGround(event: MouseEvent): boolean {
 		const target = event.target;
 		if (!(target instanceof HTMLElement) || !target.hasAttribute('data-viewer-ground')) return false;
@@ -74,13 +76,19 @@
 		return x >= 0 && x <= target.clientWidth && y >= 0 && y <= target.clientHeight;
 	}
 	function pointerdown(event: PointerEvent): void {
+		down.add(event.pointerId);
 		const selection = getSelection();
 		const selecting = Boolean(selection && !selection.isCollapsed && dialog?.contains(selection.anchorNode));
-		pressed = event.button === 0 && !selecting && onGround(event) ? { x: event.clientX, y: event.clientY } : undefined;
+		pressed = down.size === 1 && event.button === 0 && !selecting && onGround(event) ? { x: event.clientX, y: event.clientY } : undefined;
 		released = false;
 	}
 	function pointerup(event: PointerEvent): void {
+		down.delete(event.pointerId);
 		released = Boolean(pressed) && onGround(event) && Math.hypot(event.clientX - pressed!.x, event.clientY - pressed!.y) < 8;
+	}
+	function pointercancel(event: PointerEvent): void {
+		down.delete(event.pointerId);
+		pressed = undefined;
 	}
 	function click(): void {
 		if (released) open = false;
@@ -98,7 +106,7 @@
 </script>
 
 <!-- Its title names it. -->
-<dialog bind:this={dialog} class={['ap-viewer', className]} aria-labelledby={`${uid}-title`} data-testid={testid} data-viewer-ground onclose={closed} onkeydown={keydown} onpointerdown={pointerdown} onpointerup={pointerup} onpointercancel={() => (pressed = undefined)} onclick={click}>
+<dialog bind:this={dialog} class={['ap-viewer', className]} aria-labelledby={`${uid}-title`} data-testid={testid} data-viewer-ground onclose={closed} onkeydown={keydown} onpointerdown={pointerdown} onpointerup={pointerup} onpointercancel={pointercancel} onclick={click}>
 	{#if open}
 		<header class="ap-viewer-bar">
 			<div class="ap-viewer-text">

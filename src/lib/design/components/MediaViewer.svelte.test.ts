@@ -53,6 +53,26 @@ describe('MediaViewer', () => {
 		expect([props.open, document.querySelector('dialog')!.open]).toEqual([false, false]);
 	});
 
+	it('closes on no press of two fingers (a pinch), even one let go beside the image', () => {
+		const props = $state({ open: true, items, index: 0 });
+		render(MediaViewer, props);
+		const stage = document.querySelector('.ap-viewer-stage')!;
+		const pointer = (type: string, pointerId: number) => stage.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId }));
+		pointer('pointerdown', 1);
+		pointer('pointerdown', 2);
+		pointer('pointerup', 2);
+		pointer('pointerup', 1);
+		stage.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+		flushSync();
+		expect(props.open).toBe(true);
+		// A press of one, after, still does.
+		pointer('pointerdown', 3);
+		pointer('pointerup', 3);
+		stage.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+		flushSync();
+		expect(props.open).toBe(false);
+	});
+
 	it('doesn\'t open with nothing to show', () => {
 		render(MediaViewer, { open: true, items: [] });
 		expect(document.querySelector('dialog')!.open).toBe(false);
