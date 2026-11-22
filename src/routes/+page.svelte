@@ -1391,10 +1391,13 @@
 			// Whose command list to follow, signed in: the same `notifyAccount` key, and whether it is kept. Built in
 			// place, as this runs on every snapshot, and followed only as it changes (or as its code failed to load).
 			// Signed out, or signing in again (to another server, or as another user), none: the last one's commands
-			// aren't offered or run meanwhile.
-			const lists = next.authenticated && next.capabilities['ext:command_list'] && next.capabilities.command && next.you;
-			const key = lists ? `${chat.url}\n${next.you!.user_id}\n${next.passkeySession || next.keptSession ? 'kept' : ''}` : '';
-			if (key !== commands.following || commands.retry) commands.follow(chat, next, key);
+			// aren't offered or run meanwhile. A dropped connection on its way back (`disconnectedAt`) keeps them, as
+			// it keeps the page.
+			if (next.authenticated || next.disconnectedAt === undefined) {
+				const lists = next.authenticated && next.capabilities['ext:command_list'] && next.capabilities.command && next.you;
+				const key = lists ? `${chat.url}\n${next.you!.user_id}\n${next.passkeySession || next.keptSession ? 'kept' : ''}` : '';
+				if (key !== commands.following || commands.retry) commands.follow(chat, next, key);
+			}
 		});
 		// Each session the client begins goes on from what this device kept for its server.
 		keeper?.watch(chat);

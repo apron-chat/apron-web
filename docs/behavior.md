@@ -1058,7 +1058,10 @@ server. The list is asked for as the first command of the page starts, and
 again after `/help`; it is kept for the `user_id` it was listed for, an
 account's on the device too, so the next visit offers it at once (and asks
 again as a command starts), and an account with none kept asks on connecting,
-at most once a day. Without the extension, there is no list.
+at most once a day. A dropped connection on its way back keeps it, as it keeps
+the page; signing out, or in to another server or as another user, puts it away
+at once, so the last account's commands are neither offered nor run meanwhile.
+Without the extension, there is no list.
 
 **Command reference.** With the same extension, once the server's list is known,
 `/help` alone opens a dialog of every command instead of going to the server (and

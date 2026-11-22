@@ -481,6 +481,32 @@ describe('DraftField: commands', () => {
 		f.done();
 	});
 
+	it('shows the card as the commands arrive while a command’s arguments are typed, and opens the @ picker in them before and after', () => {
+		let commands = $state<readonly OfferedCommand[] | undefined>(undefined);
+		const f = field({ value: true }, { commands: () => commands, oncommand: () => {} });
+		f.type('/nick Ada');
+		expect(f.draft.commandInfo).toBeUndefined();
+		commands = COMMANDS;
+		flushSync();
+		expect(f.draft.commandInfo?.name).toBe('nick');
+		f.done();
+		// A mention in the arguments: its picker opens while the commands are on their way, and stays as they arrive.
+		commands = undefined;
+		const g = field({ value: true }, { commands: () => commands, oncommand: () => {} });
+		g.type('/nick @Al');
+		expect(g.draft.pickerOpen).toBe(true);
+		commands = COMMANDS;
+		flushSync();
+		expect(g.draft.pickerOpen).toBe(true);
+		expect(g.draft.matches.map((match) => ('id' in match ? match.id : ''))).toEqual(['alan']);
+		g.done();
+		// And with them known.
+		const h = field({ value: true }, { commands: () => COMMANDS, oncommand: () => {} });
+		h.type('/nick @Al');
+		expect(h.draft.pickerOpen).toBe(true);
+		h.done();
+	});
+
 	it('lists a command’s forms as the commands arrive, once a later word is typed', () => {
 		let commands = $state<readonly OfferedCommand[] | undefined>(undefined);
 		const f = field({ value: true }, { commands: () => commands, oncommand: () => {} });

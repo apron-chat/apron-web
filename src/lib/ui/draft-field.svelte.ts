@@ -131,8 +131,6 @@ export class DraftField {
 	 * so that a draft that is no command reads no more than it did.
 	 */
 	infoOpen = $state(false);
-	/** The field names the card in `aria-describedby` while it is drawn (`describeCard`): not with `aria` on every key. */
-	private described = false;
 	/**
 	 * The command the draft names while its arguments are typed (`CommandOffer.describe`): its entry alone, shown and
 	 * kept shown as they are, and as the commands arrive or change, to inform. No listbox: the field keeps its keys.
@@ -215,6 +213,17 @@ export class DraftField {
 			if (info && info.name === this.commandDismissed) return undefined;
 			this.commandDismissed = undefined;
 			return info;
+		});
+		// The commands arriving while one is typed: it is read again, so that a form's list (`/emoji r`) or the card
+		// (`/nick Ada`) shows at once. In a root of its own, which the page's every key doesn't go through while it is
+		// clean, as it does an effect of the field's.
+		let ready = false;
+		$effect.root(() => {
+			$effect(() => {
+				const arrived = host.commands?.ready ?? false;
+				if (arrived && !ready && this.commanded) untrack(() => this.refresh());
+				ready = arrived;
+			});
 		});
 		this.commandMatches = $derived(this.commandCompletion ? [...this.commandCompletion.suggestions, BROWSE_COMMANDS] : []);
 		this.pickerOpen = $derived(this.query !== undefined && !host.disabled);
@@ -639,9 +648,7 @@ export class DraftField {
 		const found = findCommandQuery(text, caret);
 		if (!found || found.words.length === 0) return found;
 		const commands = this.host.commands;
-		// While the commands are on their way, the second word may be a form (`/emoji r`): its list shows as they arrive.
-		if (!commands?.ready) return commands && found.words.length === 1 ? found : undefined;
-		return commands.complete(found) ? found : undefined;
+		return commands?.ready && commands.complete(found) ? found : undefined;
 	}
 
 	/** Swaps the typed `@…` for a chip: the person's name on screen, `@user_id` on the wire (Appendix A.3); a role's, `@&role`. */
@@ -784,19 +791,14 @@ export class DraftField {
 
 	/**
 	 * The card's attachment (`{@attach}`): the field names it (`${pickerId}-card`) in `aria-describedby` for as long as
-	 * it is drawn, which is only while it shows: a command named and not put away, the field enabled, its code in.
+	 * it is drawn, which is only while it shows: a command named and not put away, the field enabled, its code in. Set
+	 * on the field directly, not with `aria` on every key.
 	 */
 	describeCard = (): (() => void) => {
-		this.describe(true);
-		return () => this.describe(false);
+		const field = this.element;
+		field?.setAttribute('aria-describedby', `${this.pickerId}-card`);
+		return () => field?.removeAttribute('aria-describedby');
 	};
-
-	private describe(on: boolean): void {
-		if (this.described === on) return;
-		this.described = on;
-		if (on) this.element?.setAttribute('aria-describedby', `${this.pickerId}-card`);
-		else this.element?.removeAttribute('aria-describedby');
-	}
 
 	private dismissAutocomplete(): void {
 		// A command's list or entry stays away while the same name is typed, its arguments and all.

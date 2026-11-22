@@ -50,16 +50,25 @@ describe('Commands', () => {
 		expect(t.commands.known).toBe(false);
 	});
 
-	it('loads its code again where it failed, on the next snapshot the page follows or as a command starts', async () => {
+	it('loads its code again where it failed: on the page’s snapshots at most every 30 seconds, and as a command starts at once', async () => {
 		let fail = true;
-		const t = setup(() => (fail ? Promise.reject(new Error('offline')) : import('./command-tools')));
+		let now = 1_000_000;
+		vi.spyOn(Date, 'now').mockImplementation(() => now);
+		const load = vi.fn(() => (fail ? Promise.reject(new Error('offline')) : import('./command-tools')));
+		const t = setup(load);
 		t.commands.follow(t.chat, t.snapshot('alice'), 'alice');
-		await vi.waitFor(() => expect(t.commands.retry).toBe(true));
+		await vi.waitFor(() => expect(t.commands.retry).toBeGreaterThan(0));
 		expect(t.commands.offer).toBeUndefined();
+		// Snapshots meanwhile, while it keeps failing: no other load till 30 seconds have gone.
+		t.commands.follow(t.chat, t.snapshot('alice'), 'alice');
+		t.commands.follow(t.chat, t.snapshot('alice'), 'alice');
+		expect(load).toHaveBeenCalledOnce();
+		now += 30_000;
 		fail = false;
 		// The page follows the same key again while `retry` says so.
 		t.commands.follow(t.chat, t.snapshot('alice'), 'alice');
-		expect(t.commands.retry).toBe(false);
+		expect(load).toHaveBeenCalledTimes(2);
+		expect(t.commands.retry).toBe(0);
 		await vi.waitFor(() => expect(t.commands.offer?.ready).toBe(true));
 		expect(t.commands.known).toBe(true);
 		expect(t.listCommands).toHaveBeenCalledOnce();
@@ -68,11 +77,12 @@ describe('Commands', () => {
 		fail = true;
 		const u = setup(() => (fail ? Promise.reject(new Error('offline')) : import('./command-tools')));
 		u.commands.follow(u.chat, u.snapshot('carol'), 'carol');
-		await vi.waitFor(() => expect(u.commands.retry).toBe(true));
+		await vi.waitFor(() => expect(u.commands.retry).toBeGreaterThan(0));
 		fail = false;
 		u.commands.need();
 		await vi.waitFor(() => expect(u.commands.offer?.ready).toBe(true));
 		expect(u.commands.serves('topic clear')).toBe(true);
+		vi.restoreAllMocks();
 	});
 
 	it('says in the reference that the server’s commands couldn’t be loaded where none were had, showing apron-web’s own', async () => {

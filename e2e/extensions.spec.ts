@@ -620,6 +620,37 @@ test.describe('commands (ext:command_list)', () => {
 			expect(await preview.sent('ext:command_list')).toHaveLength(1);
 		});
 
+		test('stay through a dropped connection, the card and all, and aren’t asked for again', async ({ preview, page }) => {
+			await preview.open();
+			const field = page.getByTestId('message-input');
+			await field.click();
+			await page.keyboard.type('/ban x');
+			const card = page.getByTestId('command-card');
+			await expect(card).toContainText('Ban a user from the server');
+			expect(await preview.sent('ext:command_list')).toHaveLength(1);
+			// The server holds back its answers and drops every connection: the way back is held before signing in.
+			await page.evaluate(() => {
+				type Server = { sockets: Set<{ close(): void }>; receive: (socket: unknown, frame: unknown) => void; held?: unknown[][]; release?: () => void };
+				const server = (window as unknown as { __apronPreview: Server }).__apronPreview;
+				const receive = Object.getPrototypeOf(server).receive.bind(server);
+				const held: unknown[][] = (server.held = []);
+				server.receive = (socket, frame) => void held.push([socket, frame]);
+				server.release = () => {
+					server.receive = receive;
+					for (const [socket, frame] of held.splice(0)) receive(socket, frame);
+				};
+				for (const socket of [...server.sockets]) socket.close();
+			});
+			await expect.poll(() => page.evaluate(() => (window as unknown as { __apronPreview: { held: unknown[] } }).__apronPreview.held.length)).toBeGreaterThan(0);
+			await expect(card).toContainText('Ban a user from the server');
+			await expect(field).toHaveAttribute('aria-describedby', /-card$/);
+			await page.evaluate(() => (window as unknown as { __apronPreview: { release: () => void } }).__apronPreview.release());
+			// Signed in again, as the same guest.
+			await expect.poll(async () => (await preview.sent('auth')).length).toBe(2);
+			await page.keyboard.type('y');
+			await expect(card).toContainText('Ban a user from the server');
+			expect(await preview.sent('ext:command_list')).toHaveLength(1);
+		});
 	});
 
 	test.describe('that can’t be listed', () => {

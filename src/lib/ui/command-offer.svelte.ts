@@ -13,6 +13,9 @@ import { notifyAccount } from './notify-scopes';
 import { loadCommandLists, saveCommandLists } from './storage';
 
 type Tools = typeof import('./command-tools');
+
+/** How long snapshots wait before loading the commands' code again, once it failed (`Commands.retry`). */
+const RETRY_MS = 30_000;
 type Loaded = InstanceType<Tools['LoadedCommands']>;
 
 /** What the page gives: what the composer is doing and can do, and its own parts the commands act on. */
@@ -46,13 +49,13 @@ export class Commands {
 	/** The command used from the reference, put in the composer once it has closed (it keeps the focus till then). */
 	private used: string | undefined;
 	/**
-	 * The commands' code didn't load while a list was followed: the page follows it again on its next signed-in
-	 * snapshot, as `need` loads it again. A plain field, which the page reads on every snapshot.
+	 * The commands' code didn't load while a list was followed: when the page's signed-in snapshots, which follow it
+	 * again while this is set, load it again (at most every RETRY_MS), as `need` does at once. 0: none to load. A plain
+	 * field, which the page reads on every snapshot.
 	 */
-	retry = false;
-	/** The list followed, and the one the loaded code was last told of (`sync`). */
+	retry = 0;
+	/** The list followed, which the loaded code is told of as it loads (`LoadedCommands.follow` takes it once). */
 	private source: CommandSource | undefined;
-	private applied: CommandSource | undefined;
 
 	constructor(
 		private readonly host: CommandsHost,
@@ -64,11 +67,13 @@ export class Commands {
 	 * says), kept on this device for an account (`directory.account`'s rule). `key` empty: no extension, no commands.
 	 */
 	follow(chat: ChatClient, next: ClientSnapshot, key: string): void {
+		// Followed again for its code (`retry`): not yet, while it keeps failing (offline, or gone after a deploy).
+		if (this.retry > Date.now() && key === this.following) return;
 		this.following = key;
-		this.retry = false;
+		this.retry = 0;
 		const userId = next.you?.user_id;
 		if (!key || userId === undefined) {
-			this.source = this.applied = undefined;
+			this.source = undefined;
 			this.offer = undefined;
 			this.loaded?.follow(undefined);
 			return;
@@ -141,22 +146,19 @@ export class Commands {
 		});
 		this.loading.then(
 			(loaded) => {
-				this.sync(loaded);
+				// The latest list followed: later snapshots may have followed another meanwhile.
+				if (this.source) {
+					loaded.follow(this.source);
+					this.offer = loaded.offer;
+				}
 				then(loaded);
 			},
 			() => {
 				this.loading = undefined;
 				this.failed = true;
-				if (this.following) this.retry = true;
+				if (this.following) this.retry = Date.now() + RETRY_MS;
 			}
 		);
 	}
 
-	/** Tells the loaded code of the list followed, once: the latest, as later snapshots may have followed another meanwhile. */
-	private sync(loaded: Loaded): void {
-		if (!this.source || this.applied === this.source) return;
-		this.applied = this.source;
-		loaded.follow(this.source);
-		this.offer = loaded.offer;
-	}
 }

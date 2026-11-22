@@ -46,8 +46,15 @@ export class LoadedCommands {
 		};
 	}
 
-	/** Follows whose list it is (`CommandList.apply`), asking on connecting where `CommandList.connected` would. */
+	private followed: CommandSource | undefined;
+
+	/**
+	 * Follows whose list it is (`CommandList.apply`), asking on connecting where `CommandList.connected` would. The same
+	 * source again (as each use of the code passes it) changes nothing.
+	 */
 	follow(source: CommandSource | undefined): void {
+		if (source && source === this.followed) return;
+		this.followed = source;
 		this.list.apply(source);
 		if (source) this.list.connected();
 	}
