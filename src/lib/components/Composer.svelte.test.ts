@@ -280,6 +280,39 @@ describe('Composer', () => {
 		expect(field.getAttribute('aria-describedby')).toBeNull();
 	});
 
+	it('stops watching for the commands to arrive as it goes: a composer unmounted reads nothing of them', () => {
+		const state = $state({ ready: false });
+		let reads = 0;
+		const commands: CommandOffer = {
+			get ready() {
+				reads += 1;
+				return state.ready;
+			},
+			complete: () => undefined,
+			describe: () => undefined,
+			started: vi.fn(),
+			browse: vi.fn()
+		};
+		const warn = vi.spyOn(console, 'warn');
+		for (let i = 0; i < 5; i++) {
+			render({ value: '', canCommand: true, commands });
+			dom.unmount();
+		}
+		reads = 0;
+		state.ready = true;
+		flushSync();
+		expect(reads).toBe(0);
+		expect(warn).not.toHaveBeenCalled();
+		warn.mockRestore();
+		// One that's still there does read them as they arrive.
+		state.ready = false;
+		render({ value: '', canCommand: true, commands });
+		reads = 0;
+		state.ready = true;
+		flushSync();
+		expect(reads).toBeGreaterThan(0);
+	});
+
 	it('offers the server’s commands as one is typed, ending with Browse all commands, and none for live text', () => {
 		const list: OfferedCommand[] = [
 			{ name: 'help', description: 'List the commands that you can use' },

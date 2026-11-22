@@ -214,17 +214,6 @@ export class DraftField {
 			this.commandDismissed = undefined;
 			return info;
 		});
-		// The commands arriving while one is typed: it is read again, so that a form's list (`/emoji r`) or the card
-		// (`/nick Ada`) shows at once. In a root of its own, which the page's every key doesn't go through while it is
-		// clean, as it does an effect of the field's.
-		let ready = false;
-		$effect.root(() => {
-			$effect(() => {
-				const arrived = host.commands?.ready ?? false;
-				if (arrived && !ready && this.commanded) untrack(() => this.refresh());
-				ready = arrived;
-			});
-		});
 		this.commandMatches = $derived(this.commandCompletion ? [...this.commandCompletion.suggestions, BROWSE_COMMANDS] : []);
 		this.pickerOpen = $derived(this.query !== undefined && !host.disabled);
 		this.roomPickerOpen = $derived(this.roomFound !== undefined && !host.disabled);
@@ -248,12 +237,24 @@ export class DraftField {
 			'aria-activedescendant': this.completion?.count ? `${pickerId}-${this.activeIndex}` : undefined
 		});
 		// Copy and cut are listened for once per field, not passed as its props, which are applied again on every key.
+		// And the commands arriving while one is typed: it is read again, so that a form's list (`/emoji r`) or the card
+		// (`/nick Ada`) shows at once. In a root of its own, which the page's every key doesn't go through while it is
+		// clean, as it does an effect of the field's; stopped with the field.
 		$effect(() => {
 			const field = this.element;
 			if (!field) return;
 			field.addEventListener('copy', this.copy);
 			field.addEventListener('cut', this.cut);
+			let ready = false;
+			const stop = $effect.root(() => {
+				$effect(() => {
+					const arrived = host.commands?.ready ?? false;
+					if (arrived && !ready && this.commanded) untrack(() => this.refresh());
+					ready = arrived;
+				});
+			});
 			return () => {
+				stop();
 				field.removeEventListener('copy', this.copy);
 				field.removeEventListener('cut', this.cut);
 			};
