@@ -249,6 +249,18 @@ export interface RoomFormField {
 	submit: () => void;
 }
 
+/**
+ * What a room's or thread's description field is drawn with, wherever it is written (RoomForm, creating; the
+ * DescriptionSheet, editing): its name and placeholder, saving or not, how tall it starts, and how it submits.
+ */
+export function descriptionField(thread: boolean, field: Omit<RoomFormField, 'label' | 'placeholder'>): RoomFormField {
+	return {
+		label: thread ? 'Thread description' : 'Room description',
+		placeholder: thread ? 'What this thread is about, or what it settled. Shows on its card and at the top of the thread.' : 'What this room is for.',
+		...field
+	};
+}
+
 /** What the MessageEditor gives your own `field`: put both on it, for the editor's look and the field's name. */
 export interface MessageEditorField {
 	/** The editor's field class, `ap-msgedit-field`. */

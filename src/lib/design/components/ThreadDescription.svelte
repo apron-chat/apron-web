@@ -1,12 +1,20 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import type { ClassValue } from 'svelte/elements';
+	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import TextAlignStart from '@lucide/svelte/icons/text-align-start';
 	import X from '@lucide/svelte/icons/x';
+	import { fades } from './fades';
+
 	/**
-	 * A room's or thread's `description` (§3.4), pinned under the header: rendered + sanitized Markdown as `children`,
-	 * or plain `description`, beside the description icon in a column of its own. It previews three lines, fading out where
-	 * it's cut; a click on the text opens the rest and folds it again, and × (`ondismiss`) puts it away.
+	 * A room's or thread's `description` (§3.4), its first lines under the header as the conversation opens, until it is
+	 * read whole or put away: rendered + sanitized Markdown as `children` (its own `.ap-msg-text`), or plain `description`,
+	 * set as a document (`.ap-doc`) in the column its DescriptionSheet reads in, on the sheet's raised ground, as the sheet
+	 * folded, the description icon in its top left corner as × is in its top right. Four lines (six on a phone, which is
+	 * narrower); cut off, its text runs on under a bar at its foot, fading into it, which holds its chevron. The whole of it
+	 * is what opens the rest (`onexpand`): it lifts a shade under the pointer, and a click on it (not on a link or a
+	 * mention, nor the end of selecting its text) opens it; its chevron, named Read all, is the keyboard's way. × puts it
+	 * away (`ondismiss`). An edit of it not saved yet says so (`draft`), and takes it up (`ondraft`).
 	 */
 	interface Props {
 		description?: string;
@@ -15,51 +23,39 @@
 		label?: string;
 		/** Offer × to put the description away. */
 		ondismiss?: () => void;
+		/** Open the whole description, from Read all or a click on it. */
+		onexpand?: () => void;
+		/** An edit of the description is kept as a draft: Unsaved draft, which takes it up (`ondraft`). */
+		draft?: boolean;
+		ondraft?: () => void;
 		/** Classes for its `<section>`, added to its own. */
 		class?: ClassValue;
 	}
-	let { description, children, label = 'Thread description', ondismiss, class: className }: Props = $props();
-	let expanded = $state(false);
-	let boxHeight = $state(0);
-	let textHeight = $state(0);
-	/** The text runs past the three-line preview, so a click has more to show (and, once open, folds it again). */
-	let overflows = $derived(expanded || textHeight > boxHeight + 1);
+	let { description, children, label = 'Thread description', ondismiss, onexpand, draft = false, ondraft, class: className }: Props = $props();
+	/** More of it than its first lines show: Read all. */
+	let clipped = $state(false);
 
-	/**
-	 * The box's height and its text's, whenever either changes. Read as a ResizeObserver reports them, after the
-	 * browser has laid out the frame, so reading them never lays the page out early (as `bind:clientHeight` does on
-	 * mount); the clipped state lands before that frame paints.
-	 */
-	function heights(box: HTMLElement): (() => void) | undefined {
-		const text = box.firstElementChild;
-		if (typeof ResizeObserver === 'undefined' || !(text instanceof HTMLElement)) return;
-		const observer = new ResizeObserver(() => {
-			boxHeight = box.clientHeight;
-			textHeight = text.offsetHeight;
-		});
-		observer.observe(box, { box: 'border-box' });
-		observer.observe(text, { box: 'border-box' });
-		return () => observer.disconnect();
-	}
-
-	/** A click on the text opens or folds it, but not one on a link or mention, nor the end of selecting text. */
+	/** A click on it opens the whole, but not one on a link, a mention or a button, nor the end of selecting text. */
 	function click(event: MouseEvent): void {
-		if (!overflows || (event.target as Element | null)?.closest('a, button, [data-room-id]')) return;
+		if (!onexpand || (event.target as Element | null)?.closest('a, button, [data-room-id]')) return;
 		if (window.getSelection()?.toString()) return;
-		expanded = !expanded;
+		onexpand();
 	}
 </script>
 
-<section aria-label={label} class={['ap-description', ondismiss && 'ap-description-closable', className]}>
+<!-- The pointer opens it from anywhere on it; the keyboard has its chevron, Read all, and the header's Description. -->
+<!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
+<section aria-label={label} class={['ap-description', onexpand && 'ap-description-opens', clipped && 'ap-description-clipped', className]} onclick={click}>
 	<!-- The region's label already says it's a description; the icon's title says so to the pointer. -->
-	<span class="ap-description-icon" title="Description"><TextAlignStart size={15} strokeWidth={2} aria-hidden="true" /></span>
-	<!-- The pointer opens it from the text itself; the keyboard has the toggle, which shows only as a focus ring around the description. -->
-	<!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
-	<div class={['ap-description-text', 'ap-msg-text', 'ap-msg-markdown', expanded ? 'ap-description-open' : overflows && 'ap-description-clipped']} {@attach heights} onclick={click}>
-		<div>{#if children}{@render children()}{:else}<p>{description}</p>{/if}</div>
+	<span class="ap-description-icon" title={label}><TextAlignStart size={15} strokeWidth={2} aria-hidden="true" /></span>
+	<div class="ap-description-text ap-doc" {@attach fades((on) => (clipped = on))}>
+		{#if children}{@render children()}{:else}<div class="ap-msg-text"><p>{description}</p></div>{/if}
 	</div>
-	{#if overflows}
-		<button class="ap-description-toggle" type="button" aria-expanded={expanded} aria-label={expanded ? 'Show less of the description' : 'Show the whole description'} onclick={() => (expanded = !expanded)}></button>
+	{#if (clipped && onexpand) || (draft && ondraft)}
+		<div class="ap-description-foot">
+			{#if draft && ondraft}<button class="ap-btn ap-btn-sm ap-btn-ghost ap-description-draft" type="button" title="Kept on this device until you save or discard it" onclick={ondraft}>Unsaved draft</button>{/if}
+			{#if clipped && onexpand}<button class="ap-iconbtn ap-description-more" type="button" aria-label="Read all" title="Read all" onclick={onexpand}><ChevronDown size={18} strokeWidth={2} aria-hidden="true" /></button>{/if}
+		</div>
 	{/if}
 	{#if ondismiss}
 		<button class="ap-iconbtn ap-description-close" type="button" aria-label="Hide description" title="Hide description" onclick={ondismiss}>

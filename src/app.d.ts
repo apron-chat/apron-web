@@ -19,6 +19,8 @@ declare global {
 			terminal?: number;
 			/** The document viewer is open over it, since this time (ms): Back closes it. */
 			doc?: number;
+			/** The room's or thread's description shows over it (DescriptionSheet), since this time (ms): Back shuts it. */
+			description?: number;
 			/** Preferences is open, this many entries since it opened: closing it goes Back as many. */
 			preferences?: number;
 		}

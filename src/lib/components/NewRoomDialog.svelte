@@ -57,7 +57,7 @@
 	}
 </script>
 
-<RoomForm bind:open kind="room" mode="create" bind:name={title} field={descriptionField} bind:private={isPrivate} status={task.busy ? 'saving' : 'idle'} error={task.note} disabled={!enabled} onsubmit={create} {onclose} />
+<RoomForm bind:open kind="room" bind:name={title} field={descriptionField} bind:private={isPrivate} status={task.busy ? 'saving' : 'idle'} error={task.note} disabled={!enabled} onsubmit={create} {onclose} />
 
 {#snippet descriptionField(form: RoomFormField)}
 	<DescriptionField bind:value={description} {form} {people} {rooms} {onmention} />

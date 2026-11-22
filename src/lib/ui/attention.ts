@@ -38,3 +38,14 @@ export function tabTitle(unread: number, flash: boolean): string {
 	if (flash) return '@ You were mentioned';
 	return unread > 0 ? `(${unread > 999 ? '999+' : unread}) Apron` : 'Apron';
 }
+
+/**
+ * Has the browser show the tab title again after Back or Forward within the page. Chrome keeps a title with each
+ * history entry and shows it again on returning to the entry, though `document.title` hasn't changed since: a count
+ * from before you read the room. Writing `document.title`, even another title and back, doesn't reach the tab then;
+ * replacing the title's text does.
+ */
+export function showTitleAgain(doc: Document): void {
+	const title = doc.querySelector('title');
+	if (title) title.textContent = title.textContent;
+}

@@ -7,7 +7,7 @@ export const messageEditor = part((m) => m.MessageEditor);
 export const newPrivateDialog = part((m) => m.NewPrivateDialog);
 export const newRoomDialog = part((m) => m.NewRoomDialog);
 export const newThreadDialog = part((m) => m.NewThreadDialog);
-export const roomEditor = part((m) => m.RoomEditor);
+export const descriptionSheet = part((m) => m.DescriptionSheet);
 export const searchDialog = part((m) => m.SearchDialog);
 export const shortcutsDialog = part((m) => m.ShortcutsDialog);
 /** Every command the user can use (`ext:command_list`), opened by `/help` or the composer's Browse all commands. */

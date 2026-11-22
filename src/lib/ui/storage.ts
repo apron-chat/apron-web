@@ -372,9 +372,9 @@ function savedDescriptions(hidden: Record<string, string>): Record<string, strin
 }
 
 /**
- * Puts a room's or thread's description away, as it now reads (its fingerprint), until Description brings it back: an edit
- * leaves it put away, and marks Description (`descriptionUpdated`). Put away again, or acknowledged after your own edit, it
- * records the text anew. Returns the descriptions put away, this one newest.
+ * Puts a room's or thread's first lines away, as it now reads (its fingerprint): from then on its header's Description
+ * shows it whole. An edit leaves it put away, and marks Description (`descriptionUpdated`). Read whole, put away again, or
+ * acknowledged after your own edit, it records the text anew. Returns the descriptions put away, this one newest.
  */
 export function hideDescription(hidden: Record<string, string>, key: string, description: string): Record<string, string> {
 	const others = Object.entries(savedDescriptions(hidden)).filter(([entry]) => entry !== key);
@@ -383,12 +383,6 @@ export function hideDescription(hidden: Record<string, string>, key: string, des
 	return next;
 }
 
-/** Brings a room's or thread's description back: returns the descriptions still put away. */
-export function showDescription(hidden: Record<string, string>, key: string): Record<string, string> {
-	const next = Object.fromEntries(Object.entries(savedDescriptions(hidden)).filter(([entry]) => entry !== key));
-	write(KEY.hiddenDescriptions, JSON.stringify(next));
-	return next;
-}
 
 /** The storage key of the closed terminal embeds: other tabs follow its `storage` events. */
 export const CLOSED_TERMINALS_KEY = KEY.closedTerminals;
@@ -435,7 +429,7 @@ export function descriptionUpdated(hidden: Record<string, string>, key: string, 
 }
 
 /** A short hash of a description (FNV-1a), enough to tell an edit, without keeping the text itself. */
-function descriptionFingerprint(description: string): string {
+export function descriptionFingerprint(description: string): string {
 	let hash = 0x811c9dc5;
 	for (let i = 0; i < description.length; i++) hash = Math.imul(hash ^ description.charCodeAt(i), 0x01000193);
 	return (hash >>> 0).toString(36);
@@ -694,8 +688,12 @@ export function saveReadReceipts(on: boolean): void {
 	write(KEY.readReceipts, on ? 'on' : 'off');
 }
 
-/** An unsent draft kept for the next visit: its text, the message it replies to, and the link previews removed from it. */
-export type SavedDraft = { text: string; reply?: string; dismissed?: string[] };
+/**
+ * An unsent draft kept for the next visit: its text, the message it replies to, and the link previews removed from it.
+ * A room's or thread's edit (`RoomEdit`) is one too: its description as `text`, its `title`, and `base`, the fingerprint
+ * (`descriptionFingerprint`) of the title and description it started from.
+ */
+export type SavedDraft = { text: string; reply?: string; dismissed?: string[]; title?: string; base?: string };
 
 /** The draft kept under `key` (the page's key for its room or thread), if any, and whose it is (`notifyAccount`). */
 export function loadDraft(key: string): { draft: SavedDraft; owner?: string } | undefined {
@@ -704,7 +702,10 @@ export function loadDraft(key: string): { draft: SavedDraft; owner?: string } | 
 		if (!isJsonObject(value) || typeof value.text !== 'string') return undefined;
 		const reply = typeof value.reply === 'string' ? value.reply : undefined;
 		const dismissed = Array.isArray(value.dismissed) ? value.dismissed.filter((url): url is string => typeof url === 'string') : [];
-		const draft = { text: value.text, ...(reply ? { reply } : {}), ...(dismissed.length ? { dismissed } : {}) };
+		const draft = {
+			text: value.text, ...(reply ? { reply } : {}), ...(dismissed.length ? { dismissed } : {}),
+			...(typeof value.title === 'string' ? { title: value.title } : {}), ...(typeof value.base === 'string' ? { base: value.base } : {})
+		};
 		return { draft, ...(typeof value.owner === 'string' ? { owner: value.owner } : {}) };
 	} catch {
 		return undefined;

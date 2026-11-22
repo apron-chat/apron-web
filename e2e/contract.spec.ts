@@ -36,7 +36,8 @@ const OUT_OF_REACH: Record<string, string> = {
  * or the other, and tested (as fixme) below rather than failing every run.
  */
 const KNOWN_BREAKS: Record<string, string> = {
-	'button "Connect"': 'The connect screen reads a server’s greeting before it offers a way in: fill server-url-input, press Continue, then the guest’s button, now Join. webauthn.spec.ts:176–177 fills the field and presses Connect in one step: it needs Continue, then Join.'
+	'button "Connect"': 'The connect screen reads a server’s greeting before it offers a way in: fill server-url-input, press Continue, then the guest’s button, now Join. webauthn.spec.ts:176–177 fills the field and presses Connect in one step: it needs Continue, then Join.',
+	'dialog "Edit thread"': 'A room or thread is edited where its description reads (DescriptionSheet), not in a dialog: ⋯ → Edit thread (edit-room) makes the header’s title a field, textbox "Thread title", with Cancel and Save, button "Save", beside it. chat.spec.ts:81–89 and :113–115, and responsive.spec.ts:34, look for both inside the dialog: they need the page’s instead.'
 };
 
 const seen: Seen[] = existsSync(SEEN_DIR) ? readdirSync(SEEN_DIR).map((f) => JSON.parse(readFileSync(join(SEEN_DIR, f), 'utf8'))) : [];

@@ -160,6 +160,73 @@ describe('RoomHeader', () => {
 		expect(header.querySelector('.ap-faces')).toBeNull();
 	});
 
+	it('brings the description back from a click anywhere on the name or topic, but not from the thread’s crumb', () => {
+		render({ topic: 'Deploys' });
+		expect(document.querySelector('.ap-roomhead-text')?.classList.contains('ap-roomhead-text-opens')).toBe(false);
+		dom.unmount();
+		const ondescription = vi.fn();
+		render({ topic: 'Deploys', ondescription });
+		const text = document.querySelector<HTMLElement>('.ap-roomhead-text')!;
+		expect(text.classList.contains('ap-roomhead-text-opens')).toBe(true);
+		document.querySelector<HTMLElement>('.ap-roomhead-name')!.click();
+		byText('Deploys').click();
+		text.click();
+		expect(ondescription).toHaveBeenCalledTimes(3);
+		dom.unmount();
+		ondescription.mockClear();
+		const onroom = vi.fn();
+		render({ thread: 'deploy', threadName: 'Deploy', onroom, ondescription });
+		dom.button('Back to room').click();
+		expect([onroom, ondescription].map((fn) => fn.mock.calls.length)).toEqual([1, 0]);
+		document.querySelector<HTMLElement>('.ap-roomhead-name bdi')!.click();
+		expect(ondescription).toHaveBeenCalledOnce();
+	});
+
+	it('reading the description over the pane, offers Edit and × in place of the room’s own buttons, and marks a draft', () => {
+		const onedit = vi.fn();
+		const onclose = vi.fn();
+		render({ topic: 'Deploys', onmemberlist: () => {}, onleave: () => {}, canJoin: true, onjoin: () => {}, muted: 'until 14:30', onunmute: () => {}, descriptionDraft: true, reading: { onedit, onclose } });
+		expect(sub()).toEqual([]);
+		expect([dom.queryByRole('button', 'Room actions'), dom.queryByRole('button', 'Join room'), dom.queryByRole('button', 'Unmute room')]).toEqual([null, null, null]);
+		expect(dom.queryByRole('button', 'Show member list')).not.toBeNull();
+		dom.button('Edit room, unsaved draft').click();
+		dom.button('Close description').click();
+		expect([onedit, onclose].map((fn) => fn.mock.calls.length)).toEqual([1, 1]);
+		dom.unmount();
+		// Without cap `rooms`, × alone.
+		render({ reading: { onclose } });
+		expect([...document.querySelectorAll('button')].map((button) => button.getAttribute('aria-label'))).toEqual(['Close description']);
+	});
+
+	it('editing, makes the title a field (Enter saves, Escape cancels), says it’s a draft or why it didn’t save, and offers Cancel and Save', () => {
+		const ontitle = vi.fn();
+		const onsave = vi.fn();
+		const oncancel = vi.fn();
+		const editing = { title: 'Ops', ontitle, draft: true, saving: false, onsave, oncancel };
+		render({ onback: () => {}, onmemberlist: () => {}, editing });
+		const title = dom.byRole<HTMLInputElement>('textbox', 'Room title');
+		expect([title.value, title.maxLength]).toEqual(['Ops', 120]);
+		// Out of the way while editing: the back arrow, the member list's toggle, the ⋯ menu.
+		expect([dom.queryByRole('button', 'Back to rooms'), dom.queryByRole('button', 'Show member list')]).toEqual([null, null]);
+		expect(document.querySelector('.ap-roomhead-draft')?.textContent).toBe('Unsaved draft');
+		title.value = 'Ops room';
+		title.dispatchEvent(new Event('input', { bubbles: true }));
+		expect(ontitle).toHaveBeenLastCalledWith('Ops room');
+		dom.press(title, 'Enter');
+		dom.press(title, 'Escape');
+		dom.button('Save').click();
+		dom.button('Cancel').click();
+		expect([onsave, oncancel].map((fn) => fn.mock.calls.length)).toEqual([2, 2]);
+		dom.unmount();
+		render({ thread: 'deploy', threadName: 'Deploy', name: 'Ops', editing: { ...editing, draft: false, saving: true, error: 'Not allowed' } });
+		expect(dom.byRole<HTMLInputElement>('textbox', 'Thread title').disabled).toBe(true);
+		expect(document.querySelector('[role="alert"]')?.textContent).toBe('Not allowed');
+		expect(document.querySelector('.ap-roomhead-draft')).toBeNull();
+		expect(dom.button('Saving…').disabled).toBe(true);
+		// A thread keeps its room before its title.
+		expect(dom.button('Back to room').textContent).toBe('Ops');
+	});
+
 	it('takes a class on the header beside its own', () => {
 		const header = render({ class: 'mine', private: true });
 		expect([header.classList.contains('ap-roomhead'), header.classList.contains('ap-roomhead-private'), header.classList.contains('mine')]).toEqual([true, true, true]);

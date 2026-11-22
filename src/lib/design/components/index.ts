@@ -50,6 +50,7 @@ export { default as ProfileEditor } from './ProfileEditor.svelte';
 export { default as ReplyPreview } from './ReplyPreview.svelte';
 export { default as LinkCard } from './LinkCard.svelte';
 export { default as ThreadDescription } from './ThreadDescription.svelte';
+export { default as DescriptionSheet } from './DescriptionSheet.svelte';
 export { default as RoomForm } from './RoomForm.svelte';
 export { default as MarkdownEditor } from './MarkdownEditor.svelte';
 export { default as WritePreview } from './WritePreview.svelte';

@@ -132,6 +132,24 @@ test.describe('Back and Forward', () => {
 		await at(preview, 'engineering', /#room=engineering$/);
 	});
 
+	test('show the tab title as it is now, not as it was when the entry was last shown', async ({ preview, page, context }) => {
+		// The title the browser shows on the tab, which Chrome keeps with each history entry; `document.title` was right all along.
+		const cdp = await context.newCDPSession(page);
+		const tabTitle = async () => (await cdp.send('Target.getTargetInfo')).targetInfo.title;
+		await preview.open('#room=general');
+		await preview.post('engineering', 'ada', 'While you were in general');
+		await expect(page).toHaveTitle('(1) Apron');
+		await preview.openRoom('engineering');
+		await expect(page).toHaveTitle('Apron');
+
+		await page.goBack();
+		await at(preview, 'general', /#room=general$/);
+		await expect.poll(tabTitle).toBe('Apron');
+		await page.goForward();
+		await at(preview, 'engineering', /#room=engineering$/);
+		await expect.poll(tabTitle).toBe('Apron');
+	});
+
 	test('return to a thread left since, read without joining it', async ({ preview, page }) => {
 		await preview.open();
 		await preview.openThread('thread_deploy');

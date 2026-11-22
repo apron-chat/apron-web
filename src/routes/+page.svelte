@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { commandReference, docViewerHost, editorsNudge, fileUpload, installNudge, mentionAddLine, messageEditor, newPrivateDialog, newThreadDialog, profileCardHost, reactorsPopover, roomEditor, searchDialog, selectionBar, serverPaneHost, shortcutsDialog, signInLinkDialog } from '$lib/components/lazy';
+	import { commandReference, docViewerHost, editorsNudge, fileUpload, installNudge, descriptionSheet, mentionAddLine, messageEditor, newPrivateDialog, newThreadDialog, profileCardHost, reactorsPopover, searchDialog, selectionBar, serverPaneHost, shortcutsDialog, signInLinkDialog } from '$lib/components/lazy';
 	import { onMount, tick, untrack } from 'svelte';
 	import { fromAction } from 'svelte/attachments';
 	import { pushState, replaceState } from '$app/navigation';
@@ -77,7 +77,7 @@
 	import { MEMBER_LIST_WIDTHS, ROOMS_LIST_WIDTHS, SidebarLayout } from '$lib/ui/sidebar.svelte';
 	import { NARROW_MAX, WIDE_MIN } from '$lib/ui/breakpoints';
 	import { closedTerminals } from '$lib/ui/terminal-closed.svelte';
-	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, installOfferAnswered, answerInstallOffer, loadRecentReactions, saveRecentReactions, loadRecentServers, loadServerUrl, loadSidebarPrefs, refreshRecentServer, rememberServer, saveDisplayName, saveLastSignIn, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, HIDDEN_DESCRIPTIONS_KEY, INSTALL_OFFER_KEY, loadAddedRooms, saveAddedRooms, loadHiddenDescriptions, hideDescription, showDescription, descriptionHidden, descriptionUpdated, type RecentServer } from '$lib/ui/storage';
+	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, installOfferAnswered, answerInstallOffer, loadRecentReactions, saveRecentReactions, loadRecentServers, loadServerUrl, loadSidebarPrefs, refreshRecentServer, rememberServer, saveDisplayName, saveLastSignIn, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, HIDDEN_DESCRIPTIONS_KEY, INSTALL_OFFER_KEY, loadAddedRooms, saveAddedRooms, loadHiddenDescriptions, hideDescription, descriptionHidden, descriptionUpdated, type RecentServer } from '$lib/ui/storage';
 	import TimelineLoading from '$lib/design/components/TimelineLoading.svelte';
 	import RateLimitNotice from '$lib/design/components/RateLimitNotice.svelte';
 	import SystemLine from '$lib/design/components/SystemLine.svelte';
@@ -107,12 +107,14 @@
 	import { SignInLinks } from '$lib/ui/link-controller.svelte';
 	import { findProposal } from '$lib/protocol/proposals';
 	import { idMillis } from '$lib/ui/time';
-	import { tabTitle } from '$lib/ui/attention';
+	import { showTitleAgain, tabTitle } from '$lib/ui/attention';
 	import { trackKeyboard } from '$lib/ui/viewport';
 	import { linkPreviews, PREVIEW_WAIT_MS } from '$lib/ui/link-previews';
 	import { carriesFiles, fileDrop, pastedFiles } from '$lib/ui/file-transfer';
 	import { PaneDrafts, pageDrafts, type StagedFile } from '$lib/ui/pane-drafts.svelte';
 	import { DraftKeeper, draftServer } from '$lib/ui/draft-keeper.svelte';
+	import { RoomEdit } from '$lib/ui/room-edit.svelte';
+	import { backCloses } from '$lib/ui/viewer.svelte';
 	import { loadKeptSessionUser } from '$lib/protocol/client-internals';
 	import { PagePresence } from '$lib/ui/presence.svelte';
 	import { JUMP_WAIT_MS, TimelineViewport, until } from '$lib/ui/timeline-viewport.svelte';
@@ -174,6 +176,8 @@
 	/** Each pane's unsent draft, kept on this device so a reload doesn't lose it, unless local history is turned off. */
 	const draftKeeper = new DraftKeeper(() => historySettings.retention !== 'off', draftOwner);
 	const drafts = new PaneDrafts(draftKeeper);
+	/** The open pane's description over it (DescriptionSheet), read or edited; an edit kept as a draft as the composer's are. */
+	const roomEdit = new RoomEdit(editDraftKey, draftKeeper);
 	// The update notice, in the layout, says when reloading would lose a draft.
 	$effect(() => {
 		pageDrafts.current = drafts;
@@ -365,7 +369,6 @@
 	let highlightedId = $state<string | undefined>();
 	let editingId = $state<string | undefined>();
 	/** The Edit form for the open room or thread (its title and description). */
-	let roomEditorOpen = $state(false);
 	/** Search is open (`SearchDialog`), at its rooms and threads or at its messages. */
 	let searchMode = $state<'rooms' | 'messages' | undefined>();
 	/** The keyboard shortcuts' overlay (`?`) is open. */
@@ -818,8 +821,75 @@
 		const description = editTarget?.id === roomId ? editTarget.description : session.room(roomId)?.description;
 		if (description && descriptionHidden(hiddenDescriptions, key)) hiddenDescriptions = hideDescription(hiddenDescriptions, key, description);
 	}
-	/** The open room's or thread's description, pinned under the header until its × puts it away. */
+	/** The open pane's description, its first lines under the header until its × puts it away. */
 	let pinnedDescription = $derived(editTarget?.description && !descriptionPutAway ? { id: editTarget.id, description: editTarget.description } : undefined);
+	/**
+	 * The open room's or thread's `room_id`, from what the page chose, not `editTarget`, a new object with each snapshot (each
+	 * key typed): what follows the edit reads this, so it isn't asked again as messages come and go (perf budget).
+	 */
+	let editTargetId = $derived(activeThread ?? selectedRoomId);
+	/** The open pane's description shows over it (DescriptionSheet), and whether it is being edited. */
+	let sheetShown = $derived(editTargetId !== undefined && roomEdit.shown?.id === editTargetId);
+	let editingDescription = $derived(sheetShown && Boolean(roomEdit.shown?.editing));
+	/** An edit of the open room's or thread's title and description is kept as a draft, not saved yet. */
+	let descriptionDrafted = $derived(editTargetId !== undefined && roomEdit.drafted(editTargetId));
+	/** The open room's or thread's record is known (it may come after its id, as a thread not joined does). */
+	let editTargetKnown = $derived(editTarget !== undefined);
+	// What an earlier visit kept of the open pane's edit shows as a draft before Edit takes it up, once whose it is is known.
+	$effect(() => {
+		if (editTargetId !== undefined && editTargetKnown && session.ready) untrack(() => editTarget && roomEdit.recall(editTarget));
+	});
+	/** Back shuts the description, as it does a viewer; shut another way, it goes Back off the entry it pushed. */
+	const leaveDescription = backCloses('description', () => Boolean(roomEdit.shown), () => closeDescription());
+	$effect(() => {
+		if (!roomEdit.shown) untrack(leaveDescription);
+	});
+
+	/** Shows the description over the pane, to read; put away and edited since, it is news no more. */
+	function openDescription(): void {
+		const target = editTarget;
+		if (!target) return;
+		roomEdit.open(target);
+		if (target.description && descriptionPutAway) hiddenDescriptions = hideDescription(hiddenDescriptions, draftKey(target.id), target.description);
+	}
+	/** Edits the open room's or thread's title and description over its pane, from its draft where one is kept. */
+	function editDescription(): void {
+		if (editTarget && canEditPane) roomEdit.start(editTarget);
+	}
+	/**
+	 * Shuts the description; being edited, once discarding a draft is agreed. Returns whether it shut. Read whole, its first
+	 * lines under the header have done their work: they retire to the header's line and Description, as × puts them away.
+	 */
+	function closeDescription(): boolean {
+		// Only the room or thread it shows: the pane may have moved on already (another room opened over it, `leave`).
+		const shown = roomEdit.shown;
+		if (!shown) return true;
+		const target = editTarget?.id === shown.id ? editTarget : undefined;
+		if (!roomEdit.close(target, Boolean(activeThread))) return false;
+		if (target?.description && !descriptionPutAway) hiddenDescriptions = hideDescription(hiddenDescriptions, draftKey(target.id), target.description);
+		return true;
+	}
+	/** Back from editing to reading, once discarding a draft is agreed. */
+	function cancelDescriptionEdit(): void {
+		if (editTarget) roomEdit.cancel(editTarget, Boolean(activeThread));
+	}
+	/** Escape over the description: a step back, from editing to reading, from reading to shut. */
+	function descriptionEscape(): void {
+		if (editingDescription) cancelDescriptionEdit();
+		else closeDescription();
+	}
+	/** The title as typed in the header. */
+	function editDescriptionTitle(title: string): void {
+		if (editTarget) roomEdit.setTitle(editTarget.id, title);
+	}
+	/** Saves the edit (`room_set`): your own new description isn't news to you. */
+	async function saveDescription(): Promise<void> {
+		const target = editTarget;
+		const chat = client;
+		if (!target || !chat || !canCompose || !session.canManageRooms) return;
+		const patch = await roomEdit.save(target, Boolean(activeThread), (change) => chat.updateRoom(target.id, change).promise);
+		if (patch && 'description' in patch) acknowledgeDescription(target.id);
+	}
 	/**
 	 * The pinned description makes way, for now (not put away), while the composer needs its room: as the full panel, whose
 	 * timeline keeps its few lines and its foot in view, or past one line in a short window (a phone's, its keyboard up).
@@ -867,7 +937,12 @@
 		untrack(() => {
 			const here = (key: string) => draftServer(key) === chat.url;
 			const claim = draftKeeper.claim(chat.url, owner);
-			if (claim === 'dropped') drafts.forgetWhere(here);
+			if (claim === 'dropped') {
+				drafts.forgetWhere(here);
+				roomEdit.forgetWhere(here);
+			}
+			// A guest's edits become the account's: written again as its, as the composer's are (`recallWhere`).
+			if (claim === 'carried') roomEdit.keepWhere(here);
 			drafts.recallWhere(here, claim !== 'same');
 		});
 	});
@@ -1543,7 +1618,7 @@
 		pendingOpen = undefined;
 		pendingJoin = undefined;
 		newThread = undefined;
-		roomEditorOpen = false;
+		roomEdit.leave();
 		selection.leave();
 		mentions.reset();
 		unread.reset();
@@ -2128,6 +2203,11 @@
 		return JSON.stringify([client?.url ?? serverInput, roomId]);
 	}
 
+	/** A room's or thread's edit (its title and description) is kept as a draft beside its messages' (`draftKey`). */
+	function editDraftKey(roomId: string): string {
+		return JSON.stringify([client?.url ?? serverInput, roomId, 'edit']);
+	}
+
 	/**
 	 * Moves the pane to a room or one of its threads, keeping each destination's
 	 * draft and reply. Each move is a history entry, so Back returns to the
@@ -2140,7 +2220,7 @@
 		activeThread = thread;
 		drafts.open(draftKey(thread ?? roomId));
 		editingId = undefined;
-		roomEditorOpen = false;
+		roomEdit.leave();
 		newThread = undefined;
 		selection.leave();
 		if (typingIn && typingIn.room !== (thread ?? roomId)) stopTyping();
@@ -3634,6 +3714,12 @@
 			searchMode = event.key.toLowerCase() === 'k' ? 'rooms' : 'messages';
 			return;
 		}
+		// Escape over the description with the keyboard on the header (its Edit or ×): a step back, as in the sheet itself.
+		if (event.key === 'Escape' && roomEdit.shown && !event.defaultPrevented && !modalOpen()) {
+			event.preventDefault();
+			descriptionEscape();
+			return;
+		}
 		// Escape in a dialog (the NewThreadDialog, the keyboard shortcuts) closes it and keeps the selection.
 		if (event.key !== 'Escape' || !selection.active || newThread || modalOpen()) return;
 		if (selection.menuOpen) {
@@ -3645,7 +3731,7 @@
 	}
 </script>
 
-<svelte:window onpagehide={() => { releasePreviewWaits(); draftKeeper.flush(); }} onkeydown={windowKeydown} onpointerdowncapture={() => (tabbing = false)} onpaste={windowPaste} ondragover={refuseDrop} ondrop={refuseDrop} onfocus={() => { presence.focus(); refreshNotificationPermission(); }} onblur={() => presence.blur()} />
+<svelte:window onpagehide={() => { releasePreviewWaits(); draftKeeper.flush(); }} onpopstate={() => showTitleAgain(document)} onkeydown={windowKeydown} onpointerdowncapture={() => (tabbing = false)} onpaste={windowPaste} ondragover={refuseDrop} ondrop={refuseDrop} onfocus={() => { presence.focus(); refreshNotificationPermission(); }} onblur={() => presence.blur()} />
 <svelte:document onclick={mediaAskClick} onvisibilitychange={() => { presence.visibilityChanged(); refreshNotificationPermission(); if (document.visibilityState === 'hidden') { keepView(); releasePreviewWaits(); void historyKeeper?.flush(); draftKeeper.flush(); } }} />
 
 <svelte:head>
@@ -3752,8 +3838,14 @@
 				room={activeRoom}
 				pane={paneRoom ?? activeRoom}
 				showTopic={!pinnedDescription}
-				ondescription={descriptionPutAway ? () => { if (editTarget) hiddenDescriptions = showDescription(hiddenDescriptions, draftKey(editTarget.id)); } : undefined}
+				ondescription={sheetShown ? undefined : descriptionPutAway ? openDescription : descriptionDrafted && !pinnedDescription && canEditPane ? editDescription : undefined}
 				descriptionUpdated={descriptionEdited}
+				descriptionDraft={descriptionDrafted && canEditPane}
+				reading={sheetShown && !editingDescription ? { onedit: canEditPane ? editDescription : undefined, onclose: closeDescription } : undefined}
+				editing={editingDescription && roomEdit.editing ? {
+					title: roomEdit.editing.title, ontitle: editDescriptionTitle, draft: descriptionDrafted, saving: roomEdit.task.busy, disabled: !canCompose, error: roomEdit.task.note,
+					onsave: saveDescription, oncancel: cancelDescriptionEdit
+				} : undefined}
 				threadTitle={activeThread ? threadTitle(activeThread) : undefined}
 				typing={typingNames}
 				replyCount={activeThread ? threadReplyCount : undefined}
@@ -3769,13 +3861,14 @@
 				{unreadElsewhere}
 				{mentionsElsewhere}
 				onsearch={canSearch ? () => (searchMode = 'messages') : undefined} {searchHint} onshortcuts={searchHint ? () => (shortcutsOpen = true) : undefined}
-				onback={openRooms} onroom={backToRoom} onedit={() => (roomEditorOpen = true)} onleave={leavePane} oncopylink={copyPaneLink} onjoin={joinPane} onmemberlist={toggleMemberList}
+				onback={openRooms} onroom={backToRoom} onedit={editDescription} onleave={leavePane} oncopylink={copyPaneLink} onjoin={joinPane} onmemberlist={toggleMemberList}
 				onmute={canMuteRoom ? mutePane : undefined}
 			/>
-			{#if roomEditorOpen && editTarget && roomEditor.component}
-				{@const RoomEditor = roomEditor.component}
+			<!-- The description over the pane, read or edited: its buttons (and the title being edited) are the header's. -->
+			{#if sheetShown && editTarget && descriptionSheet.component}
+				{@const DescriptionSheet = descriptionSheet.component}
 				{#key editTarget.id}
-					<RoomEditor client={client!} room={editTarget} thread={Boolean(activeThread)} enabled={canCompose && session.canManageRooms} {people} rooms={roomSuggestions} onmention={refreshMembers} onclose={() => (roomEditorOpen = false)} ondescriptionsaved={() => { if (editTarget) acknowledgeDescription(editTarget.id); }} />
+					<DescriptionSheet room={editTarget} thread={Boolean(activeThread)} edit={roomEdit} {people} rooms={roomSuggestions} onmention={refreshMembers} onopenroom={openMentionedRoom} onsave={saveDescription} onclose={closeDescription} onescape={descriptionEscape} />
 				{/key}
 			{/if}
 
@@ -3801,7 +3894,8 @@
 			{#if pinnedDescription && !descriptionMakesWay}
 				{@const pinned = pinnedDescription}
 				{#key pinned.id}
-					<ThreadDescription description={pinned.description} thread={Boolean(activeThread)} onopenroom={openMentionedRoom} ondismiss={() => (hiddenDescriptions = hideDescription(hiddenDescriptions, draftKey(pinned.id), pinned.description))} />
+					<ThreadDescription description={pinned.description} thread={Boolean(activeThread)} onopenroom={openMentionedRoom} ondismiss={() => (hiddenDescriptions = hideDescription(hiddenDescriptions, draftKey(pinned.id), pinned.description))}
+						onexpand={openDescription} draft={descriptionDrafted && canEditPane} ondraft={editDescription} />
 				{/key}
 			{/if}
 
