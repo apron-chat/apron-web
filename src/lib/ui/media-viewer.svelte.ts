@@ -17,11 +17,13 @@ export function mediaItemOf(link: HTMLElement, gate: MediaGate = directory.media
 	const src = gate.src(link.dataset.viewerSrc);
 	if (!src || !title) return undefined;
 	const href = link instanceof HTMLAnchorElement ? link.href : undefined;
+	const original = href ? gate.src(href) : undefined;
 	return {
 		src, title,
 		...(alt ? { alt } : {}),
 		...(detail ? { detail } : {}),
 		...(href ? { href } : {}),
+		...(original && original !== src ? { original } : {}),
 		...(Number(width) > 0 && Number(height) > 0 ? { width: Number(width), height: Number(height) } : {})
 	};
 }

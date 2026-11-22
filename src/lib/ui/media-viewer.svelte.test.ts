@@ -47,6 +47,13 @@ describe('gallery', () => {
 		expect(mediaItemOf(document.querySelector<HTMLElement>('[data-viewer-title="no-src"]')!)).toBeUndefined();
 	});
 
+	it('offers the original to zoom into where it differs from the preview and may load, not from a site media may not load from', () => {
+		document.body.innerHTML = `<a href="https://files.example/big.jpg" data-viewer-src="https://files.example/big-preview.jpg" data-viewer-title="big.jpg">big</a><a href="https://tracker.example/big.jpg" data-viewer-src="https://files.example/p.jpg" data-viewer-title="tracked.jpg">t</a>`;
+		const [big, tracked] = [...document.querySelectorAll<HTMLElement>('a')].map((anchor) => mediaItemOf(anchor));
+		expect(big?.original).toBe('https://files.example/big.jpg');
+		expect(tracked && 'original' in tracked).toBe(false);
+	});
+
 	it('gives focus back to the image last shown when it closes', () => {
 		document.body.innerHTML = `<div class="ap-timeline">${link('a.png', 'a.png')}${link('b.png', 'b.png')}</div>`;
 		const [first, second] = document.querySelectorAll<HTMLElement>('[data-viewer-src]');
@@ -115,6 +122,6 @@ describe('an image upload', () => {
 		anchor.dispatchEvent(click);
 		expect(click.defaultPrevented).toBe(true);
 		expect(mediaViewer.open).toBe(true);
-		expect(mediaViewer.items).toEqual([{ src: media(PIXEL), title: 'dusk.jpg', detail: 'Grace Hopper · 4:00 PM', href: 'https://files.example/dusk.jpg', width: 960, height: 600 }]);
+		expect(mediaViewer.items).toEqual([{ src: media(PIXEL), title: 'dusk.jpg', detail: 'Grace Hopper · 4:00 PM', href: 'https://files.example/dusk.jpg', original: media('https://files.example/dusk.jpg'), width: 960, height: 600 }]);
 	});
 });

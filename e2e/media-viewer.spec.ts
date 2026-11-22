@@ -187,8 +187,77 @@ test.describe('the image viewer, zoomed with a mouse', () => {
 		await expect.poll(async () => Math.round((await image.boundingBox())!.width / whole.width * 100) / 100).toBe(2.25);
 		await page.keyboard.press('-');
 		await expect.poll(async () => Math.round((await image.boundingBox())!.width / whole.width * 100) / 100).toBe(1.5);
+		// A screen reader hears it once it settles.
+		await expect(viewer.getByRole('status').filter({ hasText: 'Zoomed' })).toHaveText('Zoomed to 150%');
+		// Zoomed, the arrows move it a tenth of the stage, rather than paging.
+		const before = (await image.boundingBox())!;
+		const stage = (await viewer.locator('.ap-viewer-stage').boundingBox())!;
+		await page.keyboard.press('ArrowRight');
+		// (As far as that, or to its edge, where the image ends before then.)
+		await expect.poll(async () => before.x - (await image.boundingBox())!.x).toBeGreaterThan(10);
+		expect(before.x - (await image.boundingBox())!.x).toBeLessThanOrEqual(stage.width / 10 + 1);
+		await expect(viewer).toBeVisible();
+		// Whole again, they page.
+		await page.keyboard.press('0');
+		await expect(viewer.getByRole('status').filter({ hasText: 'Whole' })).toHaveText('Whole image');
 		await page.keyboard.press('ArrowRight');
 		await expect(page.getByRole('dialog', { name: DAWN }).locator('.ap-viewer-stage')).not.toHaveClass(/ap-viewer-zoomed/);
+	});
+
+	test('zoomed past its preview\'s pixels, it is drawn from the original, fetched only then and only where media may load from; one that won\'t load leaves the preview', async ({ preview, page }) => {
+		await preview.open();
+		// The preview server's own files (its origin), as a real server's uploads are; the demo's photos are elsewhere.
+		const files = 'http://apron-preview.invalid/files';
+		const asked: string[] = [];
+		const preview64 = await page.locator('a.ap-embed-imagelink').first().getAttribute('data-viewer-src');
+		const bytes = Buffer.from(preview64!.split(',')[1], 'base64');
+		await page.route(`${files}/*`, (route) => {
+			asked.push(route.request().url());
+			return route.request().url().endsWith('/sharp.jpg')
+				? route.fulfill({ status: 200, contentType: 'image/jpeg', body: bytes })
+				: route.fulfill({ status: 404, body: '' });
+		});
+		await page.route('https://apron-preview.invalid/files/*.jpg', (route) => (asked.push(route.request().url()), route.abort()));
+		const og = { image: { url: preview64, type: 'image/jpeg', width: 960, height: 600 } };
+		await preview.post('general', 'grace', { text: 'Two more', embeds: [
+			{ kind: 'upload', embed_id: 'sharp', url: `${files}/sharp.jpg`, title: 'sharp.jpg', og },
+			{ kind: 'upload', embed_id: 'gone', url: `${files}/gone.jpg`, title: 'gone.jpg', og }
+		] });
+
+		const zoomIn = async (name: string) => {
+			const viewer = page.getByRole('dialog', { name });
+			const image = viewer.locator('img.ap-viewer-media');
+			await expect.poll(() => image.evaluate((node: HTMLImageElement) => node.complete && node.naturalWidth > 0)).toBe(true);
+			await page.waitForTimeout(300);
+			const whole = (await image.boundingBox())!;
+			await page.mouse.dblclick(whole.x + whole.width / 2, whole.y + whole.height / 2);
+			await expect.poll(async () => Math.round((await image.boundingBox())!.width / whole.width * 10) / 10).toBe(2.5);
+			return image;
+		};
+
+		// Allowed, and an image: fetched once zoomed (not before), and drawn in place of the preview at the same zoom.
+		await page.locator('a.ap-embed-imagelink', { hasText: '' }).nth(2).click();
+		await page.waitForTimeout(300);
+		expect(asked).toEqual([]);
+		const sharp = await zoomIn('sharp.jpg');
+		await expect(sharp).toHaveAttribute('src', `${files}/sharp.jpg`);
+		expect(asked).toEqual([`${files}/sharp.jpg`]);
+
+		// Allowed, but not there: the preview stays, drawn.
+		await page.keyboard.press('0');
+		await page.keyboard.press('ArrowRight');
+		const gone = await zoomIn('gone.jpg');
+		await expect.poll(() => asked.length).toBe(2);
+		await page.waitForTimeout(300);
+		expect((await gone.getAttribute('src'))!.startsWith('data:')).toBe(true);
+
+		// From where media may not load (the demo's photo, on another origin): never asked for.
+		await page.keyboard.press('Escape');
+		await page.locator('a.ap-embed-imagelink').first().click();
+		const demo = await zoomIn(DUSK);
+		await page.waitForTimeout(500);
+		expect(asked).toHaveLength(2);
+		expect((await demo.getAttribute('src'))!.startsWith('data:')).toBe(true);
 	});
 
 	test('eased back out with motion allowed, it stays clipped below the bar until it is whole, and then closes on a click beside it', async ({ preview, page }) => {

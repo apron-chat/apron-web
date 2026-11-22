@@ -7,8 +7,9 @@
 	/**
 	 * An image full screen, paged through with ← and → and the arrow buttons. It zooms in place: two fingers pinch it
 	 * (or a trackpad's pinch, or Ctrl and the wheel), a double tap or click zooms in where it lands and back out, + and
-	 * − zoom about the middle and 0 shows it whole; and zoomed, one finger or the mouse drags it about (or the wheel),
-	 * never past an edge it could fill the screen with. A click beside it closes the viewer, only while it isn't zoomed;
+	 * − zoom about the middle and 0 shows it whole; and zoomed, one finger or the mouse drags it about (or the wheel, or
+	 * the arrows), never past an edge it could fill the screen with. Zoomed past its preview's pixels, it is drawn from
+	 * the original file where that may load. A screen reader hears how far it is zoomed, once it settles. A click beside it closes the viewer, only while it isn't zoomed;
 	 * another image, or a resize, shows it whole.
 	 */
 
@@ -77,6 +78,34 @@
 	let lastTap: { time: number; x: number; y: number } | undefined;
 	/** The zoom a Safari trackpad pinch (its `gesture` events) started from. */
 	let gestureFrom: number | undefined;
+
+	/**
+	 * The original, loaded and drawn in place of the preview (`item.original`): fetched once the image is zoomed past
+	 * the preview's own pixels, on this screen, and swapped in only once it has loaded, so the image never blanks. Where
+	 * it can't load, or isn't an image the browser draws, the preview stays.
+	 */
+	let sharp = $state.raw<{ for: MediaItem; src: string } | undefined>();
+	let fetching: MediaItem | undefined;
+	$effect(() => {
+		const shown = item;
+		if (!shown?.original || zoom.scale <= 1 || fetching === shown || sharp?.for === shown || !geometry || !media?.naturalWidth) return;
+		if (zoom.scale * geometry.frame.w * (globalThis.devicePixelRatio || 1) <= media.naturalWidth) return;
+		fetching = shown;
+		const loader = new Image();
+		loader.onload = () => {
+			if (item === shown && loader.naturalWidth > 0) sharp = { for: shown, src: shown.original! };
+		};
+		loader.src = shown.original;
+	});
+	let shownSrc = $derived(sharp?.for === item ? sharp.src : item?.src);
+
+	/** What a screen reader hears of the zoom, once it settles: its size, as a share of the whole image. */
+	let said = $state('');
+	$effect(() => {
+		const scale = zoom.scale;
+		const timer = setTimeout(() => (said = scale > 1 ? `Zoomed to ${Math.round(scale * 100)}%` : said && 'Whole image'), 400);
+		return () => clearTimeout(timer);
+	});
 
 	/** Whole again, and nothing kept of what was measured or pressed: for each image, each open and each size. */
 	function reset(): void {
@@ -225,10 +254,22 @@
 		if (next >= 0 && next < items.length) index = next;
 	}
 
+	/** Zoomed, the arrows move it a tenth of the stage at a time, as they would scroll a page; whole, ← and → page. */
+	const PAN: Record<string, [number, number]> = { ArrowLeft: [1, 0], ArrowRight: [-1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1] };
+	function panByKey(key: string): boolean {
+		const where = zoomed && PAN[key] ? measured() : undefined;
+		if (!where) return false;
+		const [x, y] = PAN[key];
+		ease(clampZoom({ scale: zoom.scale, x: zoom.x + (x * where.frame.width) / 10, y: zoom.y + (y * where.frame.height) / 10 }, where.frame, where.max));
+		return true;
+	}
+
 	function keydown(event: KeyboardEvent): void {
-		if (event.key === 'ArrowLeft') step(-1);
+		if (event.ctrlKey || event.metaKey || event.altKey) return;
+		if (panByKey(event.key)) event.preventDefault();
+		else if (event.key === 'ArrowLeft') step(-1);
 		else if (event.key === 'ArrowRight') step(1);
-		else if (event.ctrlKey || event.metaKey || event.altKey || !zoomByKey(event.key)) return;
+		else if (!zoomByKey(event.key)) return;
 		event.preventDefault();
 	}
 </script>
@@ -245,13 +286,14 @@
 		{/if}
 	{/snippet}
 	{#if item}
+		<p class="ap-sr" role="status">{said}</p>
 		<!-- The ground around the image: a click there closes it, while the image isn't zoomed. It takes the touches that
-		     pinch and drag the image, wherever they start: a pointer's gestures; from the keyboard, the arrows page and
-		     + and − zoom. -->
+		     pinch and drag the image, wherever they start: a pointer's gestures; from the keyboard, + and − zoom, and the
+		     arrows page, or move it while zoomed. -->
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div class={['ap-viewer-stage', framed && 'ap-viewer-zoomed']} data-viewer-ground={framed ? undefined : ''} bind:this={stage}
 			onpointerdown={pointerdown} onpointermove={pointermove} onpointerup={pointerup} onpointercancel={pointergone} onlostpointercapture={pointergone}>
-			{#key item.src}<img bind:this={media} class={['ap-viewer-media', easing && 'ap-viewer-media-ease']} src={item.src} alt={item.alt ?? ''} width={item.width} height={item.height} draggable="false"
+			{#key item.src}<img bind:this={media} class={['ap-viewer-media', easing && 'ap-viewer-media-ease']} src={shownSrc} alt={item.alt ?? ''} width={item.width} height={item.height} draggable="false"
 				style:transform={zoomed ? `translate(${zoom.x}px, ${zoom.y}px) scale(${zoom.scale})` : undefined} onload={() => (geometry = undefined)}
 				ontransitionend={() => (easing = false)} />{/key}
 			{#if many}
