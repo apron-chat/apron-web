@@ -96,6 +96,7 @@ Aim for 3–8 entries a week; a week that shipped many features can have more.
 - **Improved:** YouTube previews show the video's thumbnail, so you can see what a link is before opening it. ([#282](https://github.com/apron-chat/apron-web/pull/282))
 - **Fixed:** An emailed sign-in code stopped working if the page reconnected while you checked your email, for example after a phone slept. ([#278](https://github.com/apron-chat/apron-web/pull/278))
 - **Fixed:** Opening a link to another server in a new tab took over the server from the window you were using, which then showed "Apron is open in another window". ([#280](https://github.com/apron-chat/apron-web/pull/280))
+- **Fixed:** In Chrome, going Back or Forward between rooms could put an old unread count back in the tab title, such as "(1) Apron" for a message you had already read. ([#300](https://github.com/apron-chat/apron-web/pull/300))
 
 ## Week of 2026-11-09
 
