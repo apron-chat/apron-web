@@ -42,7 +42,7 @@ export const fileUpload = part((m) => m.prepareUpload);
 export const roomDrag = part((m) => m.dragRooms);
 
 /**
- * The document viewer (an uploaded Markdown file, rendered): seldom opened, so a chunk of its own, fetched when it first
+ * The document viewer (an uploaded Markdown file, rendered, or a plain text file): seldom opened, so a chunk of its own, fetched when it first
  * opens and never in the background. Loaded by the page, not with the layout's overlays: it shares code highlighting
  * and history with the page, which the layout importing it would split out into a startup chunk of their own.
  */

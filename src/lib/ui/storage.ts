@@ -43,6 +43,8 @@ const KEY = {
 	historyRetention: 'apron.historyRetention',
 	/** How large the document viewer draws a page (`DocViewer`'s Smaller and Larger text), on this device. */
 	docZoom: 'apron.docZoom',
+	/** Whether the document viewer wraps a plain text file's long lines (`DocViewer`'s Wrap lines), on this device: `'on'`, else off. */
+	docWrap: 'apron.docWrap',
 	/** Where images and other media load from (`$lib/ui/media-settings`): `{policy, origins, blocked}`. */
 	media: 'apron.media',
 	/** Read Receipts (`ext.settings.read_receipts`) turned off on this device: `'off'`, else absent. */
@@ -129,6 +131,15 @@ export function loadDocZoom(): number | undefined {
 
 export function saveDocZoom(zoom: number): void {
 	write(KEY.docZoom, String(zoom));
+}
+
+/** Whether the document viewer wraps a plain text file's long lines, as last set here; unset, it doesn't. */
+export function loadDocWrap(): boolean {
+	return read(KEY.docWrap) === 'on';
+}
+
+export function saveDocWrap(wrap: boolean): void {
+	write(KEY.docWrap, wrap ? 'on' : 'off');
 }
 
 export function loadServerUrl(): string | undefined {

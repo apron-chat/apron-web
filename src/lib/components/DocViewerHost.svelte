@@ -2,7 +2,7 @@
 	import DocViewer from '$lib/design/components/DocViewer.svelte';
 	import { renderDocument } from '$lib/protocol/markdown';
 	import { directory } from '$lib/ui/directory.svelte';
-	import { loadDocZoom, saveDocZoom } from '$lib/ui/storage';
+	import { loadDocWrap, loadDocZoom, saveDocWrap, saveDocZoom } from '$lib/ui/storage';
 	import { headingFor, readDoc, type DocText } from '$lib/ui/doc-text';
 	import { docViewer, type DocView } from '$lib/ui/doc-viewer.svelte';
 	import { highlightCode } from '$lib/ui/highlight';
@@ -10,10 +10,12 @@
 
 	/**
 	 * The one document viewer, loaded when it first opens (`lazy.ts`) and mounted by the page from then on; a Markdown
-	 * file's card opens it (`docViewer.show`). Each open reads the file anew (`readDoc`) and renders it
-	 * (`renderDocument`): CommonMark, sanitized, its code highlighted, its pictures loading only where the timeline's
-	 * would (`directory.mediaGate`). A link to one of its headings scrolls there. Where the file can't be read, it says
-	 * so and offers Download. Open, it is a history entry of its own (`page.state.doc`), so Back closes it.
+	 * or plain text file's card opens it (`docViewer.show`). Each open reads the file anew (`readDoc`). Markdown it
+	 * renders (`renderDocument`): CommonMark, sanitized, its code highlighted, its pictures loading only where the
+	 * timeline's would (`directory.mediaGate`); a link to one of its headings scrolls there. Plain text it shows as
+	 * written: monospace, its spaces and line breaks kept, a long line on one line, scrolling sideways, unless Wrap
+	 * lines is on (as last set on this device). Where the file can't be read, it says so
+	 * and offers Download. Open, it is a history entry of its own (`page.state.doc`), so Back closes it.
 	 */
 	let view = $derived(docViewer.view);
 	/** What was read, for the open it was read for: another open, even of the same file, reads anew and shows nothing older. */
@@ -34,16 +36,19 @@
 
 	let doc = $derived(read?.view === view ? read?.doc : undefined);
 	let text = $derived(doc && 'text' in doc ? doc.text : undefined);
-	let html = $derived(text?.trim() ? renderDocument(text, directory.mediaGate) : '');
+	let plain = $derived(view?.kind === 'text');
+	let html = $derived(!plain && text?.trim() ? renderDocument(text, directory.mediaGate) : '');
 	let status = $derived(
 		!doc ? 'Loading…'
 		: 'error' in doc ? (doc.error === 'large' ? 'This file is too large to preview.' : 'This file can’t be previewed here.')
-		: !html ? 'This file is empty.'
+		: !text?.trim() ? 'This file is empty.'
 		: undefined
 	);
 
 	/** How large the page is drawn, as last chosen on this device. */
 	let zoom = $state(loadDocZoom());
+	/** Whether a plain text file's long lines wrap, as last chosen on this device: off unless chosen. */
+	let wrapLines = $state(loadDocWrap());
 
 	/** Back closes it; closing it otherwise goes Back off its entry. */
 	const leave = backCloses('doc', () => docViewer.open, () => (docViewer.open = false));
@@ -63,9 +68,13 @@
 </script>
 
 {#if view}
-	<DocViewer bind:open={docViewer.open} title={view.title} detail={view.detail} href={view.url} {status} failed={Boolean(doc && 'error' in doc)} bind:zoom={() => zoom, (value) => { zoom = value; if (value !== undefined) saveDocZoom(value); }} onclose={closed} testid="doc-viewer">
-		<!-- Its links are links, which take Enter themselves. -->
-		<!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
-		<div class="ap-msg-text ap-msg-markdown" data-testid="doc-viewer-text" onclick={follow} use:highlightCode={html}>{@html html}</div>
+	<DocViewer bind:open={docViewer.open} title={view.title} detail={view.detail} href={view.url} {status} failed={Boolean(doc && 'error' in doc)} bind:zoom={() => zoom, (value) => { zoom = value; if (value !== undefined) saveDocZoom(value); }} bind:wrap={() => (plain ? wrapLines : undefined), (value) => { if (value === undefined) return; wrapLines = value; saveDocWrap(value); }} onclose={closed} testid="doc-viewer">
+		{#if plain}
+			<pre class="ap-doc-plain" data-testid="doc-viewer-text">{text}</pre>
+		{:else}
+			<!-- Its links are links, which take Enter themselves. -->
+			<!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
+			<div class="ap-msg-text ap-msg-markdown" data-testid="doc-viewer-text" onclick={follow} use:highlightCode={html}>{@html html}</div>
+		{/if}
 	</DocViewer>
 {/if}

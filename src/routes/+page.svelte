@@ -4119,7 +4119,7 @@
 		<ProfileCard {client} {session} room={paneRoom} canChange={canAddMembers} canMention={Boolean(composer) && canCompose && !selection.active} canMessage={canStartPrivate} onmention={(userId) => composer?.mention(userId)} onnamed={(roomId) => arrivals.mine(roomId)} onopenroom={openPrivateRoom} />
 	{/if}
 	{#if reactorsPopover.once(Boolean(reactorsList.current), () => reactorsList.close(), reactorsList.current?.anchor)}{@const ReactorsPopover = reactorsPopover.component!}<ReactorsPopover />{/if}
-	<!-- An uploaded Markdown file, rendered full screen: opened from its card in the timeline. -->
+	<!-- An uploaded Markdown file, rendered full screen, or a plain text file as written: opened from its card in the timeline. -->
 	{#if docViewerHost.once(docViewer.open, () => docViewer.closed())}{@const DocViewerHost = docViewerHost.component!}<DocViewerHost />{/if}
 	<!-- While reconnecting, the banner at the top already says what went wrong (statusLabel). -->
 	<Toasts {feedback} error={session.error && session.error !== dismissedError && session.connection !== 'reconnecting' ? session.error : undefined} ondismisserror={() => (dismissedError = session.error)} />

@@ -1658,11 +1658,20 @@ dialog:modal { overscroll-behavior: contain; }
 .ap-viewer-detail { margin: 0; font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--viewer-ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ap-viewer-count { flex: none; padding: 0 var(--space-2); font-size: var(--text-ui); color: var(--viewer-ink-muted); font-variant-numeric: tabular-nums; }
 .ap-viewer-btn { flex: none; display: inline-grid; place-items: center; width: var(--control-xl); height: var(--control-xl); padding: 0; border: 0; border-radius: var(--radius-full); background: var(--viewer-control); color: var(--viewer-ink); cursor: pointer; text-decoration: none; transition: background-color var(--duration-fast) ease, opacity var(--duration-fast) ease; }
-.ap-viewer-btn:hover:not(:disabled) { background: var(--viewer-control-hover); }
+.ap-viewer-btn:hover:not(:disabled, [aria-pressed='true']) { background: var(--viewer-control-hover); }
+/* A toggle that is on (Wrap lines): the ink's own colour, the ground's on it. */
+.ap-viewer-btn[aria-pressed='true'] { background: var(--viewer-ink); color: var(--viewer-ground); }
 /* On the viewer's dark ground, whatever the theme, the ring is in its ink. */
 .ap-viewer-btn:focus-visible { outline-color: var(--viewer-ink); }
-.ap-viewer-stage { position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 calc(var(--space-4) + var(--touch-target) + var(--space-3)) calc(var(--space-6) + env(safe-area-inset-bottom, 0px)); }
-.ap-viewer-media { display: block; max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; border-radius: var(--radius-sm); }
+.ap-viewer-stage { position: relative; flex: 1; touch-action: none; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 calc(var(--space-4) + var(--touch-target) + var(--space-3)) calc(var(--space-6) + env(safe-area-inset-bottom, 0px)); }
+.ap-viewer-media { display: block; max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; border-radius: var(--radius-sm); -webkit-user-select: none; user-select: none; }
+/* The stage takes every touch on it (`touch-action`: MediaViewer pinches and drags the image itself, rather than the
+   browser the page). Zoomed, the image is clipped to it, the mouse grabs it, and a long press drags it rather than
+   offering to save it (as it does unzoomed); a double tap's or a key's zoom eases. */
+.ap-viewer-zoomed { overflow: hidden; }
+.ap-viewer-zoomed .ap-viewer-media { cursor: grab; border-radius: 0; -webkit-touch-callout: none; }
+.ap-viewer-zoomed .ap-viewer-media:active { cursor: grabbing; }
+.ap-viewer-media-ease { transition: transform var(--duration-medium) ease; }
 .ap-viewer-nav { position: absolute; top: 50%; width: var(--touch-target); height: var(--touch-target); transform: translateY(-50%); }
 .ap-viewer-prev { left: var(--space-4); }
 .ap-viewer-next { right: var(--space-4); }
@@ -1724,6 +1733,12 @@ pre.ap-termviewer-text { width: 80ch; font-family: var(--font-mono); font-size: 
 .ap-doc .ap-msg-text p + p { margin-top: var(--space-3); }
 .ap-doc .ap-msg-text :is(ul, ol, pre, blockquote, .ap-table) { margin-block: var(--space-3); }
 .ap-doc .ap-msg-text hr { margin: var(--space-6) 0; border: 0; border-top: 1px solid var(--line); }
+/* A plain text file's page: as written, in monospace (a text file's columns and drawings line up), its spaces and line
+   breaks kept. A line longer than the page wraps to it with Wrap lines on; off (`.ap-docviewer-page-wide`), each line
+   keeps to one, and the page widens to the longest (never narrower than it would be), so the viewer scrolls sideways. */
+.ap-doc-plain { margin: 0; font-family: var(--font-mono); font-size: var(--text-ui); line-height: var(--leading-body); white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 4; }
+.ap-docviewer-page-wide { width: max-content; min-width: min(100%, 52rem); max-width: none; }
+.ap-docviewer-page-wide .ap-doc-plain { white-space: pre; overflow-wrap: normal; }
 /* An image in a message's Markdown (§5.5) fits its column, in the timeline as in the document viewer; a custom emoji keeps its line's height. */
 .ap-msg-text img:not(.ap-cemoji) { max-width: 100%; height: auto; }
 .ap-docviewer-status { display: flex; flex-direction: column; align-items: center; gap: var(--space-3); padding: var(--space-8) var(--space-4); text-align: center; text-wrap: balance; color: var(--ap-tone, var(--viewer-ink-muted)); }

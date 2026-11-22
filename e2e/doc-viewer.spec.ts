@@ -32,10 +32,10 @@ const README = [
 ].join('\n');
 
 /** Serves `name` from the preview's file host, with CORS, as a server that lets web clients read its files does. */
-async function serve(page: Page, name: string, body: string): Promise<void> {
+async function serve(page: Page, name: string, body: string, contentType = 'text/markdown; charset=utf-8'): Promise<void> {
 	await page.route(`${FILES}/${name}`, (route: Route) => route.fulfill({
 		status: 200,
-		contentType: 'text/markdown; charset=utf-8',
+		contentType,
 		headers: { 'access-control-allow-origin': '*' },
 		body
 	}));
@@ -74,6 +74,8 @@ test.describe('an uploaded Markdown file', () => {
 		// A file isn't a message: names and rooms in it stay text.
 		await expect(text).toContainText('Ask @grace or see #general.');
 		await expect(text.locator('.ap-mention, .ap-linkchip, [data-room-id]')).toHaveCount(0);
+		// Markdown wraps as a page does: no Wrap lines.
+		await expect(viewer.getByRole('button', { name: 'Wrap lines' })).toHaveCount(0);
 
 		await test.step('the keys that scroll a page scroll the document, Space included, and only it; Tab reaches the bar', async () => {
 			const stage = viewer.locator('.ap-docviewer-stage');
@@ -185,6 +187,63 @@ test.describe('an uploaded Markdown file', () => {
 		await expect(viewer.getByRole('status')).toHaveText('This file can’t be previewed here.');
 		await expect(viewer.locator('.ap-docviewer-status').getByRole('link', { name: 'Download' })).toHaveAttribute('href', `${FILES}/private.md`);
 		await expect(viewer.getByTestId('doc-viewer-text')).toHaveCount(0);
+	});
+});
+
+test.describe('an uploaded plain text file', () => {
+	test.use({ ...DEVICES.desktop, knobs: { capabilities: ['embed:upload'] } });
+
+	test('opens as written on a plain click: no Markdown, its spacing kept, a long line on one line until Wrap lines, as last chosen', async ({ preview, page }) => {
+		const notes = ['# Not a heading', '', 'name    role', 'ada     api', '', `${'word '.repeat(60)}end`, '**not bold**'].join('\n');
+		await preview.open();
+		await serve(page, 'notes.txt', notes, 'text/plain; charset=utf-8');
+		await preview.post('general', 'grace', { text: 'Notes', embeds: [{ kind: 'upload', embed_id: 'txt', url: `${FILES}/notes.txt`, title: 'notes.txt' }] });
+
+		const card = page.locator('a.ap-embed-file', { hasText: 'notes.txt' });
+		await expect(card).toHaveAttribute('aria-haspopup', 'dialog');
+		await card.click();
+		const viewer = page.getByRole('dialog', { name: 'notes.txt' });
+		await expect(viewer.getByRole('region', { name: 'Document' })).toBeFocused();
+		const text = viewer.getByTestId('doc-viewer-text');
+		expect(await text.textContent()).toBe(notes);
+		await expect(text.locator('h1, strong')).toHaveCount(0);
+		await expect(viewer.getByRole('button', { name: 'Larger text' })).toBeVisible();
+
+		const stage = viewer.locator('.ap-docviewer-stage');
+		const wrap = viewer.getByRole('button', { name: 'Wrap lines' });
+		const article = viewer.locator('article.ap-docviewer-page');
+		const sideways = () => stage.evaluate((node) => node.scrollWidth > node.clientWidth);
+		// Unwrapped at first: the long line keeps to one line, the page as wide as it, and the viewer scrolls sideways
+		// (the arrow keys too, as it has focus) to its end, still on the page with room after it.
+		await expect(wrap).toHaveAttribute('aria-pressed', 'false');
+		expect(await sideways()).toBe(true);
+		const unwrapped = (await text.boundingBox())!.height;
+		await page.keyboard.press('ArrowRight');
+		await expect.poll(() => stage.evaluate((node) => node.scrollLeft)).toBeGreaterThan(0);
+		await stage.evaluate((node) => node.scrollTo({ left: node.scrollWidth }));
+		const [textBox, pageBox, stageBox] = [(await text.boundingBox())!, (await article.boundingBox())!, (await stage.boundingBox())!];
+		expect(textBox.x + textBox.width).toBeLessThan(pageBox.x + pageBox.width);
+		expect(pageBox.x + pageBox.width).toBeLessThanOrEqual(stageBox.x + stageBox.width);
+
+		// Wrap lines (or W): the line wraps to the page, and nothing is wider than the viewer.
+		await wrap.click();
+		await expect(wrap).toHaveAttribute('aria-pressed', 'true');
+		expect(await sideways()).toBe(false);
+		// The long line now takes several: the text is taller by more than one line of its seven.
+		expect((await text.boundingBox())!.height).toBeGreaterThan(unwrapped * (9 / 7));
+		await stage.focus();
+		await page.keyboard.press('w');
+		await expect(wrap).toHaveAttribute('aria-pressed', 'false');
+		await wrap.click();
+
+		await page.keyboard.press('Escape');
+		await expect(viewer).toBeHidden();
+		await expect(card).toBeFocused();
+
+		// Chosen once, kept: open again, it wraps.
+		await card.click();
+		await expect(viewer.getByRole('button', { name: 'Wrap lines' })).toHaveAttribute('aria-pressed', 'true');
+		expect(await sideways()).toBe(false);
 	});
 });
 

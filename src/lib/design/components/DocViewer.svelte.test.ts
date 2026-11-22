@@ -80,6 +80,35 @@ describe('DocViewer', () => {
 		expect([props.zoom, document.querySelector('button[aria-label="Smaller text"]')]).toEqual([1.75, null]);
 	});
 
+	it('offers Wrap lines only given `wrap`: off, the page as wide as its longest line; W toggles it, not with Ctrl, nor while it says why', async () => {
+		const props = $state<{ open: boolean; title: string; children: typeof page; wrap?: boolean; status?: string }>({ open: true, title: 'notes.txt', children: page, wrap: undefined, status: undefined });
+		render(DocViewer, props);
+		const wrap = () => document.querySelector<HTMLButtonElement>('button[aria-label="Wrap lines"]');
+		const wide = () => document.querySelector('article.ap-docviewer-page')!.classList.contains('ap-docviewer-page-wide');
+		expect([wrap(), wide()]).toEqual([null, false]);
+		const stage = document.querySelector('.ap-docviewer-stage')!;
+		const key = (key: string, init: KeyboardEventInit = {}) => {
+			stage.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init }));
+			flushSync();
+		};
+		key('w');
+		expect(props.wrap).toBeUndefined();
+
+		props.wrap = false;
+		flushSync();
+		expect([wrap()?.getAttribute('aria-pressed'), wrap()?.title, wide()]).toEqual(['false', 'Wrap lines: off (W)', true]);
+		wrap()!.click();
+		await tick();
+		expect([props.wrap, wrap()?.getAttribute('aria-pressed'), wide()]).toEqual([true, 'true', false]);
+		key('W');
+		key('w', { ctrlKey: true });
+		expect(props.wrap).toBe(false);
+		props.status = 'Loading…';
+		flushSync();
+		key('w');
+		expect([props.wrap, wrap()]).toEqual([false, null]);
+	});
+
 	it('draws nothing while closed, and closes on Escape or Close, saying so', async () => {
 		const onclose = vi.fn();
 		const props = $state({ open: false, title: 'plan.md', children: page, onclose });
