@@ -35,9 +35,17 @@ const OUT_OF_REACH: Record<string, string> = {
  * Entries the interop suite uses that this app no longer renders: real breaks, reported to fix on one side
  * or the other, and tested (as fixme) below rather than failing every run.
  */
-const KNOWN_BREAKS: Record<string, string> = {
-	'button "Connect"': 'The connect screen reads a server’s greeting before it offers a way in: fill server-url-input, press Continue, then the guest’s button, now Join. webauthn.spec.ts:176–177 fills the field and presses Connect in one step: it needs Continue, then Join.',
-	'dialog "Edit thread"': 'A room or thread is edited where its description reads (DescriptionSheet), not in a dialog: ⋯ → Edit thread (edit-room) makes the header’s title a field, textbox "Thread title", with Cancel and Save, button "Save", beside it. chat.spec.ts:81–89 and :113–115, and responsive.spec.ts:34, look for both inside the dialog: they need the page’s instead.'
+const KNOWN_BREAKS: Record<string, string> = {};
+
+/**
+ * Names the interop suite uses on a page the server serves itself, not on this app's: the passkey page (apron-server-go's
+ * SERVER.md, "The passkey page"), which it opens in a popup or a tab of its own. No scene here can show them, and the
+ * app doesn't render them: they are checked only to be still in use.
+ */
+const SERVER_PAGES: Record<string, string> = {
+	'heading "Add a passkey" (substring)': 'The passkey page adding a passkey (passkey-page.spec.ts), in the popup the app opens.',
+	'button "Create passkey" (substring)': 'The passkey page adding a passkey (passkey-page.spec.ts).',
+	'button "Continue with passkey" (substring)': 'The passkey page signing in (passkey-page.spec.ts), in a tab of its own where popups are blocked.'
 };
 
 const seen: Seen[] = existsSync(SEEN_DIR) ? readdirSync(SEEN_DIR).map((f) => JSON.parse(readFileSync(join(SEEN_DIR, f), 'utf8'))) : [];
@@ -53,7 +61,7 @@ test.beforeEach(() => {
 function missing(kind: 'testIds' | 'names' | 'selectors', entries: Record<string, string[]>): string[] {
 	const found = shown(kind);
 	return Object.entries(entries)
-		.filter(([key]) => !found.has(key) && !(key in OUT_OF_REACH) && !(key in KNOWN_BREAKS))
+		.filter(([key]) => !found.has(key) && !(key in OUT_OF_REACH) && !(key in KNOWN_BREAKS) && !(key in SERVER_PAGES))
 		.map(([key, at]) => `${key}  (used at ${at.join(', ')})`);
 }
 
@@ -78,7 +86,8 @@ test('the README’s UI contract holds', () => {
 
 test('what no scene reaches is still in the bundle, and is still out of reach', () => {
 	const all = new Set([...Object.keys(contract.testIds), ...Object.keys(contract.names), ...Object.keys(contract.selectors)]);
-	expect(Object.keys(OUT_OF_REACH).filter((key) => !all.has(key)), 'OUT_OF_REACH or KNOWN_BREAKS lists entries the interop suite no longer uses').toEqual([]);
+	const listed = [...Object.keys(OUT_OF_REACH), ...Object.keys(KNOWN_BREAKS), ...Object.keys(SERVER_PAGES)];
+	expect(listed.filter((key) => !all.has(key)), 'OUT_OF_REACH, KNOWN_BREAKS or SERVER_PAGES lists entries the interop suite no longer uses').toEqual([]);
 	const reached = new Set([...shown('testIds'), ...shown('names'), ...shown('selectors')]);
 	expect(Object.keys(OUT_OF_REACH).filter((key) => reached.has(key)), 'a scene shows these now: take them off OUT_OF_REACH').toEqual([]);
 	const dir = process.env.E2E_BUILD_DIR;

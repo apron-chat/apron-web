@@ -76,9 +76,9 @@
 			"calls": 4664
 		},
 		"scroll-timeline": {
-			"layouts": 9,
-			"styleRecalcs": 11,
-			"calls": 5923
+			"layouts": 6,
+			"styleRecalcs": 6,
+			"calls": 5900
 		},
 		"type-composer-role": {
 			"layouts": 46,
@@ -91,9 +91,9 @@
 			"calls": 30270
 		},
 		"hover-messages": {
-			"layouts": 7,
-			"styleRecalcs": 13,
-			"calls": 6714
+			"layouts": 6,
+			"styleRecalcs": 10,
+			"calls": 6479
 		},
 		"hover-toolbar": {
 			"layouts": 0,
