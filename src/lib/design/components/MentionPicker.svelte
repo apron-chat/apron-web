@@ -161,7 +161,7 @@
 							{#if item.forms?.length}<span class="ap-mpick-id">{item.forms.join(' · ')}</span>{/if}
 						</span>
 						{#if item.description}<span class="ap-mpick-id">{item.description}</span>{/if}
-						{#if item.required?.length}<span class="ap-cmdref-required">Required: {item.required.join(', ')}</span>{/if}
+						{#if item.required?.length || item.inRoom}<span class="ap-cmdref-tags">{#if item.required?.length}<span class="ap-cmdref-required">Required: {item.required.join(', ')}</span>{/if}{#if item.inRoom}{' '}<span class="ap-cmdref-required ap-cmdref-room">In this room</span>{/if}</span>{/if}
 					</span>
 				{/if}
 				{#if i === active}<kbd class="ap-mpick-kbd">Tab</kbd>{/if}

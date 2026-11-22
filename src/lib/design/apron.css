@@ -1881,7 +1881,7 @@ button.ap-mention, a.ap-linkchip { max-width: 100%; white-space: normal; overflo
    description: each takes its own direction. */
 .ap-mpick-cmd { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; }
 .ap-mpick-cmd-line { display: flex; align-items: baseline; gap: var(--space-2); min-width: 0; }
-.ap-mpick-cmd-name { flex: none; }
+.ap-mpick-cmd-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The last row of a command's suggestions, which opens every command: in the accent, as a link. */
 .ap-mpick-browse { display: flex; flex-direction: column; color: var(--accent); font-weight: 600; }
 .ap-mpick-browse-none { color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 400; }
@@ -2224,6 +2224,7 @@ a.ap-linkchip-elsewhere:hover { background: var(--hover); }
 .ap-cmdref-code, .ap-mpick-cmd-name, .ap-mpick-cmd-args { font-family: var(--font-mono); }
 .ap-cmdref-code { font-size: var(--text-ui); line-height: var(--leading-ui); color: var(--ink-muted); overflow-wrap: anywhere; }
 .ap-cmdref-name { color: var(--ink); font-weight: 600; }
+.ap-cmdcard { padding: var(--space-2) var(--space-3); }
 .ap-cmdref-desc { margin: 0; color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); unicode-bidi: plaintext; }
 /* Its body shows its scrollbar while it scrolls, so it's plain there's more below: a styled WebKit scrollbar stays shown
    where an overlay one hides (Chrome and Safari, phones too); Firefox takes the standard properties. Only the body
@@ -2237,7 +2238,9 @@ a.ap-linkchip-elsewhere:hover { background: var(--hover); }
 .ap-cmdref-use { padding: 0; border: 0; border-radius: var(--radius-sm); background: none; color: inherit; font: inherit; text-align: start; cursor: pointer; }
 .ap-cmdref-use:hover .ap-cmdref-name { text-decoration: underline; }
 /* What a command fails without, as a small label under its description, in words (not by color alone). */
-.ap-cmdref-required { width: fit-content; margin: var(--space-1) 0 0; padding: 0 var(--space-1_5); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); color: var(--ink-muted); font-size: var(--text-xs); line-height: var(--leading-sm); font-weight: 600; }
+.ap-cmdref-tags { display: flex; flex-wrap: wrap; gap: var(--space-1); margin: var(--space-1) 0 0; }
+.ap-cmdref-required { padding: 0 var(--space-1_5); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); color: var(--ink-muted); font-size: var(--text-xs); line-height: var(--leading-sm); font-weight: 600; }
+.ap-cmdref-room { border-style: dashed; }
 /* KeyboardShortcuts: titled groups in as many columns as fit, each row what a shortcut does and, at its end, its keys. */
 .ap-keys { --dialog-w: 760px; }
 /* Columns, not a grid: each group sits under the one before it in its column, so a tall group leaves no gap beside it. */

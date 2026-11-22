@@ -31,10 +31,14 @@ export type CommandSuggestion = PickerCommand;
 /** The row at the end of the suggestions that opens the command reference (`CommandOffer.browse`). */
 export const BROWSE_COMMANDS: CommandSuggestion = { name: '', browse: true };
 
-/** What the composer is doing besides the text, which a command's `uses` and `requires` can fit: replying, or with files attached. */
+/**
+ * What the composer is doing besides the text, which a command's `uses` and `requires` can fit: replying, with files
+ * attached, and in a room it names (`room`: false where there is none to name, a server without rooms).
+ */
 export interface CommandContext {
 	replying?: boolean;
 	attaching?: boolean;
+	room?: boolean;
 }
 
 /** What `commandCompletion` gives: the suggestions, and whether Enter takes one (Tab always does). */

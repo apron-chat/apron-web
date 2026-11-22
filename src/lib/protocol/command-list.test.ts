@@ -24,6 +24,7 @@ describe('parseCommandList', () => {
 				{ description: 'no name' },
 				{ name: '   ', description: 'blank' },
 				{ name: '/slash', description: 'would be typed //' },
+				{ name: 'c', requires: ['room_id'] },
 				{ name: 'b', description: 'listed before' },
 				{ name: 'A', description: 'another name: names are case-sensitive' },
 				'help',
@@ -33,6 +34,8 @@ describe('parseCommandList', () => {
 			{ name: 'a' },
 			// What `requires` names, `uses` names too.
 			{ name: 'b', description: 'B', uses: ['reply_to', 'body.mentions'], requires: ['body.mentions'] },
+			// A command that acts only on a room the client names.
+			{ name: 'c', uses: ['room_id'], requires: ['room_id'] },
 			{ name: 'A', description: 'another name: names are case-sensitive' }
 		]);
 		expect(parseCommandList({})).toEqual([]);
@@ -44,4 +47,12 @@ describe('parseCommandList', () => {
 		expect(parseCommandList({ commands: groups.map((group, index) => ({ name: `c${index}`, description: 'd', group })) }).map((command) => command.group))
 			.toEqual(['all', 'guest', 'member', 'room', 'role', 'admin', undefined, undefined, undefined]);
 	});
+
+	it('shows server text as plain text: without bidi controls, control characters as spaces, cut without splitting a character', () => {
+		const [command] = parseCommandList({ commands: [{ name: '\u202ekick\u202c', description: 'Remove\nsomeone\u2067!\u2069', hint: `${'x'.repeat(499)}😀` }] });
+		expect(command.name).toBe('kick');
+		expect(command.description).toBe('Remove someone!');
+		expect(command.hint).toBe('x'.repeat(499));
+	});
 });
+

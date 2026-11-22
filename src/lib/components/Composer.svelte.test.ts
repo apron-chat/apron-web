@@ -237,7 +237,7 @@ describe('Composer', () => {
 		typeAtEnd(field, '/');
 		expect(started).toHaveBeenCalledOnce();
 		const listbox = dom.byRole('listbox', 'Command suggestions');
-		expect([...listbox.querySelectorAll('[role="option"]')].map((row) => row.textContent?.replace(/\s+/g, ' ').trim())).toEqual(['/approve Approve the request that you reply to Required: reply Tab', '/help List the commands that you can use', 'Browse all commands']);
+		expect([...listbox.querySelectorAll('[role="option"]')].map((row) => row.textContent?.replace(/\s+/g, ' ').trim())).toEqual(['/approve Approve the request that you reply to Required: reply In this room Tab', '/help List the commands that you can use', 'Browse all commands']);
 		dom.press(field, 'Tab');
 		flushSync();
 		expect(field.textContent).toBe('/approve ');

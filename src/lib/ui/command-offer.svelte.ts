@@ -1,19 +1,18 @@
 /**
- * The server's commands (`ext:command_list`, which comes with `command`) as the page offers them: the composer's
- * `CommandOffer`, the command reference's open state and sections, and which of apron-web's own commands the server
- * takes over (`serves`). It loads with the app, and is plain code the page calls, not effects: nothing of it runs as
- * the session changes, only as whose list it follows does (`follow`) and as commands are typed. What offers them
- * (`command-tools.ts`: the list and the autocomplete) loads on demand, the first time a server advertises the
- * extension.
+ * The server's commands (`ext:command_list`, which comes with `command`) as the page offers them: what of it loads with
+ * the app. It follows whose list it is (`follow`, as the page finds it changed on a snapshot), and loads the rest
+ * (`LoadedCommands`, in `command-tools.ts`) the first time a server advertises the extension: the list, the composer's
+ * `CommandOffer`, which names the server takes over (`serves`), and what the command reference shows. Plain code the
+ * page calls, not effects: nothing of it runs as the session changes.
  */
 import type { ChatClient, ClientSnapshot } from '$lib/protocol/client';
 import type { ReferenceSection } from '$lib/design/components/types';
-import type { CommandContext, CommandOffer, OfferedCommand } from './command-query';
+import type { CommandContext, CommandOffer } from './command-query';
 import { notifyAccount } from './notify-scopes';
 import { loadCommandLists, saveCommandLists } from './storage';
 
 type Tools = typeof import('./command-tools');
-type Loaded = { tools: Tools; list: InstanceType<Tools['CommandList']> };
+type Loaded = InstanceType<Tools['LoadedCommands']>;
 
 /** What the page gives: what the composer is doing and can do, and its own parts the commands act on. */
 export interface CommandsHost {
@@ -35,71 +34,63 @@ export class Commands {
 	 * snapshot and compares it, a string (`follow` as it changes). Empty without the extension.
 	 */
 	following = '';
-	/** The composer's commands: set on a server that lists them, else none (the composer offers no commands then). */
+	/** The composer's commands: set on a server that lists them, once their code has loaded; else none. */
 	offer = $state.raw<CommandOffer | undefined>();
 	/** The command reference is open. */
 	shown = $state(false);
 	private loaded = $state.raw<Loaded | undefined>();
-	/** The tools couldn't be loaded: the reference says so, rather than wait. */
+	/** The code couldn't be loaded: the reference says so, rather than wait. */
 	private failed = $state(false);
 	private loading: Promise<Loaded> | undefined;
 	/** The command used from the reference, put in the composer once it has closed (it keeps the focus till then). */
 	private used: string | undefined;
-	/** The commands offered: the server's with apron-web's own (`mergeCommands`); undefined while on their way. */
-	private readonly merged: OfferedCommand[] | undefined;
-	private readonly own: OfferedCommand[] | undefined;
-	private readonly offering: CommandOffer;
 
-	constructor(private readonly host: CommandsHost) {
-		this.own = $derived(this.loaded?.tools.ownCommands({ command: true, ...host.caps() }));
-		this.merged = $derived(this.loaded && this.own ? this.loaded.tools.mergeCommands(this.loaded.list.commands, this.own, this.loaded.list.failed) : undefined);
-		const commands = this;
-		this.offering = {
-			get ready() {
-				return commands.merged !== undefined;
-			},
-			complete: (found) => (this.loaded && this.merged ? this.loaded.tools.commandCompletion(this.merged, found, host.context()) : undefined),
-			describe: (text) => (this.loaded && this.merged ? this.loaded.tools.commandInfo(this.merged, text) : undefined),
-			started: () => this.need(),
-			browse: () => this.show()
-		};
-	}
+	constructor(
+		private readonly host: CommandsHost,
+		private readonly load: () => Promise<Tools> = () => import('./command-tools')
+	) {}
 
 	/**
 	 * Follows the list of the server and `user_id` a signed-in snapshot is for (one `user_id` only, as the extension
-	 * says), kept on this device for an account, and asks for it on connecting only for an account with none kept and
-	 * none asked for in a day (`CommandList.connected`). `key` empty: no extension, no commands.
+	 * says), kept on this device for an account (`directory.account`'s rule). `key` empty: no extension, no commands.
 	 */
 	follow(chat: ChatClient, next: ClientSnapshot, key: string): void {
 		this.following = key;
 		const userId = next.you?.user_id;
 		if (!key || userId === undefined) {
 			this.offer = undefined;
-			this.loaded?.list.apply(undefined);
+			this.loaded?.follow(undefined);
 			return;
 		}
-		this.offer = this.offering;
 		const source = { key: notifyAccount(chat.url, userId), keep: Boolean(next.passkeySession || next.keptSession), list: () => chat.listCommands() };
-		this.withTools(({ list }) => {
+		this.withLoaded((loaded) => {
 			// A later snapshot may have followed another list meanwhile.
 			if (this.following !== key) return;
-			list.apply(source);
-			list.connected();
+			loaded.follow(source);
+			this.offer = loaded.offer;
 		});
 	}
 
 	/** A command was started: a moment to ask for the list (`CommandList.need`). */
 	need(): void {
-		if (this.following) this.withTools(({ list }) => list.need());
+		if (this.following) this.withLoaded((loaded) => loaded.list.need());
 	}
 
 	/** `/help` was sent: what it lists may have changed, so the list is asked for anew (`CommandList.refresh`). */
 	refresh(): void {
-		if (this.following) this.withTools(({ list }) => list.refresh());
+		if (this.following) this.withLoaded((loaded) => loaded.list.refresh());
 	}
 
-	/** Whether the server lists a command by this name, exactly: one of apron-web's own by it then goes to the server. */
-	readonly serves = (name: string): boolean => this.loaded?.list.commands?.some((command) => command.name === name) ?? false;
+	/**
+	 * Whether a draft's command (`text`, after the `/`) is the server's: a name it lists all of whose words lead it
+	 * (`LoadedCommands.serves`). apron-web's own by that name then goes to the server.
+	 */
+	readonly serves = (text: string): boolean => this.loaded?.serves(text) ?? false;
+
+	/** Whether the server's list is known, kept or listed: `/help` opens the reference only then, else goes to the server. */
+	get known(): boolean {
+		return this.loaded?.known ?? false;
+	}
 
 	/** Opens the command reference: `/help`, or the composer's Browse all commands. */
 	show(): void {
@@ -124,19 +115,23 @@ export class Commands {
 		else this.host.focus();
 	}
 
-	/** What the reference shows: its sections, or that they're on their way, or why they won't come. */
-	get reference(): { sections: ReferenceSection[]; loading: boolean; error?: string } {
+	/** What the reference shows: its sections, or that they're on their way, or why they won't come, or may be out of date. */
+	get reference(): { sections: ReferenceSection[]; loading: boolean; error?: string; stale?: boolean } {
 		if (this.failed) return { sections: [], loading: false, error: 'The commands couldn’t be loaded: check your connection and try again.' };
-		const loaded = this.loaded;
-		if (!loaded || !this.own || (!loaded.list.commands && !loaded.list.failed)) return { sections: [], loading: true };
-		return { sections: loaded.tools.referenceSections(loaded.list.commands ?? [], this.own), loading: false };
+		return this.loaded?.reference ?? { sections: [], loading: true };
 	}
 
-	/** Runs `then` with the tools, once they have loaded: in order, as asked. Their list is kept where `storage.ts` keeps it. */
-	private withTools(then: (loaded: Loaded) => void): void {
-		this.loading ??= import('./command-tools').then((tools) => {
+	/** Runs `then` with the commands' code, once it has loaded: in order, as asked. */
+	private withLoaded(then: (loaded: Loaded) => void): void {
+		this.loading ??= this.load().then(({ LoadedCommands }) => {
 			this.failed = false;
-			return (this.loaded = { tools, list: new tools.CommandList({ read: loadCommandLists, write: saveCommandLists }) });
+			return (this.loaded = new LoadedCommands({
+				context: () => this.host.context(),
+				caps: () => this.host.caps(),
+				stored: { read: loadCommandLists, write: saveCommandLists },
+				started: () => this.need(),
+				browse: () => this.show()
+			}));
 		});
 		this.loading.then(then, () => {
 			this.loading = undefined;

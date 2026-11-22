@@ -48,7 +48,8 @@ describe('commandCompletion', () => {
 	it('offers the first word of each command once, in the server’s order, and the forms after it once it is typed', () => {
 		expect(names('/')).toEqual(['avatar', 'embed-terminal', 'emoji', 'help', 'kick', 'server']);
 		expect(complete('/em')?.suggestions).toEqual([
-			{ name: 'embed-terminal', hint: '[<title>]', description: 'Get a link to stream a terminal into this room', forms: [] },
+			// It uses `room_id`: it acts on the room it's sent in, which apron-web names, so in no Required label.
+			{ name: 'embed-terminal', hint: '[<title>]', description: 'Get a link to stream a terminal into this room', forms: [], inRoom: true },
 			{ name: 'emoji', forms: ['add', 'remove'] }
 		]);
 		// A name that is the start of another is a command of its own, shown with its forms.
@@ -130,6 +131,21 @@ describe('the commands offered', () => {
 	});
 });
 
+describe('a command that requires a room', () => {
+	const ROOMED: ServerCommand[] = [
+		{ name: 'embed-terminal', description: 'Stream a terminal', uses: ['room_id'], requires: ['room_id'] },
+		{ name: 'help', description: 'Help' }
+	];
+
+	it('is offered only where the composer names a room, and says it acts on it, outside the Required label', () => {
+		const offered = (context = {}) => commandCompletion(ROOMED, commandQuery('/', 1)!, context)?.suggestions.map((suggestion) => suggestion.name);
+		expect(offered()).toEqual(['embed-terminal', 'help']);
+		expect(offered({ room: true })).toEqual(['embed-terminal', 'help']);
+		expect(offered({ room: false })).toEqual(['help']);
+		expect(commandInfo(ROOMED, '/embed-terminal build')).toEqual({ name: 'embed-terminal', description: 'Stream a terminal', inRoom: true });
+	});
+});
+
 describe('commandInfo', () => {
 	const info = (text: string) => commandInfo(LISTED, text)?.name;
 
@@ -138,7 +154,7 @@ describe('commandInfo', () => {
 		expect(info('/server title My server')).toBe('server title');
 		expect(info('/server')).toBe('server');
 		expect(info('/kick @bob being rude\nand more')).toBe('kick');
-		expect(commandInfo(LISTED, '/kick @bob')).toEqual({ name: 'kick', hint: '@user [<reason>]', description: 'Remove a user from this room', required: ['mention'] });
+		expect(commandInfo(LISTED, '/kick @bob')).toEqual({ name: 'kick', hint: '@user [<reason>]', description: 'Remove a user from this room', required: ['mention'], inRoom: true });
 	});
 
 	it('names none for a draft that names no command, or is no command', () => {

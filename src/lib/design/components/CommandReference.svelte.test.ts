@@ -28,6 +28,16 @@ describe('CommandReference', () => {
 		expect(dialog.querySelectorAll('dl > div')[2].querySelectorAll('dd')).toHaveLength(1);
 	});
 
+	it('says where a command acts on the room it’s sent in, and, with no room open, that one requiring it can’t be used yet', () => {
+		dom.render(CommandReference, { open: true, onuse: vi.fn(), sections: [{ title: 'Everyone', commands: [{ name: 'pin', inRoom: true }, { name: 'embed-terminal', inRoom: true, noRoom: true }] }] });
+		flushSync();
+		const [pin, terminal] = document.querySelectorAll('dialog dl > div');
+		expect(text(pin.querySelector('dd'))).toBe('In this room');
+		expect(pin.querySelector('button')).not.toBeNull();
+		expect(text(terminal.querySelector('dd'))).toBe('In this room Open a room to use it');
+		expect(terminal.querySelector('button')).toBeNull();
+	});
+
 	it('crosses out one of apron-web’s own that the server’s command of the same name replaces, says so, and offers no use of it', () => {
 		dom.render(CommandReference, { open: true, onuse: vi.fn(), sections: [{ title: 'Built into the client', commands: [{ name: 'kick', hint: '@user', description: 'Remove a user from this room', replaced: true }] }] });
 		flushSync();

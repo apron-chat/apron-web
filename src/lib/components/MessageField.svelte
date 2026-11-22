@@ -124,7 +124,7 @@
 </script>
 
 <!-- Loaded on demand: the first picker opened before the on-demand chunk's prefetch waits on its request. -->
-{#if (draft.pickerOpen || draft.roomPickerOpen || draft.emojiPickerOpen || draft.commandPickerOpen || draft.commandInfo) && autocompletePicker.component}
+{#if (draft.pickerOpen || draft.roomPickerOpen || draft.emojiPickerOpen || draft.commandPickerOpen || draft.infoOpen) && autocompletePicker.component}
 {@const AutocompletePicker = autocompletePicker.component}
 {#if draft.pickerOpen}
 	<AutocompletePicker id={draft.pickerId} query={draft.query ?? ''} people={draft.matches} active={draft.activeIndex} testid={pickerTestid} outside={outsideLabel} onpick={(index) => draft.pick(draft.matches[index])} onhover={(index) => draft.hover(index)} />
@@ -137,7 +137,7 @@
 {:else if draft.commandInfo && !disabled && commandCard.component}
 	<!-- A command's arguments typed: its entry alone, to inform; the field keeps its keys. -->
 	{@const CommandCard = commandCard.component}
-	<CommandCard command={draft.commandInfo} testid="command-card" />
+	<CommandCard command={draft.commandInfo} id="{draft.pickerId}-card" testid="command-card" />
 {/if}
 {/if}
 <!-- spread: the field's own attributes (an `id`, a `data-testid`, its label and class, `onpaste`), which the caller decides -->

@@ -1022,17 +1022,23 @@ Without the capability, `/` text is an ordinary message.
 ([EXT.md §13](../EXT.md#13-extcommand_list)), a `/` at the start of the
 composer opens a list of them, with apron-web's own (`/nick`, `/join`,
 `/leave`, `/topic`, `/kick`, `/invite`, `/live`, as the server's capabilities
-allow), each name once: a name the server lists is the server's (`/kick` then goes to
-the server as a command, not as a request apron-web makes, until the server stops
-listing it). Each row shows `/name`, its arguments as the server wrote them, what it does, and what it requires ("Required: attachment"). A
+allow), each name once, matched case-sensitively: a name the server lists is the
+server's (`/kick`, or a form such as `/topic clear`, then goes to the server as a
+command, not as a request apron-web makes, until the server stops listing it). Each
+row shows `/name`, its arguments as the server wrote them, what it does, what it
+requires ("Required: attachment"), and "In this room" for one that acts on the
+room it's sent in. A
 command with forms (`/emoji add`, `/emoji remove`) shows once, with the words of
 its forms; once its first word and a space are typed, the list shows the
 command and each of its forms as entries of their own, and the next word typed
 narrows them. A command that requires a reply shows only while
 replying; while replying, commands that use the reply come first, and with
-files attached, those that use files. ↑ ↓ move, Tab takes the
+files attached, those that use files. A command that requires a room isn't
+offered where there's none (a server without rooms). ↑ ↓ move, Tab takes the
 highlighted one, and so does Enter, unless nothing is typed of the word or the
-words typed already name a command, when Enter runs it. Taking one puts in
+words typed already name a command, when Enter runs it. Enter takes Browse all
+commands only once the arrows went to it: Enter on a command no row names sends
+it. Taking one puts in
 `/name ` and nothing else. Once the words typed name a command and its
 arguments are typed (`/server title My server`, `/kick @bob being rude`), the
 card shows that command's entry alone, as the command reference does, and keeps
@@ -1046,8 +1052,9 @@ account's on the device too, so the next visit offers it at once (and asks
 again as a command starts), and an account with none kept asks on connecting,
 at most once a day. Without the extension, there is no list.
 
-**Command reference.** With the same extension, `/help` alone opens a dialog of
-every command instead of going to the server (and asks for the list anew), and
+**Command reference.** With the same extension, once the server's list is known,
+`/help` alone opens a dialog of every command instead of going to the server (and
+asks for the list anew; if that fails, it says the list may be out of date), and
 so does **Browse all commands**, the last row of the `/` list, which leaves the
 draft as it is. It reads as a document, as the keyboard shortcuts do: a heading
 for each group of who may use them, as the server groups them (Everyone, Guests,
@@ -1056,9 +1063,10 @@ own (Built into the client), empty groups left out; one of apron-web's own that
 the server's takes over is crossed out there, "Replaced by the server's /kick", and
 can't be pressed. Each command is its `/name` and
 arguments as code, what it does, and a label of what it fails without, such as
-"Required: attachment" for `/avatar` (a reply, a mention or an attachment);
-each form, such as `/emoji add`, is an entry of its own. A command's code is a
-button (**Use /emoji add**), still read as the page's text, underlined under the
+"Required: attachment" for `/avatar` (a reply, a mention or an attachment), and
+"In this room" for one that acts on the room it's sent in (where there's no room,
+one that requires it says "Open a room to use it" and can't be pressed); each form, such as `/emoji add`, is an entry of its own. A command's code is a
+button (**Use /emoji add :<name>:**), still read as the page's text, underlined under the
 pointer: pressing it (click, Enter or Space; Tab goes through them in order)
 closes the dialog and puts `/name ` at the start of the composer, in place of the
 command text there (what was typed before Browse all commands, or the draft's

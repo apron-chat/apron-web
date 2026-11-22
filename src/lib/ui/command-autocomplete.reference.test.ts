@@ -44,6 +44,12 @@ describe('referenceSections', () => {
 		expect(find('kick')?.required).toEqual(['mention']);
 		// Only what it requires: `embed-terminal` uses a reply, and requires nothing.
 		expect(find('embed-terminal')?.required).toBeUndefined();
+		// Acting on the room it's sent in: said so, apart from what it requires; where there's no room, one that requires
+		// it can't be used, and says so.
+		expect(find('kick')?.inRoom).toBe(true);
+		const roomed: ServerCommand[] = [{ name: 'embed-terminal', description: 'Stream', uses: ['room_id'], requires: ['room_id'] }];
+		expect(referenceSections(roomed, [], { room: true })[0].commands[0]).toEqual({ name: 'embed-terminal', description: 'Stream', inRoom: true });
+		expect(referenceSections(roomed, [], { room: false })[0].commands[0]).toEqual({ name: 'embed-terminal', description: 'Stream', inRoom: true, noRoom: true });
 		const both = referenceSections([{ name: 'x', description: 'X', uses: ['body.embeds', 'reply_to', 'body.mentions'], requires: ['body.embeds', 'reply_to', 'body.mentions'] }], []);
 		expect(both[0].commands[0].required).toEqual(['reply', 'mention', 'attachment']);
 	});

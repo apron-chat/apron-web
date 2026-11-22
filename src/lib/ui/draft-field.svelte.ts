@@ -123,12 +123,21 @@ export class DraftField {
 	emojiFound = $state<EmojiQuery | undefined>();
 	roomFound = $state<RoomQuery | undefined>();
 	/** The command at the draft's start, while the caret is in its words (`commandQuery`). */
-	commandFound = $state<CommandQuery | undefined>();
+	commandFound = $state.raw<CommandQuery | undefined>();
+	/** The draft (after its `/`) while a command's arguments are typed, which `commandInfo` names the command of. */
+	private infoText = $state<string | undefined>();
+	/**
+	 * A command's arguments are being typed (`infoText` is set): what the field's picker reads before `commandInfo`,
+	 * so that a draft that is no command reads no more than it did.
+	 */
+	infoOpen = $state(false);
+	/** The field names the card in `aria-describedby`, set on it directly, as it changes: not with `aria` on every key. */
+	private described = false;
 	/**
 	 * The command the draft names while its arguments are typed (`CommandOffer.describe`): its entry alone, shown and
-	 * kept shown as they are, to inform. No listbox: the field keeps its keys.
+	 * kept shown as they are, and as the commands arrive or change, to inform. No listbox: the field keeps its keys.
 	 */
-	commandInfo = $state.raw<CommandSuggestion | undefined>();
+	commandInfo: CommandSuggestion | undefined;
 	/** The command name Escape put its list or entry away for: it stays away till the name typed changes. */
 	private commandDismissed: string | undefined;
 	/**
@@ -136,6 +145,8 @@ export class DraftField {
 	 * costs the type-composer probes a call a key.
 	 */
 	private commanded = false;
+	/** The keyboard moved through the list (↑ ↓): only then does Enter take Browse all commands, its last row. */
+	private arrowed = false;
 	private dismissedAutocomplete = $state<DismissedAutocomplete | undefined>();
 	private emojiData = $state.raw<EmojiMartData | undefined>();
 	private active = $state(0);
@@ -196,11 +207,14 @@ export class DraftField {
 		this.emojiMatches = $derived(this.emojiFound && this.emojiData ? withCustomEmoji(customEmoji.catalog, this.emojiFound.query, searchEmoji(this.emojiData, this.emojiFound.query), (emoji) => directory.mediaGate.src(customEmoji.image(emoji).src)) : []);
 		this.roomIds = $derived(host.rooms.map((room) => room.id));
 		this.roomMatches = $derived(this.roomFound ? searchRooms(host.rooms, this.roomFound.query) : []);
-		this.commandCompletion = $derived.by(() => {
-			const found = this.commandFound;
-			if (!found || !host.commands?.ready) return undefined;
-			// What finding it worked out already (`commandAt`), unless the commands came since.
-			return this.completed?.found === found ? this.completed.completion : host.commands.complete(found);
+		this.commandCompletion = $derived(this.commandFound && host.commands?.ready ? host.commands.complete(this.commandFound) : undefined);
+		this.commandInfo = $derived.by(() => {
+			if (this.infoText === undefined || !host.commands?.ready) return undefined;
+			const info = host.commands.describe(this.infoText);
+			// Put away with Escape: it stays away while the same command is named.
+			if (info && info.name === this.commandDismissed) return undefined;
+			this.commandDismissed = undefined;
+			return info;
 		});
 		this.commandMatches = $derived(this.commandCompletion ? [...this.commandCompletion.suggestions, BROWSE_COMMANDS] : []);
 		this.pickerOpen = $derived(this.query !== undefined && !host.disabled);
@@ -372,7 +386,7 @@ export class DraftField {
 		const composing = event.isComposing || event.keyCode === 229;
 		// A command's entry shown alone takes Escape, which puts it away, and nothing else. `commanded` first: it is a
 		// plain field, which costs other drafts' keys nothing.
-		if (this.commanded && !completion && !composing && event.key === 'Escape' && this.commandInfo) {
+		if (this.commanded && !completion && !composing && event.key === 'Escape' && this.host.pickerShown !== false && !this.host.disabled && this.commandInfo) {
 			event.preventDefault();
 			this.dismissAutocomplete();
 			return;
@@ -388,9 +402,12 @@ export class DraftField {
 					event.preventDefault();
 					const step = event.key === 'ArrowDown' ? 1 : completion.count - 1;
 					this.active = (this.activeIndex + step) % completion.count;
+					this.arrowed = true;
 					return;
 				}
-				if (event.key === 'Tab' || (event.key === 'Enter' && !event.shiftKey && (completion.enter || this.activeIndex === completion.enterAt))) {
+				// Browse all commands takes Enter only once the arrows went to it; Enter on a command no row names sends it.
+				const enter = this.activeIndex === completion.enterAt ? this.arrowed : completion.enter;
+				if (event.key === 'Tab' || (event.key === 'Enter' && !event.shiftKey && enter)) {
 					event.preventDefault();
 					completion.take(this.activeIndex);
 					return;
@@ -547,7 +564,8 @@ export class DraftField {
 		const position = caret ?? draftLength(parts);
 		// Most keys are far from any `@`, `#` or `:`, in a draft that is no command: with nothing open or dismissed, there's
 		// nothing to look for.
-		const commanding = text[0] === '/' && this.host.commands !== undefined;
+		// `isCommand`, written out: no call a key.
+		const commanding = text[0] === '/' && text[1] !== '/' && this.host.commands !== undefined;
 		if (!this.query && !this.emojiFound && !this.roomFound && !this.commanded && !this.dismissedAutocomplete && !commanding && !nearTrigger(parts.length > 1 ? positionText(parts) : text, position)) return;
 		if (isAutocompleteDismissed(this.dismissedAutocomplete, text, position)) {
 			this.closeCompletions();
@@ -556,30 +574,24 @@ export class DraftField {
 		if (this.dismissedAutocomplete) this.dismissedAutocomplete = undefined;
 		// A command: the commands its name can be while it is typed, else the entry of the one it names, while its
 		// arguments are (shown last, if no `@`, `#` or `:` picker opens). Escape puts either away for that name.
-		let info: CommandSuggestion | undefined;
+		let info: string | undefined;
 		if (commanding) {
 			const typed = positionText(parts);
 			const foundCommand = caret === undefined ? undefined : this.commandAt(typed, caret);
 			if (foundCommand && foundCommand.typed !== this.commandDismissed) {
 				this.commandDismissed = undefined;
-				const started = this.commandFound === undefined && this.commandInfo === undefined;
+				const started = this.commandFound === undefined && this.infoText === undefined;
 				if (this.commandFound === undefined || this.commandFound.words.length !== foundCommand.words.length) this.active = 0;
+				this.arrowed = false;
 				this.closeCompletions();
 				this.commandFound = foundCommand;
 				this.commanded = true;
 				if (started) this.host.commands?.started();
 				return;
 			}
-			if (!foundCommand) {
-				info = this.host.commands?.ready ? this.host.commands.describe(typed) : undefined;
-				if (info?.name === this.commandDismissed) info = undefined;
-				else this.commandDismissed = undefined;
-			}
+			if (!foundCommand) info = typed;
 		} else this.commandDismissed = undefined;
-		if (this.commanded) {
-			this.commandFound = undefined;
-			this.commandInfo = undefined;
-		}
+		if (this.commanded) this.closeCommand();
 		this.commanded = false;
 		const foundEmoji = caret === undefined ? undefined : findEmojiQuery(parts, caret);
 		if (foundEmoji) {
@@ -603,9 +615,11 @@ export class DraftField {
 		// A query with a space stays open only while it still names someone.
 		if (!found || (/\s/.test(found.query) && this.matching(found.query).length === 0)) {
 			this.query = undefined;
-			if (info) {
-				this.commandInfo = info;
+			if (info !== undefined) {
+				this.infoText = info;
 				this.commanded = true;
+				if (!this.infoOpen) this.infoOpen = true;
+				this.describe(true);
 			}
 			return;
 		}
@@ -625,14 +639,8 @@ export class DraftField {
 		const found = findCommandQuery(text, caret);
 		if (!found || found.words.length === 0) return found;
 		const commands = this.host.commands;
-		const completion = commands?.ready ? commands.complete(found) : undefined;
-		// Kept for the list to show, rather than worked out again.
-		this.completed = { found, completion };
-		return completion ? found : undefined;
+		return commands?.ready && commands.complete(found) ? found : undefined;
 	}
-
-	/** What `commandAt` worked out for the command it found: the list's suggestions, computed once a key. */
-	private completed: { found: CommandQuery; completion: ReturnType<CommandOffer['complete']> } | undefined;
 
 	/** Swaps the typed `@…` for a chip: the person's name on screen, `@user_id` on the wire (Appendix A.3); a role's, `@&role`. */
 	pick(item: MentionMatch): void {
@@ -760,11 +768,25 @@ export class DraftField {
 		if (this.query !== undefined) this.query = undefined;
 		if (this.emojiFound !== undefined) this.emojiFound = undefined;
 		if (this.roomFound !== undefined) this.roomFound = undefined;
-		if (this.commanded) {
-			this.commandFound = undefined;
-			this.commandInfo = undefined;
-		}
+		if (this.commanded) this.closeCommand();
 		this.commanded = false;
+		this.arrowed = false;
+	}
+
+	/** Closes a command's list or card, as `closeCompletions` does. */
+	private closeCommand(): void {
+		this.commandFound = undefined;
+		this.infoText = undefined;
+		if (this.infoOpen) this.infoOpen = false;
+		this.describe(false);
+	}
+
+	/** Names the card (`${pickerId}-card`) as what describes the field, or stops. */
+	private describe(on: boolean): void {
+		if (this.described === on) return;
+		this.described = on;
+		if (on) this.element?.setAttribute('aria-describedby', `${this.pickerId}-card`);
+		else this.element?.removeAttribute('aria-describedby');
 	}
 
 	private dismissAutocomplete(): void {

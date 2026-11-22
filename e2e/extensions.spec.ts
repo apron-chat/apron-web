@@ -456,7 +456,7 @@ test.describe('commands (ext:command_list)', () => {
 		{ name: 'help', group: 'all', description: 'List the commands that you can use' },
 		{ name: 'emoji add', group: 'role', description: 'Add a custom emoji', hint: ':<name>:', uses: ['body.embeds'], requires: ['body.embeds'] },
 		{ name: 'emoji remove', group: 'role', description: 'Remove a custom emoji', hint: ':<name>:' },
-		{ name: 'embed-terminal', group: 'all', description: 'Stream a terminal into this room', hint: '[<title>]', uses: ['room_id', 'reply_to'] },
+		{ name: 'embed-terminal', group: 'all', description: 'Stream a terminal into this room', hint: '[<title>]', uses: ['room_id', 'reply_to'], requires: ['room_id'] },
 		{ name: 'approve', group: 'member', description: 'Approve the request that you reply to', uses: ['room_id', 'reply_to'], requires: ['reply_to'] },
 		{ name: 'ban', group: 'admin', description: 'Ban a user from the server', hint: '@user' },
 		{ name: 'server', group: 'admin', description: 'Show this server’s title, description, and avatar' },
@@ -515,8 +515,11 @@ test.describe('commands (ext:command_list)', () => {
 				await page.keyboard.press('Backspace');
 				await page.keyboard.type('/embed-terminal Build');
 				await expect(card.locator('dt')).toHaveText('/embed-terminal [<title>]');
+				await expect(card.locator('dd').last()).toHaveText('In this room');
+				await expect(field).toHaveAttribute('aria-describedby', /-card$/);
 				await page.keyboard.press('Enter');
-				await preview.waitForSent('command', (params) => params.body?.text === '/embed-terminal Build');
+				// It requires the room: it goes with the one it's typed in.
+				await preview.waitForSent('command', (params) => params.body?.text === '/embed-terminal Build' && params.room_id === 'general');
 				await expect(field).toHaveText('');
 				await expect(card).toHaveCount(0);
 			});
@@ -531,7 +534,9 @@ test.describe('commands (ext:command_list)', () => {
 				// Each command its /name and hint as code, its description and what using it takes; each form an entry of its own.
 				await expect(reference.locator('dt').first()).toHaveText('/help');
 				await expect(reference.locator('section', { hasText: 'Roles' }).locator('dt')).toHaveText(['/emoji add :<name>:', '/emoji remove :<name>:']);
-				await expect(reference.locator('dl > div', { hasText: '/approve' }).locator('dd')).toHaveText(['Approve the request that you reply to', 'Required: reply']);
+				await expect(reference.locator('dl > div', { hasText: '/approve' }).locator('dd')).toHaveText(['Approve the request that you reply to', 'Required: reply In this room']);
+				// The room it acts on is said apart from what it requires: apron-web names it.
+				await expect(reference.locator('dl > div', { hasText: '/embed-terminal' }).locator('dd')).toHaveText(['Stream a terminal into this room', 'In this room']);
 				await expect(reference.locator('dl > div', { hasText: '/emoji add' }).locator('dd')).toHaveText(['Add a custom emoji', 'Required: attachment']);
 				await expect(reference.getByRole('listbox')).toHaveCount(0);
 				await expect.poll(async () => (await preview.sent('ext:command_list')).length).toBe(2);
@@ -613,6 +618,21 @@ test.describe('commands (ext:command_list)', () => {
 			await page.keyboard.type('/em');
 			await expect(page.getByRole('listbox', { name: 'Command suggestions', exact: true }).getByRole('option')).toHaveText([/^\/emoji\s/, /^\/embed-terminal\s/, /^Browse all commands/]);
 			expect(await preview.sent('ext:command_list')).toHaveLength(1);
+		});
+
+	});
+
+	test.describe('that can’t be listed', () => {
+		test.use({ knobs: { capabilities: ['ext:command_list'], commands: null } });
+
+		test('sends /help to the server while no list of its commands is known', async ({ preview, page }) => {
+			await preview.open();
+			const field = page.getByTestId('message-input');
+			await field.click();
+			await page.keyboard.type('/help');
+			await page.keyboard.press('Enter');
+			await preview.waitForSent('command', (params) => params.body?.text === '/help');
+			await expect(page.getByRole('dialog', { name: 'Commands', exact: true })).toHaveCount(0);
 		});
 	});
 

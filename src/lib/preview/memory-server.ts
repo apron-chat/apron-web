@@ -127,9 +127,9 @@ export interface PreviewKnobs {
 	liveDemo?: 'off';
 	/**
 	 * The `commands` of an `ext:command_list` result, in place of the preview's own (`PREVIEW_COMMANDS`): it answers
-	 * the request only while `capabilities` lists the extension.
+	 * the request only while `capabilities` lists the extension. `null` refuses it, as a server that can't list them.
 	 */
-	commands?: JsonObject[];
+	commands?: JsonObject[] | null;
 }
 
 /** The commands the preview takes (`command`), as `ext:command_list` lists them: what its `/help` lists. */
@@ -768,6 +768,7 @@ export class MemoryProtocolServer {
 				case 'command': this.command(socket, params, reply, fail); return;
 				case 'ext:command_list':
 					if (!this.knobs.capabilities?.includes('ext:command_list')) fail(`Unsupported preview method: ${frame.method}`, -32601);
+					else if (this.knobs.commands === null) fail('The commands can’t be listed now', -32000);
 					else reply({ commands: structuredClone(this.knobs.commands ?? PREVIEW_COMMANDS) });
 					return;
 				// `idle` and mutes (§4.5), for a server given the `status` capability: taken, and kept nowhere. A mute

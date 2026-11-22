@@ -394,11 +394,14 @@ describe('DraftField: commands', () => {
 		expect(f.value()).toBe('/emoji ');
 		expect(listed(f)).toEqual(['emoji add', 'emoji remove']);
 		f.done();
-		// Nothing typed that matches: the row is all there is.
+		// Nothing typed that matches: the row is all there is, and Enter sends what was typed, as a command no one lists.
 		const g = field({ value: true }, { commands: () => COMMANDS, oncommand: () => {}, onbrowse });
 		g.type('/zap');
 		expect(listed(g)).toEqual([]);
 		expect(g.draft.commandMatches).toHaveLength(1);
+		g.enter();
+		expect(g.submit).toHaveBeenCalledOnce();
+		expect(onbrowse).toHaveBeenCalledOnce();
 		// Used with no Browse first: the draft's first word, a command's, goes; text that's no command stays after it.
 		g.draft.putCommand('help');
 		expect(g.value()).toBe('/help ');
@@ -440,6 +443,22 @@ describe('DraftField: commands', () => {
 		expect(g.draft.commandPickerOpen).toBe(false);
 		expect(g.draft.commandInfo).toBeUndefined();
 		g.done();
+	});
+
+	it('lists the commands anew as they change, for the same command typed, and names them anew in its entry', () => {
+		let commands = $state<readonly OfferedCommand[]>([{ name: 'help', description: 'Help' }]);
+		const f = field({ value: true }, { commands: () => commands, oncommand: () => {} });
+		f.type('/he');
+		expect(listed(f)).toEqual(['help']);
+		commands = [{ name: 'help', description: 'Help' }, { name: 'hello', description: 'Say hello' }];
+		flushSync();
+		expect(listed(f)).toEqual(['help', 'hello']);
+		f.type('llo there');
+		expect(f.draft.commandInfo?.description).toBe('Say hello');
+		commands = [{ name: 'hello', description: 'Wave' }];
+		flushSync();
+		expect(f.draft.commandInfo?.description).toBe('Wave');
+		f.done();
 	});
 });
 

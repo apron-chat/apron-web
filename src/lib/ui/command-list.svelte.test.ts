@@ -169,5 +169,34 @@ describe('command lists kept', () => {
 		values.set('apron.commandLists', '{broken');
 		expect(keptList(stored, 'b')).toBeUndefined();
 	});
+
+	it('keeps at most 150,000 characters of lists: the ones asked longest ago go, and an account’s too large keeps only when it was asked', () => {
+		const stored = { read: loadCommandLists, write: saveCommandLists };
+		const big = (n: number) => ({ commands: Array.from({ length: n }, (_, i) => ({ name: `c${i}`, description: 'd'.repeat(400) })), listed: 1, asked: 1 });
+		keepList(stored, 'old', () => ({ ...big(200), asked: 1 }));
+		keepList(stored, 'mid', () => ({ ...big(150), asked: 2 }));
+		keepList(stored, 'new', () => ({ ...big(150), asked: 3 }));
+		expect(Object.keys(JSON.parse(values.get('apron.commandLists')!)).sort()).toEqual(['mid', 'new']);
+		expect(values.get('apron.commandLists')!.length).toBeLessThanOrEqual(150_000);
+		keepList(stored, 'huge', () => ({ ...big(500), asked: 4 }));
+		expect(JSON.parse(values.get('apron.commandLists')!).huge).toEqual({ asked: 4 });
+	});
+});
+
+describe('a list asked for anew', () => {
+	it('stays as it was, out of date, when the ask fails', async () => {
+		const t = setup(new Map([['ws://a/\nalice', { commands: KICK, listed: 1, asked: 1 }]]));
+		t.list.mockRejectedValueOnce(new Error('refused'));
+		t.commands.apply(t.source());
+		t.commands.refresh();
+		await settle();
+		expect(t.commands.commands).toEqual(KICK);
+		expect([t.commands.stale, t.commands.failed]).toEqual([true, false]);
+		// Noted that it was asked for, so connecting holds back.
+		expect(t.kept.get('ws://a/\nalice')).toEqual({ commands: KICK, listed: 1, asked: t.now() });
+		t.commands.refresh();
+		await settle();
+		expect(t.commands.stale).toBe(false);
+	});
 });
 

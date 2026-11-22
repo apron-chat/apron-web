@@ -57,9 +57,17 @@ function requiredOf(command: OfferedCommand): string[] | undefined {
 	return required.length ? required : undefined;
 }
 
-/** A command as an entry: its name (or the words given), hint, description and Required label, and the forms given. */
+/**
+ * A command as an entry: its name (or the words given), hint, description, Required label, whether it acts on the
+ * room it's sent in (`room_id`, which apron-web sends, so in no Required label), and the forms given.
+ */
 function entryOf(command: OfferedCommand, name = command.name, forms?: string[]): CommandSuggestion {
-	return { name, hint: command.hint, description: command.description, required: requiredOf(command), forms };
+	return { name, hint: command.hint, description: command.description, required: requiredOf(command), inRoom: command.uses?.includes('room_id') || undefined, forms };
+}
+
+/** Whether a command can be used here: one that requires a reply only while replying, one that requires a room only in one. */
+function fits(command: OfferedCommand, context: CommandContext): boolean {
+	return (context.replying || !command.requires?.includes('reply_to')) && (context.room !== false || !command.requires?.includes('room_id'));
 }
 
 /**
@@ -68,8 +76,9 @@ function entryOf(command: OfferedCommand, name = command.name, forms?: string[])
  * with nothing typed of the next, every command those words start, the command they name and each of its forms, as
  * entries of their own; none where the command has no forms, whose arguments are being typed (`commandInfo`). A later
  * word typed lists the forms it starts: once none do, the words typed are arguments, and nothing shows.
- * A command that requires a reply (`requires` with `reply_to`) is offered only while replying; any other is offered
- * whatever its `requires`, as mentions and files can come after its name. A word named exactly comes first; then,
+ * A command that requires a reply (`requires` with `reply_to`) is offered only while replying, and one that requires a
+ * room only in one (`fits`); any other is offered whatever its `requires`, as mentions and files can come after its
+ * name. A word named exactly comes first; then,
  * while replying, commands that use `reply_to`, and while files are attached, those that use `body.embeds`; else the
  * server's order, then apron-web's own. Names are case-sensitive: the words before the caret match a name's exactly,
  * and the word at the caret suggests the words it starts in any case, which picking puts in as listed. Enter sends
@@ -79,7 +88,7 @@ export function commandCompletion(commands: readonly OfferedCommand[], found: Co
 	const depth = found.words.length;
 	const prefix = found.words;
 	const wanted = found.query.toLowerCase();
-	const offered = commands.filter((command) => context.replying || !command.requires?.includes('reply_to'));
+	const offered = commands.filter((command) => fits(command, context));
 	const under = (command: OfferedCommand) => {
 		const words = command.name.split(' ');
 		return words.length >= depth && prefix.every((word, index) => words[index] === word);
@@ -134,12 +143,17 @@ const HEADINGS: Record<CommandGroup, string> = { all: 'Everyone', guest: 'Guests
 /**
  * The command reference's sections (`CommandReference`): the server's commands by `group`, widest first, each in the
  * server's order; those without one it knows after them (Other, or Server where none has one); then apron-web's own
- * (Built into the client), each one the server lists by the same name `replaced`. Every command is an entry of its
+ * (Built into the client), each one the server lists by the same name `replaced`; where there's no room (`context`),
+ * one that requires one is `noRoom`. Every command is an entry of its
  * own, a form (`emoji add`) as much as any. Empty sections are left out.
  */
-export function referenceSections(server: readonly ServerCommand[], own: readonly OfferedCommand[]): ReferenceSection[] {
+export function referenceSections(server: readonly ServerCommand[], own: readonly OfferedCommand[], context: CommandContext = {}): ReferenceSection[] {
 	const listed = new Set(server.map((command) => command.name));
-	const entries = (commands: readonly OfferedCommand[]): ReferenceCommand[] => commands.map((command) => ({ ...entryOf(command), replaced: command.own && listed.has(command.name) }));
+	const entries = (commands: readonly OfferedCommand[]): ReferenceCommand[] => commands.map((command) => ({
+		...entryOf(command),
+		noRoom: (context.room === false && command.requires?.includes('room_id')) || undefined,
+		replaced: (command.own && listed.has(command.name)) || undefined
+	}));
 	const grouped = server.some((command) => command.group !== undefined);
 	return [
 		...COMMAND_GROUPS.map((group) => ({ title: HEADINGS[group], commands: entries(server.filter((command) => command.group === group)) })),

@@ -13,13 +13,15 @@
 		loading: boolean;
 		/** Why they won't come. */
 		error?: string;
+		/** Asking for them anew failed: what shows may be out of date, which it says. */
+		stale?: boolean;
 		/** A command used, by its name: it closes, and the composer takes it. */
 		onuse: (name: string) => void;
 		onclose: () => void;
 	}
-	let { sections, loading, error, onuse, onclose }: Props = $props();
+	let { sections, loading, error, stale = false, onuse, onclose }: Props = $props();
 
 	let open = $state(true);
 </script>
 
-<CommandReference bind:open {sections} {loading} {error} subtitle="Press one to use it, or type / in the composer to complete one." {onuse} {onclose} />
+<CommandReference bind:open {sections} {loading} {error} subtitle={stale ? 'The server didn’t answer: these may be out of date.' : 'Press one to use it, or type / in the composer to complete one.'} {onuse} {onclose} />

@@ -56,6 +56,7 @@
 	import { receiptsByMessage, steadyReceipts } from '$lib/ui/receipts';
 	import { attachmentLimits, composerAction } from '$lib/ui/commands';
 	import { Commands } from '$lib/ui/command-offer.svelte';
+	import { DEFAULT_ROOM_ID } from '$lib/protocol/client-types';
 	import { serverLabel, statusLabel } from '$lib/ui/connection';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { FeedbackState, type Feedback } from '$lib/ui/feedback.svelte';
@@ -872,7 +873,8 @@
 	});
 	/** The server's commands (`ext:command_list`): the composer's offer of them, and the command reference. */
 	const commands = new Commands({
-		context: () => ({ replying: drafts.reply !== undefined, attaching: drafts.files.length > 0 }),
+		// A room it names: none on a server without rooms, whose one room goes unnamed (§3.4).
+		context: () => ({ replying: drafts.reply !== undefined, attaching: drafts.files.length > 0, room: paneRoom !== undefined && paneRoom.id !== DEFAULT_ROOM_ID }),
 		caps: () => ({ rooms: session.canManageRooms, members: memberChangesOk, append: session.capabilities['embed:append'] }),
 		loadReference: () => commandReference.load(),
 		put: (name) => composer?.putCommand(name),
@@ -2412,13 +2414,14 @@
 			return;
 		}
 		// `/live` starts with an empty composer: files staged first would wait unseen, so they go or stay first.
-		if (drafts.files.length && snapshot.capabilities['embed:append'] && /^\/live\s*$/i.test(drafts.text)) {
+		if (drafts.files.length && snapshot.capabilities['embed:append'] && /^\/live\s*$/.test(drafts.text) && !(snapshot.capabilities.command && commands.serves('live'))) {
 			feedback.error('Send or remove the attached files before typing live');
 			return;
 		}
-		// `/help` where the server lists its commands opens the command reference instead, and asks for the list anew
-		// (the extension's suggested convention): the text goes, and a reply or files stay.
-		if (snapshot.capabilities.command && snapshot.capabilities['ext:command_list'] && drafts.text.trim() === '/help') {
+		// `/help` where the server's commands are known opens the command reference instead, and asks for the list anew
+		// (the extension's suggested convention): the text goes, and a reply or files stay. Not known (not yet listed, or
+		// the list couldn't be had), `/help` goes to the server, as without the extension.
+		if (snapshot.capabilities.command && snapshot.capabilities['ext:command_list'] && commands.known && drafts.text.trim() === '/help') {
 			drafts.text = '';
 			commands.refresh();
 			commands.show();
@@ -3962,7 +3965,7 @@
 	{#if commands.shown && commandReference.component}
 		{@const CommandReferenceDialog = commandReference.component}
 		{@const reference = commands.reference}
-		<CommandReferenceDialog sections={reference.sections} loading={reference.loading} error={reference.error} onuse={(name) => commands.use(name)} onclose={() => commands.close()} />
+		<CommandReferenceDialog sections={reference.sections} loading={reference.loading} error={reference.error} stale={reference.stale} onuse={(name) => commands.use(name)} onclose={() => commands.close()} />
 	{/if}
 	{#if shortcutsOpen && shortcutsDialog.component}
 		{@const ShortcutsDialog = shortcutsDialog.component}

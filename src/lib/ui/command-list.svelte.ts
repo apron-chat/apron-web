@@ -52,11 +52,28 @@ export function keptList(stored: StoredCommandLists, account: string): KeptComma
 	return kept;
 }
 
-/** Keeps `account`'s list as `list` holds it, the others as stored; past COMMAND_LISTS_MAX accounts, the ones asked longest ago go. */
+/**
+ * The most characters all kept lists take, stored: a share of the few megabytes a page's storage has, which drafts and
+ * settings need too.
+ */
+const COMMAND_LISTS_CHARS = 150_000;
+
+/**
+ * Keeps `account`'s list as `list` holds it, the others as stored. Past COMMAND_LISTS_MAX accounts, or COMMAND_LISTS_CHARS
+ * stored, the ones asked longest ago go; if `account`'s alone is still too large, only when it was asked for is kept.
+ */
 export function keepList(stored: StoredCommandLists, account: string, list: (kept: StoredList | undefined) => StoredList): void {
 	const { [account]: previous, ...others } = storedLists(stored);
-	const kept = Object.entries({ ...others, [account]: list(previous) }).sort((a, b) => (b[1].asked as number) - (a[1].asked as number));
-	stored.write(Object.fromEntries(kept.slice(0, COMMAND_LISTS_MAX)));
+	const mine = list(previous);
+	const own = account.length + JSON.stringify(mine).length > COMMAND_LISTS_CHARS ? { asked: mine.asked } : mine;
+	let size = account.length + JSON.stringify(own).length;
+	const lists: [string, StoredList][] = [[account, own]];
+	for (const [key, entry] of Object.entries(others).sort((a, b) => (b[1].asked as number) - (a[1].asked as number)).slice(0, COMMAND_LISTS_MAX - 1)) {
+		size += key.length + JSON.stringify(entry).length;
+		if (size > COMMAND_LISTS_CHARS) break;
+		lists.push([key, entry]);
+	}
+	stored.write(Object.fromEntries(lists));
 }
 
 /** On connecting, nothing kept is asked for again only after this long, as is a list kept this long once a command starts. */
@@ -80,6 +97,8 @@ export class CommandList {
 	commands = $state.raw<readonly ServerCommand[] | undefined>();
 	/** None are known and the last ask failed: the composer offers apron-web's own commands alone. */
 	failed = $state(false);
+	/** Some are known, and the last ask for them anew failed: they may be out of date. */
+	stale = $state(false);
 	private source: CommandSource | undefined;
 	/** The key being asked for, while its request is out. */
 	private asking: string | undefined;
@@ -102,6 +121,7 @@ export class CommandList {
 		}
 		this.commands = source?.keep ? keptList(this.stored, source.key)?.commands : undefined;
 		this.failed = false;
+		this.stale = false;
 	}
 
 	/**
@@ -141,18 +161,21 @@ export class CommandList {
 		const at = this.now();
 		this.asking = key;
 		this.asked.set(key, { at, ok: false });
-		// Noted before the answer, so a page that closes meanwhile doesn't ask again on connecting within the day.
-		if (source.keep) keepList(this.stored, key, (kept) => ({ ...kept, asked: at }));
+		// Kept once answered, either way: what was listed, or that it was asked for, so connecting doesn't ask again
+		// within the day.
 		source.list().then(parseCommandList).then(
 			(commands) => {
 				this.asked.set(key, { at, ok: true });
 				if (source.keep) keepList(this.stored, key, () => ({ commands, listed: at, asked: at }));
 				if (this.source?.key !== key) return;
 				this.commands = commands;
-				this.failed = false;
+				this.failed = this.stale = false;
 			},
 			() => {
-				if (this.source?.key === key && !this.commands) this.failed = true;
+				if (source.keep) keepList(this.stored, key, (kept) => ({ ...kept, asked: at }));
+				if (this.source?.key !== key) return;
+				if (this.commands) this.stale = true;
+				else this.failed = true;
 			}
 		).finally(() => {
 			if (this.asking === key) this.asking = undefined;

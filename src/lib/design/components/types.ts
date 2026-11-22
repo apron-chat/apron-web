@@ -283,15 +283,18 @@ export interface PickerEmoji {
 /**
  * A command in the CommandReference and the composer's CommandCard: its words after `/`, its hint (what follows the
  * name) and description, shown as written; `required`, what it fails without, each a word such as "reply" or
- * "attachment", shown as "Required: reply, attachment"; and `replaced`, one of apron-web's own that a command the
- * server lists by the same name takes the place of, crossed out and saying so. A form (`emoji add`) is a command of its
- * own.
+ * "attachment", shown as "Required: reply, attachment"; `inRoom`, one that acts on the room it's sent in ("In this
+ * room"); `noRoom`, one that requires a room where there's none to name ("Open a room to use it", and not used); and
+ * `replaced`, one of apron-web's own that a command the server lists by the same name takes the place of, crossed out
+ * and saying so. A form (`emoji add`) is a command of its own.
  */
 export interface ReferenceCommand {
 	name: string;
 	hint?: string;
 	description?: string;
 	required?: string[];
+	inRoom?: boolean;
+	noRoom?: boolean;
 	replaced?: boolean;
 }
 
