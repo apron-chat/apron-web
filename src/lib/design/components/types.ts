@@ -219,7 +219,10 @@ export interface ComposerField {
 	/** The placeholder: the Composer's `placeholder`, else "Message {room}" or "Reply in {thread}". */
 	placeholder: string;
 	disabled: boolean;
-	/** The draft is a command (`canCommand`): the field is set in monospace by the Composer. */
+	/**
+	 * The draft is a command (`canCommand`): the Composer sets the field in monospace and, by its `ap-composer-field`
+	 * class, `autocapitalize="none"`, `autocorrect="off"` and `spellcheck="false"` on it while the Command tag shows.
+	 */
 	command: boolean;
 }
 

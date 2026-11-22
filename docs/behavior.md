@@ -1003,7 +1003,12 @@ cards without pictures.
 
 With the `command` capability, composer text that starts with one `/` is a command
 ([PROTOCOL.md §4.1](https://github.com/shazow/apron/blob/main/PROTOCOL.md#41-command)): the composer shows a **Command** tag, sets the line in
-monospace, and **Run** replaces **Send**. `/nick` (a `me` request), `/join`,
+monospace, and **Run** replaces **Send**. While it shows, the field asks the
+keyboard not to capitalize or correct the text and not to mark its spelling
+(`autocapitalize="none"`, `autocorrect="off"`, `spellcheck="false"`), and asks
+again as it goes; this is best-effort, as a keyboard may take the change only
+from the next key or the next focus. Names are case-sensitive: `/NICK Ada` is
+no `/nick` and goes to the server as typed. `/nick` (a `me` request), `/join`,
 `/leave`, `/topic` (`room_join`, `room_leave`, and `room_set` with the room's
 new `description`), and `/kick @user` and `/invite @user` (`room_leave` and
 `room_join` with that `user_id`), with the `rooms` capability, are handled by the
@@ -1022,10 +1027,12 @@ Without the capability, `/` text is an ordinary message.
 ([EXT.md §13](../EXT.md#13-extcommand_list)), a `/` at the start of the
 composer opens a list of them, with apron-web's own (`/nick`, `/join`,
 `/leave`, `/topic`, `/kick`, `/invite`, `/live`, as the server's capabilities
-allow), each name once: a name the server lists is the server's (`/kick`, in any
-case, or a form such as `/topic clear`, then goes to the server as a command, not
-as a request apron-web makes, until the server stops listing it). apron-web's own
-match in any case, as on a server without the extension. Each
+allow), each name once, matched case-sensitively: a name the server lists is the
+server's (`/kick`, or a form such as `/topic clear`, then goes to the server as a
+command, not as a request apron-web makes, until the server stops listing it).
+apron-web's own match exactly too, with or without the extension: `/NICK Ada`
+goes to the server as a command, and the word typed suggests only the names it
+starts as written (`/Ki` shows "No command matches “/Ki”"). Each
 row shows `/name`, its arguments as the server wrote them, what it does, what it
 requires ("Required: attachment"), and "In this room" for one that acts on the
 room it's sent in. A

@@ -23,6 +23,9 @@
 	import type { ComposerField, EmbedProps } from './types';
 	import { LONG_WAIT_MS, roomName, waitLabel, waitWords } from './util';
 
+	/** What a command's field is set to, while the Command tag shows (`commandField`). */
+	const COMMAND_FIELD = [['autocapitalize', 'none'], ['autocorrect', 'off'], ['spellcheck', 'false']] as const;
+
 	interface Props {
 		room?: string;
 		placeholder?: string;
@@ -200,6 +203,19 @@
 		lastWrapAt = untrack(() => value.length) ? wrapAt : 0;
 		wrapAt = 0;
 	});
+	/**
+	 * While the Command tag shows (`cmd`), the field (the textarea, or your own by its `ap-composer-field` class) asks the
+	 * keyboard not to capitalize or correct the command and not to mark its spelling; as the tag goes, it asks as before.
+	 * An attachment on the tag, so it's set only as the draft becomes a command or stops being one, never on a key.
+	 * Keyboards may take a change only from the next key or focus.
+	 */
+	function commandField(tag: HTMLElement): (() => void) | void {
+		const field = tag.parentElement?.querySelector<HTMLElement>('.ap-composer-field');
+		if (!field) return;
+		const before = COMMAND_FIELD.map(([name]) => field.getAttribute(name));
+		for (const [name, value] of COMMAND_FIELD) field.setAttribute(name, value);
+		return () => COMMAND_FIELD.forEach(([name], index) => (before[index] === null ? field.removeAttribute(name) : field.setAttribute(name, before[index]!)));
+	}
 	/** The field's line height, read once. */
 	let lineHeight = 0;
 	// The field wrapping onto a second line, seen by its size (a ResizeObserver: no layout read on any key).
@@ -324,7 +340,7 @@
 			{#if recording}
 				<span class="ap-composer-recording" role="status"><span class="ap-composer-recdot" aria-hidden="true"></span>Recording <span class="ap-composer-rectime">{recordingTime || '0:00'}</span></span>
 			{:else}
-				{#if cmd}<span class="ap-composer-cmdtag" data-testid={commandTestid} title="Sent to the server, not posted"><span class="ap-pill-label">Command</span></span>{/if}
+				{#if cmd}<span class="ap-composer-cmdtag" data-testid={commandTestid} {@attach commandField} title="Sent to the server, not posted"><span class="ap-pill-label">Command</span></span>{/if}
 				{#if live}<span class="ap-composer-cmdtag ap-composer-livetag" data-testid={liveTestid} title="Everyone sees this message as you type it; Send finishes it"><span class="ap-composer-livedot" aria-hidden="true"></span><span class="ap-pill-label">Live</span></span>{/if}
 				{#if field}{@render field(fieldArgs)}
 				{:else}

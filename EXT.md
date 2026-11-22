@@ -475,10 +475,10 @@ use, as `/help` lists them.
   files can come after the name. While the user replies, commands that use
   `reply_to` come first, and while files are attached, those that use
   `body.embeds`.
-- The server's names are case-sensitive: the words typed before the caret match
-  a name's exactly, and the word at the caret suggests the names it starts in any
-  case, which a pick puts in as listed. apron-web's own commands still match in
-  any case, as without the extension, unless the server lists the name.
+- Names are case-sensitive, the server's and apron-web's own alike (as
+  without the extension): the words typed before the caret match a name's
+  exactly, and the word at the caret suggests the names it starts, exactly too
+  (`/Ki` suggests no `/kick`, and says no command matches).
 - It ignores an entry without a `name`, with a name listed before, or one that
   starts with `/`, and a field of `uses` or `requires`, or a `group`, that it
   doesn't know. A field of the wrong type takes its default, and a field in

@@ -61,10 +61,13 @@ describe('commandCompletion', () => {
 		]);
 		expect(names('/server ')).toEqual(['server', 'server avatar', 'server description', 'server title']);
 		expect(names('/server av')).toEqual(['server avatar']);
-		// Names are case-sensitive: the words before the caret match exactly, and the word at the caret suggests in any case.
+		// Names are case-sensitive: the words before the caret and the word at the caret match exactly.
 		expect(names('/EMOJI R')).toBeUndefined();
-		expect(names('/emoji R')).toEqual(['emoji remove']);
-		expect(names('/EM')).toEqual(['embed-terminal', 'emoji']);
+		expect(names('/emoji R')).toBeUndefined();
+		expect(names('/emoji r')).toEqual(['emoji remove']);
+		expect(names('/EM')).toEqual([]);
+		expect(names('/Ki')).toEqual([]);
+		expect(names('/ki')).toEqual(['kick']);
 	});
 
 	it('shows nothing once the words typed are arguments, but says when the first word matches none', () => {
@@ -83,8 +86,8 @@ describe('commandCompletion', () => {
 		expect(complete('/emoji')?.enter).toBe(true);
 		expect(complete('/server')?.enter).toBe(false);
 		expect(complete('/help')?.enter).toBe(false);
-		// `/HELP` names no command: Enter puts in `/help `.
-		expect(complete('/HELP')?.enter).toBe(true);
+		// `/HELP` names no command and suggests none (names are case-sensitive): Enter sends it as typed.
+		expect(complete('/HELP')).toEqual({ suggestions: [], enter: false });
 	});
 
 	it('offers a command that requires a reply only while replying, and puts first a word named exactly, then the commands that use a reply or files', () => {

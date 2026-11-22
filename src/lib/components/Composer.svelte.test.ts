@@ -226,6 +226,33 @@ describe('Composer', () => {
 		}
 	});
 
+	it('turns off capitals, corrections and spelling marks while the draft is a command, and back on as it stops being one', () => {
+		const attributes = (field: HTMLElement) => [field.getAttribute('autocapitalize'), field.getAttribute('autocorrect'), field.getAttribute('spellcheck')];
+		const { field } = render({ value: '', canCommand: true });
+		expect(attributes(field)).toEqual([null, null, 'true']);
+		typeAtEnd(field, '/kick');
+		expect(document.querySelector('[data-testid="command-tag"]')).not.toBeNull();
+		expect(attributes(field)).toEqual(['none', 'off', 'false']);
+		// `//` posts a message starting with `/`: no command.
+		field.textContent = '/';
+		typeAtEnd(field, '/kick');
+		expect(attributes(field)).toEqual([null, null, 'true']);
+		field.textContent = '';
+		typeAtEnd(field, '/');
+		expect(attributes(field)).toEqual(['none', 'off', 'false']);
+		field.textContent = '';
+		typeAtEnd(field, 'Hi');
+		expect(attributes(field)).toEqual([null, null, 'true']);
+		dom.unmount();
+		// Without capability `command`, `/` text is a message, as is live text.
+		for (const props of [{ canCommand: false }, { canCommand: true, live: true }]) {
+			const other = render({ value: '', ...props });
+			typeAtEnd(other.field, '/kick');
+			expect(attributes(other.field)).toEqual([null, null, 'true']);
+			dom.unmount();
+		}
+	});
+
 	it('offers the server’s commands as one is typed, ending with Browse all commands, and none for live text', () => {
 		const list: OfferedCommand[] = [
 			{ name: 'help', description: 'List the commands that you can use' },

@@ -2414,7 +2414,7 @@
 			return;
 		}
 		// `/live` starts with an empty composer: files staged first would wait unseen, so they go or stay first.
-		if (drafts.files.length && snapshot.capabilities['embed:append'] && /^\/live\s*$/i.test(drafts.text) && !(snapshot.capabilities.command && commands.serves('live'))) {
+		if (drafts.files.length && snapshot.capabilities['embed:append'] && /^\/live\s*$/.test(drafts.text) && !(snapshot.capabilities.command && commands.serves('live'))) {
 			feedback.error('Send or remove the attached files before typing live');
 			return;
 		}

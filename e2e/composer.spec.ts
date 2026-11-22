@@ -157,6 +157,37 @@ test.describe('line breaks in the composer', () => {
 	});
 });
 
+test.describe('a command in the composer', () => {
+	test.use(DEVICES.desktop);
+
+	test('turns off capitals, corrections and spelling marks while the Command tag shows, and goes to the server as typed', async ({ preview, page }) => {
+		await preview.open();
+		const field = preview.composer();
+		const attributes = () => field.evaluate((element) => ['autocapitalize', 'autocorrect', 'spellcheck'].map((name) => element.getAttribute(name)));
+		await field.click();
+		expect(await attributes()).toEqual([null, null, 'true']);
+		await page.keyboard.type('/');
+		await expect(page.getByTestId('command-tag')).toBeVisible();
+		expect(await attributes()).toEqual(['none', 'off', 'false']);
+		await page.keyboard.type('/');
+		await expect(page.getByTestId('command-tag')).toHaveCount(0);
+		expect(await attributes()).toEqual([null, null, 'true']);
+		await page.keyboard.press('Backspace');
+		expect(await attributes()).toEqual(['none', 'off', 'false']);
+		// Names are case-sensitive: `/NICK Ada` is no `/nick`, so it goes to the server as a command, not as `me`.
+		await page.keyboard.type('NICK Ada');
+		await page.keyboard.press('Enter');
+		await preview.waitForSent('command', (params) => params.body?.text === '/NICK Ada');
+		expect((await preview.sent('me')).filter((params) => params.name === 'Ada')).toEqual([]);
+		// The server knows no `NICK` and gives the draft back; emptied, the field is a message's again.
+		await field.click();
+		await page.keyboard.press('ControlOrMeta+a');
+		await page.keyboard.press('Backspace');
+		await expect(page.getByTestId('command-tag')).toHaveCount(0);
+		expect(await attributes()).toEqual([null, null, 'true']);
+	});
+});
+
 test.describe('role mentions in the composer', () => {
 	test.use({ ...DEVICES.desktop, knobs: { people: { grace: { roles: ['moderator'] } } } });
 

@@ -81,13 +81,13 @@ function fits(command: OfferedCommand, context: CommandContext): boolean {
  * name. A word named exactly comes first; then,
  * while replying, commands that use `reply_to`, and while files are attached, those that use `body.embeds`; else the
  * server's order, then apron-web's own. Names are case-sensitive: the words before the caret match a name's exactly,
- * and the word at the caret suggests the words it starts in any case, which picking puts in as listed. Enter sends
+ * and the word at the caret suggests the words it starts, exactly too (`/Ki` suggests no `kick`). Enter sends
  * rather than takes when nothing is typed of the word, or the words typed name a command already.
  */
 export function commandCompletion(commands: readonly OfferedCommand[], found: CommandQuery, context: CommandContext = {}): CommandCompletion | undefined {
 	const depth = found.words.length;
 	const prefix = found.words;
-	const wanted = found.query.toLowerCase();
+	const wanted = found.query;
 	const offered = commands.filter((command) => fits(command, context));
 	const under = (command: OfferedCommand) => {
 		const words = command.name.split(' ');
@@ -104,7 +104,7 @@ export function commandCompletion(commands: readonly OfferedCommand[], found: Co
 		const words = command.name.split(' ');
 		if (words.length <= depth || !under(command)) continue;
 		const word = words[depth];
-		if (!word.toLowerCase().startsWith(wanted)) continue;
+		if (!word.startsWith(wanted)) continue;
 		let group = groups.get(word);
 		if (!group) groups.set(word, (group = { name: words.slice(0, depth + 1).join(' '), forms: [], fits: false, order: groups.size }));
 		if (words.length === depth + 1) group.bare = command;
