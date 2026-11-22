@@ -102,6 +102,24 @@ async function replyWords(preview: Preview, text: string): Promise<boolean> {
 	return reply.evaluate((element) => getComputedStyle(element.querySelector('.ap-actions-label')!).display !== 'none');
 }
 
+test.describe('Copy body', () => {
+	test.use(DEVICES.desktop);
+
+	test('copies the message as written, its Markdown and all, from below Copy link in ⋯', async ({ preview, page, context }) => {
+		await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+		await preview.open();
+		const row = preview.message('Try markdown');
+		await row.hover();
+		const toolbar = row.getByRole('toolbar', { name: 'Message actions' });
+		await toolbar.getByRole('button', { name: 'More actions', exact: true }).click();
+		const items = await toolbar.getByRole('button').evaluateAll((buttons) => buttons.map((button) => button.getAttribute('aria-label') ?? button.textContent?.trim()));
+		expect(items.indexOf('Copy body')).toBe(items.indexOf('Copy link to message') + 1);
+		await toolbar.getByRole('button', { name: 'Copy body', exact: true }).click();
+		await expect(toolbar.getByRole('button', { name: 'Body copied', exact: true })).toBeVisible();
+		expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('Try **markdown**, emoji :wave:, and mentioning @ada.');
+	});
+});
+
 for (const [device, wide] of [['desktop', true], ['tablet', false]] as const) {
 	test.describe(`the message toolbar, ${device}`, () => {
 		test.use(DEVICES[device]);

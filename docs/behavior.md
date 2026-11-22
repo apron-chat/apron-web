@@ -1520,12 +1520,17 @@ it always has that avatar and name. The quote may point into another room:
 clicking it opens that room or thread, loading the thread's history if needed,
 and highlights the message.
 
+A message's More menu (⋯ on its toolbar) offers **Copy body** below Copy link,
+for a message with text: it copies the text as it was written, so a markdown
+message gives its Markdown (`**0 errors**`, not "0 errors"). Like Copy link, it
+says Copied for a moment.
+
 On touch screens a message's actions wait for a long press, which a finger
 may drift up to 10px through (further is a scroll), or the system's own long
 press; a tap shows nothing, and messages take no text selection, so a stray
 press doesn't select words or pop the toolbar. The press opens a larger
 toolbar with **Reply** and **React** up front and ⋯ opening the rest as a
-menu of rows: Start thread, Edit, Select, **Copy text**, Copy link, Remove reply
+menu of rows: Start thread, Edit, Select, Copy link, Copy body, Remove reply
 reference and Delete, as each applies. A tap on the message, Escape or focus
 leaving puts it away. A press on a reaction chip, a link or media is theirs.
 
@@ -1713,7 +1718,7 @@ Embeds render by kind, in the design system's components ([PROTOCOL.md §4.8](ht
   above a heading, waits for more. When `GET` ends (Writing… goes) or fails,
   what it shows stays until the snapshot without the embed arrives, with the
   text in the body; a failure tries again, and the new response replaces what
-  was streamed. Edit, Copy text, a reply's quote and a thread's preview use
+  was streamed. Edit, Copy body, a reply's quote and a thread's preview use
   the message as recorded (`body.text`), never the streamed text, and a save
   sends the embed back by its `embed_id`, so editing doesn't end it; leaving
   it out of a save (its tile's (x) in the editor) ends it there, dropping what
