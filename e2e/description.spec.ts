@@ -243,3 +243,21 @@ test.describe('the description’s Preview while it’s edited', () => {
 		expect(await look(sheet.getByTestId('draft-preview').getByRole('heading', { name: 'House rules' }))).toEqual(read);
 	});
 });
+
+test.describe('the description read on a phone', () => {
+	test.use(DEVICES.phone);
+
+	test('is as tall as it reads, the room dimmed below it, where a tap shuts it; its header holds only its own buttons', async ({ preview, page }) => {
+		await preview.open();
+		await preview.describe('general', 'Say hello, and keep it kind.');
+		await page.getByTestId('pane-description').click();
+		const sheet = page.getByTestId('description-sheet');
+		await expect(sheet).toBeVisible();
+		const [box, pane] = [await sheet.boundingBox(), await page.locator('main.ap-shell-main').boundingBox()];
+		expect(box!.height).toBeLessThan(pane!.height / 3);
+		await expect(page.getByRole('button', { name: /member list$/ })).toHaveCount(0);
+		await page.mouse.click(pane!.x + pane!.width / 2, pane!.y + pane!.height * 0.75);
+		await expect(sheet).toHaveCount(0);
+		await expect(page.getByRole('button', { name: /member list$/ })).toBeVisible();
+	});
+});

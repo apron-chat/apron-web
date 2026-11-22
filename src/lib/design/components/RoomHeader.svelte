@@ -94,7 +94,7 @@
 		descriptionDraft?: boolean;
 		/**
 		 * The description shows over the pane (DescriptionSheet), to read: Edit (`onedit`, cap `rooms`) and × (`onclose`) in
-		 * place of the topic, Description, Join, the bell-off button and the ⋯ menu.
+		 * place of the topic, Description, Join, the member list's toggle, the bell-off button and the ⋯ menu.
 		 */
 		reading?: { onedit?: () => void; onclose: () => void };
 		/**
@@ -247,8 +247,8 @@
 			<TextAlignStart size={15} strokeWidth={2} aria-hidden="true" /><span class="ap-roomhead-description-word">Description</span>{#if descriptionDraft}<span class="ap-roomhead-dot" aria-hidden="true"></span>{/if}
 		</button>
 	{/if}
-	<!-- The member list's toggle after Description, at the end of the header's own buttons. -->
-	{#if onmemberlist && !editing}
+	<!-- The member list's toggle after Description, at the end of the header's own buttons; not over the description, whose header holds only its own. -->
+	{#if onmemberlist && !sheet}
 		<button type="button" class={['ap-iconbtn', 'ap-roomhead-members', memberListOpen && 'ap-iconbtn-on']} aria-label={memberLabel} aria-expanded={memberListOpen} title={memberLabel} onclick={onmemberlist}>
 			<Users size={18} strokeWidth={1.8} aria-hidden="true" />
 		</button>

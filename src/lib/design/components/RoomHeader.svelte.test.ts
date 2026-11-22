@@ -187,8 +187,8 @@ describe('RoomHeader', () => {
 		const onclose = vi.fn();
 		render({ topic: 'Deploys', onmemberlist: () => {}, onleave: () => {}, canJoin: true, onjoin: () => {}, muted: 'until 14:30', onunmute: () => {}, descriptionDraft: true, reading: { onedit, onclose } });
 		expect(sub()).toEqual([]);
-		expect([dom.queryByRole('button', 'Room actions'), dom.queryByRole('button', 'Join room'), dom.queryByRole('button', 'Unmute room')]).toEqual([null, null, null]);
-		expect(dom.queryByRole('button', 'Show member list')).not.toBeNull();
+		// The header holds only the description's own buttons: not the ⋯ menu, Join, Unmute or the member list's toggle.
+		expect(['Room actions', 'Join room', 'Unmute room', 'Show member list'].map((name) => dom.queryByRole('button', name))).toEqual([null, null, null, null]);
 		dom.button('Edit room, unsaved draft').click();
 		dom.button('Close description').click();
 		expect([onedit, onclose].map((fn) => fn.mock.calls.length)).toEqual([1, 1]);
