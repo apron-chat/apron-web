@@ -25,9 +25,11 @@ describe('apron-web’s own commands, and the server’s by the same name (ext:c
 		// A form of one of apron-web's names: the server's when it lists that form, apron-web's own otherwise.
 		expect(composerAction('/topic clear', { ...all, serves })).toEqual({ kind: 'command', text: '/topic clear' });
 		expect(composerAction('/topic Ship it', { ...all, serves })).toEqual({ kind: 'topic', description: 'Ship it' });
-		// Names are case-sensitive: `/KICK` is neither the server's `kick` nor apron-web's.
+		// apron-web's own match in any case; one the server lists goes to the server in any case too.
 		expect(composerAction('/KICK @bob', { ...all, serves })).toEqual({ kind: 'command', text: '/KICK @bob' });
-		expect(composerAction('/LIVE', all)).toEqual({ kind: 'command', text: '/LIVE' });
+		expect(composerAction('/LIVE', { ...all, serves })).toEqual({ kind: 'command', text: '/LIVE' });
+		expect(composerAction('/LIVE', all)).toEqual({ kind: 'live' });
+		expect(composerAction('/Nick Ada', { ...all, serves })).toEqual({ kind: 'nick', name: 'Ada' });
 		expect(composerAction('/kick @bob', { ...all, serves: () => false })).toEqual({ kind: 'kick', user: 'bob' });
 		// Without `command`, none goes to the server; `/live` stays apron-web's.
 		expect(composerAction('/live', { command: false, rooms: false, append: true, serves })).toEqual({ kind: 'live' });
@@ -54,8 +56,9 @@ describe('composer commands', () => {
 		expect(composerAction('/leave', both)).toEqual({ kind: 'leave' });
 		expect(composerAction('/leave ops', both)).toEqual({ kind: 'leave', room: 'ops' });
 		expect(composerAction('/topic Deploys *only* ', both)).toEqual({ kind: 'topic', description: 'Deploys *only*' });
-		// Names are case-sensitive: another spelling goes to the server.
-		expect(composerAction('/TOPIC Deploys', both)).toEqual({ kind: 'command', text: '/TOPIC Deploys' });
+		// Without ext:command_list, apron-web's own match in any case, as before it.
+		expect(composerAction('/TOPIC Deploys', both)).toEqual({ kind: 'topic', description: 'Deploys' });
+		expect(composerAction('/NICK Ada', both)).toEqual({ kind: 'nick', name: 'Ada' });
 		expect(composerAction('/kick @guest_2', both)).toEqual({ kind: 'kick', user: 'guest_2' });
 		expect(composerAction('/invite bob.', both)).toEqual({ kind: 'invite', user: 'bob' });
 		// Without an argument, or without capability rooms, the server gets them.

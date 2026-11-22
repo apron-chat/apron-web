@@ -1022,9 +1022,10 @@ Without the capability, `/` text is an ordinary message.
 ([EXT.md §13](../EXT.md#13-extcommand_list)), a `/` at the start of the
 composer opens a list of them, with apron-web's own (`/nick`, `/join`,
 `/leave`, `/topic`, `/kick`, `/invite`, `/live`, as the server's capabilities
-allow), each name once, matched case-sensitively: a name the server lists is the
-server's (`/kick`, or a form such as `/topic clear`, then goes to the server as a
-command, not as a request apron-web makes, until the server stops listing it). Each
+allow), each name once: a name the server lists is the server's (`/kick`, in any
+case, or a form such as `/topic clear`, then goes to the server as a command, not
+as a request apron-web makes, until the server stops listing it). apron-web's own
+match in any case, as on a server without the extension. Each
 row shows `/name`, its arguments as the server wrote them, what it does, what it
 requires ("Required: attachment"), and "In this room" for one that acts on the
 room it's sent in. A
