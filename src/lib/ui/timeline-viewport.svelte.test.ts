@@ -356,6 +356,10 @@ describe('TimelineViewport', () => {
 		top = 450;
 		viewport.trackScroll();
 		expect(viewport.latestVisible).toBe(true);
+		// Its head touching the list's foot exactly: on screen still, as the observer counts it.
+		top = 400;
+		viewport.trackScroll();
+		expect(viewport.latestVisible).toBe(true);
 		// Up past it: off screen at once, with no word from the observer.
 		top = 100;
 		viewport.trackScroll();

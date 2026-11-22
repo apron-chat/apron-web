@@ -592,7 +592,8 @@ export class TimelineViewport {
 		if (!atBottom && this.#latestVisible && watched && watched.pane === this.#paneId) {
 			const at = watched.row.getBoundingClientRect();
 			const box = scroller.getBoundingClientRect();
-			if (!(at.bottom > box.top && at.top < box.bottom)) this.#measured(false, watched.pane);
+			// Touching the edge counts as on screen, as it does for the observer: else, scrolled back, it would say nothing.
+			if (at.bottom < box.top || at.top > box.bottom) this.#measured(false, watched.pane);
 		}
 	};
 

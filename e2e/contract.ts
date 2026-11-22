@@ -374,6 +374,15 @@ export const SCENES: Scene[] = [
 			await preferences.getByRole('navigation', { name: 'Preference sections' }).getByRole('button', { name: 'Notifications', exact: true }).click();
 			await expect(preferences.getByRole('switch', { name: 'Notifications' })).toBeVisible();
 			await look();
+			// Renamed, the profile bar names you so: interop finds an account by it (`Open preferences. …: Lin`).
+			await page.keyboard.press('Escape');
+			await expect(preferences).toBeHidden();
+			await page.getByRole('button', { name: /^Open preferences/ }).click();
+			const name = preferences.getByTestId('display-name-input');
+			await name.fill('Lin');
+			await name.press('Enter');
+			await expect(page.getByRole('button', { name: /^Open preferences\..*: Lin(,|$)/ })).toHaveCount(1);
+			await look();
 		}
 	},
 	{
@@ -442,8 +451,8 @@ export const SCENES: Scene[] = [
 			// Another server: its address alone until Continue.
 			await page.getByTestId('server-url-input').fill('ws://127.0.0.1:9/ws');
 			await look();
-			// Disconnected, the connect screen joins anew: its guest, chosen among the ways in, joins with Join (where,
-			// connected, switching servers says Done).
+			// Disconnected, the connect screen joins anew: its guest, chosen among the ways in, joins with Join (as it does
+			// for another server than the one connected; for that one, it says Done).
 			await card.getByRole('button', { name: 'Cancel', exact: true }).click();
 			await expect(card).toBeHidden();
 			await page.getByRole('button', { name: /^Server: / }).click();
