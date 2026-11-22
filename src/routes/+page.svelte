@@ -105,7 +105,7 @@
 	import { SignInLinks } from '$lib/ui/link-controller.svelte';
 	import { findProposal } from '$lib/protocol/proposals';
 	import { idMillis } from '$lib/ui/time';
-	import { tabTitle } from '$lib/ui/attention';
+	import { showTitleAgain, tabTitle } from '$lib/ui/attention';
 	import { trackKeyboard } from '$lib/ui/viewport';
 	import { linkPreviews, PREVIEW_WAIT_MS } from '$lib/ui/link-previews';
 	import { carriesFiles, fileDrop, pastedFiles } from '$lib/ui/file-transfer';
@@ -3612,7 +3612,7 @@
 	}
 </script>
 
-<svelte:window onpagehide={() => { releasePreviewWaits(); draftKeeper.flush(); }} onkeydown={windowKeydown} onpointerdowncapture={() => (tabbing = false)} onpaste={windowPaste} ondragover={refuseDrop} ondrop={refuseDrop} onfocus={() => { presence.focus(); refreshNotificationPermission(); }} onblur={() => presence.blur()} />
+<svelte:window onpagehide={() => { releasePreviewWaits(); draftKeeper.flush(); }} onpopstate={() => showTitleAgain(document)} onkeydown={windowKeydown} onpointerdowncapture={() => (tabbing = false)} onpaste={windowPaste} ondragover={refuseDrop} ondrop={refuseDrop} onfocus={() => { presence.focus(); refreshNotificationPermission(); }} onblur={() => presence.blur()} />
 <svelte:document onclick={mediaAskClick} onvisibilitychange={() => { presence.visibilityChanged(); refreshNotificationPermission(); if (document.visibilityState === 'hidden') { keepView(); releasePreviewWaits(); void historyKeeper?.flush(); draftKeeper.flush(); } }} />
 
 <svelte:head>
