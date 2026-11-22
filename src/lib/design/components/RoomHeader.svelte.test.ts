@@ -185,13 +185,18 @@ describe('RoomHeader', () => {
 	it('reading the description over the pane, offers Edit and × in place of the room’s own buttons, and marks a draft', () => {
 		const onedit = vi.fn();
 		const onclose = vi.fn();
-		render({ topic: 'Deploys', onmemberlist: () => {}, onleave: () => {}, canJoin: true, onjoin: () => {}, muted: 'until 14:30', onunmute: () => {}, descriptionDraft: true, reading: { onedit, onclose } });
+		render({ topic: 'Deploys', onmemberlist: () => {}, onleave: () => {}, canJoin: true, onjoin: () => {}, muted: 'until 14:30', onunmute: () => {}, descriptionDraft: true, reading: { onedit, onclose }, ondescription: onclose });
 		expect(sub()).toEqual([]);
-		expect([dom.queryByRole('button', 'Room actions'), dom.queryByRole('button', 'Join room'), dom.queryByRole('button', 'Unmute room')]).toEqual([null, null, null]);
-		expect(dom.queryByRole('button', 'Show member list')).not.toBeNull();
+		// The header holds only the description's own buttons: not the ⋯ menu, Join, Unmute or the member list's toggle.
+		expect(['Room actions', 'Join room', 'Unmute room', 'Show member list'].map((name) => dom.queryByRole('button', name))).toEqual([null, null, null, null]);
 		dom.button('Edit room, unsaved draft').click();
 		dom.button('Close description').click();
 		expect([onedit, onclose].map((fn) => fn.mock.calls.length)).toEqual([1, 1]);
+		// The name that opened it shuts it again.
+		const text = document.querySelector<HTMLElement>('.ap-roomhead-text')!;
+		expect([text.classList.contains('ap-roomhead-text-opens'), text.title]).toEqual([true, 'Close the room description']);
+		document.querySelector<HTMLElement>('.ap-roomhead-name')!.click();
+		expect(onclose).toHaveBeenCalledTimes(2);
 		dom.unmount();
 		// Without cap `rooms`, × alone.
 		render({ reading: { onclose } });

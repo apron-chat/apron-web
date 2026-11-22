@@ -115,13 +115,15 @@ export function topLevelRooms(rooms: readonly RoomSnapshot[]): RoomSnapshot[] {
 export function sameRoomSnapshot(a: RoomSnapshot, b: RoomSnapshot): boolean {
 	const keys = Object.keys(a) as (keyof RoomSnapshot)[];
 	if (keys.length !== Object.keys(b).length) return false;
-	return keys.every((key) => {
-		if (a[key] === b[key]) return true;
-		if (key === 'renames') return sameItems(a.renames, b.renames, (x, y) => x.log_id === y.log_id && x.title === y.title && x.previous === y.previous);
-		if (key === 'members') return sameItems(a.members, b.members, (x, y) => x === y);
-		if (key === 'readers') return sameItems(a.readers, b.readers, (x, y) => x.user_id === y.user_id && x.message_id === y.message_id);
+	// A loop rather than `every`: asked of each room with every snapshot, a call per field adds up (perf budget).
+	for (const key of keys) {
+		if (a[key] === b[key]) continue;
+		if (key === 'renames' && sameItems(a.renames, b.renames, (x, y) => x.log_id === y.log_id && x.title === y.title && x.previous === y.previous)) continue;
+		if (key === 'members' && sameItems(a.members, b.members, (x, y) => x === y)) continue;
+		if (key === 'readers' && sameItems(a.readers, b.readers, (x, y) => x.user_id === y.user_id && x.message_id === y.message_id)) continue;
 		return false;
-	});
+	}
+	return true;
 }
 
 function sameItems<T>(a: readonly T[] | undefined, b: readonly T[] | undefined, same: (x: T, y: T) => boolean): boolean {
@@ -138,8 +140,15 @@ function hasCapability(server: ServerParams | undefined, cap: Capability): boole
 	return server?.capabilities?.includes(cap) === true;
 }
 
+/** Each `server` frame's capabilities, worked out once: the client's snapshot asks again with every message, of the same frame. */
+const capabilitiesByServer = new WeakMap<ServerParams, Capabilities>();
+
 export function capabilitiesOf(server: ServerParams | undefined): Capabilities {
-	return Object.fromEntries(CAPABILITIES.map((cap) => [cap, hasCapability(server, cap)])) as Capabilities;
+	const known = server && capabilitiesByServer.get(server);
+	if (known) return known;
+	const capabilities = Object.fromEntries(CAPABILITIES.map((cap) => [cap, hasCapability(server, cap)])) as Capabilities;
+	if (server) capabilitiesByServer.set(server, capabilities);
+	return capabilities;
 }
 
 /** Edit, move, and delete controls (capability `edit`). */

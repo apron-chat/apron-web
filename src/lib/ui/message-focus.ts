@@ -31,7 +31,15 @@ function shown(element: HTMLElement): boolean {
  * its own (a thread's card, a fold's …), since Tab no longer goes through the timeline (`tabbableOutside`).
  */
 export function timelineItems(list: ParentNode): HTMLElement[] {
-	return [...list.querySelectorAll<HTMLElement>(`${ARTICLES}, ${TABBABLE}`)].filter((element) => element.matches(ARTICLES) || (!element.closest('article[data-message-id]') && element.tabIndex >= 0));
+	return [...list.querySelectorAll<HTMLElement>(`${ARTICLES}, ${TABBABLE}`)].filter(isItem);
+}
+
+/** Of what `timelineItems` finds, whether `element` is one it keeps. */
+const isItem = (element: HTMLElement): boolean => element.matches(ARTICLES) || (!element.closest('article[data-message-id]') && element.tabIndex >= 0);
+
+/** Whether `element` is one of `timelineItems(list)`, asked of it alone rather than of every item listed (on each focus and key). */
+export function isTimelineItem(list: Node, element: HTMLElement): boolean {
+	return element !== list && list.contains(element) && element.matches(`${ARTICLES}, ${TABBABLE}`) && isItem(element);
 }
 
 /** The message or notice `element` is in (or is), if any. */

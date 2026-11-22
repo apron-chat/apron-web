@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { pushIdFor, loadLastSignIn, saveLastSignIn, loadRecentServers, refreshRecentServer, rememberServer, starServer, forgetServer, hideDescription, loadAppearance, loadClosedTerminals, saveTerminalClosed, loadShutMemberSections, saveShutMemberSections, loadSidebarFolds, saveSidebarFolds, loadHiddenDescriptions, loadAddedRooms, saveAddedRooms, loadThreadFolds, saveThreadFolds, loadRoomOrder, saveRoomOrder, descriptionHidden, descriptionUpdated, loadNotificationsEnabled, loadNotifyScopes, loadWebPushAccounts, notificationsChosen, loadWebPushOwner, saveAppearance, saveNotificationsEnabled, saveNotifyScopes, saveWebPushEnabled, saveWebPushOwner } from './storage';
+import { pushIdFor, loadLastSignIn, saveLastSignIn, loadRecentServers, refreshRecentServer, rememberServer, starServer, forgetServer, hideDescription, showDescription, loadAppearance, loadClosedTerminals, saveTerminalClosed, loadShutMemberSections, saveShutMemberSections, loadSidebarFolds, saveSidebarFolds, loadHiddenDescriptions, loadAddedRooms, saveAddedRooms, loadThreadFolds, saveThreadFolds, loadRoomOrder, saveRoomOrder, descriptionHidden, descriptionUpdated, loadNotificationsEnabled, loadNotifyScopes, loadWebPushAccounts, notificationsChosen, loadWebPushOwner, saveAppearance, saveNotificationsEnabled, saveNotifyScopes, saveWebPushEnabled, saveWebPushOwner } from './storage';
 import { notifyAccount } from './notify-scopes';
 import { memoryStorage } from '$lib/test/storage';
 
@@ -252,6 +252,15 @@ describe('preference storage', () => {
 		expect(descriptionHidden(loadHiddenDescriptions(), 'room199')).toBe(true);
 		values.set('apron.hiddenSummaries', '{broken');
 		expect(loadHiddenDescriptions()).toEqual({});
+	});
+
+	it('brings a description put away back, as another tab left the rest', () => {
+		const here = hideDescription({}, 'general', 'Say hello.');
+		hideDescription(loadHiddenDescriptions(), 'design', 'Critiques.');
+		const hidden = showDescription(here, 'general');
+		expect(descriptionHidden(hidden, 'general')).toBe(false);
+		expect(descriptionHidden(loadHiddenDescriptions(), 'general')).toBe(false);
+		expect(descriptionHidden(loadHiddenDescriptions(), 'design')).toBe(true);
 	});
 
 	it('keeps terminals closed as saved by any tab, forgets the oldest past the limit, and reads nothing from a broken entry', () => {

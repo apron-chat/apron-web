@@ -11,7 +11,8 @@
 	 * `edit` says (RoomEdit, which the header reads too: its Edit and ×, or the title, Cancel and Save). Read, it is
 	 * DescriptionText's; edited, it is the description's own editor (DescriptionField: written as in the composer), filling
 	 * the sheet, with the keyboard in it as it opens. Ctrl+Enter (⌘+Enter) saves (`onsave`); a click on the dimmed room
-	 * asks to shut it (`onclose`), and Escape to step back (`onescape`).
+	 * asks to shut it (`onclose`), and Escape to step back (`onescape`); read, ⌃ at its foot folds it back into its first
+	 * lines (`onfold`).
 	 */
 	interface Props extends DescriptionSources {
 		room: EditedRoom;
@@ -21,8 +22,12 @@
 		onsave: () => void;
 		onclose: () => void;
 		onescape: () => void;
+		/** Read, fold it back into its first lines under the header. */
+		onfold?: (event: MouseEvent) => void;
+		/** Opened by the pointer: no focus ring. */
+		pointer?: boolean;
 	}
-	let { room, thread, edit, people = [], rooms = [], onmention, onopenroom, onsave, onclose, onescape }: Props = $props();
+	let { room, thread, edit, people = [], rooms = [], onmention, onopenroom, onsave, onclose, onescape, onfold, pointer }: Props = $props();
 
 	let editing = $derived(Boolean(edit.shown?.editing));
 	let saving = $derived(edit.task.busy);
@@ -36,7 +41,7 @@
 	});
 </script>
 
-<Sheet label={thread ? 'Thread description' : 'Room description'} {editing} {onclose} {onescape} testid="description-sheet">
+<Sheet label={thread ? 'Thread description' : 'Room description'} {editing} {onclose} {onescape} {onfold} {pointer} testid="description-sheet">
 	{#if editing}
 		<DescriptionField bind:value={() => edit.editing?.text ?? '', (text) => edit.setText(room.id, text)} {form} {people} {rooms} {onmention} />
 	{:else}

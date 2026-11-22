@@ -42,6 +42,9 @@ for (const [device, use] of [['desktop', DEVICES.desktop], ['phone', DEVICES.pho
 				await expect(button(preview)).toHaveClass(UPDATED);
 				await expect(button(preview)).toHaveAccessibleName('Show the room description, updated since you hid it');
 				expect(await blue(preview)).toBe(true);
+				// Pointing at the name, which opens it too, lights Description but keeps it blue.
+				await preview.page.locator('.ap-roomhead-name').hover();
+				expect(await blue(preview)).toBe(true);
 				await expect(pinned(preview)).toHaveCount(0);
 			});
 
@@ -60,7 +63,7 @@ for (const [device, use] of [['desktop', DEVICES.desktop], ['phone', DEVICES.pho
 			});
 		});
 
-		test('shows whole from a click on the room’s name or its one-line topic, and shuts on Escape, Back or a click on the room below', async ({ preview, page }) => {
+		test('shows whole from a click on the room’s name or its one-line topic, and shuts on Escape, Back, the name again or a click on the room below', async ({ preview, page }) => {
 			await putAway(preview);
 			const sheet = page.getByTestId('description-sheet');
 			await page.getByTestId('room-description').click();
@@ -72,6 +75,11 @@ for (const [device, use] of [['desktop', DEVICES.desktop], ['phone', DEVICES.pho
 			await page.goBack();
 			await expect(sheet).toHaveCount(0);
 			await expect(page.getByTestId('message-list')).toBeVisible();
+			// The name that opened it shuts it again.
+			await page.locator('.ap-roomhead-name').click();
+			await expect(sheet).toBeVisible();
+			await page.locator('.ap-roomhead-name').click();
+			await expect(sheet).toHaveCount(0);
 			if (device === 'desktop') {
 				await button(preview).click();
 				await expect(sheet).toBeVisible();
@@ -241,5 +249,109 @@ test.describe('the description’s Preview while it’s edited', () => {
 		await page.getByRole('button', { name: 'Edit room', exact: true }).click();
 		await sheet.getByRole('radio', { name: 'Preview', exact: true }).click();
 		expect(await look(sheet.getByTestId('draft-preview').getByRole('heading', { name: 'House rules' }))).toEqual(read);
+	});
+});
+
+test.describe('the description read on a phone', () => {
+	test.use(DEVICES.phone);
+
+	test('is as tall as it reads, the room dimmed below it, where a tap shuts it; its header holds only its own buttons', async ({ preview, page }) => {
+		await preview.open();
+		await preview.describe('general', 'Say hello, and keep it kind.');
+		await page.getByTestId('pane-description').click();
+		const sheet = page.getByTestId('description-sheet');
+		await expect(sheet).toBeVisible();
+		const [box, pane] = [await sheet.boundingBox(), await page.locator('main.ap-shell-main').boundingBox()];
+		expect(box!.height).toBeLessThan(pane!.height / 3);
+		await expect(page.getByRole('button', { name: /member list$/ })).toHaveCount(0);
+		await page.mouse.click(pane!.x + pane!.width / 2, pane!.y + pane!.height * 0.75);
+		await expect(sheet).toHaveCount(0);
+		await expect(page.getByRole('button', { name: /member list$/ })).toBeVisible();
+	});
+});
+
+test.describe('the description read whole', () => {
+	test.use(DEVICES.desktop);
+
+	test('folds back into its first lines with ⌃ at its foot, there again once read and on the next visit', async ({ preview, page }) => {
+		await preview.open();
+		const sheet = page.getByTestId('description-sheet');
+		await pinned(preview).click();
+		await expect(sheet).toBeVisible();
+		await sheet.getByRole('button', { name: 'Fold into preview' }).click();
+		await expect(sheet).toHaveCount(0);
+		await expect(pinned(preview)).toBeVisible();
+		// Shut with × instead, the first lines retire; Description opens it, and ⌃ brings them back.
+		await pinned(preview).click();
+		await page.getByRole('button', { name: 'Close description' }).click();
+		await expect(pinned(preview)).toHaveCount(0);
+		await button(preview).click();
+		await sheet.getByRole('button', { name: 'Fold into preview' }).click();
+		await expect(pinned(preview)).toBeVisible();
+		await page.reload();
+		await expect(pinned(preview)).toBeVisible();
+	});
+
+	test('wears the focus ring opened from the keyboard, not from the pointer', async ({ preview, page }) => {
+		await preview.open();
+		const body = page.getByTestId('description-sheet').locator('.ap-descsheet-body');
+		const ringed = () => body.evaluate((el) => el === document.activeElement && getComputedStyle(el).outlineStyle !== 'none');
+		await pinned(preview).click();
+		await expect(body).toBeFocused();
+		expect(await ringed()).toBe(false);
+		// Shut, read: Description opens it from here.
+		await page.keyboard.press('Escape');
+		// Tabbed to, as the keyboard comes to it.
+		await button(preview).focus();
+		await page.keyboard.press('Tab');
+		await page.keyboard.press('Shift+Tab');
+		await expect(button(preview)).toBeFocused();
+		await page.keyboard.press('Enter');
+		await expect(body).toBeFocused();
+		expect(await ringed()).toBe(true);
+	});
+
+	test('shut from the keyboard, gives the keyboard back to what opens it again; shut by the pointer, leaves focus be', async ({ preview, page }) => {
+		await preview.open();
+		const sheet = page.getByTestId('description-sheet');
+		const readAll = page.getByRole('button', { name: 'Read all', exact: true });
+		const open = async (from: typeof readAll) => {
+			await from.focus();
+			await page.keyboard.press('Enter');
+			await expect(sheet).toBeVisible();
+		};
+		// ⌃ pressed: folded back, to the first lines' Read all.
+		await open(readAll);
+		await sheet.getByRole('button', { name: 'Fold into preview' }).focus();
+		await page.keyboard.press('Enter');
+		await expect(readAll).toBeFocused();
+		// Escape: read, the first lines retire, so to Description.
+		await open(readAll);
+		await page.keyboard.press('Escape');
+		await expect(button(preview)).toBeFocused();
+		// × pressed: to Description again.
+		await open(button(preview));
+		await page.getByRole('button', { name: 'Close description' }).focus();
+		await page.keyboard.press('Enter');
+		await expect(button(preview)).toBeFocused();
+		// A click on the room below: focus stays where it was.
+		await button(preview).click();
+		const pane = (await page.locator('main.ap-shell-main').boundingBox())!;
+		await page.mouse.click(pane.x + pane.width / 2, pane.y + pane.height - 20);
+		await expect(sheet).toHaveCount(0);
+		await expect(button(preview)).not.toBeFocused();
+	});
+
+	test('pointing at the room’s name, which opens it, lights Description as pointing at Description does', async ({ preview, page }) => {
+		await putAway(preview);
+		const background = () => button(preview).evaluate((el) => getComputedStyle(el).backgroundColor);
+		const resting = await background();
+		await button(preview).hover();
+		const hovered = await background();
+		expect(hovered).not.toBe(resting);
+		await page.locator('.ap-roomhead-name').hover();
+		await expect.poll(background).toBe(hovered);
+		await page.getByTestId('message-list').hover();
+		await expect.poll(background).toBe(resting);
 	});
 });

@@ -85,18 +85,20 @@
 		onshortcuts?: () => void;
 		/**
 		 * The room's or thread's pinned <ThreadDescription> was put away with its ×: a Description button brings it back,
-		 * as does a click anywhere on the name and topic (but not on the thread's crumb back to its room).
+		 * as does a click anywhere on the name and topic (but not on the thread's crumb back to its room). Called with the
+		 * click, whose `detail` is 0 when the keyboard pressed Description.
 		 */
-		ondescription?: () => void;
+		ondescription?: (event: MouseEvent) => void;
 		/** The description put away has been edited since: Description is drawn in the description's blue, quietly enough to leave. */
 		descriptionUpdated?: boolean;
 		/** An edit of the description is kept as a draft, not saved yet: Description (or Edit, reading it) carries a dot. */
 		descriptionDraft?: boolean;
 		/**
 		 * The description shows over the pane (DescriptionSheet), to read: Edit (`onedit`, cap `rooms`) and × (`onclose`) in
-		 * place of the topic, Description, Join, the bell-off button and the ⋯ menu.
+		 * place of the topic, Description, Join, the member list's toggle, the bell-off button and the ⋯ menu. A click on
+		 * the name shuts it too, as one there opened it (`ondescription`, which the caller then passes as what shuts it).
 		 */
-		reading?: { onedit?: () => void; onclose: () => void };
+		reading?: { onedit?: () => void; onclose: (event: MouseEvent) => void };
 		/**
 		 * The description shows over the pane being edited: the title is a field (`title`, typed through `ontitle`), on the
 		 * left edge of the editor's column below it and half its width, a name not a paragraph; Unsaved draft beside it while
@@ -154,10 +156,15 @@
 	const memberLabel = $derived(memberListOpen ? 'Hide member list' : 'Show member list');
 
 	/** A click on the name or topic brings the description back, unless it was on a button in it or ended a selection of its text. */
+	/**
+	 * A click on the name or topic is `ondescription`'s: it shows the description, and, while it reads over the pane, the
+	 * caller passes what shuts it. Not a click on a button or link in it (a thread's crumb back to its room), nor one
+	 * that ends a selection of its text.
+	 */
 	function openDescription(event: MouseEvent): void {
 		if (!ondescription || (event.target as Element).closest('button, a')) return;
 		if (!(window.getSelection()?.isCollapsed ?? true)) return;
-		ondescription();
+		ondescription(event);
 	}
 
 	/** In the title being edited, Enter saves and Escape cancels, as in a form. */
@@ -204,9 +211,9 @@
 			{:else if editing.draft}<span class="ap-roomhead-draft" title="Kept on this device until you save or discard it"><span class="ap-roomhead-draft-word">Unsaved draft</span></span>{/if}
 		</div>
 	{:else}
-	<!-- Clicking the name or topic is a shortcut for the mouse; Description is the button for the keyboard and screen readers. -->
+	<!-- Clicking the name or topic opens the description, and shuts it again: a shortcut for the mouse; Description and × are the buttons for the keyboard and screen readers. -->
 	<!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
-	<div class={['ap-roomhead-text', ondescription && 'ap-roomhead-text-opens']} title={ondescription ? `Show the ${noun} description` : undefined} onclick={ondescription ? openDescription : undefined}>
+	<div class={['ap-roomhead-text', ondescription && 'ap-roomhead-text-opens']} title={ondescription ? `${sheet ? 'Close' : 'Show'} the ${noun} description` : undefined} onclick={ondescription ? openDescription : undefined}>
 		{#if thread}
 			<!-- The spaces around the separator are the title's, in its weight, and the separator's own collapse into them. -->
 			<h1 class="ap-roomhead-name">
@@ -243,12 +250,12 @@
 		{/if}
 	{/if}
 	{#if ondescription && !sheet}
-		<button type="button" class={['ap-btn', 'ap-btn-sm', 'ap-btn-ghost', 'ap-roomhead-description', descriptionUpdated && 'ap-roomhead-description-updated']} data-testid={descriptionTestid} aria-label="Show the {noun} description{descriptionUpdated ? ', updated since you hid it' : ''}{descriptionDraft ? ', unsaved draft' : ''}" title="Show the {noun} description{descriptionUpdated ? ' (updated since you hid it)' : ''}" onclick={ondescription}>
+		<button type="button" class={['ap-btn', 'ap-btn-sm', 'ap-btn-ghost', 'ap-roomhead-description', 'ap-roomhead-show', descriptionUpdated && 'ap-roomhead-description-updated']} data-testid={descriptionTestid} aria-label="Show the {noun} description{descriptionUpdated ? ', updated since you hid it' : ''}{descriptionDraft ? ', unsaved draft' : ''}" title="Show the {noun} description{descriptionUpdated ? ' (updated since you hid it)' : ''}" onclick={ondescription}>
 			<TextAlignStart size={15} strokeWidth={2} aria-hidden="true" /><span class="ap-roomhead-description-word">Description</span>{#if descriptionDraft}<span class="ap-roomhead-dot" aria-hidden="true"></span>{/if}
 		</button>
 	{/if}
-	<!-- The member list's toggle after Description, at the end of the header's own buttons. -->
-	{#if onmemberlist && !editing}
+	<!-- The member list's toggle after Description, at the end of the header's own buttons; not over the description, whose header holds only its own. -->
+	{#if onmemberlist && !sheet}
 		<button type="button" class={['ap-iconbtn', 'ap-roomhead-members', memberListOpen && 'ap-iconbtn-on']} aria-label={memberLabel} aria-expanded={memberListOpen} title={memberLabel} onclick={onmemberlist}>
 			<Users size={18} strokeWidth={1.8} aria-hidden="true" />
 		</button>

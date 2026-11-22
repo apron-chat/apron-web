@@ -334,13 +334,18 @@ class Directory {
 
 /** Whether two `pieces` of the directory are the same, so what was rendered from one is current for the other. */
 export function samePieces(a: readonly unknown[], b: readonly unknown[]): boolean {
-	return a.length === b.length && a.every((piece, index) => piece === b[index]);
+	if (a.length !== b.length) return false;
+	// Loops rather than `every`, here and in `sameEntries`: asked for each name drawn, on every snapshot (perf budget).
+	for (let index = 0; index < a.length; index++) if (a[index] !== b[index]) return false;
+	return true;
 }
 
 /** The same keys holding the same values; the client keeps an identity object until that user changes. */
 function sameEntries<T>(a: Record<string, T>, b: Record<string, T>): boolean {
 	const keys = Object.keys(a);
-	return keys.length === Object.keys(b).length && keys.every((key) => Object.hasOwn(b, key) && a[key] === b[key]);
+	if (keys.length !== Object.keys(b).length) return false;
+	for (const key of keys) if (!Object.hasOwn(b, key) || a[key] !== b[key]) return false;
+	return true;
 }
 
 export const directory = new Directory();

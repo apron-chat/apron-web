@@ -77,7 +77,7 @@
 	import { MEMBER_LIST_WIDTHS, ROOMS_LIST_WIDTHS, SidebarLayout } from '$lib/ui/sidebar.svelte';
 	import { NARROW_MAX, WIDE_MIN } from '$lib/ui/breakpoints';
 	import { closedTerminals } from '$lib/ui/terminal-closed.svelte';
-	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, installOfferAnswered, answerInstallOffer, loadRecentReactions, saveRecentReactions, loadRecentServers, loadServerUrl, loadSidebarPrefs, refreshRecentServer, rememberServer, saveDisplayName, saveLastSignIn, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, HIDDEN_DESCRIPTIONS_KEY, INSTALL_OFFER_KEY, loadAddedRooms, saveAddedRooms, loadHiddenDescriptions, hideDescription, descriptionHidden, descriptionUpdated, type RecentServer } from '$lib/ui/storage';
+	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, installOfferAnswered, answerInstallOffer, loadRecentReactions, saveRecentReactions, loadRecentServers, loadServerUrl, loadSidebarPrefs, refreshRecentServer, rememberServer, saveDisplayName, saveLastSignIn, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, HIDDEN_DESCRIPTIONS_KEY, INSTALL_OFFER_KEY, loadAddedRooms, saveAddedRooms, loadHiddenDescriptions, hideDescription, showDescription, descriptionHidden, descriptionUpdated, type RecentServer } from '$lib/ui/storage';
 	import TimelineLoading from '$lib/design/components/TimelineLoading.svelte';
 	import RateLimitNotice from '$lib/design/components/RateLimitNotice.svelte';
 	import SystemLine from '$lib/design/components/SystemLine.svelte';
@@ -100,7 +100,7 @@
 	import { receiptSettings } from '$lib/ui/receipt-settings.svelte';
 	import { onlyPreferencesDiffer, preferencesOpener } from '$lib/ui/preferences.svelte';
 	import { nextRoomRow } from '$lib/ui/room-steps';
-	import { articleOf, isMessageRow, MESSAGE_STEPS, messageRows, rowControls, stepMessage, tabbableOutside, timelineItems } from '$lib/ui/message-focus';
+	import { articleOf, isMessageRow, isTimelineItem, MESSAGE_STEPS, messageRows, rowControls, stepMessage, tabbableOutside, timelineItems } from '$lib/ui/message-focus';
 	import { buildRoomTimeline, steady, threadEntries, threadStartedFrom, threadDescriptionFor, threadTitleFor, type ThreadEntry, type TimelineItem } from '$lib/ui/timeline';
 	import { takeSignInLink } from '$lib/ui/sign-in-link';
 	import { returnedWaiting } from '$lib/ui/sign-in-window';
@@ -113,7 +113,7 @@
 	import { carriesFiles, fileDrop, pastedFiles } from '$lib/ui/file-transfer';
 	import { PaneDrafts, pageDrafts, type StagedFile } from '$lib/ui/pane-drafts.svelte';
 	import { DraftKeeper, draftServer } from '$lib/ui/draft-keeper.svelte';
-	import { RoomEdit } from '$lib/ui/room-edit.svelte';
+	import { RoomEdit, type EditedRoom } from '$lib/ui/room-edit.svelte';
 	import { backCloses } from '$lib/ui/viewer.svelte';
 	import { loadKeptSessionUser } from '$lib/protocol/client-internals';
 	import { PagePresence } from '$lib/ui/presence.svelte';
@@ -802,10 +802,17 @@
 	let canStartThreads = $derived(session.canManageRooms && !session.readOnly && Boolean(activeRoom) && activeRoom?.parentRoomId === undefined);
 	/** Editing the open room's or thread's title and description (capability `rooms`); the server decides who may. */
 	let canEditPane = $derived(session.canManageRooms && !session.readOnly && Boolean(activeThread ? activeThreadEntry : activeRoom));
+	// The edit target last worked out, which `editTarget` keeps while it says the same; not state, only a memo.
+	let lastEditTarget: EditedRoom | undefined;
 	/** What the Edit form edits: the open thread, else the room; its title as written (`editableTitle`), so saving sends back every character. */
-	let editTarget = $derived(activeThread
-		? (activeThreadEntry ? { id: activeThreadEntry.id, title: editableTitle(session.room(activeThreadEntry.id) ?? activeThreadEntry), description: activeThreadEntry.description } : undefined)
-		: (activeRoom ? { id: activeRoom.id, title: editableTitle(activeRoom), description: activeRoom.description } : undefined));
+	let editTarget = $derived.by(() => {
+		const next: EditedRoom | undefined = activeThread
+			? (activeThreadEntry ? { id: activeThreadEntry.id, title: editableTitle(session.room(activeThreadEntry.id) ?? activeThreadEntry), description: activeThreadEntry.description } : undefined)
+			: (activeRoom ? { id: activeRoom.id, title: editableTitle(activeRoom), description: activeRoom.description } : undefined);
+		const last = lastEditTarget;
+		// Kept while it says the same, so what reads it isn't worked out again as each snapshot comes (perf budget).
+		return (lastEditTarget = last && next && last.id === next.id && last.title === next.title && last.description === next.description ? last : next);
+	});
 	/** Room and thread descriptions put away with their ×, on this device. */
 	let hiddenDescriptions = $state(loadHiddenDescriptions());
 	/** Whether the open room's or thread's description is put away: the header's Description brings it back. */
@@ -824,8 +831,9 @@
 	/** The open pane's description, its first lines under the header until its × puts it away. */
 	let pinnedDescription = $derived(editTarget?.description && !descriptionPutAway ? { id: editTarget.id, description: editTarget.description } : undefined);
 	/**
-	 * The open room's or thread's `room_id`, from what the page chose, not `editTarget`, a new object with each snapshot (each
-	 * key typed): what follows the edit reads this, so it isn't asked again as messages come and go (perf budget).
+	 * The open room's or thread's `room_id`, from what the page chose: what follows the edit reads this, not `editTarget`
+	 * (worked out again with each snapshot, each key typed, if kept while it reads the same), so it isn't asked again as
+	 * messages come and go (perf budget).
 	 */
 	let editTargetId = $derived(activeThread ?? selectedRoomId);
 	/** The open pane's description shows over it (DescriptionSheet), and whether it is being edited. */
@@ -845,29 +853,54 @@
 		if (!roomEdit.shown) untrack(leaveDescription);
 	});
 
+	/** The description was opened by the pointer, not the keyboard (whose click has `detail` 0): it takes focus unringed. */
+	let descriptionByPointer = $state(false);
 	/** Shows the description over the pane, to read; put away and edited since, it is news no more. */
-	function openDescription(): void {
+	function openDescription(event?: MouseEvent): void {
 		const target = editTarget;
 		if (!target) return;
+		descriptionByPointer = event?.detail !== 0;
 		roomEdit.open(target);
 		if (target.description && descriptionPutAway) hiddenDescriptions = hideDescription(hiddenDescriptions, draftKey(target.id), target.description);
 	}
 	/** Edits the open room's or thread's title and description over its pane, from its draft where one is kept. */
 	function editDescription(): void {
-		if (editTarget && canEditPane) roomEdit.start(editTarget);
+		if (!editTarget || !canEditPane) return;
+		descriptionByPointer = false;
+		roomEdit.start(editTarget);
 	}
 	/**
 	 * Shuts the description; being edited, once discarding a draft is agreed. Returns whether it shut. Read whole, its first
 	 * lines under the header have done their work: they retire to the header's line and Description, as × puts them away.
 	 */
-	function closeDescription(): boolean {
+	function closeDescription(event?: MouseEvent): boolean {
 		// Only the room or thread it shows: the pane may have moved on already (another room opened over it, `leave`).
 		const shown = roomEdit.shown;
 		if (!shown) return true;
 		const target = editTarget?.id === shown.id ? editTarget : undefined;
 		if (!roomEdit.close(target, Boolean(activeThread))) return false;
 		if (target?.description && !descriptionPutAway) hiddenDescriptions = hideDescription(hiddenDescriptions, draftKey(target.id), target.description);
+		if (event?.detail === 0) refocusDescription();
 		return true;
+	}
+	/**
+	 * Shut from the keyboard (Escape, or × or ⌃ pressed with Enter), the keyboard goes back to what opens the description
+	 * again, as a dialog's goes back to what opened it: its first lines' Read all, or the header's Description. Shut by the
+	 * pointer, focus stays put, so no ring is drawn where nobody is typing.
+	 */
+	function refocusDescription(): void {
+		void tick().then(() => {
+			const pane = document.querySelector('.ap-shell-main');
+			(pane?.querySelector<HTMLElement>('.ap-description .ap-description-more') ?? pane?.querySelector<HTMLElement>('.ap-roomhead-show'))?.focus();
+		});
+	}
+	/** Read, folds the description back into its first lines under the header, there again as when it was new. */
+	function foldDescription(event?: MouseEvent): void {
+		const shown = roomEdit.shown;
+		if (!shown || shown.editing) return;
+		roomEdit.close(undefined, Boolean(activeThread));
+		if (editTarget?.id === shown.id) hiddenDescriptions = showDescription(hiddenDescriptions, draftKey(shown.id));
+		if (event?.detail === 0) refocusDescription();
 	}
 	/** Back from editing to reading, once discarding a draft is agreed. */
 	function cancelDescriptionEdit(): void {
@@ -876,7 +909,7 @@
 	/** Escape over the description: a step back, from editing to reading, from reading to shut. */
 	function descriptionEscape(): void {
 		if (editingDescription) cancelDescriptionEdit();
-		else closeDescription();
+		else if (closeDescription()) refocusDescription();
 	}
 	/** The title as typed in the header. */
 	function editDescriptionTitle(title: string): void {
@@ -3189,7 +3222,7 @@
 		const target = event.target;
 		const list = viewport.messageScroll;
 		if (!(target instanceof HTMLElement) || !list) return;
-		if (timelineItems(list).includes(target)) lastItem = target;
+		if (isTimelineItem(list, target)) lastItem = target;
 		const from = event.relatedTarget;
 		if (!tabbing || (from instanceof Node && list.contains(from)) || target.closest('[data-testid="message-editor"]')) return;
 		if (lastItem === target) return;
@@ -3258,7 +3291,7 @@
 			}
 			return;
 		}
-		if (!timelineItems(list).includes(target)) return;
+		if (!isTimelineItem(list, target)) return;
 		if (event.key === 'Escape') {
 			// In select mode Escape ends it (windowKeydown); the composer is the selection bar then.
 			if (selection.active) return;
@@ -3838,7 +3871,7 @@
 				room={activeRoom}
 				pane={paneRoom ?? activeRoom}
 				showTopic={!pinnedDescription}
-				ondescription={sheetShown ? undefined : descriptionPutAway ? openDescription : descriptionDrafted && !pinnedDescription && canEditPane ? editDescription : undefined}
+				ondescription={sheetShown ? (editingDescription ? undefined : closeDescription) : descriptionPutAway ? openDescription : descriptionDrafted && !pinnedDescription && canEditPane ? editDescription : undefined}
 				descriptionUpdated={descriptionEdited}
 				descriptionDraft={descriptionDrafted && canEditPane}
 				reading={sheetShown && !editingDescription ? { onedit: canEditPane ? editDescription : undefined, onclose: closeDescription } : undefined}
@@ -3868,7 +3901,7 @@
 			{#if sheetShown && editTarget && descriptionSheet.component}
 				{@const DescriptionSheet = descriptionSheet.component}
 				{#key editTarget.id}
-					<DescriptionSheet room={editTarget} thread={Boolean(activeThread)} edit={roomEdit} {people} rooms={roomSuggestions} onmention={refreshMembers} onopenroom={openMentionedRoom} onsave={saveDescription} onclose={closeDescription} onescape={descriptionEscape} />
+					<DescriptionSheet room={editTarget} thread={Boolean(activeThread)} edit={roomEdit} {people} rooms={roomSuggestions} onmention={refreshMembers} onopenroom={openMentionedRoom} onsave={saveDescription} onclose={closeDescription} onescape={descriptionEscape} onfold={foldDescription} pointer={descriptionByPointer} />
 				{/key}
 			{/if}
 

@@ -79,24 +79,22 @@ const READ_MAX = 200;
  */
 const readLinks = new WeakMap<Record<string, Site>, Map<string, PreviewLink | null>>();
 
-/** The link a URL as written in text names on a site in `sites` (`previewLink` of it trimmed), or undefined. */
-function linkWritten(written: string, sites: Record<string, Site>): PreviewLink | undefined {
-	let read = readLinks.get(sites);
-	if (!read) readLinks.set(sites, (read = new Map()));
-	let link = read.get(written);
-	if (link === undefined) {
-		link = previewLink(trimUrl(written), sites) ?? null;
-		if (read.size >= READ_MAX) read.delete(read.keys().next().value as string);
-		read.set(written, link);
-	}
-	return link ?? undefined;
+/** Reads the link a URL as written in text names on a site in `sites` (`previewLink` of it trimmed) into `read`, the links read for `sites`. */
+function readLink(read: Map<string, PreviewLink | null>, written: string, sites: Record<string, Site>): PreviewLink | null {
+	const link = previewLink(trimUrl(written), sites) ?? null;
+	if (read.size >= READ_MAX) read.delete(read.keys().next().value as string);
+	read.set(written, link);
+	return link;
 }
 
 /** The distinct previewable links in a message's text, in order, up to `LINK_PREVIEWS_MAX`, leaving out links in `skip`. */
 export function findLinks(text: string, skip: readonly string[] = [], sites: Record<string, Site> = SITES): PreviewLink[] {
 	const found = new Map<string, PreviewLink>();
+	let read = readLinks.get(sites);
+	if (!read) readLinks.set(sites, (read = new Map()));
 	for (const match of text.matchAll(URL_IN_TEXT)) {
-		const link = linkWritten(match[0], sites);
+		// A URL read before is looked up here, not in a call of its own: a long draft's dozens are found again on every key.
+		const link = read.get(match[0]) ?? (read.has(match[0]) ? null : readLink(read, match[0], sites));
 		if (link && !found.has(link.url) && !skip.includes(link.url)) found.set(link.url, link);
 		if (found.size >= LINK_PREVIEWS_MAX) break;
 	}

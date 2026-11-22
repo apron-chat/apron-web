@@ -428,7 +428,10 @@ function sameFields<T extends object>(a: T | undefined, b: T | undefined): boole
 	if (a === b) return true;
 	if (!a || !b) return false;
 	const keys = Object.keys(a) as (keyof T)[];
-	return keys.length === Object.keys(b).length && keys.every((key) => a[key] === b[key]);
+	if (keys.length !== Object.keys(b).length) return false;
+	// Loops rather than `every`, here and in `sameView`: asked of each row on every snapshot, a call per field adds up (perf budget).
+	for (const key of keys) if (a[key] !== b[key]) return false;
+	return true;
 }
 
 function sameList<T>(a: readonly T[] | undefined, b: readonly T[] | undefined, same: (x: T, y: T) => boolean): boolean {
@@ -453,8 +456,8 @@ const sameEmbed = (a: MessageEmbed, b: MessageEmbed) => a.key === b.key && a.emb
 
 /** Whether two views of one record draw the same row. */
 export function sameView(a: MessageView, b: MessageView): boolean {
-	return KEYS.every((key) => a[key] === b[key])
-		&& a.body === b.body
+	for (const key of KEYS) if (a[key] !== b[key]) return false;
+	return a.body === b.body
 		&& (a.sender === b.sender || sameSender(a.sender, b.sender))
 		&& sameFields(a.caps, b.caps)
 		&& a.seenBy === b.seenBy

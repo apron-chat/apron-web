@@ -371,6 +371,9 @@ test.describe('right to left', () => {
 
 		test('a message header and the member list measure the same along the line, left to right and right to left', async ({ preview, page }) => {
 			await preview.open();
+			// The description's first lines take the top of the pane, leaving the first header measured part scrolled out at the
+			// top, where hovering it shifts the timeline: put away, so the header sits whole in view.
+			await page.getByRole('button', { name: 'Hide description' }).click();
 			for (const dir of ['ltr', 'rtl'] as const) {
 				if (dir === 'rtl') await page.evaluate(() => document.documentElement.setAttribute('dir', 'rtl'));
 				await test.step(`a message header keeps its name and time apart, the time reads as written, and the toolbar sits at the end (${dir})`, async () => {

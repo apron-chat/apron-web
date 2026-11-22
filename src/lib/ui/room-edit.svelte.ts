@@ -1,4 +1,3 @@
-import { SvelteMap } from 'svelte/reactivity';
 import type { DraftStore } from './pane-drafts.svelte';
 import { descriptionFingerprint, type SavedDraft } from './storage';
 import { messageOf, Task } from './task.svelte';
@@ -46,7 +45,8 @@ export class RoomEdit {
 	shown = $state<{ id: string; editing: boolean }>();
 	/** Saving the edit, and why it didn't save. */
 	readonly task = new Task<'saving', string>();
-	readonly #edits = new SvelteMap<string, Edit>();
+	/** The edits, by key: replaced whole on each change, so what reads them updates (a plain map: `svelte/reactivity`'s SvelteMap would load with the app). */
+	#edits = $state.raw<ReadonlyMap<string, Edit>>(new Map());
 	readonly #store: DraftStore | undefined;
 	readonly #keyOf: (roomId: string) => string;
 	readonly #ask: (question: string) => boolean;
@@ -94,7 +94,7 @@ export class RoomEdit {
 			this.#store.changed(key, this.#read);
 			return;
 		}
-		this.#edits.set(key, { title: kept.title, text: kept.text, base: kept.base });
+		this.#set(key, { title: kept.title, text: kept.text, base: kept.base });
 	}
 
 	/** Shows `room`'s description over its pane, to read. */
@@ -109,7 +109,7 @@ export class RoomEdit {
 		const key = this.#keyOf(room.id);
 		if (!this.#edits.has(key)) {
 			const from = { title: room.title, text: room.description ?? '' };
-			this.#edits.set(key, { ...from, base: roomFingerprint(room), from });
+			this.#set(key, { ...from, base: roomFingerprint(room), from });
 		}
 		this.task.reset();
 		this.shown = { id: room.id, editing: true };
@@ -180,15 +180,19 @@ export class RoomEdit {
 
 	/** Forgets the edits whose keys pass `goes`, as the page drops another account's drafts. */
 	forgetWhere(goes: (key: string) => boolean): void {
-		for (const key of [...this.#edits.keys()]) if (goes(key)) this.#edits.delete(key);
+		if ([...this.#edits.keys()].some(goes)) this.#edits = new Map([...this.#edits].filter(([key]) => !goes(key)));
 		if (this.shown?.editing && !this.#edits.has(this.#keyOf(this.shown.id))) this.shown = undefined;
+	}
+
+	#set(key: string, edit: Edit): void {
+		this.#edits = new Map(this.#edits).set(key, edit);
 	}
 
 	#change(roomId: string, change: Partial<Pick<Edit, 'title' | 'text'>>): void {
 		const key = this.#keyOf(roomId);
 		const edit = this.#edits.get(key);
 		if (!edit) return;
-		this.#edits.set(key, { ...edit, ...change });
+		this.#set(key, { ...edit, ...change });
 		this.#store?.changed(key, this.#read);
 	}
 
@@ -204,7 +208,9 @@ export class RoomEdit {
 
 	#forget(key: string): void {
 		if (!this.#edits.has(key)) return;
-		this.#edits.delete(key);
+		const edits = new Map(this.#edits);
+		edits.delete(key);
+		this.#edits = edits;
 		this.#store?.changed(key, this.#read);
 	}
 }
