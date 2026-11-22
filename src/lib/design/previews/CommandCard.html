@@ -1,0 +1,14 @@
+<!-- @dsCard group="Input" height=260 subtitle="Above the composer while a command's arguments are typed: that command's entry alone, as the command reference shows it" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>CommandCard</title></head>
+<body>
+<div id="root"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  var box = document.createElement('div'); box.style.cssText = 'position:relative;height:210px;display:flex;flex-direction:column;justify-content:flex-end';
+  root.appendChild(box);
+  A.render(A.Composer, box, { room: 'Ops', value: '/kick @bob spamming', picker: A.part(A.CommandCard, { command: { name: 'kick', hint: '@user [<reason>]', description: 'Remove a user from this room', required: ['mention'] } }) });
+</script>
+</body>
+</html>

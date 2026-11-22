@@ -10,11 +10,15 @@ export const newThreadDialog = part((m) => m.NewThreadDialog);
 export const descriptionSheet = part((m) => m.DescriptionSheet);
 export const searchDialog = part((m) => m.SearchDialog);
 export const shortcutsDialog = part((m) => m.ShortcutsDialog);
+/** Every command the user can use (`ext:command_list`), opened by `/help` or the composer's Browse all commands. */
+export const commandReference = part((m) => m.CommandReferenceDialog);
 export const signInLinkDialog = part((m) => m.SignInLinkDialog);
 /** Preferences, with Profile's form (ProfileBar's), which mounts the first time it opens. */
 export const profilePreferences = part((m) => m.ProfilePreferences);
 export const addMembersDialog = part((m) => m.AddMembersDialog);
 export const autocompletePicker = part((m) => m.AutocompletePicker);
+/** The entry of the command whose arguments are being typed, where the autocomplete sits (the design system's). */
+export const commandCard = part((m) => m.CommandCard);
 export const installNudge = part((m) => m.InstallPrompt);
 export const mentionAddLine = part((m) => m.MentionAddLine);
 export const editorsNudge = part((m) => m.EditorsPrompt);

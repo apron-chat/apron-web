@@ -219,7 +219,10 @@ export interface ComposerField {
 	/** The placeholder: the Composer's `placeholder`, else "Message {room}" or "Reply in {thread}". */
 	placeholder: string;
 	disabled: boolean;
-	/** The draft is a command (`canCommand`): the field is set in monospace by the Composer. */
+	/**
+	 * The draft is a command (`canCommand`): the Composer sets the field in monospace and, by its `ap-composer-field`
+	 * class, `autocapitalize="none"`, `autocorrect="off"` and `spellcheck="false"` on it while the Command tag shows.
+	 */
 	command: boolean;
 }
 
@@ -290,6 +293,40 @@ export interface PickerEmoji {
 	name: string;
 	/** A custom emoji's image, shown in place of `native`. */
 	image?: MediaSrc;
+}
+
+/**
+ * A command in the CommandReference and the composer's CommandCard: its words after `/`, its hint (what follows the
+ * name) and description, shown as written; `required`, what it fails without, each a word such as "reply" or
+ * "attachment", shown as "Required: reply, attachment"; `inRoom`, one that acts on the room it's sent in ("In this
+ * room"); `noRoom`, one that requires a room where there's none to name ("Needs a room", and not used); and
+ * `replaced`, one of apron-web's own that a command the server lists by the same name takes the place of, crossed out
+ * and saying so. A form (`emoji add`) is a command of its own.
+ */
+export interface ReferenceCommand {
+	name: string;
+	hint?: string;
+	description?: string;
+	required?: string[];
+	inRoom?: boolean;
+	noRoom?: boolean;
+	replaced?: boolean;
+}
+
+/**
+ * A command a `/` can name, in the MentionPicker, as the reference shows it, and the words its forms go on with (`add`
+ * and `remove` after `emoji`). `browse`: not a command, the row after them that opens every command (a
+ * CommandReference).
+ */
+export interface PickerCommand extends ReferenceCommand {
+	forms?: string[];
+	browse?: boolean;
+}
+
+/** A titled section of the CommandReference, such as the commands everyone can use. */
+export interface ReferenceSection {
+	title: string;
+	commands: ReferenceCommand[];
 }
 
 /** Someone in a MemberList (§4.2.1). */

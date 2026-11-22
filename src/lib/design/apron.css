@@ -7,7 +7,7 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
    one that fills its row, list or track (--focus-offset-inset), where an outer ring would be clipped or cross its
    neighbours. A field rings its own border, which takes the color too (.ap-field); the composer and a message being
    edited light their frame instead, and a panel's handle its border. */
-:where(.ap-btn, .ap-embed-remove, .ap-link, .ap-dialog-titlebtn, .ap-thread, .ap-composer-field, .ap-embed-card, .ap-embed-url, .ap-actions-btn, .ap-jumpbar-btn, .ap-jumpfab, .ap-sect-toggle, .ap-roomhead-back, .ap-roomhead-crumb, .ap-profile-me, .ap-shell-sidehead-return, .ap-shell-sidehead-open, .ap-field, .ap-reply, .ap-choice-item, .ap-msg-check, .ap-msg-who, .ap-member-who, .ap-iconbtn, .ap-foldpill, .ap-rchip, .ap-switch, .ap-description-toggle, .ap-attachment-rename, .ap-viewer-btn, .ap-embed-ogcard, .ap-embed-imagelink, button.ap-mention, a.ap-linkchip, .ap-pick-chip-remove, .ap-audio-play, .ap-audio-rate, .ap-audio-seek, .ap-embed-audiotitle, .ap-task, .ap-spoiler):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
+:where(.ap-btn, .ap-cmdref-use, .ap-embed-remove, .ap-link, .ap-dialog-titlebtn, .ap-thread, .ap-composer-field, .ap-embed-card, .ap-embed-url, .ap-actions-btn, .ap-jumpbar-btn, .ap-jumpfab, .ap-sect-toggle, .ap-roomhead-back, .ap-roomhead-crumb, .ap-profile-me, .ap-shell-sidehead-return, .ap-shell-sidehead-open, .ap-field, .ap-reply, .ap-choice-item, .ap-msg-check, .ap-msg-who, .ap-member-who, .ap-iconbtn, .ap-foldpill, .ap-rchip, .ap-switch, .ap-description-toggle, .ap-attachment-rename, .ap-viewer-btn, .ap-embed-ogcard, .ap-embed-imagelink, button.ap-mention, a.ap-linkchip, .ap-pick-chip-remove, .ap-audio-play, .ap-audio-rate, .ap-audio-seek, .ap-embed-audiotitle, .ap-task, .ap-spoiler):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
 :where(.ap-room, .ap-room-exit, .ap-room-join, .ap-menu-item, .ap-seg-item, .ap-connect-recent-item, .ap-font-option, .ap-font-load, .ap-preferences-nav button, .ap-profedit-upload):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset-inset); }
 /* The people picker's field rings itself while its input has the keyboard, as a field does. */
 .ap-pick-field:has(.ap-pick-input:focus-visible) { outline: var(--focus-ring); outline-offset: var(--focus-offset); border-color: var(--focus); }
@@ -1949,6 +1949,15 @@ button.ap-mention, a.ap-linkchip { max-width: 100%; white-space: normal; overflo
 .ap-mpick-kbd { margin-inline-start: auto; font: inherit; font-size: var(--text-xs); line-height: var(--leading-sm); padding: 0 var(--space-1_5); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); color: var(--ink-muted); }
 .ap-mpick-empty { padding: var(--space-2) var(--space-3); font-size: var(--text-ui); color: var(--ink-muted); }
 .ap-mpick-emoji-glyph { width: 24px; text-align: center; font-size: 20px; line-height: 24px; }
+/* A command (`ext:command_list`): its `/name`, hint and forms on one line, set as the composer sets a command, and its
+   description under them in muted text; each part cut short to the list's width. The server writes the hint and
+   description: each takes its own direction. */
+.ap-mpick-cmd { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; }
+.ap-mpick-cmd-line { display: flex; align-items: baseline; gap: var(--space-2); min-width: 0; }
+.ap-mpick-cmd-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The last row of a command's suggestions, which opens every command: in the accent, as a link. */
+.ap-mpick-browse { display: flex; flex-direction: column; color: var(--accent); font-weight: 600; }
+.ap-mpick-browse-none { color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 400; }
 
 /* Mention counts: an @ badge in accent beside the room, and in the jump bar */
 .ap-count-at { font-weight: 600; }
@@ -2283,6 +2292,28 @@ a.ap-linkchip-elsewhere:hover { background: var(--hover); }
 .ap-search-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-top: var(--space-2); }
 .ap-search-footnote { margin: 0; color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); }
 .ap-search-foot .ap-btn { flex: none; margin-inline-start: auto; }
+/* CommandReference: every command as a document, as KeyboardShortcuts shows its keys: a heading per section, each
+   command (a form like any) its `/name` and hint as code over its description and what it requires. */
+.ap-cmdref-code, .ap-mpick-cmd-name, .ap-mpick-cmd-args { font-family: var(--font-mono); }
+.ap-cmdref-code { font-size: var(--text-ui); line-height: var(--leading-ui); color: var(--ink-muted); overflow-wrap: anywhere; }
+.ap-cmdref-name { color: var(--ink); font-weight: 600; }
+.ap-cmdcard { padding: var(--space-2) var(--space-3); }
+.ap-cmdref-desc { margin: 0; color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); unicode-bidi: plaintext; }
+/* Its body shows its scrollbar while it scrolls, so it's plain there's more below: a styled WebKit scrollbar stays shown
+   where an overlay one hides (Chrome and Safari, phones too); Firefox takes the standard properties. Only the body
+   scrolls: at its tallest, the frame inside the dialog's border would scroll the dialog by that border too. */
+.ap-cmdref { overflow: hidden; }
+.ap-cmdref .ap-dialog-body { scrollbar-gutter: stable; }
+.ap-cmdref .ap-dialog-body::-webkit-scrollbar { width: 8px; }
+.ap-cmdref .ap-dialog-body::-webkit-scrollbar-thumb { border-radius: var(--radius-full); background: var(--line-strong); }
+@supports not selector(::-webkit-scrollbar) { .ap-cmdref .ap-dialog-body { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; } }
+/* A command's code, as a button that uses it: the document's text all the same, underlined under the pointer. */
+.ap-cmdref-use { padding: 0; border: 0; border-radius: var(--radius-sm); background: none; color: inherit; font: inherit; text-align: start; cursor: pointer; }
+.ap-cmdref-use:hover .ap-cmdref-name { text-decoration: underline; }
+/* What a command fails without, as a small label under its description, in words (not by color alone). */
+.ap-cmdref-tags { display: flex; flex-wrap: wrap; gap: var(--space-1); margin: var(--space-1) 0 0; }
+.ap-cmdref-required { padding: 0 var(--space-1_5); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); color: var(--ink-muted); font-size: var(--text-xs); line-height: var(--leading-sm); font-weight: 600; }
+.ap-cmdref-room { border-style: dashed; }
 /* KeyboardShortcuts: titled groups in as many columns as fit, each row what a shortcut does and, at its end, its keys. */
 .ap-keys { --dialog-w: 760px; }
 /* Columns, not a grid: each group sits under the one before it in its column, so a tall group leaves no gap beside it. */

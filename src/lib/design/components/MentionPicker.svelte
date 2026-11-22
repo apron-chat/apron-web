@@ -1,6 +1,6 @@
 <script lang="ts">
 	/*
-	 * Above the Composer while you type `@name` (people, and roles: `@&role` mentions everyone else here who holds it), `#room` (rooms and threads) or `:shortcode` (emoji); ↑ ↓ move, Tab or
+	 * Above the Composer while you type `@name` (people, and roles: `@&role` mentions everyone else here who holds it), `#room` (rooms and threads), `:shortcode` (emoji) or a `/command`; ↑ ↓ move, Tab or
 	 * Enter takes one. It opens below the field instead where what scrolls around it has no room above, as over the first
 	 * message of a timeline being edited; where neither side has room for all of it, as in a dialog, it scrolls in what
 	 * there is.
@@ -9,7 +9,7 @@
 	import type { ClassValue } from 'svelte/elements';
 	import Users from '@lucide/svelte/icons/users';
 	import Avatar from './Avatar.svelte';
-	import type { PickerEmoji, PickerRole, PickerRoom, Sender } from './types';
+	import type { PickerCommand, PickerEmoji, PickerRole, PickerRoom, Sender } from './types';
 	type PickerPerson = Sender & { outside?: string };
 	import { uid } from './util';
 
@@ -20,7 +20,7 @@
 
 	/** The list is a listbox, as its options need. */
 	interface Props {
-		/** What has been typed after the `@`, `#` or `:`; in a person's name and ID it reads in accent. */
+		/** What has been typed after the `@`, `#`, `:` or `/`; in a person's name and ID, and a command's last word, it reads in accent. */
 		query?: string;
 		/**
 		 * `@`: who can be named, people and roles, in the order shown. The list shows `rooms` instead when given, else
@@ -31,10 +31,15 @@
 		rooms?: PickerRoom[];
 		/** `:`: emoji, each its glyph, `:shortcode:` and name. */
 		emoji?: PickerEmoji[];
+		/**
+		 * `/` at the start: commands, each its `/name` and hint, the words its forms go on with, and its description
+		 * under them, and maybe a last row (`browse`), Browse all commands, that opens every command. Shown instead of the others when given.
+		 */
+		commands?: PickerCommand[];
 		/** The highlighted option, which Tab (and Enter) takes. */
 		active?: number;
 		/** A pick (a click keeps the focus in the field): the item and its index in the list shown. */
-		onpick?: (item: PickerPerson | PickerRole | PickerRoom | PickerEmoji, index: number) => void;
+		onpick?: (item: PickerPerson | PickerRole | PickerRoom | PickerEmoji | PickerCommand, index: number) => void;
 		onhover?: (index: number) => void;
 		/** The list's ID, which the field names in `aria-controls`; option `i` is `${id}-${i}`, its `aria-activedescendant`. */
 		id?: string;
@@ -45,23 +50,34 @@
 		/** A `data-testid` for the list. */
 		testid?: string;
 	}
-	let { query = '', people = [], rooms, emoji, active = 0, onpick, onhover, id, avatar, class: className, testid }: Props = $props();
+	let { query = '', people = [], rooms, emoji, commands, active = 0, onpick, onhover, id, avatar, class: className, testid }: Props = $props();
 
-	const kind = $derived(rooms ? 'rooms' : emoji ? 'emoji' : 'people');
-	const items: (PickerPerson | PickerRole | PickerRoom | PickerEmoji)[] = $derived(rooms ?? emoji ?? people);
-	const listLabel = $derived(kind === 'rooms' ? 'Room suggestions' : kind === 'emoji' ? 'Emoji suggestions' : 'Mention someone');
+	type Item = PickerPerson | PickerRole | PickerRoom | PickerEmoji | PickerCommand;
+	const kind = $derived(commands ? 'commands' : rooms ? 'rooms' : emoji ? 'emoji' : 'people');
+	const items: Item[] = $derived(commands ?? rooms ?? emoji ?? people);
+	const listLabel = $derived(kind === 'commands' ? 'Command suggestions' : kind === 'rooms' ? 'Room suggestions' : kind === 'emoji' ? 'Emoji suggestions' : 'Mention someone');
 	/** `@&`: only roles were asked for. */
 	const rolesOnly = $derived(kind === 'people' && query.startsWith('&'));
-	const emptyText = $derived(kind === 'rooms' ? `No room matches “${query}”` : kind === 'emoji' ? `No emoji match “${query}”` : rolesOnly ? (query.length > 1 ? `No role here matches “${query.slice(1)}”` : 'No one else here has a role') : query ? `No one here matches “${query}”` : 'People in this room');
+	const emptyText = $derived(kind === 'commands' ? `No command matches “/${query}”` : kind === 'rooms' ? `No room matches “${query}”` : kind === 'emoji' ? `No emoji match “${query}”` : rolesOnly ? (query.length > 1 ? `No role here matches “${query.slice(1)}”` : 'No one else here has a role') : query ? `No one here matches “${query}”` : 'People in this room');
 	// What reads in accent: the typed text, without the `&` that asks for roles.
 	const q = $derived((rolesOnly ? query.slice(1) : query).toLowerCase());
-	const key = (item: PickerPerson | PickerRole | PickerRoom | PickerEmoji, index: number): string => ('user_id' in item ? uid(item) : 'role' in item ? `&${item.role}` : item.id) ?? String(index);
+	const key = (item: Item, index: number): string => ('user_id' in item ? uid(item) : 'role' in item ? `&${item.role}` : 'id' in item ? item.id : `/${item.name}`) ?? String(index);
 	let list = $state<HTMLUListElement>();
 	let none = $state<HTMLDivElement>();
 	/** Opens below the field, for want of room above. */
 	let below = $state(false);
 	/** Its height, where neither side has room for all of it (a field in a dialog): it scrolls in what there is. */
 	let cap = $state<number | undefined>();
+
+	/**
+	 * A command's name with its last typed word in accent: every suggestion starts with the words typed, so it is the
+	 * part of the name from the start of the word at the caret for as long as what was typed there.
+	 */
+	function splitCommand(name: string): [string, string, string] | null {
+		const from = query.lastIndexOf(' ') + 1;
+		if (from >= query.length || !name.startsWith(query)) return null;
+		return [name.slice(0, from), name.slice(from, query.length), name.slice(query.length)];
+	}
 
 	function split(text: string): [string, string, string] | null {
 		const i = q ? text.toLowerCase().indexOf(q) : -1;
@@ -130,9 +146,23 @@
 					<span class="ap-mpick-emoji-glyph" aria-hidden="true">{#if item.image}<img class="ap-cemoji" src={item.image} alt="" />{:else}{item.native}{/if}</span>
 					<span class="ap-mpick-name">:{item.id}:</span>
 					<span class="ap-mpick-id">{item.name}</span>
-				{:else}
+				{:else if 'title' in item}
 					<span class="ap-mpick-name">{item.title}</span>
 					<span class="ap-mpick-id">#{item.id}</span>
+				{:else if item.browse}
+					<!-- Alone, what was typed matches no command, which it says first. -->
+					<span class="ap-mpick-browse">{#if items.length === 1}<span class="ap-mpick-browse-none">{emptyText}</span>{/if}Browse all commands</span>
+				{:else}
+					{@const m = splitCommand(item.name)}
+					<span class="ap-mpick-cmd">
+						<span class="ap-mpick-cmd-line">
+							<span class="ap-mpick-name ap-mpick-cmd-name">/{#if m}{m[0]}<mark class="ap-mpick-hit">{m[1]}</mark>{m[2]}{:else}{item.name}{/if}</span>
+							{#if item.hint}<span class="ap-mpick-id ap-mpick-cmd-args">{item.hint}</span>{/if}
+							{#if item.forms?.length}<span class="ap-mpick-id">{item.forms.join(' · ')}</span>{/if}
+						</span>
+						{#if item.description}<span class="ap-mpick-id">{item.description}</span>{/if}
+						{#if item.required?.length || item.inRoom}<span class="ap-cmdref-tags">{#if item.required?.length}<span class="ap-cmdref-required">Required: {item.required.join(', ')}</span>{/if}{#if item.inRoom}{' '}<span class="ap-cmdref-required ap-cmdref-room">In this room</span>{/if}</span>{/if}
+					</span>
 				{/if}
 				{#if i === active}<kbd class="ap-mpick-kbd">Tab</kbd>{/if}
 			</li>

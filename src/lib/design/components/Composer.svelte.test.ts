@@ -57,6 +57,21 @@ describe('Composer', () => {
 		expect(commandTag()).toBeNull();
 	});
 
+	it('asks the keyboard not to capitalize or correct a command, on its textarea, only while the Command tag shows', () => {
+		const props = $state({ room: 'Ops', value: '/kick ada', canCommand: true });
+		dom.render(Composer, props);
+		const field = dom.queryByRole<HTMLTextAreaElement>('textbox', 'Command')!;
+		const attributes = () => ['autocapitalize', 'autocorrect', 'spellcheck'].map((name) => field.getAttribute(name));
+		expect(attributes()).toEqual(['none', 'off', 'false']);
+		props.value = '//kick ada';
+		flushSync();
+		expect(commandTag()).toBeNull();
+		expect(attributes()).toEqual([null, null, null]);
+		props.value = '/';
+		flushSync();
+		expect(attributes()).toEqual(['none', 'off', 'false']);
+	});
+
 	it('puts your class on its textarea, beside its own', () => {
 		render({ class: 'mine' });
 		const field = dom.byRole('textbox', 'Message');

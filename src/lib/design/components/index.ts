@@ -92,4 +92,7 @@ export { default as FloatingDay } from './FloatingDay.svelte';
 export { default as DropZone } from './DropZone.svelte';
 export { default as SearchPanel } from './SearchPanel.svelte';
 export { default as KeyboardShortcuts } from './KeyboardShortcuts.svelte';
+export { default as CommandReference } from './CommandReference.svelte';
+export { default as CommandEntry } from './CommandEntry.svelte';
+export { default as CommandCard } from './CommandCard.svelte';
 export type * from './types';
