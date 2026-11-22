@@ -345,6 +345,15 @@ export function isMarkdownName(name: string | undefined): boolean {
 	return Boolean(lower && MARKDOWN_EXTENSIONS.some((extension) => lower.endsWith(extension)));
 }
 
+/** The extensions a plain text file goes by. */
+export const PLAIN_TEXT_EXTENSIONS = ['.txt'] as const;
+
+/** Whether a file named `name` is plain text, as its name says: an upload embed carries no type (§4.8.4). */
+export function isPlainTextName(name: string | undefined): boolean {
+	const lower = name?.trim().toLowerCase();
+	return Boolean(lower && PLAIN_TEXT_EXTENSIONS.some((extension) => lower.endsWith(extension)));
+}
+
 /**
  * What a category takes of a file of `type`, the type the client declares
  * for it (`File.type`, or `application/octet-stream` without one): the

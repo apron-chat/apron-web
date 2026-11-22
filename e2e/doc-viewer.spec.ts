@@ -32,10 +32,10 @@ const README = [
 ].join('\n');
 
 /** Serves `name` from the preview's file host, with CORS, as a server that lets web clients read its files does. */
-async function serve(page: Page, name: string, body: string): Promise<void> {
+async function serve(page: Page, name: string, body: string, contentType = 'text/markdown; charset=utf-8'): Promise<void> {
 	await page.route(`${FILES}/${name}`, (route: Route) => route.fulfill({
 		status: 200,
-		contentType: 'text/markdown; charset=utf-8',
+		contentType,
 		headers: { 'access-control-allow-origin': '*' },
 		body
 	}));
@@ -185,6 +185,32 @@ test.describe('an uploaded Markdown file', () => {
 		await expect(viewer.getByRole('status')).toHaveText('This file can’t be previewed here.');
 		await expect(viewer.locator('.ap-docviewer-status').getByRole('link', { name: 'Download' })).toHaveAttribute('href', `${FILES}/private.md`);
 		await expect(viewer.getByTestId('doc-viewer-text')).toHaveCount(0);
+	});
+});
+
+test.describe('an uploaded plain text file', () => {
+	test.use({ ...DEVICES.desktop, knobs: { capabilities: ['embed:upload'] } });
+
+	test('opens as written on a plain click: no Markdown, its spacing kept, a long line wrapped', async ({ preview, page }) => {
+		const notes = ['# Not a heading', '', 'name    role', 'ada     api', '', `${'word '.repeat(60)}end`, '**not bold**'].join('\n');
+		await preview.open();
+		await serve(page, 'notes.txt', notes, 'text/plain; charset=utf-8');
+		await preview.post('general', 'grace', { text: 'Notes', embeds: [{ kind: 'upload', embed_id: 'txt', url: `${FILES}/notes.txt`, title: 'notes.txt' }] });
+
+		const card = page.locator('a.ap-embed-file', { hasText: 'notes.txt' });
+		await expect(card).toHaveAttribute('aria-haspopup', 'dialog');
+		await card.click();
+		const viewer = page.getByRole('dialog', { name: 'notes.txt' });
+		await expect(viewer.getByRole('region', { name: 'Document' })).toBeFocused();
+		const text = viewer.getByTestId('doc-viewer-text');
+		expect(await text.textContent()).toBe(notes);
+		await expect(text.locator('h1, strong')).toHaveCount(0);
+		await expect(viewer.getByRole('button', { name: 'Larger text' })).toBeVisible();
+		expect(await viewer.locator('.ap-docviewer-stage').evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+
+		await page.keyboard.press('Escape');
+		await expect(viewer).toBeHidden();
+		await expect(card).toBeFocused();
 	});
 });
 

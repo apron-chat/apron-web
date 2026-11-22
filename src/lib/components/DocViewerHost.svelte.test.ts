@@ -39,7 +39,7 @@ const text = () => document.querySelector('[data-testid="doc-viewer-text"]');
 const status = () => document.querySelector('.ap-docviewer-status p')?.textContent;
 
 function open(url = URL): void {
-	docViewer.show({ url, title: 'plan.md' });
+	docViewer.show({ url, title: 'plan.md', kind: 'markdown' });
 	flushSync();
 }
 
@@ -108,6 +108,24 @@ describe('DocViewerHost', () => {
 		expect([docViewer.open, document.querySelector('dialog')?.open, docViewer.view?.url]).toEqual([true, true, 'https://files.example/other.md']);
 		await reads[1].answer({ text: '# Other' });
 		expect(text()?.querySelector('h1')?.textContent).toBe('Other');
+	});
+
+	it('shows a plain text file as written: its Markdown, markup and line breaks are its text', async () => {
+		render(DocViewerHost);
+		docViewer.show({ url: 'https://files.example/notes.txt', title: 'notes.txt', kind: 'text' });
+		flushSync();
+		const written = '# Not a heading\n\n  <b>indented</b> *plain*\nnext line';
+		await reads[0].answer({ text: written });
+		expect([text()?.tagName, text()?.textContent, text()?.querySelector('h1, b, em')]).toEqual(['PRE', written, null]);
+		expect(document.querySelector('button[aria-label="Larger text"]')).not.toBeNull();
+	});
+
+	it('says an empty plain text file is empty', async () => {
+		render(DocViewerHost);
+		docViewer.show({ url: 'https://files.example/blank.txt', title: 'blank.txt', kind: 'text' });
+		flushSync();
+		await reads[0].answer({ text: ' \n' });
+		expect([status(), text()]).toEqual(['This file is empty.', null]);
 	});
 
 	it('scrolls to the heading a link names, and Back closes it', async () => {

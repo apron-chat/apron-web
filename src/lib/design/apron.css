@@ -1710,6 +1710,9 @@ pre.ap-termviewer-text { width: 80ch; font-family: var(--font-mono); font-size: 
 .ap-doc .ap-msg-text p + p { margin-top: var(--space-3); }
 .ap-doc .ap-msg-text :is(ul, ol, pre, blockquote, .ap-table) { margin-block: var(--space-3); }
 .ap-doc .ap-msg-text hr { margin: var(--space-6) 0; border: 0; border-top: 1px solid var(--line); }
+/* A plain text file's page: as written, in monospace (a text file's columns and drawings line up), its spaces and line
+   breaks kept, a line longer than the page wrapped rather than scrolled. */
+.ap-doc-plain { margin: 0; font-family: var(--font-mono); font-size: var(--text-ui); line-height: var(--leading-body); white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 4; }
 /* An image in a message's Markdown (§5.5) fits its column, in the timeline as in the document viewer; a custom emoji keeps its line's height. */
 .ap-msg-text img:not(.ap-cemoji) { max-width: 100%; height: auto; }
 .ap-docviewer-status { display: flex; flex-direction: column; align-items: center; gap: var(--space-3); padding: var(--space-8) var(--space-4); text-align: center; text-wrap: balance; color: var(--ap-tone, var(--viewer-ink-muted)); }

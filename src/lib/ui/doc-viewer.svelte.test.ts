@@ -1,12 +1,25 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import { headingFor, MAX_DOC_BYTES, readDoc } from './doc-text';
-import { isMarkdownName } from './doc-viewer.svelte';
+import { docKindOf, isMarkdownName, isPlainTextName } from './doc-viewer.svelte';
 
 describe('isMarkdownName', () => {
 	it('knows a Markdown file by its name, whatever its case', () => {
 		expect(['README.md', 'notes.MD', 'plan.markdown', 'a.mdown', 'b.mkd', ' spaced.md '].map(isMarkdownName)).toEqual([true, true, true, true, true, true]);
 		expect(['md', '.md.txt', 'notes.mdx', 'a.txt', 'File', '', undefined].map(isMarkdownName)).toEqual([false, false, false, false, false, false, false]);
+	});
+});
+
+describe('isPlainTextName', () => {
+	it('knows a plain text file by its name, whatever its case', () => {
+		expect(['notes.txt', 'LOG.TXT', ' spaced.txt ', 'notes.md.txt'].map(isPlainTextName)).toEqual([true, true, true, true]);
+		expect(['txt', 'a.text', 'a.txt.zip', 'a.md', 'File', '', undefined].map(isPlainTextName)).toEqual([false, false, false, false, false, false, false]);
+	});
+});
+
+describe('docKindOf', () => {
+	it('draws Markdown rendered and plain text as written, and nothing else', () => {
+		expect(['README.md', 'notes.txt', '.md.txt', 'logs.zip', undefined].map(docKindOf)).toEqual(['markdown', 'text', 'text', undefined, undefined]);
 	});
 });
 
