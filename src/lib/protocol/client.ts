@@ -476,6 +476,12 @@ export class ChatClient {
 	private signInNeeded?: Exclude<SignInMethod, 'link'>;
 	/** The current socket carried an error about the connection; its message outlives the close. */
 	private connectionErrored = false;
+	/**
+	 * This connection's own sign-in found no way in it could take by itself (no `guest`, no token to resume, or a passkey
+	 * to wait for): signing in is the user's to choose now, on the sign-in screen. A replacing `server` frame that offers
+	 * a way again (a lobby that reopens) changes what that screen offers, and signs in as no one meanwhile.
+	 */
+	private ownSignInDeclined = false;
 	private disconnectedAt?: number;
 	/**
 	 * When this reconnect began where someone could see it: the drop, on a page
@@ -3166,6 +3172,7 @@ export class ChatClient {
 		this.status = reconnecting ? 'reconnecting' : 'connecting';
 		this.error = undefined;
 		this.connectionErrored = false;
+		this.ownSignInDeclined = false;
 		this.emit();
 	}
 
@@ -3292,7 +3299,8 @@ export class ChatClient {
 		this.transport.greeted(previousPing !== this.server.ping);
 		// Each frame fully replaces the last (§3.1): features are worth trying again.
 		this.memberChangesUnsupported = false;
-		if (this.authenticated || this.authRequested) {
+		// Left to the user (`ownSignInDeclined`): a frame that offers a guest sign-in again doesn't take it for them.
+		if (this.authenticated || this.authRequested || this.ownSignInDeclined) {
 			if (this.authenticated) this.startAddedCapabilities(previousCapabilities);
 			// A replacing frame may add capability `status`: attendance goes once signed in (§4.5).
 			this.syncIdle();
@@ -3345,6 +3353,7 @@ export class ChatClient {
 			this.reconnectHeld = true;
 			this.signInNeeded = 'webauthn';
 			this.error = 'Sign in with your passkey to continue.';
+			this.ownSignInDeclined = true;
 			this.emit();
 			return;
 		}
@@ -3357,12 +3366,14 @@ export class ChatClient {
 			this.signInNeeded = again ?? (auth.includes('webauthn') ? 'webauthn' : undefined);
 			this.error = again ? `Sign in ${way === 'email' ? 'with your email ' : way === 'external' ? 'with the server’s sign-in page ' : ''}again from the connect screen.`
 				: `This server doesn’t sign back in with ${way === 'email' ? 'email' : way === 'external' ? 'its sign-in page' : 'email or its sign-in page'}. Sign in another way from the connect screen.`;
+			this.ownSignInDeclined = true;
 			this.emit();
 			return;
 		}
 		// A guest listed only in `signup` isn't a way to sign in (§3.2: `auth` lists those).
 		if (!resume && (this.passkeyRequired || !auth.includes('guest'))) {
 			this.error = signInAdvice(auth, this.server?.signup ?? []);
+			this.ownSignInDeclined = true;
 			this.emit();
 			return;
 		}
