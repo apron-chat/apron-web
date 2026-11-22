@@ -888,7 +888,7 @@ export class DraftField {
 		if (part.room) return { target: directory.resolveRoom(part.id) ?? { kind: 'room', id: part.id, title: part.id }, hash: true };
 		const person = this.host.people.find((entry) => entry.id === part.id) ?? directory.person({ user_id: part.id });
 		const target: Mention['target'] = { kind: 'user', id: part.id, name: person?.name?.trim() || part.id, me: directory.isMe(part.id) };
-		if (directory.sharesName({ user_id: part.id })) target.shared = true;
+		if (directory.showsHandle({ user_id: part.id })) target.shared = true;
 		return { target, hash: false };
 	}
 

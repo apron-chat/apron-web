@@ -765,7 +765,8 @@
 	});
 	let typingNames = $derived(session.typing
 		.filter((entry) => entry.room === paneRoom?.id && entry.from.user_id !== session.you?.user_id)
-		.map((entry) => directory.name(entry.from)));
+		// With the `@user_id` where a message header would show it (`showsHandle`), such as a guest's.
+		.map((entry) => (directory.showsHandle(entry.from) ? `${directory.name(entry.from)} (@${directory.person(entry.from)?.user_id ?? entry.from.user_id})` : directory.name(entry.from))));
 	// `server.agent` names the implementation, for debugging, not the server: its host and path are the label.
 	/** What an archive's server says of it (`ext:archive`, ARCHIVE.md §4.1), while reading one. */
 	let archive = $derived(serverArchive(session.server));

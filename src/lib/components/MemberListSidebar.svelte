@@ -102,7 +102,7 @@
 			avatar: directory.avatar(member),
 			status,
 			statusLabel: (me ? ownStatusLabel(status) : undefined) ?? withLastSeen(presenceLabel(status), last),
-			handle: directory.sharesName(member),
+			handle: directory.showsHandle(member),
 			you: me,
 			...(isSystemId(member.user_id) ? { system: true } : {})
 		};
