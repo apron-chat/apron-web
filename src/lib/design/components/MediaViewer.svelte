@@ -32,7 +32,11 @@
 	/** How the image is drawn: zoomed and moved, or whole. */
 	let zoom = $state.raw<Zoom>(UNZOOMED);
 	let zoomed = $derived(zoom.scale > 1);
-	/** Eased to its next zoom (a double tap's, a key's), rather than following a finger; never where motion is reduced. */
+	/**
+	 * Eased to its next zoom (a double tap's, a key's), rather than following a finger; never where motion is reduced.
+	 * Until the ease ends (`transitionend`), or a gesture takes over: not when one ease gives way to the next, which
+	 * cancels the first (`transitioncancel`) while the image is still larger than the stage.
+	 */
 	let easing = $state(false);
 	/** Clipped to the stage, and no ground to close on: while zoomed, and while easing back out, still larger than it. */
 	let framed = $derived(zoomed || easing);
@@ -131,9 +135,11 @@
 			zoom = zoomAt(zoom, geometry.frame, geometry.max, mid.x, mid.y, zoom.scale * (Math.hypot(d.x - c.x, d.y - c.y) / spread), next.x - mid.x, next.y - mid.y);
 			return;
 		}
+		// Once it is a drag, from where it was; the move that makes it one, from where it went down, so none of it is lost.
+		const from = moved || !start ? before : start;
 		pointers.set(event.pointerId, point);
 		if (start && Math.hypot(point.x - start.x, point.y - start.y) >= 8) moved = true;
-		if (zoomed && moved) zoom = clampZoom({ scale: zoom.scale, x: zoom.x + point.x - before.x, y: zoom.y + point.y - before.y }, geometry.frame, geometry.max);
+		if (zoomed && moved) zoom = clampZoom({ scale: zoom.scale, x: zoom.x + point.x - from.x, y: zoom.y + point.y - from.y }, geometry.frame, geometry.max);
 	}
 
 	function pointerup(event: PointerEvent): void {
@@ -205,7 +211,7 @@
 		};
 	});
 
-	/** + and − (or =) zoom about the middle of the screen, 0 shows it whole; with Ctrl or ⌘ they stay the browser's own. */
+	/** + and − (or =) zoom about the middle of the stage, 0 shows it whole; with Ctrl or ⌘ they stay the browser's own. */
 	function zoomByKey(key: string): boolean {
 		const by = key === '+' || key === '=' ? 1.5 : key === '-' ? 1 / 1.5 : key === '0' ? 0 : undefined;
 		const where = by === undefined ? undefined : measured();
@@ -247,7 +253,7 @@
 			onpointerdown={pointerdown} onpointermove={pointermove} onpointerup={pointerup} onpointercancel={pointergone} onlostpointercapture={pointergone}>
 			{#key item.src}<img bind:this={media} class={['ap-viewer-media', easing && 'ap-viewer-media-ease']} src={item.src} alt={item.alt ?? ''} width={item.width} height={item.height} draggable="false"
 				style:transform={zoomed ? `translate(${zoom.x}px, ${zoom.y}px) scale(${zoom.scale})` : undefined} onload={() => (geometry = undefined)}
-				ontransitionend={() => (easing = false)} ontransitioncancel={() => (easing = false)} />{/key}
+				ontransitionend={() => (easing = false)} />{/key}
 			{#if many}
 				<button class="ap-viewer-btn ap-viewer-nav ap-viewer-prev" type="button" aria-label="Previous image" title="Previous (←)" disabled={index === 0} onclick={() => step(-1)}>
 					<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>

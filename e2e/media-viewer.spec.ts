@@ -89,9 +89,13 @@ test.describe('the image viewer, zoomed on a phone', () => {
 			await tap(centre.x, centre.y);
 			await expect.poll(async () => Math.round((await image.boundingBox())!.width)).toBe(Math.round(whole.width));
 			await page.waitForTimeout(400);
-			await tap(centre.x, centre.y);
-			await tap(centre.x, centre.y);
+			// Off the middle: the point tapped stays where it was across the image.
+			const at = { x: centre.x + 50, y: centre.y };
+			await tap(at.x, at.y);
+			await tap(at.x, at.y);
 			await expect.poll(async () => Math.round((await image.boundingBox())!.width / whole.width * 10) / 10).toBe(2.5);
+			const zoomed = (await image.boundingBox())!;
+			expect((at.x - zoomed.x) / zoomed.width).toBeCloseTo((at.x - whole.x) / whole.width, 2);
 		});
 
 		await test.step('a finger left down as the viewer closes leaves nothing behind: opened again, one finger drags no zoom, a double tap zooms, and a tap beside it closes it', async () => {
@@ -147,14 +151,17 @@ test.describe('the image viewer, zoomed with a mouse', () => {
 		const whole = (await image.boundingBox())!;
 		const centre = { x: whole.x + whole.width / 2, y: whole.y + whole.height / 2 };
 
+		// Zoomed in where it lands: that point of the image stays under the pointer.
 		await page.mouse.dblclick(centre.x + 40, centre.y);
 		await expect.poll(async () => Math.round((await image.boundingBox())!.width / whole.width * 10) / 10).toBe(2.5);
 		await expect(image).toHaveCSS('cursor', 'grab');
 		await page.waitForTimeout(400);
 		const zoomed = (await image.boundingBox())!;
+		expect((centre.x + 40 - zoomed.x) / zoomed.width).toBeCloseTo((centre.x + 40 - whole.x) / whole.width, 2);
+		// Dragged a pixel at a time, it keeps up with the pointer from the first: none of the move is lost.
 		await page.mouse.move(centre.x, centre.y);
 		await page.mouse.down();
-		await page.mouse.move(centre.x - 60, centre.y - 20, { steps: 4 });
+		await page.mouse.move(centre.x - 60, centre.y - 20, { steps: 60 });
 		await page.mouse.up();
 		const dragged = (await image.boundingBox())!;
 		expect([Math.round(dragged.x - zoomed.x), Math.round(dragged.y - zoomed.y)]).toEqual([-60, -20]);
@@ -211,9 +218,58 @@ test.describe('the image viewer, zoomed with a mouse', () => {
 		}, { x: bar.x + bar.width / 2, y: bar.y + bar.height / 2, cx: centre.x, cy: centre.y });
 		expect(atBar).not.toContain('IMG');
 		await expect.poll(async () => Math.round((await image.boundingBox())!.width)).toBe(Math.round(whole.width));
+
+		// One ease giving way to the next (− then 0, a frame apart) eases too, and still never over the bar: the image
+		// is drawn between its sizes on the way, and stays clipped until it is whole.
+		await page.mouse.dblclick(centre.x, centre.y);
+		await expect.poll(async () => Math.round((await image.boundingBox())!.width / whole.width * 10) / 10).toBe(2.5);
+		await page.waitForTimeout(400);
+		const { tags, sizes } = await page.evaluate(async ({ x, y, w }) => {
+			const media = document.querySelector('dialog[open] img.ap-viewer-media')!;
+			const press = (key: string) => document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+			const frame = () => new Promise((settle) => requestAnimationFrame(settle));
+			const tags: string[] = [];
+			const sizes: number[] = [];
+			const look = () => {
+				tags.push(document.elementFromPoint(x, y)!.tagName);
+				sizes.push(media.getBoundingClientRect().width / w);
+			};
+			press('-');
+			for (let n = 0; n < 2; n++) (await frame(), look());
+			press('0');
+			for (let n = 0; n < 20; n++) (await frame(), look());
+			return { tags, sizes };
+		}, { x: bar.x + bar.width / 2, y: bar.y + bar.height / 2, w: whole.width });
+		expect(tags).not.toContain('IMG');
+		expect(sizes.some((size) => size > 1.05 && size < 2.45)).toBe(true);
+		await expect.poll(async () => Math.round((await image.boundingBox())!.width)).toBe(Math.round(whole.width));
 		await expect(viewer.locator('.ap-viewer-stage')).not.toHaveClass(/ap-viewer-zoomed/);
 		await page.mouse.click(whole.x - 40, centre.y);
 		await expect(viewer).toBeHidden();
+	});
+
+	test('a Safari trackpad pinch (its gesture events) zooms the image about the pointer, not the page', async ({ preview, page }) => {
+		await preview.open();
+		await page.locator('a.ap-embed-imagelink').first().click();
+		const viewer = page.getByRole('dialog', { name: DUSK });
+		const image = viewer.locator('img.ap-viewer-media');
+		await expect.poll(() => image.evaluate((node: HTMLImageElement) => node.complete && node.naturalWidth > 0)).toBe(true);
+		const whole = (await image.boundingBox())!;
+		const at = { x: whole.x + whole.width * 0.3, y: whole.y + whole.height / 2 };
+		// As Safari sends them (Chromium has none): the scale since the pinch began, where the pointer is.
+		const prevented = await viewer.locator('.ap-viewer-stage').evaluate((stage, at) => {
+			const gesture = (type: string, scale: number) => {
+				const event = Object.assign(new Event(type, { bubbles: true, cancelable: true }), { scale, clientX: at.x, clientY: at.y });
+				stage.dispatchEvent(event);
+				return event.defaultPrevented;
+			};
+			return [gesture('gesturestart', 1), gesture('gesturechange', 2), gesture('gestureend', 2)];
+		}, at);
+		expect(prevented).toEqual([true, true, true]);
+		await expect.poll(async () => Math.round((await image.boundingBox())!.width / whole.width * 10) / 10).toBe(2);
+		const zoomed = (await image.boundingBox())!;
+		expect((at.x - zoomed.x) / zoomed.width).toBeCloseTo(0.3, 2);
+		expect(await page.evaluate(() => visualViewport!.scale)).toBe(1);
 	});
 });
 
