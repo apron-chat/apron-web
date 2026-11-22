@@ -262,7 +262,9 @@ export const SCENES: Scene[] = [
 			await look();
 			await page.getByRole('textbox', { name: 'Thread title', exact: true }).fill('Deploy checklist, renamed');
 			await page.getByRole('button', { name: 'Save', exact: true }).click();
-			// Saved, the description reads again over the thread, until it's shut.
+			// Saved, the description reads again over the thread, until it's shut (interop's roomAction shuts it first).
+			await expect(page.getByRole('button', { name: 'Close description', exact: true })).toBeVisible();
+			await look();
 			await page.getByRole('button', { name: 'Close description', exact: true }).click();
 			await expect(page.getByTestId('thread-renamed')).toBeVisible();
 			await look();

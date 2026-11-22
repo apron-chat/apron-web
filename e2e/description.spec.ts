@@ -206,3 +206,21 @@ test.describe('the description edited on a phone', () => {
 		expect(answers).toEqual([]);
 	});
 });
+
+test.describe('a description’s first lines, at the lengths where they just get cut', () => {
+	test.use(DEVICES.desktop);
+
+	test('measuring the cut changes no size, so it sets off no ResizeObserver loop', async ({ preview, page }) => {
+		await page.addInitScript(() => {
+			const seen: string[] = ((window as unknown as { seenErrors: string[] }).seenErrors = []);
+			window.addEventListener('error', (event) => seen.push(event.message));
+		});
+		await preview.open();
+		for (const lines of [5, 6, 7, 8, 9]) {
+			await preview.describe('general', Array.from({ length: lines }, (_, n) => `Line ${n + 1} of the description`).join('\n\n'));
+			await expect(pinned(preview)).toContainText(`Line ${lines} of`);
+			await page.waitForTimeout(150);
+		}
+		expect(await page.evaluate(() => (window as unknown as { seenErrors: string[] }).seenErrors)).toEqual([]);
+	});
+});

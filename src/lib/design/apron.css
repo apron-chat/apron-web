@@ -1418,11 +1418,11 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-description-close { z-index: var(--z-raised); inset-inline-end: var(--space-3); }
 /* Its text shows to its lines (four, six on a phone, which is narrower) and a bar's height more. Cut off, it runs on to
    the panel's foot, under a bar that fades from clear to the panel's ground and holds the chevron (and Unsaved draft):
-   the next lines show faintly through it, so the cut reads as more to come. The box is that tall either way, so the bar
-   coming doesn't change what's cut. */
+   the next lines show faintly through it, so the cut reads as more to come. The box, and the panel, are as tall either
+   way: the bar coming changes no size, so neither what's cut nor the conversation under it, which its measure would
+   otherwise move within the same frame (a ResizeObserver loop). */
 .ap-description-text { max-height: calc(var(--leading-body) * var(--ap-description-lines) + var(--ap-description-bar)); overflow: hidden; }
 .ap-description-foot { display: flex; justify-content: center; align-items: center; gap: var(--space-2); margin-top: var(--space-1); margin-bottom: calc(-1 * var(--space-2)); }
-.ap-description-clipped { padding-bottom: 0; }
 .ap-description-clipped .ap-description-text { mask-image: none; }
 .ap-description-clipped .ap-description-foot { position: absolute; inset-inline: 0; bottom: 0; box-sizing: border-box; height: var(--ap-description-bar); margin: 0; padding-bottom: var(--space-1); align-items: flex-end; border-radius: inherit; background: linear-gradient(to bottom, transparent, var(--ap-description-ground) 70%); pointer-events: none; }
 .ap-description-clipped .ap-description-foot > * { pointer-events: auto; }
