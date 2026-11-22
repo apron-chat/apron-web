@@ -1414,7 +1414,10 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 	background: var(--ap-description-ground); border-radius: 0 0 var(--radius-lg) var(--radius-lg); box-shadow: var(--shadow-popover);
 }
 .ap-description-opens { cursor: pointer; }
-.ap-description-opens:hover { --ap-description-ground: var(--bg-300); }
+/* Lifted under the pointer: its background, and the ground its foot's bar fades into, set where each is drawn. The
+   ground changed on the panel instead would restyle everything in it, as every element inherits it. */
+.ap-description-opens:hover { background: var(--bg-300); }
+.ap-description-opens:hover .ap-description-foot { --ap-description-ground: var(--bg-300); }
 /* The icon and ×, each in a box of a small control's size, as far in from their corners and level with the first line. */
 :is(.ap-description-icon, .ap-description-close) { position: absolute; top: calc(var(--space-4) + (var(--leading-body) - var(--control-sm)) / 2); width: var(--control-sm); height: var(--control-sm); }
 .ap-description-icon { inset-inline-start: var(--space-3); display: grid; place-items: center; color: var(--ink-muted); }
