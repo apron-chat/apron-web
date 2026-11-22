@@ -26,7 +26,7 @@
 		<dd class="ap-cmdref-tags">
 			{#if command.required?.length}<span class="ap-cmdref-required">Required: {command.required.join(', ')}</span>{/if}
 			{#if command.inRoom}<span class="ap-cmdref-required ap-cmdref-room">In this room</span>{/if}
-			{#if command.noRoom}<span class="ap-cmdref-required">Open a room to use it</span>{/if}
+			{#if command.noRoom}<span class="ap-cmdref-required">Needs a room</span>{/if}
 		</dd>
 	{/if}
 </div>

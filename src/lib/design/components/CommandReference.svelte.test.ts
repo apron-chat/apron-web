@@ -34,7 +34,7 @@ describe('CommandReference', () => {
 		const [pin, terminal] = document.querySelectorAll('dialog dl > div');
 		expect(text(pin.querySelector('dd'))).toBe('In this room');
 		expect(pin.querySelector('button')).not.toBeNull();
-		expect(text(terminal.querySelector('dd'))).toBe('In this room Open a room to use it');
+		expect(text(terminal.querySelector('dd'))).toBe('In this room Needs a room');
 		expect(terminal.querySelector('button')).toBeNull();
 	});
 

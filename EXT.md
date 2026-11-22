@@ -438,9 +438,11 @@ use, as `/help` lists them.
   Escape puts it, or the list, away while the same name is typed.
 - `/help` alone, once the server's list is known (kept, or listed), opens the
   command reference rather than going to the server, and asks for the list
-  anew; if that ask fails, the reference says it may be out of date. Before a
-  list is known, any other `/help`, such as `/help kick`, and `/help` without
-  the extension go to the server.
+  anew; if that ask fails, the reference says it may be out of date. Opened
+  where no list was had at all (Browse all commands, after the ask failed), it
+  says the server's commands couldn't be loaded, over apron-web's own. Any
+  other `/help`, such as `/help kick`, always goes to the server, as does
+  `/help` alone before a list is known and without the extension.
 - The command reference is a document of every command, read only, as the
   keyboard shortcuts are: a heading per `group`, widest first: Everyone
   (`all`), Guests (`guest`), Members (`member`), Room owners (`room`), Roles
@@ -460,16 +462,18 @@ use, as `/help` lists them.
   `/kick` and `/invite`; `/live` with `embed:append`), by their names exactly.
   Where the server lists a command whose words all lead the draft (`kick`, or a
   form such as `topic clear`), the server's takes its place: apron-web sends
-  the draft to the server as a `command`, the list and the card show the
-  server's, and the reference lists apron-web's own crossed out, "Replaced by
-  the server's /kick". Once the server stops listing it, apron-web's own works
-  again.
+  the draft to the server as a `command`, and the list and the card show the
+  server's. Where the server lists one by the same name exactly (`kick`), the
+  reference lists apron-web's own crossed out, "Replaced by the server's
+  /kick"; a form (`topic clear`) crosses nothing out, and `/topic` with any
+  other words stays apron-web's. Once the server stops listing it, apron-web's
+  own works again.
 - A command that uses `room_id` shows "In this room", apart from its Required
   label, which never names `room_id`: apron-web sends every command with the
   `room_id` of the room it's typed in. Where there is none to name (a server
-  without `rooms`, whose one room goes unnamed), it doesn't offer a command that
-  requires `room_id`, and the reference says "Open a room to use it" in place of
-  its button.
+  without `rooms`, until a message there gives its one room's ID), it doesn't
+  offer a command that requires `room_id`, and the reference says "Needs a
+  room" in place of its button.
 - It offers a command that requires `reply_to` only while the user replies.
   Every other command it offers whatever its `requires`, since mentions and
   files can come after the name. While the user replies, commands that use

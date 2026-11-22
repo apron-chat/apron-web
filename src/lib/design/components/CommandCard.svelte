@@ -13,10 +13,15 @@
 		id?: string;
 		/** A `data-testid` for the card. */
 		testid?: string;
+		/**
+		 * Called as it's drawn, and what it returns as it goes: such as for the field to name it in `aria-describedby`
+		 * for as long as it shows.
+		 */
+		onshow?: () => (() => void) | void;
 	}
-	let { command, id, testid }: Props = $props();
+	let { command, id, testid, onshow }: Props = $props();
 </script>
 
-<div class="ap-mpick" {id} data-testid={testid}>
+<div class="ap-mpick" {id} data-testid={testid} {@attach () => onshow?.()}>
 	<dl class="ap-keys-list ap-cmdcard"><CommandEntry {command} /></dl>
 </div>

@@ -137,7 +137,7 @@
 {:else if draft.commandInfo && !disabled && commandCard.component}
 	<!-- A command's arguments typed: its entry alone, to inform; the field keeps its keys. -->
 	{@const CommandCard = commandCard.component}
-	<CommandCard command={draft.commandInfo} id="{draft.pickerId}-card" testid="command-card" />
+	<CommandCard command={draft.commandInfo} id="{draft.pickerId}-card" testid="command-card" onshow={draft.describeCard} />
 {/if}
 {/if}
 <!-- spread: the field's own attributes (an `id`, a `data-testid`, its label and class, `onpaste`), which the caller decides -->

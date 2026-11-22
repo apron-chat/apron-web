@@ -65,11 +65,13 @@ const COMMAND_LISTS_CHARS = 150_000;
 export function keepList(stored: StoredCommandLists, account: string, list: (kept: StoredList | undefined) => StoredList): void {
 	const { [account]: previous, ...others } = storedLists(stored);
 	const mine = list(previous);
-	const own = account.length + JSON.stringify(mine).length > COMMAND_LISTS_CHARS ? { asked: mine.asked } : mine;
-	let size = account.length + JSON.stringify(own).length;
+	// Counted as written: `{`, then each `"key":entry` and the `,` or `}` after it.
+	const sizeOf = (key: string, entry: StoredList) => JSON.stringify(key).length + JSON.stringify(entry).length + 2;
+	const own = 1 + sizeOf(account, mine) > COMMAND_LISTS_CHARS ? { asked: mine.asked } : mine;
+	let size = 1 + sizeOf(account, own);
 	const lists: [string, StoredList][] = [[account, own]];
 	for (const [key, entry] of Object.entries(others).sort((a, b) => (b[1].asked as number) - (a[1].asked as number)).slice(0, COMMAND_LISTS_MAX - 1)) {
-		size += key.length + JSON.stringify(entry).length;
+		size += sizeOf(key, entry);
 		if (size > COMMAND_LISTS_CHARS) break;
 		lists.push([key, entry]);
 	}

@@ -131,7 +131,7 @@ export class DraftField {
 	 * so that a draft that is no command reads no more than it did.
 	 */
 	infoOpen = $state(false);
-	/** The field names the card in `aria-describedby`, set on it directly, as it changes: not with `aria` on every key. */
+	/** The field names the card in `aria-describedby` while it is drawn (`describeCard`): not with `aria` on every key. */
 	private described = false;
 	/**
 	 * The command the draft names while its arguments are typed (`CommandOffer.describe`): its entry alone, shown and
@@ -581,7 +581,8 @@ export class DraftField {
 			if (foundCommand && foundCommand.typed !== this.commandDismissed) {
 				this.commandDismissed = undefined;
 				const started = this.commandFound === undefined && this.infoText === undefined;
-				if (this.commandFound === undefined || this.commandFound.words.length !== foundCommand.words.length) this.active = 0;
+				// The highlight goes back to the best match as what's typed changes, so Enter never takes a row it fell onto.
+				if (this.commandFound?.typed !== foundCommand.typed) this.active = 0;
 				this.arrowed = false;
 				this.closeCompletions();
 				this.commandFound = foundCommand;
@@ -619,7 +620,6 @@ export class DraftField {
 				this.infoText = info;
 				this.commanded = true;
 				if (!this.infoOpen) this.infoOpen = true;
-				this.describe(true);
 			}
 			return;
 		}
@@ -639,7 +639,9 @@ export class DraftField {
 		const found = findCommandQuery(text, caret);
 		if (!found || found.words.length === 0) return found;
 		const commands = this.host.commands;
-		return commands?.ready && commands.complete(found) ? found : undefined;
+		// While the commands are on their way, the second word may be a form (`/emoji r`): its list shows as they arrive.
+		if (!commands?.ready) return commands && found.words.length === 1 ? found : undefined;
+		return commands.complete(found) ? found : undefined;
 	}
 
 	/** Swaps the typed `@…` for a chip: the person's name on screen, `@user_id` on the wire (Appendix A.3); a role's, `@&role`. */
@@ -778,10 +780,17 @@ export class DraftField {
 		this.commandFound = undefined;
 		this.infoText = undefined;
 		if (this.infoOpen) this.infoOpen = false;
-		this.describe(false);
 	}
 
-	/** Names the card (`${pickerId}-card`) as what describes the field, or stops. */
+	/**
+	 * The card's attachment (`{@attach}`): the field names it (`${pickerId}-card`) in `aria-describedby` for as long as
+	 * it is drawn, which is only while it shows: a command named and not put away, the field enabled, its code in.
+	 */
+	describeCard = (): (() => void) => {
+		this.describe(true);
+		return () => this.describe(false);
+	};
+
 	private describe(on: boolean): void {
 		if (this.described === on) return;
 		this.described = on;

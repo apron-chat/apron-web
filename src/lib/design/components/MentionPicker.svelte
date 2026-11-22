@@ -75,7 +75,7 @@
 	 */
 	function splitCommand(name: string): [string, string, string] | null {
 		const from = query.lastIndexOf(' ') + 1;
-		if (from >= query.length || !name.toLowerCase().startsWith(query.toLowerCase())) return null;
+		if (from >= query.length || !name.startsWith(query)) return null;
 		return [name.slice(0, from), name.slice(from, query.length), name.slice(query.length)];
 	}
 

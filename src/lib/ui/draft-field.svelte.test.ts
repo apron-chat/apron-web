@@ -7,7 +7,7 @@ import { commandCompletion, commandInfo } from './command-autocomplete';
 import type { OfferedCommand } from './command-query';
 
 /** A field for `@` mentions of Alan, whose picker shows only while `shown` says so (its code loads on demand). */
-function field(shown: { value: boolean }, options: { newlineOnEnter?: boolean; outsiders?: MentionPerson[]; people?: MentionPerson[]; commands?: () => readonly OfferedCommand[] | undefined; oncommand?: () => void; onbrowse?: () => void } = {}) {
+function field(shown: { value: boolean }, options: { newlineOnEnter?: boolean; outsiders?: MentionPerson[]; people?: MentionPerson[]; commands?: () => readonly OfferedCommand[] | undefined; oncommand?: () => void; onbrowse?: () => void; disabled?: { value: boolean } } = {}) {
 	let value = $state('');
 	let mentions = $state<string[]>([]);
 	const submit = vi.fn();
@@ -23,7 +23,7 @@ function field(shown: { value: boolean }, options: { newlineOnEnter?: boolean; o
 			people: options.people ?? [{ id: 'alan', name: 'Alan Turing' }],
 			outsiders: options.outsiders,
 			rooms: [],
-			disabled: false,
+			get disabled() { return options.disabled?.value ?? false; },
 			submit,
 			key: (event) => key(event),
 			get pickerShown() { return shown.value; },
@@ -458,6 +458,37 @@ describe('DraftField: commands', () => {
 		commands = [{ name: 'hello', description: 'Wave' }];
 		flushSync();
 		expect(f.draft.commandInfo?.description).toBe('Wave');
+		f.done();
+	});
+
+	it('puts the highlight back on the best match as what’s typed changes, so Enter takes it and sends nothing half typed', () => {
+		const commands: OfferedCommand[] = [{ name: 'kick', description: 'Kick' }, { name: 'kill', description: 'Kill' }];
+		const onbrowse = vi.fn();
+		const f = field({ value: true }, { commands: () => commands, oncommand: () => {}, onbrowse });
+		f.type('/ki');
+		expect(listed(f)).toEqual(['kick', 'kill']);
+		// Up to Browse all commands, then a letter more: the list narrows, and the highlight is on `kick` again.
+		f.draft.keydown(new KeyboardEvent('keydown', { key: 'ArrowUp', cancelable: true }));
+		flushSync();
+		expect(f.draft.activeIndex).toBe(2);
+		f.type('c');
+		expect(listed(f)).toEqual(['kick']);
+		expect(f.draft.activeIndex).toBe(0);
+		f.enter();
+		expect(f.submit).not.toHaveBeenCalled();
+		expect(onbrowse).not.toHaveBeenCalled();
+		expect(f.value()).toBe('/kick ');
+		f.done();
+	});
+
+	it('lists a command’s forms as the commands arrive, once a later word is typed', () => {
+		let commands = $state<readonly OfferedCommand[] | undefined>(undefined);
+		const f = field({ value: true }, { commands: () => commands, oncommand: () => {} });
+		f.type('/emoji r');
+		expect(f.draft.commandPickerOpen).toBe(false);
+		commands = COMMANDS;
+		flushSync();
+		expect(listed(f)).toEqual(['emoji remove']);
 		f.done();
 	});
 });

@@ -1064,7 +1064,8 @@ at most once a day. Without the extension, there is no list.
 `/help` alone opens a dialog of every command instead of going to the server (and
 asks for the list anew; if that fails, it says the list may be out of date), and
 so does **Browse all commands**, the last row of the `/` list, which leaves the
-draft as it is. It reads as a document, as the keyboard shortcuts do: a heading
+draft as it is (where the list couldn't be had at all, the dialog says the
+server's commands couldn't be loaded, over apron-web's own). It reads as a document, as the keyboard shortcuts do: a heading
 for each group of who may use them, as the server groups them (Everyone, Guests,
 Members, Room owners, Roles, Admins), then the server's others, then apron-web's
 own (Built into the client), empty groups left out; one of apron-web's own that
@@ -1073,7 +1074,7 @@ can't be pressed. Each command is its `/name` and
 arguments as code, what it does, and a label of what it fails without, such as
 "Required: attachment" for `/avatar` (a reply, a mention or an attachment), and
 "In this room" for one that acts on the room it's sent in (where there's no room,
-one that requires it says "Open a room to use it" and can't be pressed); each form, such as `/emoji add`, is an entry of its own. A command's code is a
+one that requires it says "Needs a room" and can't be pressed); each form, such as `/emoji add`, is an entry of its own. A command's code is a
 button (**Use /emoji add :<name>:**), still read as the page's text, underlined under the
 pointer: pressing it (click, Enter or Space; Tab goes through them in order)
 closes the dialog and puts `/name ` at the start of the composer, in place of the

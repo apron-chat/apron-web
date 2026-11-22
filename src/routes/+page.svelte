@@ -873,7 +873,7 @@
 	});
 	/** The server's commands (`ext:command_list`): the composer's offer of them, and the command reference. */
 	const commands = new Commands({
-		// A room it names: none on a server without rooms, whose one room goes unnamed (§3.4).
+		// A room it names: none on a server without rooms until a message there gives its one room's ID (§3.4).
 		context: () => ({ replying: drafts.reply !== undefined, attaching: drafts.files.length > 0, room: paneRoom !== undefined && paneRoom.id !== DEFAULT_ROOM_ID }),
 		caps: () => ({ rooms: session.canManageRooms, members: memberChangesOk, append: session.capabilities['embed:append'] }),
 		loadReference: () => commandReference.load(),
@@ -1389,12 +1389,12 @@
 			showDirectory(chat);
 			noteArrivals(next);
 			// Whose command list to follow, signed in: the same `notifyAccount` key, and whether it is kept. Built in
-			// place, as this runs on every snapshot, and followed only as it changes.
-			if (next.authenticated) {
-				const lists = next.capabilities['ext:command_list'] && next.capabilities.command && next.you;
-				const key = lists ? `${chat.url}\n${next.you!.user_id}\n${next.passkeySession || next.keptSession ? 'kept' : ''}` : '';
-				if (key !== commands.following) commands.follow(chat, next, key);
-			}
+			// place, as this runs on every snapshot, and followed only as it changes (or as its code failed to load).
+			// Signed out, or signing in again (to another server, or as another user), none: the last one's commands
+			// aren't offered or run meanwhile.
+			const lists = next.authenticated && next.capabilities['ext:command_list'] && next.capabilities.command && next.you;
+			const key = lists ? `${chat.url}\n${next.you!.user_id}\n${next.passkeySession || next.keptSession ? 'kept' : ''}` : '';
+			if (key !== commands.following || commands.retry) commands.follow(chat, next, key);
 		});
 		// Each session the client begins goes on from what this device kept for its server.
 		keeper?.watch(chat);
@@ -2495,7 +2495,7 @@
 			if (action.kind === 'command') {
 				chat.command(roomId, draft, options).promise.catch(failed);
 				// `/help` lists what the user can use, which may have changed: so may the commands the composer offers.
-				if (/^\/help(?:\s|$)/i.test(draft)) commands.refresh();
+				if (/^\/help(?:\s|$)/.test(draft)) commands.refresh();
 			} else if (action.kind === 'nick') {
 				displayName = action.name;
 				saveDisplayName(action.name);
@@ -3965,7 +3965,7 @@
 	{#if commands.shown && commandReference.component}
 		{@const CommandReferenceDialog = commandReference.component}
 		{@const reference = commands.reference}
-		<CommandReferenceDialog sections={reference.sections} loading={reference.loading} error={reference.error} stale={reference.stale} onuse={(name) => commands.use(name)} onclose={() => commands.close()} />
+		<CommandReferenceDialog sections={reference.sections} loading={reference.loading} error={reference.error} notice={reference.notice} onuse={(name) => commands.use(name)} onclose={() => commands.close()} />
 	{/if}
 	{#if shortcutsOpen && shortcutsDialog.component}
 		{@const ShortcutsDialog = shortcutsDialog.component}

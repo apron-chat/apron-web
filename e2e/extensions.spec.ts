@@ -634,6 +634,18 @@ test.describe('commands (ext:command_list)', () => {
 			await preview.waitForSent('command', (params) => params.body?.text === '/help');
 			await expect(page.getByRole('dialog', { name: 'Commands', exact: true })).toHaveCount(0);
 		});
+
+		test('says in the reference, from Browse all commands, that the server’s couldn’t be loaded, over apron-web’s own', async ({ preview, page }) => {
+			await preview.open();
+			await page.getByTestId('message-input').click();
+			await page.keyboard.type('/');
+			const browse = page.getByRole('listbox', { name: 'Command suggestions', exact: true }).getByRole('option', { name: /Browse all commands/ });
+			await expect(browse).toBeVisible();
+			await browse.click();
+			const reference = page.getByRole('dialog', { name: 'Commands', exact: true });
+			await expect(reference).toContainText('The server’s commands couldn’t be loaded.');
+			await expect(reference.locator('section h3, section h2')).toHaveText(['Built into the client']);
+		});
 	});
 
 	test('without the extension, none are offered or asked for', async ({ preview, page }) => {

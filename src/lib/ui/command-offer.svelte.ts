@@ -8,6 +8,7 @@
 import type { ChatClient, ClientSnapshot } from '$lib/protocol/client';
 import type { ReferenceSection } from '$lib/design/components/types';
 import type { CommandContext, CommandOffer } from './command-query';
+import type { CommandSource } from './command-list.svelte';
 import { notifyAccount } from './notify-scopes';
 import { loadCommandLists, saveCommandLists } from './storage';
 
@@ -44,6 +45,14 @@ export class Commands {
 	private loading: Promise<Loaded> | undefined;
 	/** The command used from the reference, put in the composer once it has closed (it keeps the focus till then). */
 	private used: string | undefined;
+	/**
+	 * The commands' code didn't load while a list was followed: the page follows it again on its next signed-in
+	 * snapshot, as `need` loads it again. A plain field, which the page reads on every snapshot.
+	 */
+	retry = false;
+	/** The list followed, and the one the loaded code was last told of (`sync`). */
+	private source: CommandSource | undefined;
+	private applied: CommandSource | undefined;
 
 	constructor(
 		private readonly host: CommandsHost,
@@ -56,19 +65,16 @@ export class Commands {
 	 */
 	follow(chat: ChatClient, next: ClientSnapshot, key: string): void {
 		this.following = key;
+		this.retry = false;
 		const userId = next.you?.user_id;
 		if (!key || userId === undefined) {
+			this.source = this.applied = undefined;
 			this.offer = undefined;
 			this.loaded?.follow(undefined);
 			return;
 		}
-		const source = { key: notifyAccount(chat.url, userId), keep: Boolean(next.passkeySession || next.keptSession), list: () => chat.listCommands() };
-		this.withLoaded((loaded) => {
-			// A later snapshot may have followed another list meanwhile.
-			if (this.following !== key) return;
-			loaded.follow(source);
-			this.offer = loaded.offer;
-		});
+		this.source = { key: notifyAccount(chat.url, userId), keep: Boolean(next.passkeySession || next.keptSession), list: () => chat.listCommands() };
+		this.withLoaded(() => undefined);
 	}
 
 	/** A command was started: a moment to ask for the list (`CommandList.need`). */
@@ -116,7 +122,7 @@ export class Commands {
 	}
 
 	/** What the reference shows: its sections, or that they're on their way, or why they won't come, or may be out of date. */
-	get reference(): { sections: ReferenceSection[]; loading: boolean; error?: string; stale?: boolean } {
+	get reference(): { sections: ReferenceSection[]; loading: boolean; error?: string; notice?: string } {
 		if (this.failed) return { sections: [], loading: false, error: 'The commands couldn’t be loaded: check your connection and try again.' };
 		return this.loaded?.reference ?? { sections: [], loading: true };
 	}
@@ -133,9 +139,24 @@ export class Commands {
 				browse: () => this.show()
 			}));
 		});
-		this.loading.then(then, () => {
-			this.loading = undefined;
-			this.failed = true;
-		});
+		this.loading.then(
+			(loaded) => {
+				this.sync(loaded);
+				then(loaded);
+			},
+			() => {
+				this.loading = undefined;
+				this.failed = true;
+				if (this.following) this.retry = true;
+			}
+		);
+	}
+
+	/** Tells the loaded code of the list followed, once: the latest, as later snapshots may have followed another meanwhile. */
+	private sync(loaded: Loaded): void {
+		if (!this.source || this.applied === this.source) return;
+		this.applied = this.source;
+		loaded.follow(this.source);
+		this.offer = loaded.offer;
 	}
 }

@@ -66,10 +66,14 @@ export class LoadedCommands {
 		return this.list.commands !== undefined;
 	}
 
-	/** What the reference shows: its sections, or that they're on their way, and whether they may be out of date. */
-	get reference(): { sections: ReferenceSection[]; loading: boolean; stale: boolean } {
+	/**
+	 * What the reference shows: its sections, or that they're on their way, and a notice where the server's may be out
+	 * of date (`stale`) or couldn't be had at all (`failed`, nothing kept: only apron-web's own show).
+	 */
+	get reference(): { sections: ReferenceSection[]; loading: boolean; notice?: string } {
 		const { commands, failed, stale } = this.list;
-		if (!commands && !failed) return { sections: [], loading: true, stale: false };
-		return { sections: referenceSections(commands ?? [], this.own, this.host.context()), loading: false, stale };
+		if (!commands && !failed) return { sections: [], loading: true };
+		const notice = !commands ? 'The server’s commands couldn’t be loaded.' : stale ? 'The server didn’t answer: these may be out of date.' : undefined;
+		return { sections: referenceSections(commands ?? [], this.own, this.host.context()), loading: false, notice };
 	}
 }

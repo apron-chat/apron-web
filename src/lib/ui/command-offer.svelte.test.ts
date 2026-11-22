@@ -42,9 +42,46 @@ describe('Commands', () => {
 		expect(t.commands.serves('topic clear')).toBe(true);
 		expect(t.commands.serves('topic Ship it')).toBe(false);
 		expect(t.commands.known).toBe(true);
-		// No extension: no commands.
+		// No extension, or signed out or signing in again (the page follows '' then): none of bob's commands are
+		// offered or run meanwhile, and `/help` goes to the server.
 		t.commands.follow(t.chat, t.snapshot('bob'), '');
 		expect(t.commands.offer).toBeUndefined();
+		expect(t.commands.serves('topic clear')).toBe(false);
+		expect(t.commands.known).toBe(false);
+	});
+
+	it('loads its code again where it failed, on the next snapshot the page follows or as a command starts', async () => {
+		let fail = true;
+		const t = setup(() => (fail ? Promise.reject(new Error('offline')) : import('./command-tools')));
+		t.commands.follow(t.chat, t.snapshot('alice'), 'alice');
+		await vi.waitFor(() => expect(t.commands.retry).toBe(true));
+		expect(t.commands.offer).toBeUndefined();
+		fail = false;
+		// The page follows the same key again while `retry` says so.
+		t.commands.follow(t.chat, t.snapshot('alice'), 'alice');
+		expect(t.commands.retry).toBe(false);
+		await vi.waitFor(() => expect(t.commands.offer?.ready).toBe(true));
+		expect(t.commands.known).toBe(true);
+		expect(t.listCommands).toHaveBeenCalledOnce();
+
+		// Or a command started: `need` loads it and follows the list.
+		fail = true;
+		const u = setup(() => (fail ? Promise.reject(new Error('offline')) : import('./command-tools')));
+		u.commands.follow(u.chat, u.snapshot('carol'), 'carol');
+		await vi.waitFor(() => expect(u.commands.retry).toBe(true));
+		fail = false;
+		u.commands.need();
+		await vi.waitFor(() => expect(u.commands.offer?.ready).toBe(true));
+		expect(u.commands.serves('topic clear')).toBe(true);
+	});
+
+	it('says in the reference that the server’s commands couldn’t be loaded where none were had, showing apron-web’s own', async () => {
+		const t = setup();
+		t.listCommands.mockRejectedValueOnce(new Error('refused'));
+		t.commands.follow(t.chat, t.snapshot('alice'), 'alice');
+		await vi.waitFor(() => expect(t.commands.reference.loading).toBe(false));
+		expect(t.commands.reference.notice).toBe('The server’s commands couldn’t be loaded.');
+		expect(t.commands.reference.sections.map((section) => section.title)).toEqual(['Built into the client']);
 	});
 
 	it('says while the reference waits for the list, and why it won’t come when the code can’t load', async () => {

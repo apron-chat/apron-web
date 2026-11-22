@@ -178,6 +178,16 @@ describe('command lists kept', () => {
 		keepList(stored, 'new', () => ({ ...big(150), asked: 3 }));
 		expect(Object.keys(JSON.parse(values.get('apron.commandLists')!)).sort()).toEqual(['mid', 'new']);
 		expect(values.get('apron.commandLists')!.length).toBeLessThanOrEqual(150_000);
+		// Counted as written, quotes and punctuation too: one exactly at the limit is kept whole, one a character past it not.
+		const fit = (extra: number) => {
+			const entry = { commands: [{ name: 'c', description: '' }], listed: 1, asked: 9 };
+			const pad = 150_000 - JSON.stringify({ edge: entry }).length + extra;
+			return { ...entry, commands: [{ name: 'c', description: 'd'.repeat(pad) }] };
+		};
+		keepList(stored, 'edge', () => fit(0));
+		expect(values.get('apron.commandLists')!.length).toBe(150_000);
+		keepList(stored, 'edge', () => fit(1));
+		expect(JSON.parse(values.get('apron.commandLists')!)).toEqual({ edge: { asked: 9 } });
 		keepList(stored, 'huge', () => ({ ...big(500), asked: 4 }));
 		expect(JSON.parse(values.get('apron.commandLists')!).huge).toEqual({ asked: 4 });
 	});

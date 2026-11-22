@@ -2,7 +2,7 @@
 import { flushSync, tick } from 'svelte';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import Composer from './Composer.svelte';
-import { autocompletePicker } from './lazy';
+import { autocompletePicker, commandCard } from './lazy';
 import { commandCompletion, commandInfo } from '$lib/ui/command-autocomplete';
 import type { CommandOffer, OfferedCommand } from '$lib/ui/command-query';
 import * as dom from '$lib/test/dom';
@@ -15,7 +15,7 @@ function render(props: Record<string, unknown>) {
 }
 
 // The autocomplete loads on demand (MessageEditor.svelte.test.ts says why it is loaded here, and returns nothing).
-beforeAll(async () => void (await autocompletePicker.load()), 30_000);
+beforeAll(async () => void (await Promise.all([autocompletePicker.load(), commandCard.load()])), 30_000);
 
 /** Types `text` at the end of the field, as one `input` event, the caret after it. */
 function typeAtEnd(field: HTMLElement, text: string) {
@@ -251,6 +251,33 @@ describe('Composer', () => {
 			expect(attributes(other.field)).toEqual([null, null, 'true']);
 			dom.unmount();
 		}
+	});
+
+	it('names the command’s card in the field’s aria-describedby only while it shows: not for a name that names nothing, once put away, or while disabled', () => {
+		const list: OfferedCommand[] = [{ name: 'nick', description: 'Change your display name', hint: '<name>' }];
+		const commands: CommandOffer = { ready: true, complete: (found) => commandCompletion(list, found), describe: (text) => commandInfo(list, text), started: vi.fn(), browse: vi.fn() };
+		const props = $state({ value: '', placeholder: 'Message General', disabled: false, canUpload: false, canCommand: true, commands, people: [], oninput: vi.fn(), onsend: vi.fn(), onfiles: vi.fn(), onunstage: vi.fn(), onrename: vi.fn(), oncancelreply: vi.fn() });
+		dom.render(Composer, props as never);
+		const field = document.querySelector<HTMLElement>('[data-testid="message-input"]')!;
+		const card = () => document.querySelector('[data-testid="command-card"]');
+		typeAtEnd(field, '/nick Ada');
+		expect(card()).not.toBeNull();
+		expect(field.getAttribute('aria-describedby')).toBe(card()!.id);
+		props.disabled = true;
+		flushSync();
+		expect(card()).toBeNull();
+		expect(field.getAttribute('aria-describedby')).toBeNull();
+		props.disabled = false;
+		flushSync();
+		expect(field.getAttribute('aria-describedby')).toBe(card()!.id);
+		dom.press(field, 'Escape');
+		flushSync();
+		expect(card()).toBeNull();
+		expect(field.getAttribute('aria-describedby')).toBeNull();
+		field.textContent = '';
+		typeAtEnd(field, '/nope arg');
+		expect(card()).toBeNull();
+		expect(field.getAttribute('aria-describedby')).toBeNull();
 	});
 
 	it('offers the server’s commands as one is typed, ending with Browse all commands, and none for live text', () => {
