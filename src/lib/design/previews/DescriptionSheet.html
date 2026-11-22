@@ -1,0 +1,29 @@
+<!-- @dsCard group="Layout" height=1100 width=1100 page subtitle="A room's whole description over its conversation, from under its header: read (Edit and × in the header, as tall as it reads to 80% of the pane, the room dimmed below, where a click shuts it), then edited in the same place (the title a field on the column's edge, Unsaved draft, Cancel and Save; the editor filling the sheet)" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>DescriptionSheet</title></head>
+<body>
+<div id="root" class="ap-stack" style="padding:0;gap:16px"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  var noop = function () {};
+  var doc = '<div class="ap-msg-text ap-msg-markdown"><p>Deploys and incidents. On-call keeps this room quiet enough to read at 3am.</p><h2>Before a deploy</h2><ol><li>Check the migrations: none may hold a lock for long.</li><li>Flip the flags off for anything new.</li><li>Say who is on call, in a thread.</li></ol><h2>During an incident</h2><p>Open a thread named for the alert, and keep the room for the summary. <strong>Page twice</strong> before escalating.</p><blockquote><p>Rollbacks are always fine. Ask after.</p></blockquote></div>';
+  // Each state in a pane of its own, as the conversation pane holds it: a header, the timeline under the sheet.
+  function pane(header, sheet) {
+    var box = document.createElement('main');
+    box.className = 'ap-shell-main';
+    box.style.cssText = 'height:520px;border:1px solid var(--line)';
+    root.appendChild(box);
+    A.render(A.RoomHeader, box, header);
+    var tl = document.createElement('div');
+    tl.className = 'ap-timeline';
+    box.appendChild(tl);
+    A.render(A.Message, tl, { view: { sender: { user_id: 'bob', name: 'Bob' }, time: '14:04', body: { html: 'Worker pods are restarting in a loop.' } }, on: {} });
+    A.render(A.DescriptionSheet, box, sheet);
+  }
+  pane({ room: 'ops', name: 'Ops', reading: { onedit: noop, onclose: noop } }, { label: 'Room description', onclose: noop, children: A.html(doc) });
+  var editor = A.part(A.MarkdownEditor, { label: 'Room description', rows: 8, value: 'Deploys and incidents. On-call keeps this room quiet enough to read at 3am.\n\n## Before a deploy\n\n1. Check the migrations: none may hold a lock for long.\n2. Flip the flags off for anything new.\n3. Say who is on call, in a thread.', rendered: A.html(doc) });
+  pane({ room: 'ops', name: 'Ops', editing: { title: 'Ops', ontitle: noop, draft: true, saving: false, onsave: noop, oncancel: noop } }, { label: 'Room description', editing: true, onclose: noop, children: editor });
+</script>
+</body>
+</html>

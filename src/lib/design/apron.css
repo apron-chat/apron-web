@@ -719,6 +719,7 @@ a.ap-embed-card:hover { background: var(--hover); }
 @keyframes ap-roomhead-updating-in { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .ap-roomhead-updating { animation: none; } .ap-roomhead-updating::after { width: 100%; opacity: var(--opacity-dim); animation: none; } }
 .ap-roomhead-text { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: var(--space-3); }
+.ap-roomhead-text-opens { cursor: pointer; }
 .ap-roomhead-name { margin: 0; font-size: var(--text-body); line-height: var(--leading-field); font-weight: 600; white-space: nowrap; }
 .ap-roomhead-sub { margin: 0; font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ap-roomhead-typing { color: var(--denim); }
@@ -729,7 +730,24 @@ a.ap-embed-card:hover { background: var(--hover); }
 @container (max-width: 560px) { .ap-roomhead-text { flex-direction: column; align-items: stretch; gap: 0; } }
 /* The ‹ back to the rooms list, and typing in the subtitle, are for phones: wider, the rooms list is beside the pane and typing shows above the composer. */
 .ap-roomhead-back, .ap-roomhead-typing { display: none; }
-.ap-roomhead-members, .ap-roomhead-description { flex: none; }
+.ap-roomhead-members, .ap-roomhead-description, .ap-roomhead-close, .ap-roomhead-actions { flex: none; }
+/* The description being edited (DescriptionSheet): the title a field on the editor's column, half its width, a name not a
+   paragraph; the field drawn as the editor's box is, so the two read as one form. A thread's keeps its room before it. */
+.ap-roomhead-edit { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--space-3); }
+/* Its inset is the column's (`--ap-doc-inset`) in the pane's own units: in percentages it would be of its row's width, not
+   the pane's. Only while it is edited, so these container units cost nothing the rest of the time. */
+.ap-roomhead-title { flex: 0 1 23rem; min-width: 0; height: var(--control-xl); margin-inline-start: calc(max(min(var(--space-8), 4cqi), (100cqi - 46rem) / 2) - var(--space-4)); padding: 0 var(--space-3); font-size: var(--text-body); font-weight: 600; }
+.ap-roomhead-crumb ~ .ap-roomhead-title { margin-inline-start: 0; }
+.ap-roomhead-edit .ap-roomhead-sep { margin-inline: calc(-1 * var(--space-2)); }
+.ap-roomhead-draft { display: inline-flex; align-items: center; gap: var(--space-2); flex: none; font-size: var(--text-sm); color: var(--ink-muted); white-space: nowrap; }
+.ap-roomhead-actions { display: inline-flex; align-items: center; gap: var(--space-2); }
+.ap-roomhead-error { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-sm); color: var(--danger); }
+.ap-roomhead-dot { flex: none; width: 7px; height: 7px; border-radius: var(--radius-full); background: var(--accent); }
+@container (max-width: 560px) {
+	.ap-roomhead-title { flex: 1; margin-inline-start: 0; }
+	.ap-roomhead-draft { gap: 0; }
+	.ap-roomhead-draft-word { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
 /* Description, once the description put away is edited: drawn in the description's blue, hovered or not, with no mark of
    its own. Not the accent unread rooms and mentions wear: fine to leave. */
 .ap-roomhead-description-updated, .ap-roomhead-description-updated:hover:not(:disabled) { color: var(--denim); }
@@ -1370,26 +1388,77 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-linkcard-text { font-size: var(--text-sm); overflow-wrap: anywhere; white-space: pre-line; }
 .ap-linkcard-message .ap-linkcard-text { -webkit-line-clamp: 3; line-clamp: 3; }
 
-/* ThreadDescription — pinned under the header of a thread view */
-/* The description icon has a column of its own, so every line of the text starts after it, not just the first. */
-.ap-description { position: relative; flex: none; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--space-2); margin: var(--space-3) var(--space-4) var(--space-1); padding: var(--space-2) var(--space-3); background: var(--denim-soft); border-radius: var(--radius-md); }
-.ap-description-icon { display: grid; place-items: center; height: var(--leading-body); color: var(--denim); }
-.ap-description-closable { padding-inline-end: 36px; }
-/* × sits beside the first line, centred on it. */
-.ap-description-close { position: absolute; z-index: var(--z-raised); top: 7px; inset-inline-end: 6px; width: var(--control-sm); height: var(--control-sm); }
-/* Its text set as a message's body is (`.ap-msg-text`, the size and line height it inherits): the same Markdown, drawn the same.
-   A preview of five and a half lines, faded where it's cut, so the half line says there's more; opened, it scrolls within the pinned box past a third of the pane. */
-.ap-description-text { max-height: calc(var(--leading-body) * 5.5); overflow: hidden; margin: 0; color: var(--ink); }
-.ap-description-clipped { mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent); }
-.ap-description-clipped, .ap-description-open { cursor: pointer; }
-.ap-description-open { max-height: 33vh; overflow-y: auto; }
-/* The keyboard's way to open and fold it: invisible, under the pointer's reach, a focus ring around the description. */
-.ap-description-toggle { position: absolute; inset: 0; padding: 0; border: 0; border-radius: inherit; background: none; pointer-events: none; }
-/* Its lists spaced and indented as a message's, but none at its very top or foot: the box's padding is space enough there. */
-.ap-description-text :is(ul, ol):not(li > *):first-child { margin-top: 0; }
-.ap-description-text :is(ul, ol):not(li > *):last-child { margin-bottom: 0; }
-.ap-description-text pre { background: var(--bg-100); }
-.ap-description-text code { background: var(--bg-100); }
+/* A room's or thread's description reads in a column a line of text reads well at, centered in the conversation pane,
+   whose edge its title and editor line up on while it's edited: at least a gutter's width in, 4% of the pane on a phone.
+   In percentages of the width each sits in (the pane's, for the first lines, the sheet and the header alike), not container
+   units: one of those, even on a property, restyles what holds it at each change of the pane's layout (perf budget:
+   type-composer, scroll-timeline). */
+.ap-shell-main { --ap-doc-inset: max(min(var(--space-8), 4%), (100% - 46rem) / 2); }
+/* fades.ts: a box's edges fade where its content is cut off, so the cut says there's more. */
+.ap-fade-below { mask-image: linear-gradient(to bottom, #000 calc(100% - var(--ap-fade, 48px)), transparent); }
+.ap-fade-above { mask-image: linear-gradient(to top, #000 calc(100% - var(--ap-fade, 48px)), transparent); }
+.ap-fade-above.ap-fade-below { mask-image: linear-gradient(to bottom, transparent, #000 var(--ap-fade, 48px), #000 calc(100% - var(--ap-fade, 48px)), transparent); }
+
+/* ThreadDescription — a room's or thread's description, its first lines under the header as the conversation opens: the
+   DescriptionSheet folded, on its raised ground, rounded at its foot and lifted off the conversation; the description icon
+   in its top left corner as × is in its top right. Set as the sheet sets it, in the same column, but clear of both
+   corners where the column comes nearer the edges (a phone). The whole of it opens the rest, so it lifts a shade under
+   the pointer. */
+.ap-description {
+	--ap-description-ground: var(--bg-200); --ap-description-bar: 48px; --ap-description-lines: 4;
+	--ap-description-corner: calc(var(--space-3) + var(--control-sm) + var(--space-2));
+	position: relative; flex: none; padding: var(--space-4) max(var(--ap-doc-inset, var(--space-4)), var(--ap-description-corner)) var(--space-3);
+	background: var(--ap-description-ground); border-radius: 0 0 var(--radius-lg) var(--radius-lg); box-shadow: var(--shadow-popover);
+}
+.ap-description-opens { cursor: pointer; }
+.ap-description-opens:hover { --ap-description-ground: var(--bg-300); }
+/* The icon and ×, each in a box of a small control's size, as far in from their corners and level with the first line. */
+:is(.ap-description-icon, .ap-description-close) { position: absolute; top: calc(var(--space-4) + (var(--leading-body) - var(--control-sm)) / 2); width: var(--control-sm); height: var(--control-sm); }
+.ap-description-icon { inset-inline-start: var(--space-3); display: grid; place-items: center; color: var(--ink-muted); }
+.ap-description-close { z-index: var(--z-raised); inset-inline-end: var(--space-3); }
+/* Its text shows to its lines (four, six on a phone, which is narrower) and a bar's height more. Cut off, it runs on to
+   the panel's foot, under a bar that fades from clear to the panel's ground and holds the chevron (and Unsaved draft):
+   the next lines show faintly through it, so the cut reads as more to come. The box, and the panel, are as tall either
+   way: the bar coming changes no size, so neither what's cut nor the conversation under it, which its measure would
+   otherwise move within the same frame (a ResizeObserver loop). */
+.ap-description-text { max-height: calc(var(--leading-body) * var(--ap-description-lines) + var(--ap-description-bar)); overflow: hidden; }
+.ap-description-foot { display: flex; justify-content: center; align-items: center; gap: var(--space-2); margin-top: var(--space-1); margin-bottom: calc(-1 * var(--space-2)); }
+.ap-description-clipped .ap-description-text { mask-image: none; }
+.ap-description-clipped .ap-description-foot { position: absolute; inset-inline: 0; bottom: 0; box-sizing: border-box; height: var(--ap-description-bar); margin: 0; padding-bottom: var(--space-1); align-items: flex-end; border-radius: inherit; background: linear-gradient(to bottom, transparent, var(--ap-description-ground) 70%); pointer-events: none; }
+.ap-description-clipped .ap-description-foot > * { pointer-events: auto; }
+.ap-description-more { width: var(--control-lg); height: var(--control-sm); color: var(--ink-muted); }
+.ap-description-opens:hover .ap-description-more { color: var(--ink); }
+@container (max-width: 560px) { .ap-description { --ap-description-lines: 6; } }
+/* An edit kept as a draft, here and in the header: an accent dot before what says so. */
+:is(.ap-description-draft, .ap-roomhead-draft)::before { content: ''; flex: none; width: 7px; height: 7px; border-radius: var(--radius-full); background: var(--accent); }
+
+/* DescriptionSheet — the whole description, over the conversation from under its header, on the raised ground its first
+   lines are folded on (ThreadDescription): as tall as it reads, to 80% of the pane, scrolling within past that, the room dimmed below it, where a click shuts it. Edited, it takes all 80%, the
+   editor filling it. On a phone it is the pane, header and all. */
+.ap-descsheet-scrim { position: absolute; inset: var(--header-h) 0 0; z-index: var(--z-overlay); background: var(--scrim); }
+.ap-descsheet { position: absolute; top: var(--header-h); inset-inline: 0; z-index: var(--z-overlay); display: flex; flex-direction: column; max-height: calc((100% - var(--header-h)) * 0.8); background: var(--bg-200); border-radius: 0 0 var(--radius-lg) var(--radius-lg); box-shadow: var(--shadow-popover); }
+.ap-descsheet-editing { height: calc((100% - var(--header-h)) * 0.8); }
+.ap-descsheet-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--space-6) var(--ap-doc-inset) var(--space-8); }
+.ap-descsheet-body:focus { outline: none; }
+.ap-descsheet-body:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset-inset); }
+.ap-descsheet-editing .ap-descsheet-body { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: var(--space-4) var(--ap-doc-inset) var(--space-6); }
+/* The editor (a MarkdownEditor) fills the sheet, its field scrolling within: the column's box, its text a field's inset in. */
+.ap-descsheet-editing .ap-mdedit { flex: 1; min-height: 0; }
+.ap-descsheet-editing .ap-mdedit-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.ap-descsheet-editing :is(.ap-mdedit-field, .ap-mdedit-rendered) { flex: 1; max-height: none; }
+.ap-descsheet-editing .ap-mdedit-previewing .ap-mdedit-rendered { overflow-y: auto; }
+@container (max-width: 560px) {
+	.ap-descsheet-scrim { display: none; }
+	.ap-descsheet, .ap-descsheet-editing { bottom: 0; height: auto; max-height: none; border-radius: 0; box-shadow: none; }
+	.ap-descsheet-body { padding: var(--space-4) var(--ap-doc-inset) var(--space-6); }
+	.ap-descsheet-editing .ap-descsheet-body { padding: 0; }
+	.ap-descsheet-editing .ap-mdedit { border: 0; border-radius: 0; }
+}
+@media (prefers-reduced-motion: no-preference) {
+	.ap-descsheet { animation: ap-descsheet-in var(--duration-medium) var(--ease-slide, ease-out); }
+	.ap-descsheet-scrim { animation: ap-viewer-in var(--duration-medium) ease-out; }
+}
+@keyframes ap-descsheet-in { from { opacity: 0; transform: translateY(-8px); } }
 
 /* Code diffs in Markdown — the highlighter marks lines; we color them */
 .ap-msg-text pre .ap-diff-add { display: block; background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); }
@@ -1624,19 +1693,23 @@ pre.ap-termviewer-text { width: 80ch; font-family: var(--font-mono); font-size: 
 /* The document has focus once it opens (to scroll it by keys): from the keyboard, a ring just inside the stage. */
 .ap-docviewer-stage:focus { outline: none; }
 .ap-docviewer-stage:focus-visible { outline: var(--focus-ring); outline-color: var(--viewer-ink); outline-offset: var(--focus-offset-inset); }
-.ap-docviewer-page { box-sizing: border-box; max-width: 52rem; margin: 0 auto; padding: var(--space-6) var(--space-8); border-radius: var(--radius-md); background: var(--bg-100); color: var(--ink); font-size: var(--text-body); line-height: var(--leading-body); }
-.ap-docviewer-page .ap-msg-text :is(h1, h2, h3, h4, h5, h6) { margin: 1.4em 0 0.5em; text-wrap: balance; }
-/* A document's prose avoids a last line of one short word. */
-.ap-docviewer-page .ap-msg-text :is(p, li, blockquote) { text-wrap: pretty; }
-.ap-docviewer-page .ap-msg-text :is(h1, h2) { padding-bottom: 0.25em; border-bottom: 1px solid var(--line); }
-.ap-docviewer-page .ap-msg-text h1 { font-size: 1.75em; line-height: var(--leading-display); }
-.ap-docviewer-page .ap-msg-text h2 { font-size: 1.4em; line-height: var(--leading-title); }
-.ap-docviewer-page .ap-msg-text h3 { font-size: 1.15em; line-height: var(--leading-title); }
-.ap-docviewer-page .ap-msg-text :is(h4, h5, h6) { font-size: 1em; }
-.ap-docviewer-page .ap-msg-text > :first-child { margin-top: 0; }
-.ap-docviewer-page .ap-msg-text p + p { margin-top: var(--space-3); }
-.ap-docviewer-page .ap-msg-text :is(ul, ol, pre, blockquote, .ap-table) { margin-block: var(--space-3); }
-.ap-docviewer-page .ap-msg-text hr { margin: var(--space-6) 0; border: 0; border-top: 1px solid var(--line); }
+.ap-docviewer-page { box-sizing: border-box; max-width: 52rem; margin: 0 auto; padding: var(--space-6) var(--space-8); border-radius: var(--radius-md); background: var(--bg-100); }
+/* A document's text (`.ap-doc` around a message's, `.ap-msg-text`): an uploaded Markdown file's page, and a room's or
+   thread's description, read in its sheet or its first lines under the header. Room around headings, rules and lists as a
+   page has, and prose that avoids a last line of one short word. */
+.ap-doc { color: var(--ink); font-size: var(--text-body); line-height: var(--leading-body); }
+.ap-doc .ap-msg-text :is(h1, h2, h3, h4, h5, h6) { margin: 1.4em 0 0.5em; text-wrap: balance; }
+.ap-doc .ap-msg-text :is(p, li, blockquote) { text-wrap: pretty; }
+.ap-doc .ap-msg-text :is(h1, h2) { padding-bottom: 0.25em; border-bottom: 1px solid var(--line); }
+.ap-doc .ap-msg-text h1 { font-size: 1.75em; line-height: var(--leading-display); }
+.ap-doc .ap-msg-text h2 { font-size: 1.4em; line-height: var(--leading-title); }
+.ap-doc .ap-msg-text h3 { font-size: 1.15em; line-height: var(--leading-title); }
+.ap-doc .ap-msg-text :is(h4, h5, h6) { font-size: 1em; }
+.ap-doc .ap-msg-text > :first-child { margin-top: 0; }
+.ap-doc .ap-msg-text > :last-child { margin-bottom: 0; }
+.ap-doc .ap-msg-text p + p { margin-top: var(--space-3); }
+.ap-doc .ap-msg-text :is(ul, ol, pre, blockquote, .ap-table) { margin-block: var(--space-3); }
+.ap-doc .ap-msg-text hr { margin: var(--space-6) 0; border: 0; border-top: 1px solid var(--line); }
 /* An image in a message's Markdown (§5.5) fits its column, in the timeline as in the document viewer; a custom emoji keeps its line's height. */
 .ap-msg-text img:not(.ap-cemoji) { max-width: 100%; height: auto; }
 .ap-docviewer-status { display: flex; flex-direction: column; align-items: center; gap: var(--space-3); padding: var(--space-8) var(--space-4); text-align: center; text-wrap: balance; color: var(--ap-tone, var(--viewer-ink-muted)); }

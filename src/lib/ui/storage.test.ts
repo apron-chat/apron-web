@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { pushIdFor, loadLastSignIn, saveLastSignIn, loadRecentServers, refreshRecentServer, rememberServer, starServer, forgetServer, hideDescription, loadAppearance, loadClosedTerminals, saveTerminalClosed, loadShutMemberSections, saveShutMemberSections, loadSidebarFolds, saveSidebarFolds, loadHiddenDescriptions, loadAddedRooms, saveAddedRooms, loadThreadFolds, saveThreadFolds, loadRoomOrder, saveRoomOrder, showDescription, descriptionHidden, descriptionUpdated, loadNotificationsEnabled, loadNotifyScopes, loadWebPushAccounts, notificationsChosen, loadWebPushOwner, saveAppearance, saveNotificationsEnabled, saveNotifyScopes, saveWebPushEnabled, saveWebPushOwner } from './storage';
+import { pushIdFor, loadLastSignIn, saveLastSignIn, loadRecentServers, refreshRecentServer, rememberServer, starServer, forgetServer, hideDescription, loadAppearance, loadClosedTerminals, saveTerminalClosed, loadShutMemberSections, saveShutMemberSections, loadSidebarFolds, saveSidebarFolds, loadHiddenDescriptions, loadAddedRooms, saveAddedRooms, loadThreadFolds, saveThreadFolds, loadRoomOrder, saveRoomOrder, descriptionHidden, descriptionUpdated, loadNotificationsEnabled, loadNotifyScopes, loadWebPushAccounts, notificationsChosen, loadWebPushOwner, saveAppearance, saveNotificationsEnabled, saveNotifyScopes, saveWebPushEnabled, saveWebPushOwner } from './storage';
 import { notifyAccount } from './notify-scopes';
 import { memoryStorage } from '$lib/test/storage';
 
@@ -242,12 +242,10 @@ describe('preference storage', () => {
 		expect(descriptionUpdated(hidden, 'general', 'Say hello, and read the rules.')).toBe(true);
 		expect(descriptionUpdated(hidden, 'random', 'Say hello, and read the rules.')).toBe(false);
 		expect(descriptionHidden(loadHiddenDescriptions(), 'general')).toBe(true);
-		// Put away again (or acknowledged), it's recorded as it now reads: no longer marked.
+		// Read whole (or put away again, or acknowledged), it's recorded as it now reads: no longer marked.
 		hidden = hideDescription(hidden, 'general', 'Say hello, and read the rules.');
 		expect(descriptionUpdated(loadHiddenDescriptions(), 'general', 'Say hello, and read the rules.')).toBe(false);
-		expect(descriptionHidden(showDescription(hidden, 'general'), 'general')).toBe(false);
-		expect(descriptionHidden(loadHiddenDescriptions(), 'general')).toBe(false);
-		hidden = hideDescription(hidden, 'general', 'Say hello.');
+		// Past the most kept, the ones put away longest ago show again first.
 		for (let i = 0; i < 200; i++) hidden = hideDescription(hidden, `room${i}`, 'Description');
 		expect(Object.keys(hidden)).toHaveLength(200);
 		expect(descriptionHidden(loadHiddenDescriptions(), 'general')).toBe(false);
@@ -268,7 +266,7 @@ describe('preference storage', () => {
 		expect(loadClosedTerminals()).toEqual([]);
 	});
 
-	it('keeps the descriptions another tab put away, or brought back, since this one loaded them', () => {
+	it('keeps the descriptions another tab put away since this one loaded them', () => {
 		const here = loadHiddenDescriptions();
 		hideDescription(loadHiddenDescriptions(), 'general', 'Say hello.');
 		hideDescription(loadHiddenDescriptions(), 'design', 'Critiques.');
@@ -276,8 +274,6 @@ describe('preference storage', () => {
 		expect(descriptionHidden(hidden, 'general')).toBe(true);
 		expect(descriptionHidden(loadHiddenDescriptions(), 'general')).toBe(true);
 		expect(descriptionHidden(loadHiddenDescriptions(), 'random')).toBe(true);
-		showDescription(loadHiddenDescriptions(), 'design');
-		expect(descriptionHidden(showDescription(hidden, 'random'), 'design')).toBe(false);
-		expect(Object.keys(loadHiddenDescriptions())).toEqual(['general']);
+		expect(Object.keys(loadHiddenDescriptions())).toEqual(['general', 'design', 'random']);
 	});
 });

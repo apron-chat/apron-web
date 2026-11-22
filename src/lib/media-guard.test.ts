@@ -72,11 +72,11 @@ describe('markup from anyone else goes through the one sanitizer', () => {
 		// Each of these inserts what `renderMarkdown`, `renderPlain`, `renderBio` or `sanitizeHtml` returned.
 		expect(using(/\{@html\b/)).toEqual([
 			'lib/components/ConnectScreen.svelte',
+			'lib/components/DescriptionText.svelte',
 			'lib/components/DocViewerHost.svelte',
 			'lib/components/DraftPreview.svelte',
 			'lib/components/ProfileCard.svelte',
 			'lib/components/ServerPane.svelte',
-			'lib/components/ThreadDescription.svelte',
 			'lib/design/components/EmbedHtml.svelte',
 			'lib/design/components/Message.svelte'
 		]);

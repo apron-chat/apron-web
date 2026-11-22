@@ -8,7 +8,7 @@ export { default as NewRoomDialog } from './NewRoomDialog.svelte';
 export { default as NewThreadDialog } from './NewThreadDialog.svelte';
 // Preferences, which draws PreferencesDialog and, in its Profile section, the design system's ProfileEditor.
 export { default as ProfilePreferences } from './ProfilePreferences.svelte';
-export { default as RoomEditor } from './RoomEditor.svelte';
+export { default as DescriptionSheet } from './DescriptionSheet.svelte';
 export { default as SearchDialog } from './SearchDialog.svelte';
 export { default as ShortcutsDialog } from './ShortcutsDialog.svelte';
 export { default as SignInLinkDialog } from './SignInLinkDialog.svelte';

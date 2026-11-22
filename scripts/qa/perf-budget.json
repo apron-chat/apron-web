@@ -7,7 +7,7 @@
 		"load": {
 			"requests": 22,
 			"startupJsKB": 951.1,
-			"domNodes": 537,
+			"domNodes": 531,
 			"layouts": 10,
 			"styleRecalcs": 18,
 			"calls": 208818,
@@ -25,10 +25,10 @@
 		"load-phone": {
 			"requests": 22,
 			"startupJsKB": 951.1,
-			"domNodes": 538,
+			"domNodes": 532,
 			"layouts": 10,
 			"styleRecalcs": 16,
-			"calls": 183397,
+			"calls": 184350,
 			"heapMB": 8.2
 		},
 		"load-phone-busy": {
@@ -68,22 +68,22 @@
 		"open-thread": {
 			"layouts": 4,
 			"styleRecalcs": 14,
-			"calls": 64023
+			"calls": 64183
 		},
 		"open-preferences": {
 			"layouts": 3,
 			"styleRecalcs": 9,
-			"calls": 4633
+			"calls": 4664
 		},
 		"scroll-timeline": {
 			"layouts": 9,
 			"styleRecalcs": 9,
-			"calls": 5193
+			"calls": 5255
 		},
 		"type-composer-role": {
 			"layouts": 46,
 			"styleRecalcs": 1,
-			"calls": 31773
+			"calls": 32148
 		},
 		"type-composer": {
 			"layouts": 36,
@@ -92,8 +92,8 @@
 		},
 		"hover-messages": {
 			"layouts": 7,
-			"styleRecalcs": 11,
-			"calls": 6656
+			"styleRecalcs": 9,
+			"calls": 6714
 		},
 		"hover-toolbar": {
 			"layouts": 0,
@@ -108,11 +108,11 @@
 	},
 	"bundle": {
 		"jsGzipKB": 623.1,
-		"cssGzipKB": 30.5
+		"cssGzipKB": 31.2
 	},
 	"production": {
 		"startupFiles": 13,
-		"startupJsKB": 855.1,
-		"startupJsBrotliKB": 241.6
+		"startupJsKB": 865,
+		"startupJsBrotliKB": 244
 	}
 }

@@ -258,11 +258,14 @@ export const SCENES: Scene[] = [
 			await page.getByTestId('room-actions').click();
 			await look();
 			await page.getByTestId('edit-room').click();
-			const dialog = page.getByRole('dialog', { name: 'Edit thread', exact: true });
-			await expect(dialog).toBeVisible();
+			await expect(page.getByTestId('description-sheet')).toBeVisible();
 			await look();
-			await dialog.getByRole('textbox', { name: 'Thread title', exact: true }).fill('Deploy checklist, renamed');
-			await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+			await page.getByRole('textbox', { name: 'Thread title', exact: true }).fill('Deploy checklist, renamed');
+			await page.getByRole('button', { name: 'Save', exact: true }).click();
+			// Saved, the description reads again over the thread, until it's shut (interop's roomAction shuts it first).
+			await expect(page.getByRole('button', { name: 'Close description', exact: true })).toBeVisible();
+			await look();
+			await page.getByRole('button', { name: 'Close description', exact: true }).click();
 			await expect(page.getByTestId('thread-renamed')).toBeVisible();
 			await look();
 			// Your message in a thread can move back to its room.
