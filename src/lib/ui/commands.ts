@@ -10,7 +10,9 @@ import type { MediaTypes, ServerMedia } from '$lib/protocol/client';
  * `command`. `//` posts a message starting with `/`. Without capability `command`,
  * every text is a message. `/live` alone, with capability `embed:append`
  * (`caps.append`), is the client's own, with or without `command`: it puts the
- * composer in live typing mode.
+ * composer in live typing mode. Names are case-sensitive. A command the server lists (`caps.serves`,
+ * `ext:command_list`: a name all of whose words lead the draft, such as `topic clear`) is the server's: apron-web's own
+ * by its first word goes to the server as a `command` instead.
  */
 export type ComposerAction =
 	| { kind: 'message'; text: string }
@@ -40,13 +42,16 @@ const USER_ARGUMENT = new RegExp(`^@?(${TEXT_ID.source})[.+@:-]*$`);
  * exact where the text is not: in text, an ID ends with a letter, a digit, or
  * `_` (Appendix A.3), so `/kick @al-` names `al` unless a chip says `al-`.
  */
-export function composerAction(text: string, caps: { command: boolean; rooms: boolean; members?: boolean; append?: boolean }, mentions: readonly string[] = []): ComposerAction {
-	if (caps.append && /^\/live\s*$/i.test(text)) return { kind: 'live' };
+export function composerAction(text: string, caps: { command: boolean; rooms: boolean; members?: boolean; append?: boolean; serves?: (command: string) => boolean }, mentions: readonly string[] = []): ComposerAction {
+	const match = /^\/(\S+)(?:\s+([\s\S]*))?$/.exec(text.trimEnd());
+	// The server's: a name it lists whose words lead the draft, exactly (`topic clear`). None of apron-web's own runs.
+	const served = caps.command && match !== null && (caps.serves?.(text.slice(1)) ?? false);
+	if (caps.append && !served && /^\/live\s*$/.test(text)) return { kind: 'live' };
 	if (!caps.command) return { kind: 'message', text };
 	if (text.startsWith('//')) return { kind: 'message', text: text.slice(1) };
-	if (!isCommand(text)) return { kind: 'message', text };
-	const match = /^\/(\S+)(?:\s+([\s\S]*))?$/.exec(text.trimEnd());
-	const name = match?.[1].toLowerCase();
+	if (!isCommand(text) || served) return isCommand(text) ? { kind: 'command', text } : { kind: 'message', text };
+	// Names are case-sensitive, as `ext:command_list` has them: `/NICK` is no command of apron-web's.
+	const name = match?.[1];
 	const argument = match?.[2]?.trim() ?? '';
 	if (name === 'nick' && argument) return { kind: 'nick', name: argument };
 	if (caps.rooms) {
@@ -71,6 +76,6 @@ export function composerAction(text: string, caps: { command: boolean; rooms: bo
  * them, else `upload`.
  */
 export function attachmentLimits(action: ComposerAction, media: Pick<ServerMedia, 'upload' | 'emoji'>): MediaTypes | undefined {
-	if (action.kind === 'command' && media.emoji && /^\/emoji\s+add(\s|$)/i.test(action.text)) return media.emoji;
+	if (action.kind === 'command' && media.emoji && /^\/emoji\s+add(\s|$)/.test(action.text)) return media.emoji;
 	return media.upload;
 }

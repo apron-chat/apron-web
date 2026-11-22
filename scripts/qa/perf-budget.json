@@ -6,16 +6,16 @@
 	"probes": {
 		"load": {
 			"requests": 22,
-			"startupJsKB": 951.1,
+			"startupJsKB": 965.4,
 			"domNodes": 531,
 			"layouts": 10,
 			"styleRecalcs": 18,
-			"calls": 208818,
+			"calls": 210190,
 			"heapMB": 8.4
 		},
 		"load-busy": {
 			"requests": 20,
-			"startupJsKB": 924.3,
+			"startupJsKB": 938,
 			"domNodes": 1149,
 			"layouts": 13,
 			"styleRecalcs": 16,
@@ -24,7 +24,7 @@
 		},
 		"load-phone": {
 			"requests": 22,
-			"startupJsKB": 951.1,
+			"startupJsKB": 965.4,
 			"domNodes": 532,
 			"layouts": 10,
 			"styleRecalcs": 16,
@@ -33,7 +33,7 @@
 		},
 		"load-phone-busy": {
 			"requests": 20,
-			"startupJsKB": 924.3,
+			"startupJsKB": 938,
 			"domNodes": 1150,
 			"layouts": 9,
 			"styleRecalcs": 15,
@@ -88,7 +88,7 @@
 		"type-composer": {
 			"layouts": 36,
 			"styleRecalcs": 6,
-			"calls": 30315
+			"calls": 30483
 		},
 		"hover-messages": {
 			"layouts": 7,
@@ -107,12 +107,12 @@
 		}
 	},
 	"bundle": {
-		"jsGzipKB": 623.1,
+		"jsGzipKB": 631.9,
 		"cssGzipKB": 31.2
 	},
 	"production": {
 		"startupFiles": 13,
-		"startupJsKB": 865,
-		"startupJsBrotliKB": 244
+		"startupJsKB": 874,
+		"startupJsBrotliKB": 246
 	}
 }

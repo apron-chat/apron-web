@@ -1,0 +1,33 @@
+<!-- @dsCard group="Layout" height=700 subtitle="Every command (ext:command_list), opened by /help: a heading per group of who may use them, each command (a form like any) its /name and hint as code, its description and a Required label of what it fails without, one of apron-web's own that the server's replaces crossed out" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>CommandReference</title></head>
+<body>
+<div id="root"></div>
+<script>
+  var A = window.Apron, root = document.getElementById('root');
+  A.render(A.CommandReference, root, {
+    open: true,
+    subtitle: 'Type / in the composer to complete one as you type.',
+    sections: [
+      { title: 'Everyone', commands: [
+        { name: 'embed-terminal', hint: '[<title>]', description: 'Get a link to stream a terminal into this room, such as a build' },
+        { name: 'help', description: 'List the commands that you can use' }
+      ] },
+      { title: 'Members', commands: [
+        { name: 'approve', description: 'Approve the agent’s request that you reply to', required: ['reply'] }
+      ] },
+      { title: 'Roles', commands: [
+        { name: 'emoji add', hint: ':<name>:', description: 'Add a custom emoji, or replace its image, from one attached image', required: ['attachment'] },
+        { name: 'emoji remove', hint: ':<name>:', description: 'Remove a custom emoji' }
+      ] },
+      { title: 'Built into the client', commands: [
+        { name: 'nick', hint: '<name>', description: 'Change your display name' },
+        { name: 'kick', hint: '@user', description: 'Remove a user from this room', replaced: true },
+        { name: 'join', hint: '#room', description: 'Join a room, or open one you’re in' }
+      ] }
+    ]
+  });
+</script>
+</body>
+</html>

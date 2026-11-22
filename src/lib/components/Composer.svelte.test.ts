@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
 import { flushSync, tick } from 'svelte';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import Composer from './Composer.svelte';
+import { autocompletePicker, commandCard } from './lazy';
+import { commandCompletion, commandInfo } from '$lib/ui/command-autocomplete';
+import type { CommandOffer, OfferedCommand } from '$lib/ui/command-query';
 import * as dom from '$lib/test/dom';
 
 function render(props: Record<string, unknown>) {
@@ -9,6 +12,21 @@ function render(props: Record<string, unknown>) {
 	dom.render(Composer, { value: 'Back in a bit', placeholder: 'Message General', disabled: false, canUpload: false, people: [], oninput: vi.fn(), onsend, onfiles: vi.fn(), onunstage: vi.fn(), onrename: vi.fn(), oncancelreply: vi.fn(), ...props } as never);
 	flushSync();
 	return { onsend, field: document.querySelector<HTMLElement>('[data-testid="message-input"]')!, send: document.querySelector<HTMLButtonElement>('[data-testid="send-button"]')! };
+}
+
+// The autocomplete loads on demand (MessageEditor.svelte.test.ts says why it is loaded here, and returns nothing).
+beforeAll(async () => void (await Promise.all([autocompletePicker.load(), commandCard.load()])), 30_000);
+
+/** Types `text` at the end of the field, as one `input` event, the caret after it. */
+function typeAtEnd(field: HTMLElement, text: string) {
+	field.focus();
+	field.append(text);
+	const range = document.createRange();
+	range.setStart(field, field.childNodes.length);
+	document.getSelection()!.removeAllRanges();
+	document.getSelection()!.addRange(range);
+	field.dispatchEvent(new InputEvent('input', { bubbles: true }));
+	flushSync();
 }
 
 describe('Composer', () => {
@@ -206,5 +224,114 @@ describe('Composer', () => {
 			expect(document.querySelector('button[aria-label="Embed as attachment"]')).toBeNull();
 			dom.unmount();
 		}
+	});
+
+	it('turns off capitals, corrections and spelling marks while the draft is a command, and back on as it stops being one', () => {
+		const attributes = (field: HTMLElement) => [field.getAttribute('autocapitalize'), field.getAttribute('autocorrect'), field.getAttribute('spellcheck')];
+		const { field } = render({ value: '', canCommand: true });
+		expect(attributes(field)).toEqual([null, null, 'true']);
+		typeAtEnd(field, '/kick');
+		expect(document.querySelector('[data-testid="command-tag"]')).not.toBeNull();
+		expect(attributes(field)).toEqual(['none', 'off', 'false']);
+		// `//` posts a message starting with `/`: no command.
+		field.textContent = '/';
+		typeAtEnd(field, '/kick');
+		expect(attributes(field)).toEqual([null, null, 'true']);
+		field.textContent = '';
+		typeAtEnd(field, '/');
+		expect(attributes(field)).toEqual(['none', 'off', 'false']);
+		field.textContent = '';
+		typeAtEnd(field, 'Hi');
+		expect(attributes(field)).toEqual([null, null, 'true']);
+		dom.unmount();
+		// Without capability `command`, `/` text is a message, as is live text.
+		for (const props of [{ canCommand: false }, { canCommand: true, live: true }]) {
+			const other = render({ value: '', ...props });
+			typeAtEnd(other.field, '/kick');
+			expect(attributes(other.field)).toEqual([null, null, 'true']);
+			dom.unmount();
+		}
+	});
+
+	it('names the command’s card in the field’s aria-describedby only while it shows: not for a name that names nothing, once put away, or while disabled', () => {
+		const list: OfferedCommand[] = [{ name: 'nick', description: 'Change your display name', hint: '<name>' }];
+		const commands: CommandOffer = { ready: true, complete: (found) => commandCompletion(list, found), describe: (text) => commandInfo(list, text), started: vi.fn(), browse: vi.fn() };
+		const props = $state({ value: '', placeholder: 'Message General', disabled: false, canUpload: false, canCommand: true, commands, people: [], oninput: vi.fn(), onsend: vi.fn(), onfiles: vi.fn(), onunstage: vi.fn(), onrename: vi.fn(), oncancelreply: vi.fn() });
+		dom.render(Composer, props as never);
+		const field = document.querySelector<HTMLElement>('[data-testid="message-input"]')!;
+		const card = () => document.querySelector('[data-testid="command-card"]');
+		typeAtEnd(field, '/nick Ada');
+		expect(card()).not.toBeNull();
+		expect(field.getAttribute('aria-describedby')).toBe(card()!.id);
+		props.disabled = true;
+		flushSync();
+		expect(card()).toBeNull();
+		expect(field.getAttribute('aria-describedby')).toBeNull();
+		props.disabled = false;
+		flushSync();
+		expect(field.getAttribute('aria-describedby')).toBe(card()!.id);
+		dom.press(field, 'Escape');
+		flushSync();
+		expect(card()).toBeNull();
+		expect(field.getAttribute('aria-describedby')).toBeNull();
+		field.textContent = '';
+		typeAtEnd(field, '/nope arg');
+		expect(card()).toBeNull();
+		expect(field.getAttribute('aria-describedby')).toBeNull();
+	});
+
+	it('stops watching for the commands to arrive as it goes: a composer unmounted reads nothing of them', () => {
+		const state = $state({ ready: false });
+		let reads = 0;
+		const commands: CommandOffer = {
+			get ready() {
+				reads += 1;
+				return state.ready;
+			},
+			complete: () => undefined,
+			describe: () => undefined,
+			started: vi.fn(),
+			browse: vi.fn()
+		};
+		const warn = vi.spyOn(console, 'warn');
+		for (let i = 0; i < 5; i++) {
+			render({ value: '', canCommand: true, commands });
+			dom.unmount();
+		}
+		reads = 0;
+		state.ready = true;
+		flushSync();
+		expect(reads).toBe(0);
+		expect(warn).not.toHaveBeenCalled();
+		warn.mockRestore();
+		// One that's still there does read them as they arrive.
+		state.ready = false;
+		render({ value: '', canCommand: true, commands });
+		reads = 0;
+		state.ready = true;
+		flushSync();
+		expect(reads).toBeGreaterThan(0);
+	});
+
+	it('offers the server’s commands as one is typed, ending with Browse all commands, and none for live text', () => {
+		const list: OfferedCommand[] = [
+			{ name: 'help', description: 'List the commands that you can use' },
+			{ name: 'approve', description: 'Approve the request that you reply to', uses: ['room_id', 'reply_to'], requires: ['reply_to'] }
+		];
+		const started = vi.fn();
+		const commands: CommandOffer = { ready: true, complete: (found) => commandCompletion(list, found, { replying: true }), describe: (text) => commandInfo(list, text), started, browse: vi.fn() };
+		const { field } = render({ value: '', canCommand: true, commands, reply: { name: 'Bot', text: 'May I deploy?' } });
+		typeAtEnd(field, '/');
+		expect(started).toHaveBeenCalledOnce();
+		const listbox = dom.byRole('listbox', 'Command suggestions');
+		expect([...listbox.querySelectorAll('[role="option"]')].map((row) => row.textContent?.replace(/\s+/g, ' ').trim())).toEqual(['/approve Approve the request that you reply to Required: reply In this room Tab', '/help List the commands that you can use', 'Browse all commands']);
+		dom.press(field, 'Tab');
+		flushSync();
+		expect(field.textContent).toBe('/approve ');
+		dom.unmount();
+		const live = render({ value: '', canCommand: true, live: true, commands });
+		typeAtEnd(live.field, '/');
+		expect(dom.queryByRole('listbox', 'Command suggestions')).toBeNull();
+		expect(started).toHaveBeenCalledOnce();
 	});
 });

@@ -449,3 +449,241 @@ test.describe('text direction (§3.5.2)', () => {
 		expect(await overridesShown(page)).toEqual([]);
 	});
 });
+
+test.describe('commands (ext:command_list)', () => {
+	const COMMANDS = [
+		{ name: 'help', group: 'all', description: 'List the commands that you can use' },
+		{ name: 'emoji add', group: 'role', description: 'Add a custom emoji', hint: ':<name>:', uses: ['body.embeds'], requires: ['body.embeds'] },
+		{ name: 'emoji remove', group: 'role', description: 'Remove a custom emoji', hint: ':<name>:' },
+		{ name: 'embed-terminal', group: 'all', description: 'Stream a terminal into this room', hint: '[<title>]', uses: ['room_id', 'reply_to'], requires: ['room_id'] },
+		{ name: 'approve', group: 'member', description: 'Approve the request that you reply to', uses: ['room_id', 'reply_to'], requires: ['reply_to'] },
+		{ name: 'ban', group: 'admin', description: 'Ban a user from the server', hint: '@user' },
+		{ name: 'server', group: 'admin', description: 'Show this server’s title, description, and avatar' },
+		{ name: 'server avatar', group: 'admin', description: 'Set this server’s avatar from one attached image, or clear it', uses: ['body.embeds'] },
+		{ name: 'server title', group: 'admin', description: 'Set this server’s title, or clear it', hint: '[<text>]' }
+	];
+
+	test.describe('listed', () => {
+		test.use({ knobs: { capabilities: ['ext:command_list'], commands: COMMANDS, account: true } });
+
+		test('are offered with apron-web’s own as a command is typed, forms after their first word, and all of them in the reference', async ({ preview, page }) => {
+			await preview.open();
+			const field = page.getByTestId('message-input');
+			const picker = page.getByRole('listbox', { name: 'Command suggestions', exact: true });
+			const reference = page.getByRole('dialog', { name: 'Commands', exact: true });
+
+			await test.step('the list is asked for on connecting, and offered as a command is typed', async () => {
+				// Signed in to an account with nothing kept on this device: the list is asked for on connecting, once. A
+				// command that requires a reply isn't offered outside one.
+				await preview.waitForSent('ext:command_list');
+				await field.click();
+				await page.keyboard.type('/');
+				await expect(picker.getByRole('option')).toHaveText([
+					/^\/help\s*List the commands/, /^\/emoji\s*add · remove\s*$/, /^\/embed-terminal\s*\[<title>\]\s*Stream/, /^\/ban\s*@user/, /^\/server\s*avatar · title/,
+					/^\/nick\s*<name>/, /^\/join\s/, /^\/leave\s/, /^\/topic\s/, /^\/kick\s/, /^\/invite\s/, /^\/live\s/, /^Browse all commands/
+				]);
+				await page.keyboard.type('emo');
+				await page.keyboard.press('Tab');
+				await expect(field).toHaveText('/emoji ');
+				await expect(picker.getByRole('option')).toHaveText([/^\/emoji add\s*:<name>:\s*Add a custom emoji/, /^\/emoji remove\s*:<name>:\s*Remove/, /^Browse all commands/]);
+				await page.keyboard.type('r');
+				await page.keyboard.press('Enter');
+				await expect(field).toHaveText('/emoji remove ');
+				await expect(picker).toHaveCount(0);
+			});
+
+			await test.step('the card stays as the command is filled out: its forms, then the one named, while its arguments are typed', async () => {
+				const card = page.getByTestId('command-card');
+				await page.keyboard.press('ControlOrMeta+a');
+				await page.keyboard.press('Backspace');
+				await page.keyboard.type('/server ');
+				await expect(picker.getByRole('option')).toHaveText([/^\/server\s*Show this server/, /^\/server avatar\s*Set this server’s avatar/, /^\/server title\s*\[<text>\]\s*Set this server’s title/, /^Browse all commands/]);
+				await page.keyboard.type('avatar');
+				await expect(picker.getByRole('option')).toHaveText([/^\/server avatar/, /^Browse all commands/]);
+				// Its arguments typed: its entry alone stays shown, no longer a list.
+				await page.keyboard.type(' ');
+				await expect(picker).toHaveCount(0);
+				await expect(card.locator('dt')).toHaveText('/server avatar');
+				await page.keyboard.press('ControlOrMeta+a');
+				await page.keyboard.press('Backspace');
+				await page.keyboard.type('/server title My server');
+				await expect(card.locator('dt')).toHaveText('/server title [<text>]');
+				await expect(card.locator('dd')).toHaveText(['Set this server’s title, or clear it']);
+				// Enter sends it, as ever, and the card goes with the draft.
+				await page.keyboard.press('ControlOrMeta+a');
+				await page.keyboard.press('Backspace');
+				await page.keyboard.type('/embed-terminal Build');
+				await expect(card.locator('dt')).toHaveText('/embed-terminal [<title>]');
+				await expect(card.locator('dd').last()).toHaveText('In this room');
+				await expect(field).toHaveAttribute('aria-describedby', /-card$/);
+				await page.keyboard.press('Enter');
+				// It requires the room: it goes with the one it's typed in.
+				await preview.waitForSent('command', (params) => params.body?.text === '/embed-terminal Build' && params.room_id === 'general');
+				await expect(field).toHaveText('');
+				await expect(card).toHaveCount(0);
+			});
+
+			await test.step('/help opens every command, by who may use each, and asks for the list again', async () => {
+				await page.keyboard.press('ControlOrMeta+a');
+				await page.keyboard.press('Backspace');
+				await page.keyboard.type('/help');
+				await page.keyboard.press('Enter');
+				await expect(reference).toBeVisible();
+				await expect(reference.getByRole('heading', { level: 3 })).toHaveText(['Everyone', 'Members', 'Roles', 'Admins', 'Built into the client']);
+				// Each command its /name and hint as code, its description and what using it takes; each form an entry of its own.
+				await expect(reference.locator('dt').first()).toHaveText('/help');
+				await expect(reference.locator('section', { hasText: 'Roles' }).locator('dt')).toHaveText(['/emoji add :<name>:', '/emoji remove :<name>:']);
+				await expect(reference.locator('dl > div', { hasText: '/approve' }).locator('dd')).toHaveText(['Approve the request that you reply to', 'Required: reply In this room']);
+				// The room it acts on is said apart from what it requires: apron-web names it.
+				await expect(reference.locator('dl > div', { hasText: '/embed-terminal' }).locator('dd')).toHaveText(['Stream a terminal into this room', 'In this room']);
+				await expect(reference.locator('dl > div', { hasText: '/emoji add' }).locator('dd')).toHaveText(['Add a custom emoji', 'Required: attachment']);
+				await expect(reference.getByRole('listbox')).toHaveCount(0);
+				await expect.poll(async () => (await preview.sent('ext:command_list')).length).toBe(2);
+				expect((await preview.sent('command')).filter((params) => params.body?.text === '/help')).toEqual([]);
+				await expect(field).toHaveText('');
+				await page.keyboard.press('Escape');
+				await expect(reference).toHaveCount(0);
+				await expect(field).toBeFocused();
+			});
+
+			await test.step('Browse all commands opens it too, leaving the draft as it is', async () => {
+				await page.keyboard.type('/emo');
+				await picker.getByRole('option', { name: 'Browse all commands' }).click();
+				await expect(reference).toBeVisible();
+				await expect(reference.getByRole('heading', { level: 3 }).first()).toHaveText('Everyone');
+				await reference.getByRole('button', { name: 'Close' }).click();
+				await expect(reference).toHaveCount(0);
+				await expect(field).toHaveText('/emo');
+			});
+
+			await test.step('pressing a command closes it and puts `/name ` in the composer, in place of the command typed', async () => {
+				// The caret moving reads the command again: its list shows.
+				await page.keyboard.press('End');
+				await picker.getByRole('option', { name: 'Browse all commands' }).click();
+				await expect(reference).toBeVisible();
+				await reference.getByRole('button', { name: 'Use /emoji add :<name>:' }).click();
+				await expect(reference).toHaveCount(0);
+				await expect(field).toHaveText('/emoji add ');
+				await expect(field).toBeFocused();
+				// From the keyboard too, a built-in one: Tab reaches it, Enter uses it.
+				await page.keyboard.press('ControlOrMeta+a');
+				await page.keyboard.press('Backspace');
+				await page.keyboard.type('/help');
+				await page.keyboard.press('Enter');
+				await expect(reference).toBeVisible();
+				await reference.getByRole('button', { name: 'Use /nick <name>' }).focus();
+				await page.keyboard.press('Enter');
+				await expect(reference).toHaveCount(0);
+				await expect(field).toHaveText('/nick ');
+			});
+		});
+	});
+
+	test.describe('with one of apron-web’s own names', () => {
+		test.use({ knobs: { capabilities: ['ext:command_list'], commands: [...COMMANDS, { name: 'kick', group: 'admin', description: 'Remove a user, with a reason', hint: '@user [<reason>]', uses: ['room_id', 'body.mentions'], requires: ['body.mentions'] }], account: true } });
+
+		test('the server’s command takes its place: listed in its group, apron-web’s crossed out, and sent to the server', async ({ preview, page }) => {
+			await preview.open();
+			const field = page.getByTestId('message-input');
+			await preview.waitForSent('ext:command_list');
+			await field.click();
+			await page.keyboard.type('/kic');
+			await expect(page.getByRole('listbox', { name: 'Command suggestions', exact: true }).getByRole('option')).toHaveText([/^\/kick\s*@user \[<reason>\]\s*Remove a user, with a reason/, /^Browse all commands/]);
+			await page.keyboard.press('ControlOrMeta+a');
+			await page.keyboard.press('Backspace');
+			await page.keyboard.type('/help');
+			await page.keyboard.press('Enter');
+			const reference = page.getByRole('dialog', { name: 'Commands', exact: true });
+			await expect(reference.locator('section', { hasText: 'Admins' }).locator('dt')).toContainText(['/kick @user [<reason>]']);
+			const own = reference.locator('section', { hasText: 'Built into the client' }).locator('dl > div', { hasText: '/kick' });
+			await expect(own.locator('dt s')).toHaveText('/kick @user');
+			await expect(own.locator('dd').last()).toHaveText('Replaced by the server’s /kick');
+			await expect(own.getByRole('button')).toHaveCount(0);
+			await page.keyboard.press('Escape');
+			await page.keyboard.type('/kick @bob');
+			await page.keyboard.press('Enter');
+			await preview.waitForSent('command', (params) => params.body?.text === '/kick @bob');
+			expect(await preview.sent('room_leave')).toEqual([]);
+		});
+	});
+
+	test.describe('to a guest', () => {
+		test.use({ knobs: { capabilities: ['ext:command_list'], commands: COMMANDS } });
+
+		test('are asked for as the first command starts, not on connecting', async ({ preview, page }) => {
+			await preview.open();
+			await page.getByTestId('message-input').click();
+			expect(await preview.sent('ext:command_list')).toEqual([]);
+			await page.keyboard.type('/em');
+			await expect(page.getByRole('listbox', { name: 'Command suggestions', exact: true }).getByRole('option')).toHaveText([/^\/emoji\s/, /^\/embed-terminal\s/, /^Browse all commands/]);
+			expect(await preview.sent('ext:command_list')).toHaveLength(1);
+		});
+
+		test('stay through a dropped connection, the card and all, and aren’t asked for again', async ({ preview, page }) => {
+			await preview.open();
+			const field = page.getByTestId('message-input');
+			await field.click();
+			await page.keyboard.type('/ban x');
+			const card = page.getByTestId('command-card');
+			await expect(card).toContainText('Ban a user from the server');
+			expect(await preview.sent('ext:command_list')).toHaveLength(1);
+			// The server holds back its answers and drops every connection: the way back is held before signing in.
+			await page.evaluate(() => {
+				type Server = { sockets: Set<{ close(): void }>; receive: (socket: unknown, frame: unknown) => void; held?: unknown[][]; release?: () => void };
+				const server = (window as unknown as { __apronPreview: Server }).__apronPreview;
+				const receive = Object.getPrototypeOf(server).receive.bind(server);
+				const held: unknown[][] = (server.held = []);
+				server.receive = (socket, frame) => void held.push([socket, frame]);
+				server.release = () => {
+					server.receive = receive;
+					for (const [socket, frame] of held.splice(0)) receive(socket, frame);
+				};
+				for (const socket of [...server.sockets]) socket.close();
+			});
+			await expect.poll(() => page.evaluate(() => (window as unknown as { __apronPreview: { held: unknown[] } }).__apronPreview.held.length)).toBeGreaterThan(0);
+			await expect(card).toContainText('Ban a user from the server');
+			await expect(field).toHaveAttribute('aria-describedby', /-card$/);
+			await page.evaluate(() => (window as unknown as { __apronPreview: { release: () => void } }).__apronPreview.release());
+			// Signed in again, as the same guest.
+			await expect.poll(async () => (await preview.sent('auth')).length).toBe(2);
+			await page.keyboard.type('y');
+			await expect(card).toContainText('Ban a user from the server');
+			expect(await preview.sent('ext:command_list')).toHaveLength(1);
+		});
+	});
+
+	test.describe('that can’t be listed', () => {
+		test.use({ knobs: { capabilities: ['ext:command_list'], commands: null } });
+
+		test('sends /help to the server while no list of its commands is known', async ({ preview, page }) => {
+			await preview.open();
+			const field = page.getByTestId('message-input');
+			await field.click();
+			await page.keyboard.type('/help');
+			await page.keyboard.press('Enter');
+			await preview.waitForSent('command', (params) => params.body?.text === '/help');
+			await expect(page.getByRole('dialog', { name: 'Commands', exact: true })).toHaveCount(0);
+		});
+
+		test('says in the reference, from Browse all commands, that the server’s couldn’t be loaded, over apron-web’s own', async ({ preview, page }) => {
+			await preview.open();
+			await page.getByTestId('message-input').click();
+			await page.keyboard.type('/');
+			const browse = page.getByRole('listbox', { name: 'Command suggestions', exact: true }).getByRole('option', { name: /Browse all commands/ });
+			await expect(browse).toBeVisible();
+			await browse.click();
+			const reference = page.getByRole('dialog', { name: 'Commands', exact: true });
+			await expect(reference).toContainText('The server’s commands couldn’t be loaded.');
+			await expect(reference.locator('section h3, section h2')).toHaveText(['Built into the client']);
+		});
+	});
+
+	test('without the extension, none are offered or asked for', async ({ preview, page }) => {
+		await preview.open();
+		await page.getByTestId('message-input').click();
+		await page.keyboard.type('/he');
+		await expect(page.getByTestId('message-input')).toHaveText('/he');
+		await expect(page.getByRole('listbox', { name: 'Command suggestions', exact: true })).toHaveCount(0);
+		expect(await preview.sent('ext:command_list')).toEqual([]);
+	});
+});

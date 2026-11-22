@@ -1864,6 +1864,16 @@ export class ChatClient {
 	}
 
 	/**
+	 * Lists the commands that the user can use (extension `ext:command_list`). Only to a server that advertises the
+	 * extension; any other refuses without asking. It waits for the connection, as requests do. The result as it
+	 * came: the caller, loaded on demand, reads it (`parseCommandList`) and keeps it (`$lib/ui/command-list`).
+	 */
+	listCommands(): Promise<JsonObject> {
+		if (!this.hasCap('ext:command_list')) return Promise.reject(new Error('This server lists no commands'));
+		return this.enqueueRequest('ext:command_list', {}, { visible: false, allowBeforeAuth: false }).promise;
+	}
+
+	/**
 	 * Shows a transient notice in a room for this session (§3.5), such as a
 	 * command's error: from `~private`, never sent or stored. `format` as a
 	 * message's: `markdown` for one with links.
