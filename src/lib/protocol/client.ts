@@ -4220,7 +4220,11 @@ export class ChatClient {
 		if (this.activeRoomId === roomId) this.activeRoomId = this.defaultRoomId();
 	}
 
-	/** A record of a room not joined, such as a new thread in a joined room: listings that show it take it. */
+	/**
+	 * A record of a room not joined, such as a new thread in a joined room, or a room the user may see from now on (one
+	 * a server let them see by letting them in from its lobby): listings that show it take it, a new top-level room
+	 * among the rooms to join (`directory`) too.
+	 */
 	private noteUnjoinedRoom(record: RoomRecord, delivery: RoomDelivery): void {
 		const first = this.store.firstRoomLogId(record.room_id);
 		const listing = (members: Identity[]): RoomListing => ({
@@ -4237,9 +4241,17 @@ export class ChatClient {
 		});
 		// A record without `members` leaves the listed members, and a truncated list's total, as they were (§4.2.1).
 		const replace = (listings: RoomListing[]) => listings.map((known) => known.id === record.room_id ? { ...listing(known.members), ...(known.memberCount !== undefined ? { memberCount: known.memberCount } : {}) } : known);
-		if (this.directory) this.directory = replace(this.directory);
 		const parent = record.parent_room_id;
-		if (parent === undefined) return;
+		if (parent === undefined) {
+			if (this.directory?.some((known) => known.id === record.room_id)) this.directory = replace(this.directory);
+			else if (this.directory) {
+				// New to this user: listed to join at once, and the listing reused until now is no longer the whole story.
+				this.directory = [...this.directory, listing([])];
+				this.forgetListings(undefined);
+			}
+			return;
+		}
+		if (this.directory) this.directory = replace(this.directory);
 		const threads = this.threadDirectory.get(parent);
 		if (threads?.some((known) => known.id === record.room_id)) this.threadDirectory.set(parent, replace(threads));
 		else if (threads || this.rooms.has(parent)) this.threadDirectory.set(parent, [...(threads ?? []), listing([])]);
