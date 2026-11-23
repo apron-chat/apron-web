@@ -86,6 +86,8 @@ Aim for 3–8 entries a week; a week that shipped many features can have more.
 ## Week of 2026-11-23
 
 - **New feature:** Copy a message exactly as it was written, Markdown and all, with Copy text in its ⋯ menu below Copy link: you get `**0 errors**`, not just the "0 errors" it shows. Until now only the long-press menu on touch screens had it. ([#305](https://github.com/apron-chat/apron-web/pull/305))
+- **Changed:** In the full-screen image viewer, the arrow keys move a zoomed-in image around, as they would scroll a page, instead of going to the next or previous image. To page while zoomed, hold Alt, Ctrl or ⌘ with ← or →, or keep pressing once the image reaches that edge. ([#306](https://github.com/apron-chat/apron-web/pull/306))
+- **Improved:** Zooming into an image no longer leaves you looking at a blurry preview: once you zoom in past the preview's detail, the image viewer loads the original JPEG, PNG, GIF, WebP or AVIF file and swaps it in, only then and only from where Preferences → Media lets images load. Screen readers hear how far the image is zoomed once you stop zooming. ([#306](https://github.com/apron-chat/apron-web/pull/306))
 
 ## Week of 2026-11-16
 
