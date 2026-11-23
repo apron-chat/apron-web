@@ -79,35 +79,66 @@
 	/** The zoom a Safari trackpad pinch (its `gesture` events) started from. */
 	let gestureFrom: number | undefined;
 
+	/** The zoom's scale alone: what fetching the original and the announcement follow, rather than each frame of a pan. */
+	let scale = $derived(zoom.scale);
+
 	/**
-	 * The original, loaded and drawn in place of the preview (`item.original`): fetched once the image is zoomed past
-	 * the preview's own pixels, on this screen, and swapped in only once it has loaded, so the image never blanks. Where
-	 * it can't load, or isn't an image the browser draws, the preview stays.
+	 * The original, drawn in place of the preview (`item.original`): fetched once the image is zoomed past the preview's
+	 * own pixels on this screen, and swapped in once it has loaded and decoded, so the image never blanks. It is drawn
+	 * in the preview's box (`width`, `height`), so it never jumps in size, whatever the original's size. Where it can't
+	 * load or isn't an image the browser draws, the preview stays, and it isn't asked for again. Paging, closing or a
+	 * resize lets go of it, and stops a fetch still going.
 	 */
-	let sharp = $state.raw<{ for: MediaItem; src: string } | undefined>();
-	let fetching: MediaItem | undefined;
+	let sharp = $state.raw<{ for: MediaItem; src: string; width: number; height: number } | undefined>();
+	let loader: HTMLImageElement | undefined;
+	const unloadable = new Set<string>();
 	$effect(() => {
 		const shown = item;
-		if (!shown?.original || zoom.scale <= 1 || fetching === shown || sharp?.for === shown || !geometry || !media?.naturalWidth) return;
-		if (zoom.scale * geometry.frame.w * (globalThis.devicePixelRatio || 1) <= media.naturalWidth) return;
-		fetching = shown;
-		const loader = new Image();
-		loader.onload = () => {
-			if (item === shown && loader.naturalWidth > 0) sharp = { for: shown, src: shown.original! };
-		};
-		loader.src = shown.original;
+		const original = shown?.original;
+		if (!original || scale <= 1 || loader || sharp?.for === shown || unloadable.has(original) || !geometry || !media?.naturalWidth) return;
+		if (scale * geometry.frame.w * (globalThis.devicePixelRatio || 1) <= media.naturalWidth) return;
+		const box = { width: geometry.frame.w, height: geometry.frame.h };
+		const fetching = (loader = new Image());
+		fetching.src = original;
+		fetching.decode().then(
+			() => {
+				if (loader !== fetching) return;
+				loader = undefined;
+				if (item === shown) sharp = { for: shown, src: original, ...box };
+			},
+			() => {
+				if (loader !== fetching) return;
+				loader = undefined;
+				unloadable.add(original);
+			}
+		);
 	});
-	let shownSrc = $derived(sharp?.for === item ? sharp.src : item?.src);
+	/** The original, drawn: for this image only. */
+	let drawn = $derived(sharp?.for === item ? sharp : undefined);
+
+	/** A fetch of the original still going: stopped; and the original let go of. */
+	function letGo(): void {
+		const fetching = loader;
+		loader = undefined;
+		if (fetching) fetching.src = '';
+		sharp = undefined;
+	}
+
+	/** Drawn from a new file (the original swapped in): what it zooms to may rise; mid-gesture, the rest of its place holds. */
+	function loaded(): void {
+		if (geometry && pointers.size && media) geometry = { ...geometry, max: maxScale(geometry.frame, media.naturalWidth) };
+		else geometry = undefined;
+	}
 
 	/** What a screen reader hears of the zoom, once it settles: its size, as a share of the whole image. */
 	let said = $state('');
 	$effect(() => {
-		const scale = zoom.scale;
-		const timer = setTimeout(() => (said = scale > 1 ? `Zoomed to ${Math.round(scale * 100)}%` : said && 'Whole image'), 400);
+		const percent = Math.round(scale * 100);
+		const timer = setTimeout(() => (said = percent > 100 ? `Zoomed to ${percent}%` : said && 'Whole image'), 400);
 		return () => clearTimeout(timer);
 	});
 
-	/** Whole again, and nothing kept of what was measured or pressed: for each image, each open and each size. */
+	/** Whole again, and nothing kept of what was measured, pressed, fetched or said: for each image, each open and each size. */
 	function reset(): void {
 		zoom = UNZOOMED;
 		easing = false;
@@ -115,6 +146,8 @@
 		pointers.clear();
 		lastTap = undefined;
 		gestureFrom = undefined;
+		said = '';
+		letGo();
 	}
 
 	$effect(() => {
@@ -260,16 +293,20 @@
 		const where = zoomed && PAN[key] ? measured() : undefined;
 		if (!where) return false;
 		const [x, y] = PAN[key];
-		ease(clampZoom({ scale: zoom.scale, x: zoom.x + (x * where.frame.width) / 10, y: zoom.y + (y * where.frame.height) / 10 }, where.frame, where.max));
+		const next = clampZoom({ scale: zoom.scale, x: zoom.x + (x * where.frame.width) / 10, y: zoom.y + (y * where.frame.height) / 10 }, where.frame, where.max);
+		// At its edge already: ← and → page, as they do whole.
+		if (next.x === zoom.x && next.y === zoom.y) return false;
+		ease(next);
 		return true;
 	}
 
 	function keydown(event: KeyboardEvent): void {
-		if (event.ctrlKey || event.metaKey || event.altKey) return;
-		if (panByKey(event.key)) event.preventDefault();
-		else if (event.key === 'ArrowLeft') step(-1);
+		const plain = !event.ctrlKey && !event.metaKey && !event.altKey;
+		if (plain && panByKey(event.key)) {
+			// Moved it.
+		} else if (event.key === 'ArrowLeft') step(-1);
 		else if (event.key === 'ArrowRight') step(1);
-		else if (!zoomByKey(event.key)) return;
+		else if (!plain || !zoomByKey(event.key)) return;
 		event.preventDefault();
 	}
 </script>
@@ -293,8 +330,8 @@
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div class={['ap-viewer-stage', framed && 'ap-viewer-zoomed']} data-viewer-ground={framed ? undefined : ''} bind:this={stage}
 			onpointerdown={pointerdown} onpointermove={pointermove} onpointerup={pointerup} onpointercancel={pointergone} onlostpointercapture={pointergone}>
-			{#key item.src}<img bind:this={media} class={['ap-viewer-media', easing && 'ap-viewer-media-ease']} src={shownSrc} alt={item.alt ?? ''} width={item.width} height={item.height} draggable="false"
-				style:transform={zoomed ? `translate(${zoom.x}px, ${zoom.y}px) scale(${zoom.scale})` : undefined} onload={() => (geometry = undefined)}
+			{#key item.src}<img bind:this={media} class={['ap-viewer-media', easing && 'ap-viewer-media-ease']} src={drawn?.src ?? item.src} style:width={drawn && `${drawn.width}px`} style:height={drawn && `${drawn.height}px`} alt={item.alt ?? ''} width={item.width} height={item.height} draggable="false"
+				style:transform={zoomed ? `translate(${zoom.x}px, ${zoom.y}px) scale(${zoom.scale})` : undefined} onload={loaded}
 				ontransitionend={() => (easing = false)} />{/key}
 			{#if many}
 				<button class="ap-viewer-btn ap-viewer-nav ap-viewer-prev" type="button" aria-label="Previous image" title="Previous (←)" disabled={index === 0} onclick={() => step(-1)}>

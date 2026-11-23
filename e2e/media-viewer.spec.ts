@@ -197,11 +197,18 @@ test.describe('the image viewer, zoomed with a mouse', () => {
 		await expect.poll(async () => before.x - (await image.boundingBox())!.x).toBeGreaterThan(10);
 		expect(before.x - (await image.boundingBox())!.x).toBeLessThanOrEqual(stage.width / 10 + 1);
 		await expect(viewer).toBeVisible();
-		// Whole again, they page.
+		// Whole again, they page; and the next image starts with nothing said of the last one's zoom.
 		await page.keyboard.press('0');
 		await expect(viewer.getByRole('status').filter({ hasText: 'Whole' })).toHaveText('Whole image');
 		await page.keyboard.press('ArrowRight');
-		await expect(page.getByRole('dialog', { name: DAWN }).locator('.ap-viewer-stage')).not.toHaveClass(/ap-viewer-zoomed/);
+		const next = page.getByRole('dialog', { name: DAWN });
+		await expect(next.locator('.ap-viewer-stage')).not.toHaveClass(/ap-viewer-zoomed/);
+		await page.waitForTimeout(500);
+		await expect(next.locator('p.ap-sr[role="status"]')).toHaveText('');
+		// With Alt, the arrows page as they always did, zoomed or not.
+		await page.keyboard.press('+');
+		await page.keyboard.press('Alt+ArrowLeft');
+		await expect(page.getByRole('dialog', { name: DUSK })).toBeVisible();
 	});
 
 	test('zoomed past its preview\'s pixels, it is drawn from the original, fetched only then and only where media may load from; one that won\'t load leaves the preview', async ({ preview, page }) => {
@@ -258,6 +265,60 @@ test.describe('the image viewer, zoomed with a mouse', () => {
 		await page.waitForTimeout(500);
 		expect(asked).toHaveLength(2);
 		expect((await demo.getAttribute('src'))!.startsWith('data:')).toBe(true);
+	});
+
+	test('a small preview\'s large original draws in the preview\'s place, at the size it was zoomed to, though it comes mid-drag; and Back to whole, the preview again', async ({ preview, page }) => {
+		await preview.open();
+		const files = 'http://apron-preview.invalid/files';
+		// A 300 × 200 preview of a 3000 × 2000 photo, as a server that scales its previews down sends.
+		const [small, large] = await page.evaluate(async () => {
+			const paint = async (width: number, height: number, type: string) => {
+				const canvas = Object.assign(document.createElement('canvas'), { width, height });
+				const context = canvas.getContext('2d')!;
+				context.fillStyle = '#c86';
+				context.fillRect(0, 0, width, height);
+				context.fillStyle = '#358';
+				context.fillRect(width / 4, height / 4, width / 2, height / 2);
+				return canvas.toDataURL(type);
+			};
+			return [await paint(300, 200, 'image/png'), await paint(3000, 2000, 'image/png')];
+		});
+		let release: () => void = () => {};
+		const held = new Promise<void>((resolve) => (release = resolve));
+		await page.route(`${files}/photo.png`, async (route) => {
+			await held;
+			await route.fulfill({ status: 200, contentType: 'image/png', body: Buffer.from(large.split(',')[1], 'base64') });
+		});
+		await preview.post('general', 'grace', { text: 'Full size', embeds: [{ kind: 'upload', embed_id: 'photo', url: `${files}/photo.png`, title: 'photo.png', og: { image: { url: small, type: 'image/png', width: 300, height: 200 } } }] });
+		await page.locator('a.ap-embed-imagelink').last().click();
+		const viewer = page.getByRole('dialog', { name: 'photo.png' });
+		const image = viewer.locator('img.ap-viewer-media');
+		await expect.poll(() => image.evaluate((node: HTMLImageElement) => node.complete && node.naturalWidth > 0)).toBe(true);
+		const whole = (await image.boundingBox())!;
+		const centre = { x: whole.x + whole.width / 2, y: whole.y + whole.height / 2 };
+		await page.mouse.dblclick(centre.x, centre.y);
+		await expect.poll(async () => Math.round((await image.boundingBox())!.width / whole.width * 10) / 10).toBe(2.5);
+		const zoomed = (await image.boundingBox())!;
+
+		// A drag under way as the original comes: it keeps following the pointer, all the way.
+		await page.mouse.move(centre.x, centre.y);
+		await page.mouse.down();
+		for (let step = 1; step <= 20; step++) {
+			if (step === 8) release();
+			await page.mouse.move(centre.x - step * 4, centre.y);
+			await page.waitForTimeout(40);
+		}
+		await page.mouse.up();
+		await expect(image).toHaveAttribute('src', `${files}/photo.png`);
+		expect(await image.evaluate((node: HTMLImageElement) => node.naturalWidth)).toBe(3000);
+		const after = (await image.boundingBox())!;
+		// Drawn at the size it was zoomed to, not the size the original would fill; and moved as far as the pointer.
+		expect(Math.round(after.width)).toBe(Math.round(zoomed.width));
+		expect(Math.round(zoomed.x - after.x)).toBe(80);
+
+		// Whole again, it is the size it opened at.
+		await page.keyboard.press('0');
+		await expect.poll(async () => Math.round((await image.boundingBox())!.width)).toBe(Math.round(whole.width));
 	});
 
 	test('eased back out with motion allowed, it stays clipped below the bar until it is whole, and then closes on a click beside it', async ({ preview, page }) => {

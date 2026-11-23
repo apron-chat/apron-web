@@ -47,11 +47,15 @@ describe('gallery', () => {
 		expect(mediaItemOf(document.querySelector<HTMLElement>('[data-viewer-title="no-src"]')!)).toBeUndefined();
 	});
 
-	it('offers the original to zoom into where it differs from the preview and may load, not from a site media may not load from', () => {
-		document.body.innerHTML = `<a href="https://files.example/big.jpg" data-viewer-src="https://files.example/big-preview.jpg" data-viewer-title="big.jpg">big</a><a href="https://tracker.example/big.jpg" data-viewer-src="https://files.example/p.jpg" data-viewer-title="tracked.jpg">t</a>`;
-		const [big, tracked] = [...document.querySelectorAll<HTMLElement>('a')].map((anchor) => mediaItemOf(anchor));
+	it('offers the original to zoom into where it differs from the preview, may load, and is an image a browser draws', () => {
+		document.body.innerHTML = `<a href="https://files.example/big.jpg" data-viewer-src="https://files.example/big-preview.jpg" data-viewer-title="big.jpg">big</a><a href="https://tracker.example/big.jpg" data-viewer-src="https://files.example/p.jpg" data-viewer-title="tracked.jpg">t</a><a href="https://files.example/report.pdf" data-viewer-src="https://files.example/p.jpg" data-viewer-title="report.pdf">r</a><a href="https://files.example/f/9a1b" data-viewer-src="https://files.example/p.jpg" data-viewer-title="IMG_0042.PNG">n</a>`;
+		const [big, tracked, pdf, named] = [...document.querySelectorAll<HTMLElement>('a')].map((anchor) => mediaItemOf(anchor));
 		expect(big?.original).toBe('https://files.example/big.jpg');
 		expect(tracked && 'original' in tracked).toBe(false);
+		// A file whose preview is all a browser can draw of it (a PDF, a RAW photo): not fetched to zoom into.
+		expect(pdf && 'original' in pdf).toBe(false);
+		// An image by its name, though its address doesn't say so.
+		expect(named?.original).toBe('https://files.example/f/9a1b');
 	});
 
 	it('gives focus back to the image last shown when it closes', () => {
