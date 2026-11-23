@@ -83,7 +83,8 @@ describe('directory', () => {
 		expect(directory.name({ user_id: 'guest_7' })).toBe('guest_7');
 		// A mention of someone known only from a record resolves by the recorded name.
 		directory.apply(snapshot([ada], { recordedUsers: { guest_7: { user_id: 'guest_7', name: 'Seven' } } }), undefined);
-		expect(directory.resolve('guest_7')).toEqual({ kind: 'user', id: 'guest_7', name: 'Seven', me: false });
+		// A guest's, with its user_id after the name (`showsHandle`).
+		expect(directory.resolve('guest_7')).toEqual({ kind: 'user', id: 'guest_7', name: 'Seven', me: false, shared: true });
 		expect(directory.resolve('guest_8')).toBeUndefined();
 	});
 
@@ -126,6 +127,36 @@ describe('directory', () => {
 		// Whoever else shows under that name still shows their handle.
 		expect(directory.sharesName(impostors.guest_3)).toBe(true);
 		expect(directory.sharesName(impostors.guest_4)).toBe(true);
+	});
+
+	it('shows a guest’s handle always, as it shows one where a name is shared, but not for a name that is its user_id', () => {
+		const maya = { user_id: 'maya', name: 'Maya' };
+		const guest = { user_id: 'guest_7', name: 'Maya L' };
+		const labelled = { user_id: 'visitor', name: 'Vi', roles: ['guest'] };
+		directory.apply(snapshot([ada, maya, guest, labelled, { user_id: 'guest_8', name: 'guest_8' }]), undefined);
+		// No one else shows as "Maya L" or "Vi": still with their handle, as guests.
+		expect([directory.showsHandle(guest), directory.sharesName(guest)]).toEqual([true, false]);
+		expect(directory.showsHandle(labelled)).toBe(true);
+		expect(directory.showsHandle({ user_id: 'guest_8' })).toBe(false);
+		// A member's name, unshared, needs none.
+		expect(directory.showsHandle(maya)).toBe(false);
+		expect(directory.resolve('guest_7')).toEqual({ kind: 'user', id: 'guest_7', name: 'Maya L', me: false, shared: true });
+		expect(renderMarkdown('@guest_7 @maya', directory.resolve)).toContain('@Maya L (guest_7)');
+		// A guest taking a member's name: both show their handles.
+		directory.apply(snapshot([ada, maya, { user_id: 'guest_9', name: 'Maya' }]), undefined);
+		expect([directory.showsHandle({ user_id: 'guest_9' }), directory.showsHandle(maya)]).toEqual([true, true]);
+	});
+
+	it('names a membership’s user as their messages do: the kept name, else the one last recorded, else the membership’s, else the user_id', () => {
+		directory.apply(snapshot([ada, { user_id: 'guest_2' }], { recordedUsers: { guest_2: { user_id: 'guest_2', name: 'Robin' }, guest_3: { user_id: 'guest_3' } } }), undefined);
+		// Logged under the name it joined with, or none: the name its messages carry.
+		expect(directory.memberName({ user_id: 'guest_2', name: 'Guest 2' })).toBe('Robin');
+		expect(directory.memberName({ user_id: 'guest_2' })).toBe('Robin');
+		// The kept name first.
+		expect(directory.memberName({ user_id: 'ada', name: 'Ada L' })).toBe('Ada');
+		// Nothing better known: the membership's name, else the user_id.
+		expect(directory.memberName({ user_id: 'guest_3', name: 'Three' })).toBe('Three');
+		expect(directory.memberName({ user_id: 'guest_4' })).toBe('guest_4');
 	});
 
 	it('shows names and roles without bidi embeddings and overrides, and tells names alike once they are dropped (§3.5.2)', () => {

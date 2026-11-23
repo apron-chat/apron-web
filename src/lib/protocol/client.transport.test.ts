@@ -165,6 +165,27 @@ describe('connection errors', () => {
 	});
 });
 
+describe('a server frame that offers guests again', () => {
+	it('doesn’t sign in as a guest on a connection that left signing in to the user, and a new connection does', async () => {
+		vi.useFakeTimers();
+		const { client, snap } = startClient();
+		latest().open();
+		latest().receive({ method: 'server', params: { apron: 10, auth: ['webauthn', 'token'], capabilities: ['rooms'] } });
+		const auths = () => latest().sent.filter((frame) => frame.method === 'auth');
+		expect(auths()).toEqual([]);
+		// The lobby reopens: what the sign-in screen offers changes, and nothing signs in for the user.
+		latest().receive({ method: 'server', params: { apron: 10, auth: ['webauthn', 'token', 'guest'], capabilities: ['rooms'] } });
+		expect(snap().server?.auth).toContain('guest');
+		expect(auths()).toEqual([]);
+		expect(snap().authenticated).toBe(false);
+		// Choosing Guest connects afresh, which signs in as one.
+		client.restart();
+		const next = afterBackoff();
+		await next.greet([], { auth: ['webauthn', 'token', 'guest'] });
+		expect(next.sent.filter((frame) => frame.method === 'auth').map((frame) => (frame.params as Record<string, unknown>).scheme)).toEqual(['guest']);
+	});
+});
+
 describe('a guest sign-in refused with retry_after', () => {
 	let snapshot: ClientSnapshot;
 

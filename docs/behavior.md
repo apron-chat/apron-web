@@ -116,7 +116,11 @@ rather than after the backoff; the network back between attempts also
 connects at once, and starts the backoff over. An explicit server retry window takes precedence, including a
 `retry_after` error about the connection as a whole (`data.retry_after`
 seconds); after such a `denied` error the client stops reconnecting, shows
-**Signed out** with the server's message, and waits for **Sign in**.
+**Signed out** with the server's message, and waits for **Sign in**. Held so
+(also while a session waits for its user to sign in again), the page shows what
+it had, disconnected: nothing in it checking for new messages, and in place of
+the composer, "You’re signed out, so nothing can be sent here. Sign in to go
+on." with **Sign in**.
 One window or tab of a browser connects to a server at a time
 (`src/lib/ui/server-claim.ts`): the one most recently shown with its client
 running holds a Web Lock named for the server, taken from any other window with
@@ -269,14 +273,19 @@ recorded one the message carries only for fields the kept object lacks, so a
 cleared avatar, name or `roles` stays cleared however stale the message; an
 empty or unknown name shows as the `user_id`. A
 `user` notification with `new` and `old` maps the retired ID to the new
-identity: the same account under a new `user_id`, such as a guest that
-becomes a new account. Signing in to an existing account isn't one: others
-see the guest leave (a membership leave, `offline`) and the account arrive,
-two people, the guest's messages staying the guest's, and the connection
-that signed in takes its own identity from the `auth` result or `you`. Message headers, the member list and the list of who reacted show the muted
+identity: the same account under a new `user_id`. Signing in to an existing
+account isn't one, and neither is a guest creating an account (the account is
+a new user, apart from the guest's history: [shazow/apron#137](https://github.com/shazow/apron/issues/137)):
+others see the guest leave (a membership leave, `offline`) and the account
+arrive, two people, the guest's messages staying the guest's, also on the
+connection that signed in or signed up, which takes its own identity from the
+`auth` result or `you`. Message headers, the member list and the list of who reacted show the muted
 `@user_id` beside a name only where it tells people apart: when another user the
-client knows of shows under the same name, so no one can pass as someone else (a
-name that is the user's own `user_id` needs no handle beside it). A handle that
+client knows of shows under the same name, so no one can pass as someone else, and
+always for a guest (a `user_id` starting `guest_`, or a `guest` role), since a
+guest may take any name, a member's included (a name that is the user's own
+`user_id` needs no handle beside it). Mentions (`@Name (user_id)`), a joined or
+left line, who edited a message, and who is typing follow the same rule. A handle that
 merely differs from the name says nothing more, so it isn't shown; one that is
 shown is needed, so it stays whole, giving way only after the name and the role
 badges. The profile card always shows the `@user_id`, and the mention picker
@@ -286,7 +295,11 @@ so the same person has the same color on every client. A user's `roles`
 ([PROTOCOL.md §3.3](https://github.com/shazow/apron/blob/main/PROTOCOL.md#33-identity)),
 such as "admin" or "bot", show as small outlined badges beside the name in
 message headers and the member list, never as part of it, so no name can pass
-as a role; they grant nothing here. Short of room, the badges come first: the
+as a role; they grant nothing here. A guest that is gone (it left every room
+this page shows, or it was this connection, which then signed in or up as
+someone else; a guest lasts as long as its connection) keeps no role its
+current objects gave it, such as `welcomed`: its messages show the roles they
+were recorded with. Short of room, the badges come first: the
 name truncates, down to 6em (or all of a shorter name), before the badges that
 don't fit go behind the last one that does, which ends with how many, its count in the role’s color ("BOT +2",
 its tooltip naming every role),
@@ -317,7 +330,11 @@ side, and a run that nets to nothing shows no line at all: "Ada and Bob joined
 · Carol left", and past three names "Ada, Bob, and 4 others joined", with
 everyone in the tooltip. A record joining more than 20 users at once is a
 baseline, not an event, and gets no line. Names render like any other user,
-with the `@user_id` when someone else shows under the same name. The lines
+with the `@user_id` where a message header would show it: the kept name, else
+the name the user was last recorded with by a message or reaction, before any
+membership's (a server may log a membership under the name the user joined
+with, or none), else the membership's own, else the `user_id`, so a guest that
+renamed itself reads as its messages do. The lines
 never count as unread or mention you, and a message after one starts a new
 sender group. A title change, in a room or thread, private or not, gets a
 system line at its room record's `log_id`: "Room renamed to “Ops”" (or
@@ -1457,7 +1474,10 @@ the error.
 `filter: "not_joined"`, the most active visible rooms you haven't joined, each
 with its member count. It starts open, so a newcomer sees what
 else there is without looking for it, and folds as the other sections do;
-unfolding it lists afresh.
+unfolding it lists afresh. A `room_update` `updated` with the record of a
+top-level room you haven't joined and it doesn't list yet, as a server sends
+when it lets you see more (letting you in from its lobby, say), adds that room
+to it at once, without a reload, and the next listing asks the server again.
 Picking one opens it to read through its history (§4.3) without joining it, since joining shows in it for everyone:
 its row shows it open, its threads are listed under it to read too, and the header has **Join**, the primary
 button beside its ⋯ menu, which joins it (`room_join`), as posting there does first. Until then it doesn't
@@ -1912,7 +1932,14 @@ its `description`, and its `server.welcome`
 both rendered as CommonMark and sanitized like a message.
 A server without the `guest` scheme opens this screen by itself once, since
 nothing works before signing in, and so does a session held for a sign-in
-(below) with nothing on screen yet. The server and name
+(below) with nothing on screen yet. A connection that found no way to sign in
+by itself leaves signing in to the user: a new `server` frame on it that offers
+`guest` again (a lobby reopening) changes what the screen offers, Guest
+included, and signs in as no one until the user chooses. It offers only what the server lists, the
+schemes it signs in with and its `signup`, such as a token for an invite link
+(a server that takes members only by invitation), and nothing of the server
+shows behind it: no placeholder rooms or messages, since no session is
+coming up. The server and name
 are stored in local storage, and the last few backends are listed under the
 form, each once by its address normalized by RFC 3986 (lowercase scheme and
 host, no default port, `/` for an empty path, percent-encoding normalized,

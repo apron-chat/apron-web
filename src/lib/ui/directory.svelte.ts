@@ -8,6 +8,7 @@ import type { Identity, ServerParams } from '$lib/protocol/types';
 import { readPlaceLink, writeApronLink } from './apron-link';
 import { serverLabel } from './connection';
 import { customEmoji } from './custom-emoji.svelte';
+import { isGuest } from './members';
 import { mediaSettings } from './media-settings.svelte';
 import type { KeyImage } from './reactions';
 import { shownSeen } from './user-status';
@@ -188,6 +189,17 @@ class Directory {
 	}
 
 	/**
+	 * The name for a membership's `user` (§4.2.2), a joined or left line's: the kept name, else the one the user was
+	 * last recorded with (a message's `from` before any membership's: a server may log a membership with the name the
+	 * user joined under, or none), else the membership's own, else the `user_id`. The line then names them as their
+	 * messages do.
+	 */
+	memberName(user: Identity): string {
+		const latest = this.users.recordedUsers[this.person(user)?.user_id ?? user.user_id];
+		return this.name(latest?.name ? latest : user);
+	}
+
+	/**
 	 * An avatar this client will load, if the user has one where avatars may load from (`mediaOrigins`, §4.8.6):
 	 * from anywhere else, only `https:`, as ever.
 	 */
@@ -245,11 +257,29 @@ class Directory {
 	sharesName(from: Identity | undefined): boolean {
 		const person = this.person(from);
 		if (!person) return false;
+		return this.#shares(person, this.name(from), from!.user_id);
+	}
+
+	/**
+	 * Whether to show the user's `@user_id` beside their name, wherever a name shows who someone is (a message's
+	 * sender, the member list, a mention, who reacted, typing): where another user shares the name (`sharesName`), and
+	 * always for a guest (`isGuest`), whose name says nothing of who they are, as any guest may take any name, such as
+	 * a member's. Not for a name that is the user's own `user_id`.
+	 */
+	showsHandle(from: Identity | undefined): boolean {
+		const person = this.person(from);
+		if (!person) return false;
 		const name = this.name(from);
+		if (name === person.user_id) return false;
+		return isGuest(person) || this.#shares(person, name, from!.user_id);
+	}
+
+	/** Another known `user_id` than `person`'s (or the one it was recorded as, `recorded`) shows under `name`. */
+	#shares(person: Identity, name: string, recorded: string): boolean {
 		if (name === person.user_id) return false;
 		const ids = this.byName.get(name);
 		if (!ids) return false;
-		for (const id of ids) if (id !== person.user_id && id !== from!.user_id) return true;
+		for (const id of ids) if (id !== person.user_id && id !== recorded) return true;
 		return false;
 	}
 
@@ -319,7 +349,7 @@ class Directory {
 		const known = users[id] || userAliases[id] !== undefined || recorded ? this.person(from) : undefined;
 		if (!known) return undefined;
 		const target: MentionTarget = { kind: 'user', id, name: known.name || known.user_id, me: this.isMe(id) };
-		if (this.sharesName(from)) target.shared = true;
+		if (this.showsHandle(from)) target.shared = true;
 		return target;
 	};
 

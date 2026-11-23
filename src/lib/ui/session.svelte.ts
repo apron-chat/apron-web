@@ -155,6 +155,13 @@ export class SessionView {
 	get error(): string | undefined {
 		return this.live.error;
 	}
+	/**
+	 * The server denied the connection (`denied`, §1.1), or it waits for a sign-in: nothing reconnects until you act.
+	 * What shows is the last view, disconnected: nothing in it is catching up, and nothing can be sent.
+	 */
+	get signedOut(): boolean {
+		return Boolean(this.live.held);
+	}
 	/** A sign-in is under way (a passkey's, or an approval's). */
 	get authBusy(): boolean {
 		return Boolean(this.live.authBusy);

@@ -35,7 +35,7 @@
 		reactors.map((user): Reactor => {
 			const id = directory.person(user)?.user_id ?? user.user_id;
 			const name = directory.name(user);
-			return { user_id: id, name, avatar: directory.avatar(user), you: directory.isMe(id), handle: directory.sharesName(user) };
+			return { user_id: id, name, avatar: directory.avatar(user), you: directory.isMe(id), handle: directory.showsHandle(user) };
 		})
 	);
 

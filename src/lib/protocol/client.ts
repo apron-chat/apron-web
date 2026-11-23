@@ -220,8 +220,12 @@ export class ChatClient {
 	private readonly pendingRoomSaves = new Map<string, PendingSave>();
 	/** One kept user object per `user_id` (§3.3), merged from current objects only. */
 	private readonly users = new KeptUsers();
-	/** The latest recorded object per `user_id` and the `log_id` of the record that carried it. */
-	private readonly recordedUsers = new Map<string, { identity: Identity; log_id: string }>();
+	/**
+	 * The latest recorded object per `user_id` and the `log_id` of the record that carried it. One a membership carried
+	 * (`membership`) gives way to one a message or reaction carried, whatever their order: a server may log a
+	 * membership with the name the user joined under, or none (§4.2.2), where a message's `from` names them as they were.
+	 */
+	private readonly recordedUsers = new Map<string, { identity: Identity; log_id: string; membership?: true }>();
 	private readonly userAliases = new CountedMap<string, string>();
 	/** The greatest `log_id` this client has received: where a notice sits in its room's timeline. */
 	private greatestLogId?: string;
@@ -476,6 +480,12 @@ export class ChatClient {
 	private signInNeeded?: Exclude<SignInMethod, 'link'>;
 	/** The current socket carried an error about the connection; its message outlives the close. */
 	private connectionErrored = false;
+	/**
+	 * This connection's own sign-in found no way in it could take by itself (no `guest`, no token to resume, or a passkey
+	 * to wait for): signing in is the user's to choose now, on the sign-in screen. A replacing `server` frame that offers
+	 * a way again (a lobby that reopens) changes what that screen offers, and signs in as no one meanwhile.
+	 */
+	private ownSignInDeclined = false;
 	private disconnectedAt?: number;
 	/**
 	 * When this reconnect began where someone could see it: the drop, on a page
@@ -945,7 +955,7 @@ export class ChatClient {
 		}
 		for (const entry of memberships) {
 			this.store.putMembership(entry);
-			this.noteRecorded(entry.user, entry.log_id);
+			this.noteRecorded(entry.user, entry.log_id, true);
 		}
 		for (const user of state.users) this.noteUser(cloneJson(user));
 		for (const [old, next] of Object.entries(state.aliases ?? {})) this.userAliases.set(old, next);
@@ -3166,6 +3176,7 @@ export class ChatClient {
 		this.status = reconnecting ? 'reconnecting' : 'connecting';
 		this.error = undefined;
 		this.connectionErrored = false;
+		this.ownSignInDeclined = false;
 		this.emit();
 	}
 
@@ -3292,7 +3303,8 @@ export class ChatClient {
 		this.transport.greeted(previousPing !== this.server.ping);
 		// Each frame fully replaces the last (§3.1): features are worth trying again.
 		this.memberChangesUnsupported = false;
-		if (this.authenticated || this.authRequested) {
+		// Left to the user (`ownSignInDeclined`): a frame that offers a guest sign-in again doesn't take it for them.
+		if (this.authenticated || this.authRequested || this.ownSignInDeclined) {
 			if (this.authenticated) this.startAddedCapabilities(previousCapabilities);
 			// A replacing frame may add capability `status`: attendance goes once signed in (§4.5).
 			this.syncIdle();
@@ -3345,6 +3357,7 @@ export class ChatClient {
 			this.reconnectHeld = true;
 			this.signInNeeded = 'webauthn';
 			this.error = 'Sign in with your passkey to continue.';
+			this.ownSignInDeclined = true;
 			this.emit();
 			return;
 		}
@@ -3357,12 +3370,14 @@ export class ChatClient {
 			this.signInNeeded = again ?? (auth.includes('webauthn') ? 'webauthn' : undefined);
 			this.error = again ? `Sign in ${way === 'email' ? 'with your email ' : way === 'external' ? 'with the server’s sign-in page ' : ''}again from the connect screen.`
 				: `This server doesn’t sign back in with ${way === 'email' ? 'email' : way === 'external' ? 'its sign-in page' : 'email or its sign-in page'}. Sign in another way from the connect screen.`;
+			this.ownSignInDeclined = true;
 			this.emit();
 			return;
 		}
 		// A guest listed only in `signup` isn't a way to sign in (§3.2: `auth` lists those).
 		if (!resume && (this.passkeyRequired || !auth.includes('guest'))) {
 			this.error = signInAdvice(auth, this.server?.signup ?? []);
+			this.ownSignInDeclined = true;
 			this.emit();
 			return;
 		}
@@ -3782,10 +3797,13 @@ export class ChatClient {
 	 */
 	private setYou(identity: Identity, complete: boolean): void {
 		const changed = this.you?.user_id !== identity.user_id;
+		// A guest this connection was, now another identity (signed in or up): that guest is gone, and its roles with it.
+		const departed = changed && this.you && this.isGuest(this.you.user_id) ? this.you.user_id : undefined;
 		// A pending addition belongs to the account that proposed it (§4.11.3): another identity needs a new code. The
 		// same account again, after a reconnect, keeps it: its code works there with its state (§4.11.2).
 		if (this.addition && this.addition.account !== identity.user_id) this.addition = undefined;
 		this.you = this.noteUser(identity, { own: true, complete });
+		if (departed !== undefined) this.forgetRoles(departed);
 		// `mine` in every reaction summary depends on the viewer.
 		if (changed) for (const room of this.rooms.values()) room.dirty = true;
 	}
@@ -3829,9 +3847,35 @@ export class ChatClient {
 			this.noteLive(room, logId);
 		}
 		for (const entry of entries) {
-			this.noteRecorded(entry.user, logId);
+			this.noteRecorded(entry.user, logId, true);
 			this.store.putMembership(entry);
 		}
+		// A guest that left every room shown here is gone (§3.2: a guest lasts as long as its connection, as a guest
+		// signing up does): its roles go with it (`forgetRoles`).
+		for (const entry of entries) {
+			const userId = entry.user.user_id;
+			if (entry.joined || !this.isGuest(userId) || userId === this.you?.user_id) continue;
+			if (![...this.rooms.keys()].some((id) => this.store.members(id)?.some((member) => member.user_id === userId))) this.forgetRoles(userId);
+		}
+	}
+
+	/** Whether a `user_id` is a guest's, as clients tell (§3.2's `guest_` convention, or a `guest` role on its kept object). */
+	private isGuest(userId: string): boolean {
+		const roles = this.users.get(userId)?.roles;
+		return userId.startsWith('guest_') || (Array.isArray(roles) && roles.includes('guest'));
+	}
+
+	/**
+	 * A guest that is gone: the display roles kept for it, which only its current objects gave it (such as
+	 * `welcomed`), are left out of its kept object, so its messages show the roles they were recorded with rather than
+	 * one it had last. Not cleared (an empty value is kept as cleared, §3.3): left out, so the recorded ones show.
+	 */
+	private forgetRoles(userId: string): void {
+		const kept = this.users.get(userId);
+		if (!kept || !Object.hasOwn(kept, 'roles')) return;
+		const { roles: _gone, ...rest } = kept;
+		this.users.set(userId, rest as Identity);
+		for (const room of this.rooms.values()) room.dirty = true;
 	}
 
 	/**
@@ -3999,11 +4043,15 @@ export class ChatClient {
 	 * `user`) by its record's `log_id`, apart from the kept one: a fallback
 	 * where no frame carries one, and what tells apart users sharing a name.
 	 */
-	private noteRecorded(identity: Identity, logId: string): void {
+	private noteRecorded(identity: Identity, logId: string, membership = false): void {
 		const current = this.recordedUsers.get(identity.user_id);
-		if (current && compareLogIds(logId, current.log_id) <= 0) return;
+		if (current) {
+			// A membership's object never replaces a message's; a message's always replaces a membership's; else the newer.
+			if (membership && !current.membership) return;
+			if (membership === Boolean(current.membership) && compareLogIds(logId, current.log_id) <= 0) return;
+		}
 		const same = current !== undefined && canonicalJson(current.identity) === canonicalJson(identity);
-		this.recordedUsers.set(identity.user_id, { identity: same ? current.identity : identity, log_id: logId });
+		this.recordedUsers.set(identity.user_id, { identity: same ? current.identity : identity, log_id: logId, ...(membership ? { membership: true as const } : {}) });
 	}
 
 	/** Remembers the greatest `log_id` received: where a notice sits in its room's timeline. */
@@ -4220,7 +4268,11 @@ export class ChatClient {
 		if (this.activeRoomId === roomId) this.activeRoomId = this.defaultRoomId();
 	}
 
-	/** A record of a room not joined, such as a new thread in a joined room: listings that show it take it. */
+	/**
+	 * A record of a room not joined, such as a new thread in a joined room, or a room the user may see from now on (one
+	 * a server let them see by letting them in from its lobby): listings that show it take it, a new top-level room
+	 * among the rooms to join (`directory`) too.
+	 */
 	private noteUnjoinedRoom(record: RoomRecord, delivery: RoomDelivery): void {
 		const first = this.store.firstRoomLogId(record.room_id);
 		const listing = (members: Identity[]): RoomListing => ({
@@ -4237,9 +4289,17 @@ export class ChatClient {
 		});
 		// A record without `members` leaves the listed members, and a truncated list's total, as they were (§4.2.1).
 		const replace = (listings: RoomListing[]) => listings.map((known) => known.id === record.room_id ? { ...listing(known.members), ...(known.memberCount !== undefined ? { memberCount: known.memberCount } : {}) } : known);
-		if (this.directory) this.directory = replace(this.directory);
 		const parent = record.parent_room_id;
-		if (parent === undefined) return;
+		if (parent === undefined) {
+			if (this.directory?.some((known) => known.id === record.room_id)) this.directory = replace(this.directory);
+			else if (this.directory) {
+				// New to this user: listed to join at once, and the listing reused until now is no longer the whole story.
+				this.directory = [...this.directory, listing([])];
+				this.forgetListings(undefined);
+			}
+			return;
+		}
+		if (this.directory) this.directory = replace(this.directory);
 		const threads = this.threadDirectory.get(parent);
 		if (threads?.some((known) => known.id === record.room_id)) this.threadDirectory.set(parent, replace(threads));
 		else if (threads || this.rooms.has(parent)) this.threadDirectory.set(parent, [...(threads ?? []), listing([])]);
@@ -4595,7 +4655,7 @@ export class ChatClient {
 		const records: DecodedRecords = decodeHistoryRecords(page);
 		for (const record of [...records.rooms, ...records.messages, ...records.embedded, ...records.reactions, ...records.memberships]) this.observeLogId(record.log_id);
 		for (const record of [...records.messages, ...records.embedded, ...records.reactions]) this.noteRecorded(record.from, record.log_id);
-		for (const record of records.memberships) this.noteRecorded(record.user, record.log_id);
+		for (const record of records.memberships) this.noteRecorded(record.user, record.log_id, true);
 		const retained = room
 			? (record: { log_id: string }) => room.floor === undefined || compareLogIds(record.log_id, room.floor) >= 0
 			: (record: { room_id?: string; log_id: string }) => {
