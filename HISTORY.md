@@ -83,6 +83,10 @@ surprised that nobody told them. If neither, leave it out.
 Aim for 3–8 entries a week; a week that shipped many features can have more.
 -->
 
+## Week of 2026-11-23
+
+- **New feature:** Copy a message exactly as it was written, Markdown and all, with Copy text in its ⋯ menu below Copy link: you get `**0 errors**`, not just the "0 errors" it shows. Until now only the long-press menu on touch screens had it. ([#305](https://github.com/apron-chat/apron-web/pull/305))
+
 ## Week of 2026-11-16
 
 - **New feature:** Sign in with a passkey from any copy of Apron, not only one on the server's own domain or a domain it trusts, such as Apron hosted elsewhere or web.apron.chat on another server. Apron sends you to the server's passkey page to sign in, create an account or add a passkey, and finishes when you come back. ([#278](https://github.com/apron-chat/apron-web/pull/278))

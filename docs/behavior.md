@@ -1520,12 +1520,17 @@ it always has that avatar and name. The quote may point into another room:
 clicking it opens that room or thread, loading the thread's history if needed,
 and highlights the message.
 
+A message's More menu (⋯ on its toolbar) offers **Copy text** below Copy link,
+for a message with text: it copies the text as it was written, so a markdown
+message gives its Markdown (`**0 errors**`, not "0 errors"). Like Copy link, it
+says Copied for a moment.
+
 On touch screens a message's actions wait for a long press, which a finger
 may drift up to 10px through (further is a scroll), or the system's own long
 press; a tap shows nothing, and messages take no text selection, so a stray
 press doesn't select words or pop the toolbar. The press opens a larger
 toolbar with **Reply** and **React** up front and ⋯ opening the rest as a
-menu of rows: Start thread, Edit, Select, **Copy text**, Copy link, Remove reply
+menu of rows: Start thread, Edit, Select, Copy link, Copy text, Remove reply
 reference and Delete, as each applies. A tap on the message, Escape or focus
 leaving puts it away. A press on a reaction chip, a link or media is theirs.
 

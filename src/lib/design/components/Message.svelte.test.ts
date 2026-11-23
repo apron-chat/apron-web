@@ -344,6 +344,29 @@ describe('a message row’s toolbar', () => {
 		expect(dom.button('More actions')).not.toBeNull();
 	});
 
+	it('offers Copy text below Copy link, for a message with text that isn\u2019t deleted', async () => {
+		vi.useFakeTimers();
+		const copyText = vi.fn(async () => true);
+		const row = render({ caps: { ...NONE, link: true }, body: { html: '<strong>hi</strong>', markdown: true } }, { copyText });
+		engage(row);
+		dom.button('More actions').click();
+		flushSync();
+		expect([...dom.byRole('toolbar', 'Message actions').querySelectorAll('button')].map(dom.nameOf)).toEqual(['Copy link to message', 'Copy text']);
+		dom.button('Copy text').click();
+		expect(copyText).toHaveBeenCalledOnce();
+		await vi.waitFor(() => expect(dom.queryByRole('button', 'Text copied')).not.toBeNull());
+		expect(dom.button('Text copied').textContent).toBe('Copied');
+		row.remove();
+		for (const fields of [{ body: undefined }, { deleted: true }]) {
+			const other = render({ caps: { ...NONE, link: true }, body: { html: 'hi' }, ...fields }, { copyText });
+			engage(other);
+			dom.button('More actions').click();
+			flushSync();
+			expect(dom.queryByRole('button', 'Copy text')).toBeNull();
+			other.remove();
+		}
+	});
+
 	it('puts the rarer actions away when the link could not be copied', async () => {
 		const copyLink = vi.fn(async () => false);
 		const row = render({ caps: { ...NONE, link: true } }, { copyLink });
@@ -507,7 +530,7 @@ describe('select gestures', () => {
 		dom.button('More actions').click();
 		flushSync();
 		expect(dom.byRole('toolbar', 'Message actions').getAttribute('aria-orientation')).toBe('vertical');
-		expect(buttons()).toEqual(['React', 'Reply to message', 'Start thread', 'Select message', 'Copy text', 'Copy link to message']);
+		expect(buttons()).toEqual(['React', 'Reply to message', 'Start thread', 'Select message', 'Copy link to message', 'Copy text']);
 		expect(dom.button('Reply to message').textContent).toBe('Reply');
 		expect(dom.button('Reply to message').classList.contains('ap-actions-row')).toBe(true);
 		expect(dom.button('Reply to message').querySelector('svg')).not.toBeNull();

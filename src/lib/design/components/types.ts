@@ -546,7 +546,7 @@ export interface MessageHandlers {
 	startThread?: (view: MessageView) => void;
 	/** Copy the message's link; resolves whether it was copied, and Copy link says so for a moment. */
 	copyLink?: (view: MessageView) => Promise<boolean>;
-	/** Copy the message's text, offered in touch's menu, whose rows take no text selection; resolves whether it was copied. */
+	/** Copy text, under ⋯ below Copy link: the message's text as written (a markdown body's Markdown); resolves whether it was copied. */
 	copyText?: (view: MessageView) => Promise<boolean>;
 	/** In select mode: toggle this message, or with `range` fill the selection to it. */
 	select?: (view: MessageView, range: boolean) => void;
