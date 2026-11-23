@@ -8,6 +8,9 @@ import type { MediaItem } from '$lib/design/components/types';
 import { directory } from './directory.svelte';
 import type { MediaGate } from './media-gate';
 
+/** A file every browser draws as an image, by its name: an original worth fetching to zoom into (not a PDF or a RAW photo, whose preview is all there is to see). */
+const DRAWN = /\.(jpe?g|png|gif|webp|avif)$/i;
+
 /**
  * What a link that opens the viewer says about its image, where it may load from (`gate`): what the page says is
  * asked again, as anything read back from it is.
@@ -17,11 +20,13 @@ export function mediaItemOf(link: HTMLElement, gate: MediaGate = directory.media
 	const src = gate.src(link.dataset.viewerSrc);
 	if (!src || !title) return undefined;
 	const href = link instanceof HTMLAnchorElement ? link.href : undefined;
+	const original = href && (DRAWN.test(new URL(href).pathname) || DRAWN.test(title)) ? gate.src(href) : undefined;
 	return {
 		src, title,
 		...(alt ? { alt } : {}),
 		...(detail ? { detail } : {}),
 		...(href ? { href } : {}),
+		...(original && original !== src ? { original } : {}),
 		...(Number(width) > 0 && Number(height) > 0 ? { width: Number(width), height: Number(height) } : {})
 	};
 }

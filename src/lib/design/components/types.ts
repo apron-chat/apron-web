@@ -178,6 +178,11 @@ export interface MediaItem {
 	detail?: string;
 	/** The original, which Open original opens in a new tab. */
 	href?: string;
+	/**
+	 * The original as an image to load, where it may load from: drawn in place of `src` (a preview, §4.8.4) once the
+	 * image is zoomed past the preview's own pixels and the original has loaded.
+	 */
+	original?: MediaSrc;
 	/** Its size, so the image keeps its shape while it loads. */
 	width?: number;
 	height?: number;
