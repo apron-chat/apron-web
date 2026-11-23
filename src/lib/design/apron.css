@@ -143,7 +143,7 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-msg-actions-below { top: calc(100% - var(--space-1)); }
 /* Touch's menu, its long press on the row already: over the row's top edge, wherever the observer would have it. */
 .ap-msg-held .ap-msg-actions { top: -14px; }
-/* On a touch screen a long press opens a message's menu (with Copy body), so its row takes no text selection or callout,
+/* On a touch screen a long press opens a message's menu (with Copy text), so its row takes no text selection or callout,
    which would fight it; a link, media and the editor keep the browser's own. */
 @media (hover: none) and (pointer: coarse) {
 	.ap-msg { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }

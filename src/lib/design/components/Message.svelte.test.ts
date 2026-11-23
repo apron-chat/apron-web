@@ -344,25 +344,25 @@ describe('a message row’s toolbar', () => {
 		expect(dom.button('More actions')).not.toBeNull();
 	});
 
-	it('offers Copy body below Copy link, for a message with text that isn\u2019t deleted', async () => {
+	it('offers Copy text below Copy link, for a message with text that isn\u2019t deleted', async () => {
 		vi.useFakeTimers();
-		const copyBody = vi.fn(async () => true);
-		const row = render({ caps: { ...NONE, link: true }, body: { html: '<strong>hi</strong>', markdown: true } }, { copyBody });
+		const copyText = vi.fn(async () => true);
+		const row = render({ caps: { ...NONE, link: true }, body: { html: '<strong>hi</strong>', markdown: true } }, { copyText });
 		engage(row);
 		dom.button('More actions').click();
 		flushSync();
-		expect([...dom.byRole('toolbar', 'Message actions').querySelectorAll('button')].map(dom.nameOf)).toEqual(['Copy link to message', 'Copy body']);
-		dom.button('Copy body').click();
-		expect(copyBody).toHaveBeenCalledOnce();
-		await vi.waitFor(() => expect(dom.queryByRole('button', 'Body copied')).not.toBeNull());
-		expect(dom.button('Body copied').textContent).toBe('Copied');
+		expect([...dom.byRole('toolbar', 'Message actions').querySelectorAll('button')].map(dom.nameOf)).toEqual(['Copy link to message', 'Copy text']);
+		dom.button('Copy text').click();
+		expect(copyText).toHaveBeenCalledOnce();
+		await vi.waitFor(() => expect(dom.queryByRole('button', 'Text copied')).not.toBeNull());
+		expect(dom.button('Text copied').textContent).toBe('Copied');
 		row.remove();
 		for (const fields of [{ body: undefined }, { deleted: true }]) {
-			const other = render({ caps: { ...NONE, link: true }, body: { html: 'hi' }, ...fields }, { copyBody });
+			const other = render({ caps: { ...NONE, link: true }, body: { html: 'hi' }, ...fields }, { copyText });
 			engage(other);
 			dom.button('More actions').click();
 			flushSync();
-			expect(dom.queryByRole('button', 'Copy body')).toBeNull();
+			expect(dom.queryByRole('button', 'Copy text')).toBeNull();
 			other.remove();
 		}
 	});
@@ -512,9 +512,9 @@ describe('select gestures', () => {
 
 	it('opens a larger menu from a long touch press, React and Reply up front and the rest behind ⋯ as rows, Select on anyone’s', () => {
 		vi.useFakeTimers();
-		const copyBody = vi.fn(async () => true);
+		const copyText = vi.fn(async () => true);
 		// Not yours: Select is still there.
-		const row = render({ caps: { ...ALL, edit: false, removeReply: false } }, { copyBody });
+		const row = render({ caps: { ...ALL, edit: false, removeReply: false } }, { copyText });
 		const text = row.querySelector('.ap-msg-text')!;
 		hold(text);
 		expect(held(row)).toBe(true);
@@ -530,12 +530,12 @@ describe('select gestures', () => {
 		dom.button('More actions').click();
 		flushSync();
 		expect(dom.byRole('toolbar', 'Message actions').getAttribute('aria-orientation')).toBe('vertical');
-		expect(buttons()).toEqual(['React', 'Reply to message', 'Start thread', 'Select message', 'Copy link to message', 'Copy body']);
+		expect(buttons()).toEqual(['React', 'Reply to message', 'Start thread', 'Select message', 'Copy link to message', 'Copy text']);
 		expect(dom.button('Reply to message').textContent).toBe('Reply');
 		expect(dom.button('Reply to message').classList.contains('ap-actions-row')).toBe(true);
 		expect(dom.button('Reply to message').querySelector('svg')).not.toBeNull();
-		dom.button('Copy body').click();
-		expect(copyBody).toHaveBeenCalledOnce();
+		dom.button('Copy text').click();
+		expect(copyText).toHaveBeenCalledOnce();
 	});
 
 	it('puts its menu away when Select or Edit is chosen from it, so it isn\u2019t back when they end, nor opens from a press held into them', () => {

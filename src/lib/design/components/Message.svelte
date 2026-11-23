@@ -112,7 +112,7 @@
 	/**
 	 * The toolbar's actions, in order: React first, beside the quick reactions; the rarer ones wait behind ⋯. Each
 	 * shows as its icon, its `key` (Reply's `r`, Edit's `e`, which `keydown` handles) badged for the keyboard. Touch's
-	 * menu (`held`) keeps only React and Reply up front, with everything else behind ⋯. Copy body, below Copy link,
+	 * menu (`held`) keeps only React and Reply up front, with everything else behind ⋯. Copy text, below Copy link,
 	 * copies the text as written (Markdown and all), which touch's rows, taking no text selection, can't give otherwise.
 	 */
 	function actions(): { quick: MessageAction[]; items: MessageAction[]; more?: MessageAction[] } {
@@ -138,7 +138,7 @@
 		const unreply: MessageAction | undefined = can.edit && !can.textOnly && view.reply ? { id: 'unreply', label: 'Remove reply reference', title: 'Remove reply', glyph: 'Remove reply', icon: icons.unlink, onclick: () => on.removeReply?.(view) } : undefined;
 		const select: MessageAction | undefined = can.select ? { id: 'select', label: 'Select message', title: 'Select', glyph: 'Select', icon: icons.squareCheck, testid: testids?.select, onclick: () => ((held = false), on.beginSelect?.(view)) } : undefined;
 		const link: MessageAction | undefined = can.link ? { id: 'link', label: 'Copy link to message', title: 'Copy link', glyph: 'Copy link', icon: icons.link, done: { label: 'Link copied', glyph: 'Copied' }, onclick: () => on.copyLink?.(view) } : undefined;
-		const copy: MessageAction | undefined = view.body && !view.deleted && on.copyBody ? { id: 'copy', label: 'Copy body', title: 'Copy body', glyph: 'Copy body', icon: icons.copy, done: { label: 'Body copied', glyph: 'Copied' }, onclick: () => on.copyBody?.(view) } : undefined;
+		const copy: MessageAction | undefined = view.body && !view.deleted && on.copyText ? { id: 'copy', label: 'Copy text', title: 'Copy text', glyph: 'Copy text', icon: icons.copy, done: { label: 'Text copied', glyph: 'Copied' }, onclick: () => on.copyText?.(view) } : undefined;
 		const remove: MessageAction | undefined = can.edit && !can.textOnly ? { id: 'delete', label: 'Delete message', title: 'Delete', glyph: 'Delete', icon: icons.trash, danger: true, onclick: () => on.delete?.(view) } : undefined;
 		const present = (list: Array<MessageAction | undefined>) => list.filter((it): it is MessageAction => it !== undefined);
 		if (held) {
