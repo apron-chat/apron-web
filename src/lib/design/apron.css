@@ -734,9 +734,9 @@ a.ap-embed-card:hover { background: var(--hover); }
 /* The description being edited (DescriptionSheet): the title a field on the editor's column, half its width, a name not a
    paragraph; the field drawn as the editor's box is, so the two read as one form. A thread's keeps its room before it. */
 .ap-roomhead-edit { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--space-3); }
-/* Its inset is the column's (`--ap-doc-inset`) in the pane's own units: in percentages it would be of its row's width, not
-   the pane's. Only while it is edited, so these container units cost nothing the rest of the time. */
-.ap-roomhead-title { flex: 0 1 23rem; min-width: 0; height: var(--control-xl); margin-inline-start: calc(max(min(var(--space-8), 4cqi), (100cqi - 46rem) / 2) - var(--space-4)); padding: 0 var(--space-3); font-size: var(--text-body); font-weight: 600; }
+/* On the column's edge (`--ap-doc-start`), less the header's own inset (`--ap-roomhead-start`: wider with the sidebar
+   shut, clear of its toggle). */
+.ap-roomhead-title { flex: 0 1 23rem; min-width: 0; height: var(--control-xl); margin-inline-start: max(0px, var(--ap-doc-start, var(--space-4)) - var(--ap-roomhead-start, var(--space-4))); padding: 0 var(--space-3); font-size: var(--text-body); font-weight: 600; }
 .ap-roomhead-crumb ~ .ap-roomhead-title { margin-inline-start: 0; }
 .ap-roomhead-edit .ap-roomhead-sep { margin-inline: calc(-1 * var(--space-2)); }
 .ap-roomhead-draft { display: inline-flex; align-items: center; gap: var(--space-2); flex: none; font-size: var(--text-sm); color: var(--ink-muted); white-space: nowrap; }
@@ -848,7 +848,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
  * at the start of its header, before Members, then at the end of the room's. The headers keep clear of it.
  */
 .ap-shell-side-toggle .ap-shell-sidehead { padding-inline-end: var(--toggle-clear); }
-.ap-shell-side-toggle.ap-shell-side-shut .ap-roomhead { padding-inline-start: var(--toggle-clear); }
+.ap-shell-side-toggle.ap-shell-side-shut .ap-roomhead { padding-inline-start: var(--toggle-clear); --ap-roomhead-start: var(--toggle-clear); }
 .ap-shell-members-toggle .ap-memberlist-head { padding-inline-start: var(--toggle-clear); }
 .ap-shell-members-toggle:not(.ap-shell-members-open) .ap-roomhead { padding-inline-end: var(--toggle-clear); }
 .ap-shell-slides .ap-roomhead { transition: padding var(--duration-slide) var(--ease-slide); }
@@ -943,7 +943,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 	.ap-shell { grid-template-columns: minmax(0, 1fr); }
 	.ap-shell .ap-shell-toggle-left, .ap-shell-handle, .ap-typing.ap-shell-typing { display: none; }
 	.ap-shell-side-toggle .ap-shell-sidehead { padding-inline-end: var(--space-4); }
-	.ap-shell.ap-shell-side-toggle .ap-roomhead { padding-inline-start: var(--space-4); }
+	.ap-shell.ap-shell-side-toggle .ap-roomhead { padding-inline-start: var(--space-4); --ap-roomhead-start: var(--space-4); }
 	.ap-shell .ap-shell-side { align-items: stretch; }
 	.ap-shell .ap-shell-side > * { width: auto; }
 	.ap-shell[data-pane='main'] .ap-shell-side { display: none; }
@@ -1390,12 +1390,20 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-linkcard-text { font-size: var(--text-sm); overflow-wrap: anywhere; white-space: pre-line; }
 .ap-linkcard-message .ap-linkcard-text { -webkit-line-clamp: 3; line-clamp: 3; }
 
-/* A room's or thread's description reads in a column a line of text reads well at, centered in the conversation pane,
-   whose edge its title and editor line up on while it's edited: at least a gutter's width in, 4% of the pane on a phone.
-   In percentages of the width each sits in (the pane's, for the first lines, the sheet and the header alike), not container
-   units: one of those, even on a property, restyles what holds it at each change of the pane's layout (perf budget:
-   type-composer, scroll-timeline). */
-.ap-shell-main { --ap-doc-inset: max(min(var(--space-8), 4%), (100% - 46rem) / 2); }
+/* A room's or thread's description reads in a column a line of text reads well at (46rem at most), starting where the
+   conversation's messages' text does, past their avatars (`--ap-doc-start`), so it reads as the top of the conversation;
+   its title and editor line up on that edge while it's edited. On a phone, 4% of the pane in, either side. The far side
+   (`--ap-doc-end`) in percentages of the width each sits in (the pane's, for the first lines and the sheet alike), not
+   container units: one of those, even on a property, restyles what holds it at each change of the pane's layout (perf
+   budget: type-composer, scroll-timeline). The description icon sits in the corner before it (`--ap-description-corner`). */
+.ap-shell-main {
+	--ap-doc-start: calc(2 * var(--space-2) + var(--avatar-md) + var(--space-3));
+	--ap-doc-end: max(var(--space-8), 100% - 46rem - var(--ap-doc-start));
+	--ap-description-corner: calc(var(--space-3) + var(--control-sm) + var(--space-2));
+}
+@container (max-width: 560px) {
+	:is(.ap-description, .ap-descsheet) { --ap-doc-start: min(var(--space-8), 4%); --ap-doc-end: min(var(--space-8), 4%); }
+}
 /* fades.ts: a box's edges fade where its content is cut off, so the cut says there's more. */
 .ap-fade-below { mask-image: linear-gradient(to bottom, #000 calc(100% - var(--ap-fade, 48px)), transparent); }
 .ap-fade-above { mask-image: linear-gradient(to top, #000 calc(100% - var(--ap-fade, 48px)), transparent); }
@@ -1409,8 +1417,8 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-description {
 	--ap-description-ground: var(--bg-200); --ap-description-bar: 48px; --ap-description-lines: 4;
 	--ap-description-foot: calc(var(--control-md) + var(--space-2));
-	--ap-description-corner: calc(var(--space-3) + var(--control-sm) + var(--space-2));
-	position: relative; flex: none; padding: var(--space-4) max(var(--ap-doc-inset, var(--space-4)), var(--ap-description-corner)) var(--space-3);
+	--ap-description-inline: max(var(--ap-doc-start, var(--space-4)), var(--ap-description-corner, 44px)) max(var(--ap-doc-end, var(--space-4)), var(--ap-description-corner, 44px));
+	position: relative; flex: none; padding-block: var(--space-4) var(--space-3); padding-inline: var(--ap-description-inline);
 	background: var(--ap-description-ground); border-radius: 0 0 var(--radius-lg) var(--radius-lg); box-shadow: var(--shadow-popover);
 }
 .ap-description-opens { cursor: pointer; }
@@ -1447,14 +1455,19 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-descsheet-scrim { position: absolute; inset: var(--header-h) 0 0; z-index: var(--z-overlay); background: var(--scrim); }
 .ap-descsheet { position: absolute; top: var(--header-h); inset-inline: 0; z-index: var(--z-overlay); display: flex; flex-direction: column; max-height: calc((100% - var(--header-h)) * 0.8); background: var(--bg-200); border-radius: 0 0 var(--radius-lg) var(--radius-lg); box-shadow: var(--shadow-popover); }
 .ap-descsheet-editing { height: calc((100% - var(--header-h)) * 0.8); }
-.ap-descsheet-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--space-6) var(--ap-doc-inset) var(--space-8); }
+.ap-descsheet-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-block: var(--space-6) var(--space-8); padding-inline: var(--ap-descsheet-inline); }
+/* Read, the column is clear of the description icon in the corner before it, as the first lines' is; edited, the editor is. */
+.ap-descsheet { --ap-descsheet-inline: max(var(--ap-doc-start), var(--ap-description-corner)) var(--ap-doc-end); --ap-descsheet-top: var(--space-6); }
+.ap-descsheet-editing { --ap-descsheet-inline: var(--ap-doc-start) var(--ap-doc-end); --ap-descsheet-top: var(--space-4); }
+/* The description icon, in the sheet's corner as in its first lines', level with its first line. */
+.ap-descsheet-icon { position: absolute; inset-inline-start: var(--space-3); top: calc(var(--ap-descsheet-top) + (var(--leading-body) - var(--control-sm)) / 2); width: var(--control-sm); height: var(--control-sm); display: grid; place-items: center; color: var(--ink-muted); }
 .ap-descsheet-body:focus { outline: none; }
 /* Opened by the keyboard, the description wears the focus ring; opened by the pointer, it doesn't (`data-pointer`). */
 .ap-descsheet-body:not([data-pointer]):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset-inset); }
 /* Read, ⌃ at its foot folds it back into its first lines under the header, where their ⌄ opened it. */
 .ap-descsheet-foot { flex: none; display: flex; justify-content: center; padding-bottom: var(--space-1); }
 .ap-descsheet-folds .ap-descsheet-body { padding-bottom: var(--space-2); }
-.ap-descsheet-editing .ap-descsheet-body { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: var(--space-4) var(--ap-doc-inset) var(--space-6); }
+.ap-descsheet-editing .ap-descsheet-body { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding-block: var(--space-4) var(--space-6); }
 /* The editor (a MarkdownEditor) fills the sheet, its field scrolling within: the column's box, its text a field's inset in. */
 .ap-descsheet-editing .ap-mdedit { flex: 1; min-height: 0; }
 .ap-descsheet-editing .ap-mdedit-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; }
@@ -1464,7 +1477,8 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 	/* Read, it is as tall as it reads here too, the room dimmed below it, where a tap shuts it; edited, it is the pane,
 	   the keyboard taking the rest. */
 	.ap-descsheet-editing { bottom: 0; height: auto; max-height: none; border-radius: 0; box-shadow: none; }
-	.ap-descsheet-body { padding: var(--space-4) var(--ap-doc-inset) var(--space-6); }
+	.ap-descsheet { --ap-descsheet-top: var(--space-4); }
+	.ap-descsheet-body { padding-block: var(--space-4) var(--space-6); }
 	.ap-descsheet-editing .ap-descsheet-body { padding: 0; }
 	.ap-descsheet-editing .ap-mdedit { border: 0; border-radius: 0; }
 }

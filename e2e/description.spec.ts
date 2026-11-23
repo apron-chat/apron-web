@@ -355,3 +355,38 @@ test.describe('the description read whole', () => {
 		await expect.poll(background).toBe(resting);
 	});
 });
+
+test.describe('the description on a wide window', () => {
+	test.use({ viewport: { width: 1920, height: 900 } });
+
+	test('starts where the conversation’s text does, in its first lines and read whole, its icon in the corner of both', async ({ preview, page }) => {
+		await preview.open();
+		const left = (locator: ReturnType<typeof page.locator>) => locator.first().evaluate((el) => Math.round(el.getBoundingClientRect().left));
+		const messages = await left(page.getByTestId('message-list').locator('article[data-message-id] .ap-msg-main'));
+		const description = pinned(preview);
+		expect(await left(description)).toBe(messages);
+		await expect(page.locator('.ap-description-icon')).toBeVisible();
+		await description.click();
+		const sheet = page.getByTestId('description-sheet');
+		expect(await left(sheet.getByTestId('sheet-description'))).toBe(messages);
+		await expect(sheet.locator('.ap-descsheet-icon')).toBeVisible();
+		// Edited, the title field and the editor share that edge, with the sidebar open and shut alike (its toggle then
+		// takes the header's start).
+		for (const shut of [false, true]) {
+			if (shut) {
+				await page.keyboard.press('Escape');
+				await page.getByRole('button', { name: 'Collapse sidebar' }).click();
+				await page.getByRole('button', { name: /^Show the room description/ }).click();
+			}
+			await page.getByRole('button', { name: /^Edit room/ }).click();
+			// The pane moves as the sidebar shuts: its messages' edge, measured again.
+			const edge = await left(page.getByTestId('message-list').locator('article[data-message-id] .ap-msg-main'));
+			expect(await left(page.locator('.ap-roomhead-title'))).toBe(edge);
+			expect(await left(sheet.locator('.ap-mdedit'))).toBe(edge);
+			await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+		}
+		// Its line still reads well: the column stops at 46rem, short of the wide pane's far edge.
+		const width = await sheet.getByTestId('sheet-description').evaluate((el) => el.getBoundingClientRect().width);
+		expect(width).toBeLessThanOrEqual(46 * 16);
+	});
+});

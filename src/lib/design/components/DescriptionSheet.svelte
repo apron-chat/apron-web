@@ -3,6 +3,7 @@
 	import type { Attachment } from 'svelte/attachments';
 	import type { ClassValue } from 'svelte/elements';
 	import ChevronUp from '@lucide/svelte/icons/chevron-up';
+	import TextAlignStart from '@lucide/svelte/icons/text-align-start';
 	import { fades } from './fades';
 
 	/**
@@ -10,13 +11,14 @@
 	 * as tall as the description, to 80% of the pane, scrolling within past that and faded where it's cut; edited, all 80%,
 	 * the editor (`children`, a MarkdownEditor) filling it. The room under it is dimmed, and out of reach (inert) but for
 	 * its header, which holds the sheet's buttons (Edit and ×, or Cancel and Save) and the title being edited. A click on
-	 * the dimmed room asks to shut it (`onclose`); Escape that nothing in the sheet took, to step back (`onescape`). On a
-	 * phone it is the whole pane under the header.
+	 * the dimmed room asks to shut it (`onclose`); Escape that nothing in the sheet took, to step back (`onescape`). Edited
+	 * on a phone, it is the whole pane under the header.
 	 *
-	 * Read, the description (`children`: rendered Markdown with its own `.ap-msg-text`) is set as a document (`.ap-doc`)
-	 * and has focus as it opens, so the keys that scroll a page scroll it: with the focus ring if the keyboard opened it,
-	 * without if the pointer did. ⌃ at its foot folds it back into its first lines under the header (`onfold`), the
-	 * ThreadDescription whose ⌄ opens it.
+	 * Read, the description (`children`: rendered Markdown with its own `.ap-msg-text`) is set as a document (`.ap-doc`) in
+	 * the column the conversation's text starts on, with the description icon in its top left corner as its first lines
+	 * have it. It has focus as it opens, so the keys that scroll a page scroll it: with the focus ring if the keyboard
+	 * opened it, without if the pointer did. ⌃ at its foot folds it back into its first lines under the header (`onfold`),
+	 * the ThreadDescription whose ⌄ opens it.
 	 */
 	interface Props {
 		/** Names the region: "Room description" or "Thread description". */
@@ -92,6 +94,8 @@
 	{#if editing}
 		<div class="ap-descsheet-body">{@render children()}</div>
 	{:else}
+		<!-- The description icon in its corner, as in its first lines': the region's label already says what it is. -->
+		<span class="ap-descsheet-icon" title={label}><TextAlignStart size={15} strokeWidth={2} aria-hidden="true" /></span>
 		<!-- The description has focus, so Space, the arrows and Page Up and Down scroll it. -->
 		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 		<div class="ap-descsheet-body ap-doc" tabindex="0" {@attach fades()} {@attach focused}>{@render children()}</div>
