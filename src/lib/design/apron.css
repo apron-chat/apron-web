@@ -734,8 +734,9 @@ a.ap-embed-card:hover { background: var(--hover); }
 /* The description being edited (DescriptionSheet): the title a field on the editor's column, half its width, a name not a
    paragraph; the field drawn as the editor's box is, so the two read as one form. A thread's keeps its room before it. */
 .ap-roomhead-edit { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--space-3); }
-/* On the column's edge (`--ap-doc-start`), less the header's own inset. */
-.ap-roomhead-title { flex: 0 1 23rem; min-width: 0; height: var(--control-xl); margin-inline-start: calc(var(--ap-doc-start, var(--space-4)) - var(--space-4)); padding: 0 var(--space-3); font-size: var(--text-body); font-weight: 600; }
+/* On the column's edge (`--ap-doc-start`), less the header's own inset (`--ap-roomhead-start`: wider with the sidebar
+   shut, clear of its toggle). */
+.ap-roomhead-title { flex: 0 1 23rem; min-width: 0; height: var(--control-xl); margin-inline-start: max(0px, var(--ap-doc-start, var(--space-4)) - var(--ap-roomhead-start, var(--space-4))); padding: 0 var(--space-3); font-size: var(--text-body); font-weight: 600; }
 .ap-roomhead-crumb ~ .ap-roomhead-title { margin-inline-start: 0; }
 .ap-roomhead-edit .ap-roomhead-sep { margin-inline: calc(-1 * var(--space-2)); }
 .ap-roomhead-draft { display: inline-flex; align-items: center; gap: var(--space-2); flex: none; font-size: var(--text-sm); color: var(--ink-muted); white-space: nowrap; }
@@ -847,7 +848,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
  * at the start of its header, before Members, then at the end of the room's. The headers keep clear of it.
  */
 .ap-shell-side-toggle .ap-shell-sidehead { padding-inline-end: var(--toggle-clear); }
-.ap-shell-side-toggle.ap-shell-side-shut .ap-roomhead { padding-inline-start: var(--toggle-clear); }
+.ap-shell-side-toggle.ap-shell-side-shut .ap-roomhead { padding-inline-start: var(--toggle-clear); --ap-roomhead-start: var(--toggle-clear); }
 .ap-shell-members-toggle .ap-memberlist-head { padding-inline-start: var(--toggle-clear); }
 .ap-shell-members-toggle:not(.ap-shell-members-open) .ap-roomhead { padding-inline-end: var(--toggle-clear); }
 .ap-shell-slides .ap-roomhead { transition: padding var(--duration-slide) var(--ease-slide); }
@@ -942,7 +943,7 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 	.ap-shell { grid-template-columns: minmax(0, 1fr); }
 	.ap-shell .ap-shell-toggle-left, .ap-shell-handle, .ap-typing.ap-shell-typing { display: none; }
 	.ap-shell-side-toggle .ap-shell-sidehead { padding-inline-end: var(--space-4); }
-	.ap-shell.ap-shell-side-toggle .ap-roomhead { padding-inline-start: var(--space-4); }
+	.ap-shell.ap-shell-side-toggle .ap-roomhead { padding-inline-start: var(--space-4); --ap-roomhead-start: var(--space-4); }
 	.ap-shell .ap-shell-side { align-items: stretch; }
 	.ap-shell .ap-shell-side > * { width: auto; }
 	.ap-shell[data-pane='main'] .ap-shell-side { display: none; }

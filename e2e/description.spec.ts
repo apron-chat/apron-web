@@ -370,6 +370,21 @@ test.describe('the description on a wide window', () => {
 		const sheet = page.getByTestId('description-sheet');
 		expect(await left(sheet.getByTestId('sheet-description'))).toBe(messages);
 		await expect(sheet.locator('.ap-descsheet-icon')).toBeVisible();
+		// Edited, the title field and the editor share that edge, with the sidebar open and shut alike (its toggle then
+		// takes the header's start).
+		for (const shut of [false, true]) {
+			if (shut) {
+				await page.keyboard.press('Escape');
+				await page.getByRole('button', { name: 'Collapse sidebar' }).click();
+				await page.getByRole('button', { name: /^Show the room description/ }).click();
+			}
+			await page.getByRole('button', { name: /^Edit room/ }).click();
+			// The pane moves as the sidebar shuts: its messages' edge, measured again.
+			const edge = await left(page.getByTestId('message-list').locator('article[data-message-id] .ap-msg-main'));
+			expect(await left(page.locator('.ap-roomhead-title'))).toBe(edge);
+			expect(await left(sheet.locator('.ap-mdedit'))).toBe(edge);
+			await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+		}
 		// Its line still reads well: the column stops at 46rem, short of the wide pane's far edge.
 		const width = await sheet.getByTestId('sheet-description').evaluate((el) => el.getBoundingClientRect().width);
 		expect(width).toBeLessThanOrEqual(46 * 16);
