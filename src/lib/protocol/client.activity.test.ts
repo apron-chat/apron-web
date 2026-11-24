@@ -59,6 +59,15 @@ describe('typing', () => {
 		client.send('lobby', 'hello').promise.catch(() => undefined);
 		client.sendTyping('lobby', false);
 		expect(typing()).toHaveLength(4);
+		// An indicator that ran out by itself needs no stop: it would only spend the server's typing allowance.
+		client.sendTyping('lobby', true);
+		expect(typing()).toHaveLength(5);
+		vi.advanceTimersByTime(15_000);
+		client.sendTyping('lobby', false);
+		expect(typing()).toHaveLength(5);
+		// Typing again after that starts it afresh at once.
+		client.sendTyping('lobby', true);
+		expect(typing()).toHaveLength(6);
 	});
 
 	it('sends no typing to a server without cap activity', () => {

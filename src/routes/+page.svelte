@@ -460,8 +460,11 @@
 	/** The height the app takes (`trackKeyboard`): the window's, or what an on-screen keyboard leaves of it. */
 	let appHeight = $state(Infinity);
 	let memberListToggle = $state<PanelToggle | undefined>();
-	/** The room your typing indicator shows in, and the timer that ends it there 5 s after the last keystroke. */
-	let typingIn: { room: string; timer: ReturnType<typeof setTimeout> } | undefined;
+	/**
+	 * The room your typing indicator may show in. A pause lets it run out by itself (`TYPING_TIMEOUT_S`) rather than
+	 * end it: a stop and a restart for each pause would spend the server's typing allowance on one long draft.
+	 */
+	let typingIn: { room: string } | undefined;
 	/** The last read whose notifications were closed (account, server, room, message), so each closes once. */
 	let closedThrough: string | undefined;
 	/**
@@ -1539,7 +1542,6 @@
 			for (const type of ['pointermove', 'wheel', 'touchmove'] as const) window.removeEventListener(type, moved, inputOptions);
 			window.removeEventListener('beforeinstallprompt', installOffered);
 			window.removeEventListener('appinstalled', installed);
-			if (typingIn) clearTimeout(typingIn.timer);
 			if (highlightTimer) clearTimeout(highlightTimer);
 			viewport.dispose();
 			presence.dispose();
@@ -2382,19 +2384,18 @@
 		const roomId = paneRoom.id;
 		// Typing somewhere else now: it ends where it was, rather than show there until it runs out.
 		if (typingIn && typingIn.room !== roomId) stopTyping();
+		// An emptied draft is no longer being written.
+		if (!drafts.text) {
+			stopTyping();
+			return;
+		}
 		client.sendTyping(roomId, true);
-		if (typingIn) clearTimeout(typingIn.timer);
-		const timer = setTimeout(() => {
-			if (typingIn?.timer === timer) typingIn = undefined;
-			client?.sendTyping(roomId, false);
-		}, 5000);
-		typingIn = { room: roomId, timer };
+		typingIn = { room: roomId };
 	}
 
 	/** Your typing indicator ends where it shows: you stopped, sent, or went elsewhere. */
 	function stopTyping(): void {
 		if (!typingIn) return;
-		clearTimeout(typingIn.timer);
 		client?.sendTyping(typingIn.room, false);
 		typingIn = undefined;
 	}
