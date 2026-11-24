@@ -1,6 +1,6 @@
 <script lang="ts">
 	/** The connect screen: which backend, its welcome, and the sign-in panel for it. */
-	import { normalizeWebSocketUrl, serverLook, type ChatClient } from '$lib/protocol/client';
+	import { serverLook, type ChatClient } from '$lib/protocol/client';
 	import { PROTOCOL_VERSION } from '$lib/protocol/client-internals';
 	import type { ServerParams } from '$lib/protocol/types';
 	import { serverLabel } from '$lib/ui/connection';
@@ -48,14 +48,8 @@
 	let busy = $state(false);
 	let signIn = $state<ReturnType<typeof SignIn>>();
 	/** Each recent server by its title, else its host and path, with its address. */
-	/** The server in the card, as Recent lists it: not listed twice. */
-	let inCard = $derived.by(() => {
-		try {
-			return normalizeWebSocketUrl(serverInput, window.location);
-		} catch {
-			return serverInput.trim();
-		}
-	});
+	/** The server the card shows, while signing in to it: Recent doesn't list it twice. */
+	let inCard = $state<string | undefined>();
 	let recent = $derived(recentServers.filter((entry) => entry.url !== inCard).map((entry) => ({ url: entry.url, label: entry.title ?? (serverLabel(entry.url) || entry.url), avatar: directory.avatarGateFor(entry.url).src(entry.avatar), starred: entry.starred })));
 
 	/** How the server that answered shows itself (§3.1): its title, else its host and path (`serverLabel`), always with its address beside it (§5.3). */
@@ -85,6 +79,6 @@
 	<SignIn
 		bind:this={signIn}
 		{client} {session} bind:serverInput bind:displayName bind:busy {passkeyUnavailable} {canCancel}
-		{initialScheme} {initialEmail} {initialError} {initialChoosing} {header} {onconnect} {onconnected} {oncancel} {onsignout}
+		{initialScheme} {initialEmail} {initialError} {initialChoosing} {header} {onconnect} {onconnected} {oncancel} {onsignout} bind:inCard
 	/>
 </ConnectPage>

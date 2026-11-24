@@ -108,7 +108,8 @@ test.describe('external sign-in', () => {
 		await expect(page.getByRole('form', { name: 'Sign in' })).toHaveCount(0);
 		await preview.openConnect({ signIn: true });
 		const host = new URL((await page.getByTestId('connect-server').locator('.ap-connect-address').textContent())!).host;
-		await expect(page.getByRole('form', { name: 'Sign in' }).getByText(`last used: ${host}`)).toBeVisible();
+		// The way last used here is the one chosen.
+		await expect(page.getByRole('form', { name: 'Sign in' }).getByRole('radiogroup', { name: 'Sign in with' }).getByRole('radio', { name: host, exact: true })).toBeChecked();
 	});
 });
 

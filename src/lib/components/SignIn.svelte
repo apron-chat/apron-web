@@ -54,10 +54,12 @@
 		oncancel: () => void;
 		/** Signing out starts a different session: the page drops what it held from this one. */
 		onsignout: SignOutHandler;
+		/** `bind:`: the address of the server the card shows, while it shows one (signing in), for the page to leave out of Recent. */
+		inCard?: string;
 	}
 	let {
 		client, session, serverInput = $bindable(), displayName = $bindable(), busy = $bindable(false), passkeyUnavailable, canCancel,
-		initialScheme, initialEmail, initialError, header, initialChoosing = false, onconnect, onconnected, oncancel, onsignout
+		initialScheme, initialEmail, initialError, header, initialChoosing = false, onconnect, onconnected, oncancel, onsignout, inCard = $bindable()
 	}: Props = $props();
 
 	// The initial choice follows the request or the current session; the segmented control owns it from then on.
@@ -130,6 +132,9 @@
 	let known = $derived((sameServer ? session.server : undefined) ?? (greeting?.status === 'known' ? greeting.server : undefined));
 	/** Choosing the server: its address alone, and Continue. Then signing in, with what it offers. */
 	let step = $derived<'choose' | 'sign-in'>(choosing || !known ? 'choose' : 'sign-in');
+	$effect(() => {
+		inCard = step === 'sign-in' ? normalizedInput : undefined;
+	});
 	/** What the server offers for signing in or creating an account, in its order. */
 	let offered = $derived(known ? offeredSchemes(known) : []);
 	/** Those this client can drive here (passkeys only where the browser has them); none, and there is no way in. */

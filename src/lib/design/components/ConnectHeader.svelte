@@ -8,7 +8,7 @@
 		url?: string;
 		/** `server.welcome` (§3.2): its Markdown, rendered and sanitized by you, shown above the Server field. Each `server` frame replaces it. */
 		welcome?: Snippet;
-		/** Starts the welcome folded to its first lines, with More: for someone who has signed in here before. */
+		/** Starts the welcome folded to its first two lines, with More where it runs longer: for someone who has signed in here before. */
 		welcomeFolded?: boolean;
 		/** Something is under way: the Server field waits. */
 		busy?: boolean;
@@ -31,8 +31,18 @@
 		warning?: { title: string; text: string };
 	}
 	let { url = $bindable(''), welcome, welcomeFolded = false, busy = false, urlTestid, server, description, serverTestid, onchange, linked, warning }: Props = $props();
-	let unfolded = $state(false);
-	const folded = $derived(welcomeFolded && !unfolded);
+	/** The server whose welcome was unfolded: another server's starts folded again. */
+	let unfoldedFor = $state<string | undefined>();
+	const folded = $derived(welcomeFolded && unfoldedFor !== (server?.address ?? ''));
+	/** The folded welcome runs past its two lines: it fades out, with More. */
+	let overflows = $state(false);
+	/** Measures the welcome against its fold as it lays out (a ResizeObserver: no layout forced of its own). */
+	function measure(content: HTMLElement) {
+		const observer = new ResizeObserver(() => (overflows = content.offsetHeight > (content.parentElement?.clientHeight ?? 0) + 1));
+		observer.observe(content);
+		return () => observer.disconnect();
+	}
+	const unfold = () => (unfoldedFor = server?.address ?? '');
 </script>
 
 <!--
@@ -54,9 +64,10 @@
 {/if}
 {#if warning}<p class="ap-connect-warn"><strong>{warning.title}</strong> {warning.text}</p>{/if}
 {#if welcome}
-	<div class={['ap-welcome', folded && 'ap-welcome-folded']}>
-		<div class="ap-welcome-body ap-msg-text">{@render welcome()}</div>
-		{#if folded}<button class="ap-link ap-welcome-more" type="button" onclick={() => (unfolded = true)}>More</button>{/if}
+	<!-- Focus on a link under the fold unfolds it, so the keyboard never lands on something hidden. -->
+	<div class={['ap-welcome', folded && 'ap-welcome-folded', folded && overflows && 'ap-welcome-clipped']} onfocusin={(event) => folded && event.target !== event.currentTarget.querySelector('.ap-welcome-more') && unfold()}>
+		<div class="ap-welcome-body"><div class="ap-msg-text" {@attach measure}>{@render welcome()}</div></div>
+		{#if folded && overflows}<button class="ap-link ap-welcome-more" type="button" onclick={unfold}>More</button>{/if}
 	</div>
 {/if}
 {#if linked && !server}<p class="ap-connect-intent">A link opened this page to <strong>{linked}</strong> on this server.</p>{/if}

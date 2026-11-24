@@ -1552,7 +1552,8 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-welcome :is(ul, ol):not(.ap-task-list) { padding-inline-start: var(--space-6); }
 /* Folded for someone who has signed in here before: its first two lines, fading out, and More. */
 .ap-welcome-folded { display: flex; align-items: flex-end; gap: var(--space-2); }
-.ap-welcome-folded .ap-welcome-body { flex: 1; min-width: 0; max-height: calc(2 * var(--leading-ui)); overflow: hidden; mask-image: linear-gradient(to bottom, #000 50%, transparent); }
+.ap-welcome-folded .ap-welcome-body { flex: 1; min-width: 0; max-height: calc(2 * var(--leading-ui)); overflow: hidden; }
+.ap-welcome-clipped .ap-welcome-body { mask-image: linear-gradient(to bottom, #000 50%, transparent); }
 .ap-welcome-more { flex: none; font-size: var(--text-ui); }
 .ap-connect-actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); margin-top: var(--space-1); }
 .ap-connect-actions .ap-btn { border-radius: var(--radius-sm); }

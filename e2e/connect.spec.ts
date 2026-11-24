@@ -205,14 +205,112 @@ test.describe('the server pane', () => {
 test.describe('the way last used to sign in', () => {
 	test.use(DEVICES.desktop);
 
-	test('is chosen first, and marked', async ({ preview, page }) => {
+	test('is chosen first, which is mark enough', async ({ preview, page }) => {
 		await page.addInitScript(() => localStorage.setItem('apron.lastSignIn', JSON.stringify({ 'wss://server.apron.chat/': 'email' })));
 		await preview.openRoot();
 		await preview.openConnect({ signIn: true });
 		const schemes = page.getByRole('form', { name: 'Sign in' }).getByRole('radiogroup', { name: 'Sign in with' });
 		await expect(schemes.getByRole('radio', { name: 'Email', exact: true })).toBeChecked();
-		await expect(page.getByRole('form', { name: 'Sign in' })).toContainText('Sign in with · last used: Email');
+		await expect(page.getByRole('form', { name: 'Sign in' })).not.toContainText('last used');
 		await expect(page.getByTestId('connect-email-input')).toBeVisible();
+	});
+
+	test('with a passkey: no hint about passkeys, until something goes wrong', async ({ preview, page }) => {
+		await page.addInitScript(() => localStorage.setItem('apron.lastSignIn', JSON.stringify({ 'wss://server.apron.chat/': 'webauthn' })));
+		await preview.openRoot();
+		await preview.openConnect({ signIn: true });
+		const form = page.getByRole('form', { name: 'Sign in' });
+		await expect(form.getByRole('radio', { name: /^Sign in/ })).toBeChecked();
+		await expect(form.locator('.ap-form-hint')).toHaveCount(0);
+		// Create account still says what it does.
+		await form.getByRole('radio', { name: /^Create account/ }).click();
+		await expect(form.locator('.ap-form-hint')).toContainText('saves a new passkey');
+	});
+});
+
+test.describe('the connect screen for a server signed in to before', () => {
+	test.use(DEVICES.desktop);
+	const WELCOME = 'Welcome to the demo server. Some tips for getting started:\n\n- Guests only read: create an account with a passkey to post.\n- See [the guide](https://example.com/guide) for more.\n\nPlease be kind.';
+	const returning = (page: import('@playwright/test').Page) => page.addInitScript(() => localStorage.setItem('apron.lastSignIn', JSON.stringify({ 'wss://server.apron.chat/': 'email' })));
+
+	test('folds the server’s welcome to two lines, with More; the keyboard reaching a hidden link unfolds it', async ({ preview, page }) => {
+		await returning(page);
+		await preview.openRoot({ server: { welcome: WELCOME } });
+		await preview.openConnect({ signIn: true });
+		const welcome = page.locator('.ap-welcome');
+		await expect(welcome).toHaveClass(/ap-welcome-clipped/);
+		expect((await welcome.locator('.ap-welcome-body').boundingBox())!.height).toBeLessThanOrEqual(36);
+		await welcome.getByRole('button', { name: 'More', exact: true }).click();
+		await expect(welcome).not.toHaveClass(/ap-welcome-folded/);
+		await expect(welcome.getByRole('button', { name: 'More', exact: true })).toHaveCount(0);
+		await expect(welcome.getByRole('link', { name: 'the guide' })).toBeVisible();
+		// Again, from the keyboard: focus on the link under the fold unfolds the welcome.
+		await page.reload();
+		await preview.openConnect({ signIn: true });
+		await expect(welcome).toHaveClass(/ap-welcome-folded/);
+		await welcome.getByRole('link', { name: 'the guide' }).focus();
+		await expect(welcome).not.toHaveClass(/ap-welcome-folded/);
+	});
+
+	test('shows a welcome that fits in two lines as it is, and the whole welcome on a first visit', async ({ preview, page }) => {
+		await returning(page);
+		await preview.openRoot({ server: { welcome: 'Be kind.' } });
+		await preview.openConnect({ signIn: true });
+		await expect(page.locator('.ap-welcome')).not.toHaveClass(/ap-welcome-clipped/);
+		await expect(page.locator('.ap-welcome').getByRole('button', { name: 'More', exact: true })).toHaveCount(0);
+	});
+
+	test('on a first visit, the whole welcome', async ({ preview, page }) => {
+		await preview.openRoot({ server: { welcome: WELCOME } });
+		await preview.openConnect({ signIn: true });
+		await expect(page.locator('.ap-welcome')).not.toHaveClass(/ap-welcome-folded/);
+		await expect(page.locator('.ap-welcome').getByRole('link', { name: 'the guide' })).toBeVisible();
+	});
+});
+
+test.describe('the recent servers under the card', () => {
+	test.use(DEVICES.desktop);
+
+	test('leave out the server the card shows, list it while choosing, and show four at first', async ({ preview, page }) => {
+		await page.addInitScript(() => {
+			if (sessionStorage.getItem('seeded')) return;
+			sessionStorage.setItem('seeded', '1');
+			const others = ['a', 'b', 'c', 'd', 'e'].map((name) => ({ url: `wss://${name}.example/`, title: name.toUpperCase() }));
+			localStorage.setItem('apron.recentServers', JSON.stringify([{ url: 'wss://server.apron.chat/', title: 'Demo', starred: true }, ...others]));
+		});
+		await preview.openRoot();
+		await preview.openConnect({ signIn: true });
+		const recent = page.getByRole('group', { name: 'Recent servers' });
+		const addresses = recent.locator('.ap-connect-recent-item .ap-connect-address');
+		await expect(addresses).toHaveText(['wss://a.example/', 'wss://b.example/', 'wss://c.example/', 'wss://d.example/']);
+		await recent.getByRole('button', { name: 'Show 1 more', exact: true }).click();
+		await expect(addresses).toHaveText(['wss://a.example/', 'wss://b.example/', 'wss://c.example/', 'wss://d.example/', 'wss://e.example/']);
+		// Choosing a server again, it is one to choose.
+		await page.getByRole('button', { name: 'Change', exact: true }).click();
+		await expect(addresses.first()).toHaveText('wss://server.apron.chat/');
+	});
+
+	test('show a row’s star and × while it is hovered or focused, and a set star always', async ({ page }) => {
+		const base = process.env.E2E_URL!;
+		await page.route(/^https?:\/\/(?!127\.0\.0\.1[:/]|localhost[:/])/, (route) => route.abort());
+		await page.routeWebSocket(/.*/, () => new Promise<void>(() => undefined));
+		await page.addInitScript(() => {
+			localStorage.setItem('apron.serverUrl', 'wss://chat.gone.example/');
+			localStorage.setItem('apron.recentServers', JSON.stringify([{ url: 'wss://work.example/', title: 'Work', starred: true }, { url: 'wss://home.example/', title: 'Home' }]));
+		});
+		await page.goto(`${base}/`);
+		await page.getByRole('button', { name: 'Change server', exact: true }).click();
+		const recent = page.getByRole('group', { name: 'Recent servers' });
+		await page.mouse.move(0, 0);
+		await expect(recent.getByRole('button', { name: 'Star Work', exact: true })).toHaveCSS('opacity', '1');
+		await expect(recent.getByRole('button', { name: 'Forget Work', exact: true })).toHaveCSS('opacity', '0');
+		await expect(recent.getByRole('button', { name: 'Star Home', exact: true })).toHaveCSS('opacity', '0');
+		await recent.getByRole('button', { name: /^Home/ }).hover();
+		await expect(recent.getByRole('button', { name: 'Star Home', exact: true })).toHaveCSS('opacity', '1');
+		await expect(recent.getByRole('button', { name: 'Forget Home', exact: true })).toHaveCSS('opacity', '1');
+		await page.mouse.move(0, 0);
+		await recent.getByRole('button', { name: 'Forget Work', exact: true }).focus();
+		await expect(recent.getByRole('button', { name: 'Forget Work', exact: true })).toHaveCSS('opacity', '1');
 	});
 });
 
