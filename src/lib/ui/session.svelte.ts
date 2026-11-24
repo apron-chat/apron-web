@@ -199,6 +199,8 @@ export class SessionView {
 	private lastReady = $state.raw<ClientSnapshot | undefined>();
 
 	readonly ready = $derived(isSessionReady(this.live));
+	/** The server has listed the rooms on this connection: read on its own, unlike `snapshot`, which changes with each message. */
+	readonly roomsListed = $derived(Boolean(this.live.roomsListed));
 	readonly connection = $derived(connectionStateOf(this.live));
 	readonly reconnectError = $derived(reconnectErrorOf(this.live));
 	/** A reconnect that has stalled past the quiet window, or one the server refused. */
