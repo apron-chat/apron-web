@@ -1166,10 +1166,12 @@
 		untrack(() => openAtMessage(room.parentRoomId ?? room.id, room.parentRoomId ? room.id : undefined, pending.messageId));
 	});
 
-	// A linked destination waits a while for its server's rooms, then goes.
+	// A linked destination waits a while for the listings it needs once its server has listed its rooms, then goes.
+	// Connecting and signing in don't count, nor does a drop on the way: a reload while the server is slow to answer
+	// keeps the page's place rather than saying the room isn't there.
 	$effect(() => {
 		const pending = linked;
-		if (!pending || serverUrl !== pending.server) return;
+		if (!pending || serverUrl !== pending.server || !session.ready || !session.roomsListed) return;
 		const timer = setTimeout(() => {
 			if (linked === pending) abandonLink(activeRoom?.id !== pending.room ? 'room' : 'thread');
 		}, PUSH_ROOM_WAIT_MS);
