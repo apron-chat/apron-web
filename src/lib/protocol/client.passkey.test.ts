@@ -374,8 +374,8 @@ describe('the passkey page', () => {
 	const redeem = { code: 'Hk41x9', code_verifier: 'dBjftJ', redirect_uri: 'https://web.example/signed-in/', client_id: 'apron-web' };
 
 	/** Begins `action` and answers with `result`; resolves with what `usePasskey` threw. */
-	async function begin(client: ChatClient, socket: FakeSocket, action: 'login' | 'register', result: Record<string, unknown>): Promise<unknown> {
-		const pending = client.usePasskey(action).then(() => undefined, (cause: unknown) => cause);
+	async function begin(client: ChatClient, socket: FakeSocket, action: 'login' | 'register', result: Record<string, unknown>, options: { offerPage?: boolean } = {}): Promise<unknown> {
+		const pending = client.usePasskey(action, undefined, options).then(() => undefined, (cause: unknown) => cause);
 		await settle();
 		await socket.reply('auth', result);
 		return pending;
@@ -396,18 +396,62 @@ describe('the passkey page', () => {
 		await expect(begin(client, socket, 'login', { challenge_id: 'c2', public_key: { challenge: 'x', rpId: 'other.example' }, external: page })).resolves.toBeInstanceOf(PasskeyPageNeeded);
 
 		// A sign-in that used no passkey (dismissed, or none for the RP ID) is the user's no, and stays one:
-		// the page isn't opened, but offered, since it may find a passkey this page can't.
+		// the page isn't opened, but offered to a caller that asks, since it may find a passkey this page can't.
 		vi.mocked(requestPasskey).mockRejectedValue(new DOMException('Dismissed', 'NotAllowedError'));
-		const offered = await begin(client, socket, 'login', { challenge_id: 'c3', public_key: { challenge: 'x' }, external: page });
+		const offered = await begin(client, socket, 'login', { challenge_id: 'c3', public_key: { challenge: 'x' }, external: page }, { offerPage: true });
 		expect(offered).toBeInstanceOf(PasskeyPageOffered);
 		expect((offered as PasskeyPageOffered).needed).toMatchObject({ action: 'login', external: page });
 		expect((offered as PasskeyPageOffered).cause).toMatchObject({ name: 'NotAllowedError' });
-		// Without a page, or for a new passkey, it's the browser's error as it was.
-		await expect(begin(client, socket, 'login', { challenge_id: 'c4', public_key: { challenge: 'x' } })).resolves.toMatchObject({ name: 'NotAllowedError' });
+		// Without a page, or for a caller that doesn't ask (adding a passkey in Preferences), it's the error as it was.
+		await expect(begin(client, socket, 'login', { challenge_id: 'c4', public_key: { challenge: 'x' } }, { offerPage: true })).resolves.toMatchObject({ name: 'NotAllowedError' });
 		await expect(begin(client, socket, 'register', { challenge_id: 'c5', public_key: { challenge: 'x' }, external: page })).resolves.toMatchObject({ name: 'NotAllowedError' });
-		// A ceremony this page gave up (AbortError) is no sign that a passkey is elsewhere.
-		vi.mocked(requestPasskey).mockRejectedValue(new DOMException('Aborted', 'AbortError'));
-		await expect(begin(client, socket, 'login', { challenge_id: 'c6', public_key: { challenge: 'x' }, external: page })).resolves.toMatchObject({ name: 'AbortError' });
+	});
+
+	it('offers the page after any failure of the ceremony here, as browsers and password managers report it, but not after its own Cancel', async () => {
+		const { client, socket } = await connected();
+		// What browsers and password managers that run ceremonies in their place throw: DOMExceptions by
+		// many names, plain Errors (some named as DOMExceptions are, some not), and things that aren't errors.
+		const named = (name: string, message: string) => Object.assign(new Error(message), { name });
+		const failures: unknown[] = [
+			new DOMException('Dismissed', 'NotAllowedError'),
+			new DOMException('Not supported', 'NotSupportedError'),
+			new DOMException('Already registered', 'InvalidStateError'),
+			new DOMException('Unknown', 'UnknownError'),
+			new DOMException('Its own abort', 'AbortError'),
+			named('NotAllowedError', 'Dismissed'),
+			new Error('Something went wrong.'),
+			new TypeError('Cannot read properties of undefined'),
+			'failed',
+			undefined,
+		];
+		for (const [index, failure] of failures.entries()) {
+			vi.mocked(requestPasskey).mockRejectedValue(failure);
+			for (const action of ['login', 'register'] as const) {
+				const offered = await begin(client, socket, action, { challenge_id: `c${index}${action}`, public_key: { challenge: 'x' }, external: page }, { offerPage: true });
+				expect(offered).toBeInstanceOf(PasskeyPageOffered);
+				expect((offered as PasskeyPageOffered).needed).toMatchObject({ action, external: page });
+			}
+		}
+		// Cancel in this page gives the ceremony up: nothing is offered.
+		vi.mocked(requestPasskey).mockImplementation((_action, _options, signal) => new Promise((_resolve, reject) => {
+			signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+		}));
+		const pending = client.usePasskey('login', undefined, { offerPage: true }).then(() => undefined, (cause: unknown) => cause);
+		await settle();
+		await socket.reply('auth', { challenge_id: 'cancelled', public_key: { challenge: 'x' }, external: page });
+		await settle();
+		client.cancelPasskeyPrompt();
+		expect(await pending).not.toBeInstanceOf(PasskeyPageOffered);
+	});
+
+	it('reads a password manager’s errors by name, as Bitwarden throws them: a plain Error, not a DOMException', async () => {
+		const { client, socket } = await connected();
+		// Bitwarden's extension runs the ceremony itself, without related origins, and its errors cross into the page as JSON.
+		const named = (name: string, message: string) => Object.assign(new Error(message), { name });
+		vi.mocked(requestPasskey).mockRejectedValue(named('SecurityError', "'rp.id' cannot be used with the current origin"));
+		await expect(begin(client, socket, 'login', { challenge_id: 'c1', public_key: { challenge: 'x', rpId: 'fake.test' }, external: page })).resolves.toBeInstanceOf(PasskeyPageNeeded);
+		vi.mocked(requestPasskey).mockRejectedValue(named('NotAllowedError', 'Dismissed'));
+		await expect(begin(client, socket, 'login', { challenge_id: 'c2', public_key: { challenge: 'x' }, external: page }, { offerPage: true })).resolves.toBeInstanceOf(PasskeyPageOffered);
 	});
 
 	it('goes straight to the page when the server sends no public_key, and says where passkeys work without one', async () => {

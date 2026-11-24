@@ -24,6 +24,8 @@ describe('passkey route', () => {
 	it('falls back to the page for a refused RP ID, never for the user’s no', () => {
 		expect(usesPage(new DOMException('The RP ID is not valid', 'SecurityError'))).toBe(true);
 		expect(usesPage(new ForeignRpIdError('not its own'))).toBe(true);
+		// A password manager's refusal, by name: Bitwarden's is a plain Error.
+		expect(usesPage(Object.assign(new Error("'rp.id' cannot be used with the current origin"), { name: 'SecurityError' }))).toBe(true);
 		for (const cause of [new DOMException('Dismissed', 'NotAllowedError'), new DOMException('Aborted', 'AbortError'), new Error('SecurityError'), undefined]) {
 			expect(usesPage(cause)).toBe(false);
 		}

@@ -15,7 +15,7 @@
 	import { offeredSchemes, serverLabel, passkeyMessage, schemeUse } from '$lib/ui/connection';
 	import { greetings } from '$lib/ui/greetings.svelte';
 	import { codeStillFor, type SentCode } from '$lib/ui/sign-in-link';
-	import { PasskeyPageNeeded, PasskeyPageOffered } from '$lib/protocol/passkey-route';
+	import { isWebAuthnError, PasskeyPageNeeded, PasskeyPageOffered } from '$lib/protocol/passkey-route';
 	import { openSignInWindow, signInPageError } from '$lib/ui/sign-in-window';
 	import type { SessionView } from '$lib/ui/session.svelte';
 	import {
@@ -172,7 +172,7 @@
 	}));
 	// After a sign-in here used no passkey, the submit continues on the server's page (pageOffer).
 	// Only for the server it was offered for: Change, or another address in the field, lets it go.
-	let continuesOnPage = $derived(pageOffer !== undefined && pageOffer.url === normalizedInput && sameServer && !choosing && view.primary.action === 'passkey-login');
+	let continuesOnPage = $derived(pageOffer !== undefined && pageOffer.url === normalizedInput && sameServer && !choosing && view.primary.action === `passkey-${pageOffer.needed.action}`);
 	let pageHost = $derived(pageOffer ? new URL(pageOffer.needed.external.url).host : '');
 	/** What the hint says while the panel is ready: a notice, if there is one, in place of the usual hint. */
 	let shownNotice = $derived((view.phase === 'ready' || codeBusy) && notice ? notice : '');
@@ -564,7 +564,7 @@
 		if (action === 'login') client.setDisplayName('');
 		try {
 			try {
-				await client.usePasskey(action, name);
+				await client.usePasskey(action, name, { offerPage: true });
 			} catch (cause) {
 				// This page can't use the server's passkeys: its passkey page can.
 				if (!(cause instanceof PasskeyPageNeeded)) throw cause;
@@ -582,12 +582,12 @@
 			if (action === 'login' && displayName.trim()) client.setDisplayName(displayName);
 			const offered = cause instanceof PasskeyPageOffered ? cause : undefined;
 			const browser = offered ? offered.cause : cause;
-			const refused = browser instanceof DOMException && browser.name === 'NotAllowedError';
+			const refused = isWebAuthnError(browser, 'NotAllowedError');
 			if (followUp && refused) notice = 'Connected. Tap again to continue with your passkey.';
-			// No passkey used here: the server's page may find one this page can't (an older one, say).
+			// The ceremony here failed, whoever ran it: the server's page may do what this page can't (find an older passkey, say).
 			else if (offered) {
 				pageOffer = { needed: offered.needed, url: client.url };
-				notice = tryPasskeyOn(new URL(offered.needed.external.url).host);
+				notice = tryPasskeyOn(new URL(offered.needed.external.url).host, action);
 			}
 			// Most likely no passkey for this server on this device: point to Create account, where there is one.
 			else if (refused && action === 'login' && passkeyChoice(use)) error = CANCELLED_TRY_CREATE;
@@ -595,24 +595,25 @@
 		}
 	}
 
-	/** Signs in on the server's sign-in page, offered after a sign-in here used no passkey. */
+	/** Continues on the server's sign-in page, offered after a ceremony here failed. */
 	async function passkeyOnServerPage(): Promise<void> {
 		const needed = pageOffer?.needed;
 		if (!needed || !continuesOnPage) return;
 		error = '';
 		notice = '';
 		pageOffer = undefined;
-		client.setDisplayName('');
+		const name = needed.action === 'register' ? displayName.trim() || undefined : undefined;
+		if (needed.action === 'login') client.setDisplayName('');
 		try {
-			await passkeyPage(needed, undefined);
-			const kept = client.snapshot().you?.name;
+			await passkeyPage(needed, name);
+			const kept = name ?? client.snapshot().you?.name;
 			if (kept) {
 				displayName = kept;
 				saveDisplayName(kept);
 			}
 			finish();
 		} catch (cause) {
-			if (displayName.trim()) client.setDisplayName(displayName);
+			if (needed.action === 'login' && displayName.trim()) client.setDisplayName(displayName);
 			error = passkeyMessage(cause);
 		}
 	}
@@ -669,7 +670,7 @@
 <SignInForm
 	label="Sign in" phase={view.phase} onsubmit={submit}
 	header={top} {schemes} {names} {lastUsed} fields={step === 'sign-in' && !unusable} scheme={chosen} onscheme={(candidate) => { scheme = candidate as Scheme; schemeFor = normalizedInput; }}
-	passkeyChoice={chosen === 'webauthn' && passkeyChoice(use) && !(here && registered)} passkeyMode={passkeyChosen} onpasskeymode={(value) => { passkeyChosen = value; error = ''; notice = ''; pageOffer = undefined; }} passkeyNudge={error === CANCELLED_TRY_CREATE || continuesOnPage ? 'register' : undefined}
+	passkeyChoice={chosen === 'webauthn' && passkeyChoice(use) && !(here && registered)} passkeyMode={passkeyChosen} onpasskeymode={(value) => { passkeyChosen = value; error = ''; notice = ''; pageOffer = undefined; }} passkeyNudge={error === CANCELLED_TRY_CREATE || (continuesOnPage && pageOffer?.needed.action === 'login') ? 'register' : undefined}
 	bind:token bind:email bind:code bind:name={() => (chosen === 'token' ? tokenName : displayName), (value) => (chosen === 'token' ? (tokenName = value) : (displayName = value))} askName={!passkeyLogin && !reader}
 	sent={codeSentTo} onrestart={() => { codeSent = undefined; code = ''; error = ''; client.cancelSignInCode(); }}
 	hint={shownNotice || hint} hintTone={continuesOnPage && shownNotice ? 'warn' : undefined} error={errorText} {busy}

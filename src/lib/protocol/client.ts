@@ -1006,9 +1006,11 @@ export class ChatClient {
 	 * not set is applied as soon as the session is registered. Resolves with
 	 * the `me` request sent for the display name after authenticating, if
 	 * any, so callers can show what the server kept. Busy (`authBusy`) from
-	 * the call on, so a tap never goes unanswered.
+	 * the call on, so a tap never goes unanswered. With `offerPage`, a
+	 * ceremony here that fails on a server that also offered its passkey page
+	 * throws `PasskeyPageOffered`, for the caller to offer the page.
 	 */
-	async usePasskey(action: 'register' | 'login', name?: string): Promise<OperationHandle | undefined> {
+	async usePasskey(action: 'register' | 'login', name?: string, options: { offerPage?: boolean } = {}): Promise<OperationHandle | undefined> {
 		// Registering creates an account or adds to one (`signup`, §3.1); logging in signs in (`auth`).
 		if (action === 'login' ? !this.server?.auth.includes('webauthn') : !this.offers('webauthn')) throw new Error('This server does not support passkeys');
 		if (this.passkeyAbort || this.passkeyStarting) throw new Error('Already signing in; finish or cancel that first');
@@ -1062,8 +1064,10 @@ export class ChatClient {
 				const line = `[apron] passkey ${action} failed during ${stage}: ${error.message}`;
 				(isCancelled(error, stage) ? console.info : console.warn)(line, { stage, error, server: report.server });
 			});
-			// A sign-in that used no passkey here: the server's page may find one, so it's offered, not opened.
-			if (action === 'login' && page && stage === 'browser' && cause instanceof DOMException && cause.name === 'NotAllowedError') throw new PasskeyPageOffered(page, cause);
+			// The ceremony here failed, however the browser or a password manager said so (a dismissed or
+			// empty sheet, or any other error): the server's page may work, so it's offered, not opened.
+			// Not when this page gave the ceremony up itself (Cancel, or the connection changed).
+			if (options.offerPage && page && stage === 'browser' && !controller.signal.aborted) throw new PasskeyPageOffered(page, cause);
 			throw cause;
 		} finally {
 			if (this.passkeyStarting === controller) this.passkeyStarting = undefined;
