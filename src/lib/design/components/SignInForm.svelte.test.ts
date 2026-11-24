@@ -54,9 +54,10 @@ describe('SignInForm', () => {
 		expect(onrestart).toHaveBeenCalledOnce();
 	});
 
-	it('says the hint as a status only when asked, and waits while busy', () => {
+	it('says the hint as a status, which is there before its news, and waits while busy', () => {
 		const form = render({ hint: 'No token needed.', busy: true, secondary: { label: 'Cancel', onclick: () => {} } });
-		expect(byText('No token needed.').hasAttribute('role')).toBe(false);
+		// Already a live region while busy, so that what replaces the hint once the wait ends is announced.
+		expect(byText('No token needed.').getAttribute('role')).toBe('status');
 		expect(form.querySelector('.ap-typing-dots')).not.toBeNull();
 		const submit = dom.button('Connect');
 		expect([submit.type, submit.disabled]).toEqual(['submit', true]);

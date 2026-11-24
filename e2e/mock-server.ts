@@ -25,6 +25,11 @@ export type MockOptions = {
 	 */
 	passkeyPage?: string;
 	/**
+	 * The server's passkey page besides a ceremony in the page (§4.10.1): a `webauthn` begin answers
+	 * with `public_key` and `external` at this `url`; a finish signs in as `passkey`, with a credential or a `code`.
+	 */
+	passkeyPageBeside?: string;
+	/**
 	 * External sign-in (§4.12): a begin answers with `external` at this `url`, and an `external` request with a `code`
 	 * signs in as `you`, with `token`. Add `external` to the server's `auth` with `server` too.
 	 */
@@ -81,7 +86,7 @@ export async function mockServer(page: Page, options: MockOptions = {}): Promise
 					}
 					if (options.passkey && frame.params?.scheme === 'webauthn') {
 						// Nothing is verified: `begin` gives a challenge for this server's host, and `finish` signs in as the account.
-						if (frame.params.step === 'begin') return reply({ challenge_id: 'challenge_1', public_key: { challenge: 'AAAA', rpId: new URL(ws.url()).hostname } });
+						if (frame.params.step === 'begin') return reply({ challenge_id: 'challenge_1', public_key: { challenge: 'AAAA', rpId: new URL(ws.url()).hostname }, ...(options.passkeyPageBeside ? { external: { url: options.passkeyPageBeside } } : {}) });
 						you = { status: 'online', ...options.passkey };
 						return reply({ you });
 					}

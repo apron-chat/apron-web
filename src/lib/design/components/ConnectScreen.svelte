@@ -98,7 +98,7 @@
 	<SignInForm
 		{schemes} scheme={current} onscheme={(k) => (scheme = k)} passkeyChoice={current === 'webauthn' && signIn && signUp} {passkeyMode} onpasskeymode={(k) => (passkeyMode = k)}
 		bind:token bind:email bind:code bind:name {askName} sent={codeSent && current === 'email' ? { scheme: 'email', email } : undefined} {onrestart}
-		{hint} hintStatus={Boolean(notice)} {error} {busy} secondary={oncancel && { label: 'Cancel', onclick: oncancel }} onsubmit={submit}
+		{hint} {error} {busy} secondary={oncancel && { label: 'Cancel', onclick: oncancel }} onsubmit={submit}
 		submit={status === 'connecting' ? 'Connecting…' : status === 'authing' ? 'Signing in…' : current === 'email' ? (codeSent ? 'Sign in' : 'Email me a code') : current === 'webauthn' ? (passkeyAction === 'login' ? 'Sign in with passkey' : 'Create account with passkey') : 'Connect'}
 	>
 		{#snippet header()}<ConnectHeader bind:url {welcome} {busy} {server} {description} />{/snippet}

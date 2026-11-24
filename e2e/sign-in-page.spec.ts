@@ -132,4 +132,99 @@ test.describe('a passkey on the server’s passkey page', () => {
 		expect(finish!.challenge_id).toBeUndefined();
 		expect(finish!.credential).toBeUndefined();
 	});
+
+	test('continues on the server’s page from the same button, without opening it, when a passkey here finds none', async ({ preview, page }) => {
+		const requests: URLSearchParams[] = [];
+		await signInPage(page.context(), requests);
+		// A device with no passkey for the server's RP ID: the browser's sheet closes empty (NotAllowedError),
+		// as it does when the viewer dismisses it.
+		await page.addInitScript(() => {
+			navigator.credentials.get = async () => { throw new DOMException('The operation either timed out or was not allowed.', 'NotAllowedError'); };
+		});
+		const options: MockOptions = { passkey: { user_id: 'grace', name: 'Grace' }, passkeyPageBeside: PASSKEY_PAGE, sent: [] };
+		await preview.openRoot(options);
+		await connectAt(page, preview, 'Passkey');
+		let opened = 0;
+		page.context().on('page', () => opened++);
+		const submit = page.getByTestId('passkey-login');
+		await submit.click();
+		const form = page.getByRole('form', { name: 'Sign in' });
+		// The same button now continues on the server's page; nothing opened yet.
+		await expect(submit).toHaveText('Continue on sso.test ↗');
+		await expect(submit).toHaveClass(/ap-btn-elsewhere/);
+		await expect(form.getByRole('status')).toHaveText('Didn’t find your passkey? Try on sso.test');
+		await expect(form.getByRole('alert')).toHaveCount(0);
+		expect(opened).toBe(0);
+		expect(requests).toEqual([]);
+		const popup = page.waitForEvent('popup');
+		await submit.click();
+		await (await popup).waitForEvent('close');
+		await expect(form).toHaveCount(0);
+		expect(Object.fromEntries(requests[0])).toMatchObject({ action: 'login', response_type: 'code' });
+		const finish = auths(options).find((params) => params.scheme === 'webauthn' && params.step === 'finish');
+		expect(finish).toMatchObject({ action: 'login', code: 'code_1', client_id: 'apron-web' });
+	});
+
+	/** A device whose sheet closes empty, as when it has no passkey for the RP ID or the viewer dismisses it; `window.sheets` counts the sheets. */
+	async function emptySheet(page: Page): Promise<void> {
+		await page.addInitScript(() => {
+			(window as unknown as { sheets: number }).sheets = 0;
+			navigator.credentials.get = async () => {
+				(window as unknown as { sheets: number }).sheets++;
+				throw new DOMException('The operation either timed out or was not allowed.', 'NotAllowedError');
+			};
+		});
+	}
+	const sheets = (page: Page) => page.evaluate(() => (window as unknown as { sheets: number }).sheets);
+
+	test('Cancel takes the offer back, and the next tap tries a passkey here again', async ({ preview, page }) => {
+		await signInPage(page.context(), []);
+		await emptySheet(page);
+		await preview.openRoot({ passkey: { user_id: 'grace', name: 'Grace' }, passkeyPageBeside: PASSKEY_PAGE, sent: [] });
+		await connectAt(page, preview, 'Passkey');
+		const submit = page.getByTestId('passkey-login');
+		const label = await submit.textContent();
+		await submit.click();
+		await expect(submit).toHaveText('Continue on sso.test ↗');
+		await expect(submit).toHaveAccessibleName('Continue on sso.test, on the server’s sign-in page');
+		const form = page.getByRole('form', { name: 'Sign in' });
+		await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+		// Back as it was: the form stays open, with its usual button and hint.
+		await expect(form).toBeVisible();
+		await expect(submit).toHaveText(label!);
+		await expect(submit).not.toHaveClass(/ap-btn-elsewhere/);
+		await expect(form.getByText('Didn’t find your passkey?')).toHaveCount(0);
+		await submit.click();
+		await expect.poll(() => sheets(page)).toBe(2);
+		// Empty again: the page is offered again.
+		await expect(submit).toHaveText('Continue on sso.test ↗');
+	});
+
+	test('a server without passkey sign-up still offers its page', async ({ preview, page }) => {
+		await signInPage(page.context(), []);
+		await emptySheet(page);
+		await preview.openRoot({ passkey: { user_id: 'grace', name: 'Grace' }, passkeyPageBeside: PASSKEY_PAGE, server: { signup: ['guest'] }, sent: [] });
+		await connectAt(page, preview, 'Passkey');
+		const submit = page.getByTestId('passkey-login');
+		await submit.click();
+		await expect(submit).toHaveText('Continue on sso.test ↗');
+		await expect(page.getByRole('form', { name: 'Sign in' }).getByRole('alert')).toHaveCount(0);
+	});
+
+	test('Change lets the offer go', async ({ preview, page }) => {
+		await signInPage(page.context(), []);
+		await emptySheet(page);
+		await preview.openRoot({ passkey: { user_id: 'grace', name: 'Grace' }, passkeyPageBeside: PASSKEY_PAGE, sent: [] });
+		await connectAt(page, preview, 'Passkey');
+		const submit = page.getByTestId('passkey-login');
+		const label = await submit.textContent();
+		await submit.click();
+		await expect(submit).toHaveText('Continue on sso.test ↗');
+		const form = page.getByRole('form', { name: 'Sign in' });
+		await page.getByTestId('connect-server').getByRole('button', { name: 'Change', exact: true }).click();
+		await form.getByRole('button', { name: 'Continue', exact: true }).click();
+		await form.getByRole('radiogroup', { name: 'Sign in with' }).getByRole('radio', { name: 'Passkey', exact: true }).click();
+		await expect(submit).toHaveText(label!);
+		await expect(submit).not.toHaveClass(/ap-btn-elsewhere/);
+	});
 });
