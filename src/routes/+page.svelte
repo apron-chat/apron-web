@@ -2385,7 +2385,7 @@
 		// Typing somewhere else now: it ends where it was, rather than show there until it runs out.
 		if (typingIn && typingIn.room !== roomId) stopTyping();
 		// An emptied draft is no longer being written.
-		if (!drafts.text) {
+		if (!drafts.text.trim()) {
 			stopTyping();
 			return;
 		}
