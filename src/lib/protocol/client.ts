@@ -5,7 +5,7 @@ import { writeEmbed } from './embeds';
 import { PROPOSAL_MS, SignInConnection, type RpcFailure } from './signin-connection';
 import { PROPOSAL_KEPT_MS, findProposal, forgetProposal, newProposalState, rememberProposal, type ProposalScheme } from './proposals';
 import { parseExternal, type CodeRedemption, type External } from './external';
-import { PasskeyPageNeeded, PasskeyPageOffered, passkeyRoute, passkeysOnlyFirstParty, usesPage } from './passkey-route';
+import { isWebAuthnError, PasskeyPageNeeded, PasskeyPageOffered, passkeyRoute, passkeysOnlyFirstParty, usesPage } from './passkey-route';
 import {
 	ProtocolStore,
 	compareLogIds,
@@ -1063,7 +1063,7 @@ export class ChatClient {
 				(isCancelled(error, stage) ? console.info : console.warn)(line, { stage, error, server: report.server });
 			});
 			// A sign-in that used no passkey here: the server's page may find one, so it's offered, not opened.
-			if (action === 'login' && page && stage === 'browser' && cause instanceof DOMException && cause.name === 'NotAllowedError') throw new PasskeyPageOffered(page, cause);
+			if (action === 'login' && page && stage === 'browser' && isWebAuthnError(cause, 'NotAllowedError')) throw new PasskeyPageOffered(page, cause);
 			throw cause;
 		} finally {
 			if (this.passkeyStarting === controller) this.passkeyStarting = undefined;

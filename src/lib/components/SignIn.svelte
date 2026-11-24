@@ -15,7 +15,7 @@
 	import { offeredSchemes, serverLabel, passkeyMessage, schemeUse } from '$lib/ui/connection';
 	import { greetings } from '$lib/ui/greetings.svelte';
 	import { codeStillFor, type SentCode } from '$lib/ui/sign-in-link';
-	import { PasskeyPageNeeded, PasskeyPageOffered } from '$lib/protocol/passkey-route';
+	import { isWebAuthnError, PasskeyPageNeeded, PasskeyPageOffered } from '$lib/protocol/passkey-route';
 	import { openSignInWindow, signInPageError } from '$lib/ui/sign-in-window';
 	import type { SessionView } from '$lib/ui/session.svelte';
 	import {
@@ -582,7 +582,7 @@
 			if (action === 'login' && displayName.trim()) client.setDisplayName(displayName);
 			const offered = cause instanceof PasskeyPageOffered ? cause : undefined;
 			const browser = offered ? offered.cause : cause;
-			const refused = browser instanceof DOMException && browser.name === 'NotAllowedError';
+			const refused = isWebAuthnError(browser, 'NotAllowedError');
 			if (followUp && refused) notice = 'Connected. Tap again to continue with your passkey.';
 			// No passkey used here: the server's page may find one this page can't (an older one, say).
 			else if (offered) {

@@ -1,5 +1,8 @@
 import { parseExternal, type External } from './external';
 import { isJsonObject, type JsonObject } from './types';
+import { isWebAuthnError } from './webauthn-error';
+
+export { isWebAuthnError };
 
 /**
  * Where a passkey ceremony runs (§4.10, and the passkey page,
@@ -42,8 +45,9 @@ export class ForeignRpIdError extends Error {
  * failure, doesn't: the user, not the domain, said no.
  */
 export function usesPage(cause: unknown): boolean {
-	return cause instanceof ForeignRpIdError || (cause instanceof DOMException && cause.name === 'SecurityError');
+	return cause instanceof ForeignRpIdError || isWebAuthnError(cause, 'SecurityError');
 }
+
 
 /**
  * A passkey ceremony that has to finish on the server's passkey page: the

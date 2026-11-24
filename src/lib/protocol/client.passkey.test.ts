@@ -410,6 +410,16 @@ describe('the passkey page', () => {
 		await expect(begin(client, socket, 'login', { challenge_id: 'c6', public_key: { challenge: 'x' }, external: page })).resolves.toMatchObject({ name: 'AbortError' });
 	});
 
+	it('reads a password manager’s errors by name, as Bitwarden throws them: a plain Error, not a DOMException', async () => {
+		const { client, socket } = await connected();
+		// Bitwarden's extension runs the ceremony itself, without related origins, and its errors cross into the page as JSON.
+		const named = (name: string, message: string) => Object.assign(new Error(message), { name });
+		vi.mocked(requestPasskey).mockRejectedValue(named('SecurityError', "'rp.id' cannot be used with the current origin"));
+		await expect(begin(client, socket, 'login', { challenge_id: 'c1', public_key: { challenge: 'x', rpId: 'fake.test' }, external: page })).resolves.toBeInstanceOf(PasskeyPageNeeded);
+		vi.mocked(requestPasskey).mockRejectedValue(named('NotAllowedError', 'Dismissed'));
+		await expect(begin(client, socket, 'login', { challenge_id: 'c2', public_key: { challenge: 'x' }, external: page })).resolves.toBeInstanceOf(PasskeyPageOffered);
+	});
+
 	it('goes straight to the page when the server sends no public_key, and says where passkeys work without one', async () => {
 		const { client, socket } = await connected();
 		await expect(begin(client, socket, 'login', { challenge_id: 'c1', external: page })).resolves.toBeInstanceOf(PasskeyPageNeeded);
