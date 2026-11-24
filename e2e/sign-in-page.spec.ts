@@ -133,7 +133,7 @@ test.describe('a passkey on the server’s passkey page', () => {
 		expect(finish!.credential).toBeUndefined();
 	});
 
-	test('offers the server’s page, without opening it, when a passkey here finds none, and signs in there', async ({ preview, page }) => {
+	test('continues on the server’s page from the same button, without opening it, when a passkey here finds none', async ({ preview, page }) => {
 		const requests: URLSearchParams[] = [];
 		await signInPage(page.context(), requests);
 		// A device with no passkey for the server's RP ID: the browser's sheet closes empty (NotAllowedError),
@@ -146,16 +146,18 @@ test.describe('a passkey on the server’s passkey page', () => {
 		await connectAt(page, preview, 'Passkey');
 		let opened = 0;
 		page.context().on('page', () => opened++);
-		await page.getByTestId('passkey-login').click();
+		const submit = page.getByTestId('passkey-login');
+		await submit.click();
 		const form = page.getByRole('form', { name: 'Sign in' });
-		const offer = form.getByRole('button', { name: 'Use the server’s sign-in page' });
-		await expect(offer).toBeVisible();
-		await expect(form.getByRole('alert')).toContainText('No passkey was used. If you have one for this server, its sign-in page may find it');
-		// Offered, not opened: the empty sheet may only have been a no.
+		// The same button now continues on the server's page; nothing opened yet.
+		await expect(submit).toHaveText('Continue on sso.test ↗');
+		await expect(submit).toHaveClass(/ap-btn-elsewhere/);
+		await expect(form.getByText('No passkey found here, check on sso.test?')).toBeVisible();
+		await expect(form.getByRole('alert')).toHaveCount(0);
 		expect(opened).toBe(0);
 		expect(requests).toEqual([]);
 		const popup = page.waitForEvent('popup');
-		await offer.click();
+		await submit.click();
 		await (await popup).waitForEvent('close');
 		await expect(form).toHaveCount(0);
 		expect(Object.fromEntries(requests[0])).toMatchObject({ action: 'login', response_type: 'code' });

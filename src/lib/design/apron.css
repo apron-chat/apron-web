@@ -40,6 +40,8 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
 .ap-btn-sm { height: var(--control-md); padding: 0 var(--space-3); }
 .ap-btn-primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .ap-btn-primary:hover:not(:disabled) { background: var(--accent); filter: var(--hover-lift); }
+/* A submit that now goes somewhere else (SignInForm's submitElsewhere): in ink, apart from the usual accent. */
+.ap-btn-primary.ap-btn-elsewhere, .ap-btn-primary.ap-btn-elsewhere:hover:not(:disabled) { background: var(--ink); border-color: var(--ink); color: var(--bg-000); }
 .ap-btn-ghost { background: transparent; border-color: transparent; color: var(--ink-muted); }
 .ap-btn-ghost:hover:not(:disabled) { color: var(--ink); }
 .ap-btn-danger { background: transparent; border-color: var(--danger); color: var(--danger); }

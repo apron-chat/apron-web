@@ -54,14 +54,16 @@
 		hint?: string;
 		/** The hint is news, said as a status (such as "Connected. Tap again…"). */
 		hintStatus?: boolean;
+		/** The hint in a status's colour, such as `warn` when the submit now does something else. */
+		hintTone?: 'warn';
 		/** The server's error `message` when it gave one (§1.1). */
 		error?: string;
-		/** A way on from the error, shown with it as a link, such as the server's sign-in page. */
-		errorAction?: { label: string; onclick: () => void };
 		/** Something is under way: the controls wait, and dots show by the submit. */
 		busy?: boolean;
 		/** The submit's label, such as Connect or Email me a code. */
 		submit: string;
+		/** The submit goes somewhere else, such as the server's own sign-in page: drawn apart from the usual submit. */
+		submitElsewhere?: boolean;
 		/** A quiet action before the submit, such as Cancel or Stay a guest. */
 		secondary?: { label: string; onclick: () => void };
 		/** `data-testid` on the submit. */
@@ -78,7 +80,7 @@
 	}
 	let {
 		header, schemes, names, fields = true, lastUsed, scheme, onscheme, passkeyChoice = false, passkeyMode = 'login', onpasskeymode, passkeyNudge, token = $bindable(''), email = $bindable(''), code = $bindable(''), name = $bindable(''),
-		askName = true, sent, onrestart, hint, hintStatus = false, error, errorAction, busy = false, submit, secondary,
+		askName = true, sent, onrestart, hint, hintStatus = false, hintTone, error, busy = false, submit, submitElsewhere = false, secondary,
 		submitTestid, tokenTestid, emailTestid, codeTestid, nameTestid, passkeyChoiceTestid, onsubmit, label, phase, class: className
 	}: Props = $props();
 	const nameOf = (candidate: string) => names?.[candidate] ?? LABELS[candidate] ?? candidate;
@@ -137,15 +139,15 @@
 		<p class="ap-form-hint" role="status">If {sent.email} can sign in here, a code is on its way. Enter it, or open the link in the email.</p>
 		<button class="ap-link ap-connect-other" type="button" disabled={busy} onclick={onrestart}>Use another address, or send a new code</button>
 	{:else if hint}
-		<p class="ap-form-hint" role={hintStatus ? 'status' : undefined}>{#each hint?.split('`') ?? [] as part, index (index)}{#if index % 2}<code>{part}</code>{:else}{part}{/if}{/each}</p>
+		<p class={['ap-form-hint', hintTone && `ap-tone-${hintTone}`]} role={hintStatus ? 'status' : undefined}>{#each hint?.split('`') ?? [] as part, index (index)}{#if index % 2}<code>{part}</code>{:else}{part}{/if}{/each}</p>
 	{/if}
-	{#if error}<p class="ap-form-note ap-tone-danger" role="alert">{error}{#if errorAction}{' '}<button class="ap-link" type="button" disabled={busy} onclick={errorAction.onclick}>{errorAction.label}</button>{/if}</p>{/if}
+	{#if error}<p class="ap-form-note ap-tone-danger" role="alert">{error}</p>{/if}
 	<div class="ap-connect-actions">
 		{#if busy}<TypingDots />{/if}
 		{#if secondary}
 			<Button variant="ghost" label={secondary.label} onclick={secondary.onclick} />
 		{/if}
-		<Button type="submit" variant="primary" data-testid={submitTestid} disabled={busy} label={submit} />
+		<Button type="submit" variant="primary" class={submitElsewhere ? 'ap-btn-elsewhere' : undefined} data-testid={submitTestid} disabled={busy} label={submit} />
 	</div>
 </form>
 

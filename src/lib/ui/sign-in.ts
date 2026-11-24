@@ -296,10 +296,12 @@ export const CANCELLED_TRY_CREATE = 'Cancelled. No passkey for this server? Choo
 
 /**
  * A sign-in that used no passkey here, on a server that offered its sign-in
- * page (`PasskeyPageOffered`): the page may find one this page can't, so it's
- * offered with this, besides Create account for someone new.
+ * page at `host` (`PasskeyPageOffered`): said as a hint while the submit
+ * becomes "Continue on <host> ↗", since the page may find one this page can't.
  */
-export const PASSKEY_PAGE_OFFERED = 'No passkey was used. If you have one for this server, its sign-in page may find it; if you’re new, choose Create account.';
+export function passkeyNotFoundHere(host: string): string {
+	return `No passkey found here, check on \`${host}\`?`;
+}
 
 /**
  * What the panel says about the chosen scheme. `host` names the server in the form, shown as code (`…`), and

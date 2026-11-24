@@ -19,7 +19,7 @@
 	import { openSignInWindow, signInPageError } from '$lib/ui/sign-in-window';
 	import type { SessionView } from '$lib/ui/session.svelte';
 	import {
-		CANCELLED_TRY_CREATE, PASSKEY_PAGE_OFFERED, UNUSABLE_VIEW, chooseView, firstScheme, passkeyChoice, readsOnly, passkeyMode, schemeName, schemeNames, signInHint, signInView, signOutThen, unusableMessage, usableSchemes,
+		CANCELLED_TRY_CREATE, passkeyNotFoundHere, UNUSABLE_VIEW, chooseView, firstScheme, passkeyChoice, readsOnly, passkeyMode, schemeName, schemeNames, signInHint, signInView, signOutThen, unusableMessage, usableSchemes,
 		type ConnectStep, type PasskeyMode, type SignOutHandler, type Scheme
 	} from '$lib/ui/sign-in';
 	import { loadLastSignIn, saveDisplayName, saveServerUrl } from '$lib/ui/storage';
@@ -93,8 +93,10 @@
 	let codeBusy = $state(false);
 	/** Gives up the sign-in page open in a window (`authorize`): Cancel closes it. */
 	let pageAbort = $state.raw<AbortController | undefined>();
-	// The server's sign-in page, offered after a sign-in here used no passkey (PASSKEY_PAGE_OFFERED).
+	// The server's sign-in page, offered after a sign-in here used no passkey: the submit continues there.
 	let pageOffer = $state.raw<PasskeyPageNeeded | undefined>();
+	let continuesOnPage = $derived(pageOffer !== undefined && view.primary.action === 'passkey-login');
+	let pageHost = $derived(pageOffer ? new URL(pageOffer.external.url).host : '');
 	/** The pasted token for the Token scheme; cleared once handed to the client. */
 	let token = $state('');
 	/**
@@ -260,6 +262,10 @@
 	function submit(event: SubmitEvent): void {
 		event.preventDefault();
 		error = '';
+		if (continuesOnPage) {
+			void passkeyOnServerPage();
+			return;
+		}
 		const action = view.primary.action;
 		if (action === 'continue') {
 			void continueTo();
@@ -576,7 +582,7 @@
 			// No passkey used here: the server's page may find one this page can't (an older one, say).
 			else if (offered && passkeyChoice(use)) {
 				pageOffer = offered.needed;
-				error = PASSKEY_PAGE_OFFERED;
+				notice = passkeyNotFoundHere(new URL(offered.needed.external.url).host);
 			}
 			// Most likely no passkey for this server on this device: point to Create account, where there is one.
 			else if (refused && action === 'login' && passkeyChoice(use)) error = CANCELLED_TRY_CREATE;
@@ -589,6 +595,7 @@
 		const needed = pageOffer;
 		if (!needed) return;
 		error = '';
+		notice = '';
 		pageOffer = undefined;
 		client.setDisplayName('');
 		try {
@@ -657,11 +664,11 @@
 <SignInForm
 	label="Sign in" phase={view.phase} onsubmit={submit}
 	header={top} {schemes} {names} {lastUsed} fields={step === 'sign-in' && !unusable} scheme={chosen} onscheme={(candidate) => { scheme = candidate as Scheme; schemeFor = normalizedInput; }}
-	passkeyChoice={chosen === 'webauthn' && passkeyChoice(use) && !(here && registered)} passkeyMode={passkeyChosen} onpasskeymode={(value) => { passkeyChosen = value; error = ''; notice = ''; }} passkeyNudge={error === CANCELLED_TRY_CREATE || error === PASSKEY_PAGE_OFFERED ? 'register' : undefined}
+	passkeyChoice={chosen === 'webauthn' && passkeyChoice(use) && !(here && registered)} passkeyMode={passkeyChosen} onpasskeymode={(value) => { passkeyChosen = value; error = ''; notice = ''; pageOffer = undefined; }} passkeyNudge={error === CANCELLED_TRY_CREATE || continuesOnPage ? 'register' : undefined}
 	bind:token bind:email bind:code bind:name={() => (chosen === 'token' ? tokenName : displayName), (value) => (chosen === 'token' ? (tokenName = value) : (displayName = value))} askName={!passkeyLogin && !reader}
 	sent={codeSentTo} onrestart={() => { codeSent = undefined; code = ''; error = ''; client.cancelSignInCode(); }}
-	hint={(view.phase === 'ready' || codeBusy) && notice ? notice : hint} hintStatus={view.phase === 'ready' || codeBusy} error={errorText} errorAction={pageOffer && errorText === PASSKEY_PAGE_OFFERED ? { label: 'Use the server’s sign-in page', onclick: passkeyOnServerPage } : undefined} {busy}
-	submit={view.primary.label} submitTestid={view.primary.action}
+	hint={(view.phase === 'ready' || codeBusy) && notice ? notice : hint} hintStatus={view.phase === 'ready' || codeBusy} hintTone={continuesOnPage && notice ? 'warn' : undefined} error={errorText} {busy}
+	submit={continuesOnPage ? `Continue on ${pageHost} ↗` : view.primary.label} submitElsewhere={continuesOnPage} submitTestid={view.primary.action}
 	tokenTestid="connect-token-input" emailTestid="connect-email-input" codeTestid="connect-code-input" nameTestid="connect-name-input" passkeyChoiceTestid="passkey-choice"
 	secondary={joinedAsGuest && view.phase === 'ready' ? { label: 'Stay a guest', onclick: finish } : canCancel ? { label: 'Cancel', onclick: () => { client.cancelPasskeyPrompt(); pageAbort?.abort(); greetings.cancel(); oncancel(); } } : codeBusy && pageAbort ? { label: 'Cancel', onclick: () => pageAbort?.abort() } : undefined}
 />
