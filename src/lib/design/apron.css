@@ -1554,8 +1554,6 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-welcome-folded { display: flex; align-items: flex-end; gap: var(--space-2); }
 .ap-welcome-folded .ap-welcome-body { flex: 1; min-width: 0; max-height: calc(2 * var(--leading-ui)); overflow: hidden; mask-image: linear-gradient(to bottom, #000 50%, transparent); }
 .ap-welcome-more { flex: none; font-size: var(--text-ui); }
-/* The scheme last used here: a dot on its tab. */
-.ap-seg-last { display: inline-block; width: 6px; height: 6px; margin-inline-start: var(--space-1_5); vertical-align: middle; border-radius: var(--radius-full); background: var(--accent); }
 .ap-connect-actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); margin-top: var(--space-1); }
 .ap-connect-actions .ap-btn { border-radius: var(--radius-sm); }
 .ap-connect-other { align-self: flex-start; font-size: var(--text-ui); }
@@ -1568,6 +1566,8 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-seg-stacked { flex-direction: column; }
 .ap-seg-stacked .ap-seg-item { height: auto; min-height: var(--control-md); padding-block: var(--space-1); text-align: start; white-space: normal; overflow-wrap: anywhere; }
 .ap-seg-on, .ap-seg-on:hover { background: var(--chosen); color: var(--ink); box-shadow: var(--shadow-chosen); }
+/* The sign-in schemes: the chosen one in the accent, as the passkey choice under it, so it reads at a glance. */
+.ap-seg-names .ap-seg-on, .ap-seg-names .ap-seg-on:hover { background: var(--accent-soft); box-shadow: inset 0 0 0 1.5px var(--accent); }
 /* Choice — two paths of equal weight, each a title and a line saying what it does (Sign in · Create account) */
 .ap-choice { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
 .ap-choice-item { font: inherit; display: flex; flex-direction: column; gap: var(--space-0_5); padding: var(--space-2) var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--bg-200); color: var(--ink-muted); text-align: start; cursor: pointer; transition: background-color var(--duration-fast), border-color var(--duration-fast), color var(--duration-fast); }

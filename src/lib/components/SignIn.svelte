@@ -668,7 +668,7 @@
 <!-- The design system's SignInForm draws the panel; this runs it. -->
 <SignInForm
 	label="Sign in" phase={view.phase} onsubmit={submit}
-	header={top} {schemes} {names} {lastUsed} fields={step === 'sign-in' && !unusable} scheme={chosen} onscheme={(candidate) => { scheme = candidate as Scheme; schemeFor = normalizedInput; }}
+	header={top} {schemes} {names} fields={step === 'sign-in' && !unusable} scheme={chosen} onscheme={(candidate) => { scheme = candidate as Scheme; schemeFor = normalizedInput; }}
 	passkeyChoice={chosen === 'webauthn' && passkeyChoice(use) && !(here && registered)} passkeyMode={passkeyChosen} onpasskeymode={(value) => { passkeyChosen = value; error = ''; notice = ''; pageOffer = undefined; }} passkeyNudge={error === CANCELLED_TRY_CREATE || continuesOnPage ? 'register' : undefined}
 	bind:token bind:email bind:code bind:name={() => (chosen === 'token' ? tokenName : displayName), (value) => (chosen === 'token' ? (tokenName = value) : (displayName = value))} askName={!passkeyLogin && !reader}
 	sent={codeSentTo} onrestart={() => { codeSent = undefined; code = ''; error = ''; client.cancelSignInCode(); }}
