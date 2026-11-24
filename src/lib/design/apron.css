@@ -1554,10 +1554,6 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-welcome-folded { display: flex; align-items: flex-end; gap: var(--space-2); }
 .ap-welcome-folded .ap-welcome-body { flex: 1; min-width: 0; max-height: calc(2 * var(--leading-ui)); overflow: hidden; mask-image: linear-gradient(to bottom, #000 50%, transparent); }
 .ap-welcome-more { flex: none; font-size: var(--text-ui); }
-/* The other passkey path, under the submit. */
-.ap-connect-switch { margin: 0; text-align: center; font-size: var(--text-ui); color: var(--ink-muted); }
-.ap-connect-switch-nudge { position: relative; }
-.ap-connect-switch-nudge::after { content: ''; position: absolute; top: -2px; inset-inline-end: -8px; width: 6px; height: 6px; border-radius: var(--radius-full); background: var(--danger); }
 /* The scheme last used here: a dot on its tab. */
 .ap-seg-last { display: inline-block; width: 6px; height: 6px; margin-inline-start: var(--space-1_5); vertical-align: middle; border-radius: var(--radius-full); background: var(--accent); }
 .ap-connect-actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); margin-top: var(--space-1); }
@@ -1580,6 +1576,13 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-choice-text { font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
 .ap-choice-on, .ap-choice-on:hover:not(:disabled) { background: var(--chosen); border-color: var(--line-strong); color: var(--ink); box-shadow: var(--shadow-chosen); }
 /* A dot in the top end corner (the right, or the left under dir="rtl"), just inside the border, to draw the eye to a choice (SignInForm `passkeyNudge`). */
+/* The sign-in choice is a radio group: a radio mark by each title, and the chosen one in the accent, so which is on reads at a glance with two. */
+.ap-choice > .ap-choice-item { background: transparent; }
+.ap-choice .ap-choice-title { display: flex; align-items: center; gap: var(--space-2); }
+.ap-choice .ap-choice-title::before { content: ''; flex: none; box-sizing: border-box; width: 14px; height: 14px; border: 1.5px solid var(--line-strong); border-radius: var(--radius-full); }
+.ap-choice .ap-choice-text { padding-inline-start: calc(14px + var(--space-2)); }
+.ap-choice > .ap-choice-on, .ap-choice > .ap-choice-on:hover:not(:disabled) { background: var(--accent-soft); border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.ap-choice > .ap-choice-on .ap-choice-title::before { border: 4px solid var(--accent); background: var(--bg-100); }
 .ap-choice-nudge { position: relative; }
 .ap-choice-nudge::after { content: ''; position: absolute; top: 3px; inset-inline-end: 3px; width: 8px; height: 8px; border-radius: var(--radius-full); background: var(--danger); }
 @media (prefers-reduced-motion: reduce) { .ap-choice-item { transition: none; } }

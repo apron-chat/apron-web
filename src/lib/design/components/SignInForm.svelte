@@ -6,6 +6,12 @@
 	import { segFit } from './seg-fit';
 
 	const LABELS: Record<string, string> = { guest: 'Guest', webauthn: 'Passkey', email: 'Email', external: 'External', token: 'Token' };
+	/** On Passkey, the two paths: each a title and what it does. */
+	const PASSKEY_CHOICES = [
+		['login', 'Sign in', 'I have a passkey'],
+		['register', 'Create account', 'I’m new here']
+	] as const;
+
 	/** The sign-in card, a form: its submit is the caller's `onsubmit`. */
 	interface Props {
 		/** The form's submit: connect, or sign in with the scheme shown. */
@@ -92,6 +98,16 @@
 		</div>
 	{/if}
 	{#if fields}
+		{#if passkeyChoice}
+			<div class="ap-choice" role="radiogroup" aria-label="Passkey" data-testid={passkeyChoiceTestid}>
+				{#each PASSKEY_CHOICES as [value, title, text] (value)}
+					<button class="ap-choice-item" class:ap-choice-on={passkeyMode === value} class:ap-choice-nudge={passkeyNudge === value && passkeyMode !== value} type="button" role="radio" aria-checked={passkeyMode === value} data-testid={passkeyChoiceTestid ? `${passkeyChoiceTestid}-${value}` : undefined} disabled={busy} onclick={() => onpasskeymode?.(value)}>
+						<span class="ap-choice-title">{title}</span>
+						<span class="ap-choice-text">{text}</span>
+					</button>
+				{/each}
+			</div>
+		{/if}
 		{#if scheme === 'token'}
 			<label class="ap-fieldlabel">{nameOf('token')}
 				<input class="ap-field ap-field-mono" data-testid={tokenTestid} type="password" bind:value={token} placeholder="From the server" disabled={busy} autocomplete="off" spellcheck="false" />
@@ -130,13 +146,6 @@
 		{/if}
 		<Button type="submit" variant="primary" class={submitElsewhere ? 'ap-btn-elsewhere' : undefined} aria-label={submitElsewhere} data-testid={submitTestid} disabled={busy} label={submit} />
 	</div>
-	{#if fields && passkeyChoice}
-		{@const other = passkeyMode === 'login' ? 'register' : 'login'}
-		<p class="ap-connect-switch" data-testid={passkeyChoiceTestid}>
-			{other === 'register' ? 'New here?' : 'Have a passkey?'}
-			<button class={['ap-link', passkeyNudge === other && 'ap-connect-switch-nudge']} type="button" data-testid={passkeyChoiceTestid ? `${passkeyChoiceTestid}-${other}` : undefined} disabled={busy} onclick={() => onpasskeymode?.(other)}>{other === 'register' ? 'Create an account' : 'Sign in'}</button>
-		</p>
-	{/if}
 </form>
 
 {#snippet nameField()}
