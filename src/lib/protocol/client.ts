@@ -1008,9 +1008,13 @@ export class ChatClient {
 	 * any, so callers can show what the server kept. Busy (`authBusy`) from
 	 * the call on, so a tap never goes unanswered. With `offerPage`, a
 	 * ceremony here that fails on a server that also offered its passkey page
-	 * throws `PasskeyPageOffered`, for the caller to offer the page.
+	 * throws `PasskeyPageOffered`, for the caller to offer the page: when the
+	 * device's ceremony fails, or the server refuses the passkey it gave for a
+	 * sign-in (one the server doesn't know, such as one saved where saving it
+	 * on the server then failed). With `preferPage`, such a server's page is
+	 * used at once (`PasskeyPageNeeded`), as where it worked before.
 	 */
-	async usePasskey(action: 'register' | 'login', name?: string, options: { offerPage?: boolean } = {}): Promise<OperationHandle | undefined> {
+	async usePasskey(action: 'register' | 'login', name?: string, choices: { offerPage?: boolean; preferPage?: boolean } = {}): Promise<OperationHandle | undefined> {
 		// Registering creates an account or adds to one (`signup`, §3.1); logging in signs in (`auth`).
 		if (action === 'login' ? !this.server?.auth.includes('webauthn') : !this.offers('webauthn')) throw new Error('This server does not support passkeys');
 		if (this.passkeyAbort || this.passkeyStarting) throw new Error('Already signing in; finish or cancel that first');
@@ -1040,6 +1044,8 @@ export class ChatClient {
 			if (route.kind === 'none') throw new Error(passkeysOnlyFirstParty(this.serverTitle()));
 			if (route.kind === 'page') throw new PasskeyPageNeeded(action, route.external, account);
 			if (route.external) page = new PasskeyPageNeeded(action, route.external, account);
+			// The page is where this worked before: straight there, without asking the device first.
+			if (choices.preferPage && page) throw page;
 			begun = { challengeId: route.challengeId, options, publicKey: route.publicKey };
 			stage = 'browser';
 			try {
@@ -1065,9 +1071,12 @@ export class ChatClient {
 				(isCancelled(error, stage) ? console.info : console.warn)(line, { stage, error, server: report.server });
 			});
 			// The ceremony here failed, however the browser or a password manager said so (a dismissed or
-			// empty sheet, or any other error): the server's page may work, so it's offered, not opened.
-			// Not when this page gave the ceremony up itself (Cancel, or the connection changed).
-			if (options.offerPage && page && stage === 'browser' && !controller.signal.aborted) throw new PasskeyPageOffered(page, cause);
+			// empty sheet, or any other error), or the server refused the passkey a sign-in gave: the
+			// server's page may work, so it's offered, not opened. Not when this page gave the ceremony up
+			// itself (Cancel, or the connection changed), nor when the server only asked to wait.
+			// Refused is `denied` (§1.1): not a malformed request, the server's own failure, or a wait (`RateLimitError`).
+			const refused = action === 'login' && (cause as { code?: unknown } | undefined)?.code === -32001 && !(cause instanceof RateLimitError);
+			if (choices.offerPage && page && !controller.signal.aborted && (stage === 'browser' || (stage === 'finish' && refused))) throw new PasskeyPageOffered(page, cause);
 			throw cause;
 		} finally {
 			if (this.passkeyStarting === controller) this.passkeyStarting = undefined;

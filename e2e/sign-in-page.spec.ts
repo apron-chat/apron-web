@@ -253,6 +253,82 @@ test.describe('a passkey on the server’s passkey page', () => {
 		await expect(page.locator('.ap-choice-nudge')).toHaveCount(0);
 	});
 
+	test('remembers that the server’s page worked, and goes straight there next time, without asking the device', async ({ preview, page }) => {
+		await signInPage(page.context(), []);
+		await emptySheet(page);
+		await preview.openRoot({ passkey: { user_id: 'grace', name: 'Grace' }, passkeyPageBeside: PASSKEY_PAGE, sent: [] });
+		await connectAt(page, preview, 'Passkey');
+		const submit = page.getByTestId('passkey-login');
+		await submit.click();
+		await expect(submit).toHaveText('Continue on sso.test ↗');
+		const popup = page.waitForEvent('popup');
+		await submit.click();
+		await (await popup).waitForEvent('close');
+		await expect(page.getByRole('form', { name: 'Sign in' })).toHaveCount(0);
+		const remembered = await page.evaluate(() => JSON.parse(localStorage.getItem('apron.passkeyOnPage') ?? '{}') as Record<string, number>);
+		expect(Object.keys(remembered)).toHaveLength(1);
+	});
+
+	test('where the server’s page worked before, the first tap goes there, and the device isn’t asked', async ({ preview, page }) => {
+		await signInPage(page.context(), []);
+		await emptySheet(page);
+		await preview.openRoot({ passkey: { user_id: 'grace', name: 'Grace' }, passkeyPageBeside: PASSKEY_PAGE, sent: [] });
+		await connectAt(page, preview, 'Passkey');
+		const server = (await page.getByTestId('connect-server').locator('.ap-connect-address').textContent())!;
+		await page.evaluate((url) => localStorage.setItem('apron.passkeyOnPage', JSON.stringify({ [new URL(url).href]: Date.now() })), server);
+		const popup = page.waitForEvent('popup');
+		await page.getByTestId('passkey-login').click();
+		await (await popup).waitForEvent('close');
+		await expect(page.getByRole('form', { name: 'Sign in' })).toHaveCount(0);
+		expect(await sheets(page)).toBe(0);
+	});
+
+	test('adding a passkey in Preferences that can’t be saved here offers the server’s page', async ({ preview, page }) => {
+		await signInPage(page.context(), []);
+		// Signing in works here; saving another passkey doesn't.
+		await page.addInitScript(() => {
+			const bytes = () => new Uint8Array([1, 2, 3]).buffer;
+			navigator.credentials.get = async () => ({
+				id: 'AQID', rawId: bytes(), type: 'public-key',
+				response: { clientDataJSON: bytes(), authenticatorData: bytes(), signature: bytes(), userHandle: bytes() },
+				getClientExtensionResults: () => ({})
+			}) as unknown as Credential;
+			navigator.credentials.create = async () => { throw Object.assign(new Error('Something went wrong.'), { name: 'Error' }); };
+		});
+		await preview.openRoot({ passkey: { user_id: 'grace', name: 'Grace' }, passkeyPageBeside: PASSKEY_PAGE, sent: [] });
+		await connectAt(page, preview, 'Passkey');
+		await page.getByTestId('passkey-login').click();
+		await expect(page.getByRole('form', { name: 'Sign in' })).toHaveCount(0);
+		await page.getByRole('button', { name: /^Open preferences/ }).click();
+		const preferences = page.getByRole('dialog', { name: 'Preferences' });
+		await preferences.getByRole('group', { name: 'Add a way to sign in' }).getByRole('button', { name: /Passkey/ }).click();
+		// Not an error: the sheet may only have been closed.
+		await expect(preferences.getByRole('alert')).toHaveCount(0);
+		await expect(preferences.getByRole('status')).toContainText('Passkey not saved here.');
+		const popup = page.waitForEvent('popup');
+		await preferences.getByRole('button', { name: 'Continue on sso.test, on the server’s sign-in page' }).click();
+		await (await popup).waitForEvent('close');
+		await expect(preferences.getByRole('status')).toContainText('Passkey saved.');
+	});
+
+	test('a remembered page that doesn’t work is forgotten: the next tap asks the device again', async ({ preview, page }) => {
+		// The server's page declines (access_denied).
+		await signInPage(page.context(), [], true);
+		await emptySheet(page);
+		await preview.openRoot({ passkey: { user_id: 'grace', name: 'Grace' }, passkeyPageBeside: PASSKEY_PAGE, sent: [] });
+		await connectAt(page, preview, 'Passkey');
+		const server = (await page.getByTestId('connect-server').locator('.ap-connect-address').textContent())!;
+		await page.evaluate((url) => localStorage.setItem('apron.passkeyOnPage', JSON.stringify({ [new URL(url).href]: Date.now() })), server);
+		const submit = page.getByTestId('passkey-login');
+		const popup = page.waitForEvent('popup');
+		await submit.click();
+		await (await popup).waitForEvent('close');
+		await expect(page.getByRole('form', { name: 'Sign in' }).getByRole('alert')).toBeVisible();
+		expect(await page.evaluate(() => localStorage.getItem('apron.passkeyOnPage'))).toBe('{}');
+		await submit.click();
+		await expect.poll(() => sheets(page)).toBe(1);
+	});
+
 	test('Change lets the offer go', async ({ preview, page }) => {
 		await signInPage(page.context(), []);
 		await emptySheet(page);

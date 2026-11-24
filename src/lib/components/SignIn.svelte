@@ -16,10 +16,11 @@
 	import { greetings } from '$lib/ui/greetings.svelte';
 	import { codeStillFor, type SentCode } from '$lib/ui/sign-in-link';
 	import { isWebAuthnError, PasskeyPageNeeded, PasskeyPageOffered } from '$lib/protocol/passkey-route';
+	import { forgetPasskeyPage, passkeyPageSince, rememberPasskeyPage } from '$lib/ui/passkey-route-memory';
 	import { openSignInWindow, signInPageError } from '$lib/ui/sign-in-window';
 	import type { SessionView } from '$lib/ui/session.svelte';
 	import {
-		CANCELLED_TRY_CREATE, tryPasskeyOn, UNUSABLE_VIEW, chooseView, firstScheme, passkeyChoice, readsOnly, passkeyMode, schemeName, schemeNames, signInHint, signInView, signOutThen, unusableMessage, usableSchemes,
+		CANCELLED_TRY_CREATE, refusedTryOn, tryPasskeyOn, UNUSABLE_VIEW, chooseView, firstScheme, passkeyChoice, readsOnly, passkeyMode, schemeName, schemeNames, signInHint, signInView, signOutThen, unusableMessage, usableSchemes,
 		type ConnectStep, type PasskeyMode, type SignOutHandler, type Scheme
 	} from '$lib/ui/sign-in';
 	import { loadLastSignIn, saveDisplayName, saveServerUrl } from '$lib/ui/storage';
@@ -574,13 +575,29 @@
 		const name = action === 'register' ? displayName.trim() || undefined : undefined;
 		// The guest's name, which the connection carries, isn't the account's: it stays as the account has it.
 		if (action === 'login') client.setDisplayName('');
+		const server = client.url;
+		let onPage = false;
+		// Where a sign-in worked on the server's page before: straight there, from this tap, with the window it
+		// needs opened now, while the browser still counts the tap. Used up as it's taken: only a page sign-in
+		// that comes back here keeps it, not one that leaves this tab or fails.
+		const since = action === 'login' ? passkeyPageSince(server) : undefined;
+		if (since !== undefined) forgetPasskeyPage(server);
+		let early = since !== undefined ? openSignInWindow() : undefined;
 		try {
 			try {
-				await client.usePasskey(action, name, { offerPage: true });
+				await client.usePasskey(action, name, { offerPage: true, preferPage: since !== undefined });
 			} catch (cause) {
-				// This page can't use the server's passkeys: its passkey page can.
+				// This page can't use the server's passkeys, or they worked on its passkey page before: that page.
 				if (!(cause instanceof PasskeyPageNeeded)) throw cause;
-				await passkeyPage(cause, name);
+				onPage = true;
+				const popup = early;
+				early = undefined;
+				await passkeyPage(cause, name, popup);
+			}
+			// Where a sign-in worked, for the next one on this device.
+			if (action === 'login') {
+				if (onPage) rememberPasskeyPage(server, since ?? Date.now());
+				else forgetPasskeyPage(server);
 			}
 			// What the account is called from here on, for the form and the next visit.
 			const kept = name ?? client.snapshot().you?.name;
@@ -588,8 +605,11 @@
 				displayName = kept;
 				saveDisplayName(kept);
 			}
+			early?.close();
 			finish();
 		} catch (cause) {
+			// A window opened for a page this sign-in didn't go to.
+			early?.close();
 			// Still the guest it was: it keeps its name.
 			if (action === 'login' && displayName.trim()) client.setDisplayName(displayName);
 			const offered = cause instanceof PasskeyPageOffered ? cause : undefined;
@@ -599,7 +619,9 @@
 			// The ceremony here failed, whoever ran it: the server's page may do what this page can't (find an older passkey, say).
 			else if (offered) {
 				pageOffer = { needed: offered.needed, url: client.url };
-				notice = tryPasskeyOn(new URL(offered.needed.external.url).host, action);
+				const host = new URL(offered.needed.external.url).host;
+				// The server refused the passkey (\`denied\`; a browser's DOMException has a small legacy \`code\` too): its own words, then the page.
+				notice = (offered.cause as { code?: unknown } | undefined)?.code === -32001 ? refusedTryOn(passkeyMessage(offered.cause), host) : tryPasskeyOn(host, action);
 			}
 			// Most likely no passkey for this server on this device: point to Create account, where there is one.
 			else if (refused && action === 'login' && passkeyChoice(use)) error = CANCELLED_TRY_CREATE;
@@ -611,6 +633,7 @@
 	async function passkeyOnServerPage(): Promise<void> {
 		const needed = pageOffer?.needed;
 		if (!needed || !continuesOnPage) return;
+		const server = pageOffer!.url;
 		error = '';
 		notice = '';
 		pageOffer = undefined;
@@ -618,6 +641,7 @@
 		if (needed.action === 'login') client.setDisplayName('');
 		try {
 			await passkeyPage(needed, name);
+			if (needed.action === 'login') rememberPasskeyPage(server, Date.now());
 			const kept = name ?? client.snapshot().you?.name;
 			if (kept) {
 				displayName = kept;
@@ -635,14 +659,14 @@
 	 * tab, where the browser blocks one), finished on this connection with the
 	 * code it sends back.
 	 */
-	async function passkeyPage(needed: PasskeyPageNeeded, name: string | undefined): Promise<void> {
+	async function passkeyPage(needed: PasskeyPageNeeded, name: string | undefined, opened?: Window | null): Promise<void> {
 		const abort = new AbortController();
 		pageAbort = abort;
 		codeBusy = true;
 		notice = '';
 		try {
-			// Opened before what runs the page loads, while a browser may still allow it.
-			const popup = openSignInWindow();
+			// Opened before what runs the page loads, while a browser may still allow it (or already, from the tap).
+			const popup = opened === undefined ? openSignInWindow() : opened;
 			try {
 				const { passkeyOnPage } = await import('$lib/ui/sign-in-page');
 				await passkeyOnPage(client, needed, { popup, ...(name ? { name } : {}), signal: abort.signal });

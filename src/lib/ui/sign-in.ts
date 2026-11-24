@@ -303,6 +303,12 @@ export const CANCELLED_TRY_CREATE = 'Cancelled. No passkey for this server? Choo
  * The browser doesn't say whether it found none or the viewer closed it, so
  * the hint claims neither.
  */
+/** A server's refusal of the passkey a sign-in here gave, in its words, then the page at `host` (`PasskeyPageOffered`). */
+export function refusedTryOn(message: string, host: string): string {
+	const said = message.trim().replace(/[.!?]?$/, (end) => end || '.');
+	return `${said} Try on \`${host}\`?`;
+}
+
 export function tryPasskeyOn(host: string, action: 'login' | 'register' = 'login'): string {
 	return action === 'login' ? `Didn’t find your passkey? Try on \`${host}\`` : `Couldn’t save a passkey here? Try on \`${host}\``;
 }

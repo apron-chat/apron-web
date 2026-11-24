@@ -60,7 +60,7 @@
 	import { receiptSettings } from '$lib/ui/receipt-settings.svelte';
 	import { impliedOrigins } from '$lib/ui/media-settings.svelte';
 	import { addError, passkeyMessage, wayBackNudge, wayBackWords } from '$lib/ui/connection';
-	import { PasskeyPageNeeded } from '$lib/protocol/passkey-route';
+	import { isWebAuthnError, PasskeyPageNeeded, PasskeyPageOffered } from '$lib/protocol/passkey-route';
 	import { openSignInWindow, signInPageError } from '$lib/ui/sign-in-window';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { saveDisplayName } from '$lib/ui/storage';
@@ -97,6 +97,8 @@
 	let openedWith = $state('');
 	let passkeyError = $state('');
 	let passkeyNotice = $state('');
+	/** The server's passkey page, offered after a passkey couldn't be saved here: the next tap continues there. */
+	let passkeyPageOffer = $state.raw<PasskeyPageNeeded | undefined>();
 	/** Sign out's Keep local history: checked each time, so deleting is always chosen. */
 	let keepHistory = $state(true);
 	let bioDraft = $state('');
@@ -234,6 +236,7 @@
 		bioError = '';
 		passkeyError = '';
 		passkeyNotice = '';
+		passkeyPageOffer = undefined;
 		avatarError = '';
 		addEmail = undefined;
 	}
@@ -286,6 +289,7 @@
 	async function passkey(action: 'register' | 'logout'): Promise<void> {
 		passkeyError = '';
 		passkeyNotice = '';
+		passkeyPageOffer = undefined;
 		try {
 			if (action === 'logout') {
 				const forget = offersKeep && !keepHistory ? keptAccount : undefined;
@@ -298,21 +302,18 @@
 			} else {
 				// Labelled with the account's name, so the passkey manager shows whose it is.
 				try {
-					await client.usePasskey('register', you?.name);
+					await client.usePasskey('register', you?.name, { offerPage: true });
 				} catch (cause) {
+					// Saving it here failed, however the browser or a password manager said so: the server's page may work, from the next tap.
+					// Not when this device already holds that passkey (\`InvalidStateError\`): the page would find the same.
+					if (cause instanceof PasskeyPageOffered && !isWebAuthnError(cause.cause, 'InvalidStateError')) {
+						passkeyPageOffer = cause.needed;
+						return;
+					}
+					if (cause instanceof PasskeyPageOffered) throw cause.cause;
 					// This page can't create a passkey for the server's RP ID: its passkey page can.
 					if (!(cause instanceof PasskeyPageNeeded)) throw cause;
-					const popup = openSignInWindow();
-					const saved = await onServerPage('passkey', async (signal) => {
-						try {
-							const { passkeyOnPage } = await import('$lib/ui/sign-in-page');
-							await passkeyOnPage(client, cause, { popup, ...(you?.name ? { name: you.name } : {}), signal });
-						} catch (failure) {
-							popup?.close();
-							throw failure;
-						}
-					});
-					if (!saved) return;
+					if (!await passkeyOnServerPage(cause)) return;
 				}
 				passkeyNotice = 'Passkey saved. This server will ask your device next time.';
 			}
@@ -377,6 +378,27 @@
 		if (added) passkeyNotice = 'Added · sign in with it anywhere';
 	}
 
+	/** Saves a passkey on the server's passkey page, in a window opened from this tap; whether it was saved. */
+	function passkeyOnServerPage(needed: PasskeyPageNeeded): Promise<boolean> {
+		const popup = openSignInWindow();
+		return onServerPage('passkey', async (signal) => {
+			try {
+				const { passkeyOnPage } = await import('$lib/ui/sign-in-page');
+				await passkeyOnPage(client, needed, { popup, ...(you?.name ? { name: you.name } : {}), signal });
+			} catch (failure) {
+				popup?.close();
+				throw failure;
+			}
+		});
+	}
+
+	/** The offered page, from its own tap. */
+	async function continueOnPasskeyPage(): Promise<void> {
+		const needed = passkeyPageOffer;
+		passkeyPageOffer = undefined;
+		if (needed && await passkeyOnServerPage(needed)) passkeyNotice = 'Passkey saved. This server will ask your device next time.';
+	}
+
 	/**
 	 * Runs `work` with a server's page open in a window (`onPage`), saying so
 	 * meanwhile. False when it was cancelled or failed, the error said.
@@ -384,6 +406,7 @@
 	async function onServerPage(what: 'external' | 'passkey', work: (signal: AbortSignal) => Promise<void>): Promise<boolean> {
 		passkeyError = '';
 		passkeyNotice = '';
+		passkeyPageOffer = undefined;
 		onPage?.abort.abort();
 		const job = { abort: new AbortController(), what };
 		onPage = job;
@@ -419,6 +442,7 @@
 
 	/** Back to what the server keeps for whoever this session is now: the name and the bio. */
 	function resetDraft(): void {
+		passkeyPageOffer = undefined;
 		draft = you?.name || displayName;
 		openedWith = draft;
 		bioDraft = bioOf(you) ?? '';
@@ -505,6 +529,10 @@
 {#snippet signinHint()}
 	{#if passkeyError}
 		<span class="ap-form-hint ap-tone-danger" role="alert">{passkeyError}</span>
+	{:else if passkeyPageOffer}
+		<!-- Not an error: the sheet may only have been closed. The server's page may save it where this page couldn't. -->
+		{@const host = new URL(passkeyPageOffer.external.url).host}
+		<span class="ap-form-hint" role="status">Passkey not saved here. <button class="ap-link" type="button" aria-label={`Continue on ${host}, on the server’s sign-in page`} onclick={continueOnPasskeyPage}>Continue on {host} ↗</button></span>
 	{:else if passkeyNotice}
 		<span class="ap-form-hint ap-tone-ok" role="status">{passkeyNotice}</span>
 	{:else if passkeyUnavailable && canUsePasskey && !canUseEmail && !canUseExternal}
