@@ -55,10 +55,12 @@
 		oncancel: () => void;
 		/** Signing out starts a different session: the page drops what it held from this one. */
 		onsignout: SignOutHandler;
+		/** `bind:`: the address of the server the card shows, while it shows one (signing in), for the page to leave out of Recent. */
+		inCard?: string;
 	}
 	let {
 		client, session, serverInput = $bindable(), displayName = $bindable(), busy = $bindable(false), passkeyUnavailable, canCancel,
-		initialScheme, initialEmail, initialError, header, initialChoosing = false, onconnect, onconnected, oncancel, onsignout
+		initialScheme, initialEmail, initialError, header, initialChoosing = false, onconnect, onconnected, oncancel, onsignout, inCard = $bindable()
 	}: Props = $props();
 
 	// The initial choice follows the request or the current session; the segmented control owns it from then on.
@@ -131,6 +133,9 @@
 	let known = $derived((sameServer ? session.server : undefined) ?? (greeting?.status === 'known' ? greeting.server : undefined));
 	/** Choosing the server: its address alone, and Continue. Then signing in, with what it offers. */
 	let step = $derived<'choose' | 'sign-in'>(choosing || !known ? 'choose' : 'sign-in');
+	$effect(() => {
+		inCard = step === 'sign-in' ? normalizedInput : undefined;
+	});
 	/** What the server offers for signing in or creating an account, in its order. */
 	let offered = $derived(known ? offeredSchemes(known) : []);
 	/** Those this client can drive here (passkeys only where the browser has them); none, and there is no way in. */
@@ -145,6 +150,8 @@
 		if (last === 'guest' && here && registered) return undefined;
 		return last && (schemes as string[]).includes(last) ? last : undefined;
 	});
+	/** Signed in to the server in the field on this device before, any way, offered still or not: its welcome can start folded. */
+	let signedInBefore = $derived(loadLastSignIn(normalizedInput) !== undefined);
 	/** The address the panel opened on: a scheme asked for with it belongs to it. */
 	const openedOn = untrack(() => normalizedInput);
 	let asked = $derived((schemeFor ?? openedOn) === normalizedInput ? scheme : undefined);
@@ -208,6 +215,11 @@
 		if (!pending || !snapshot.error) return '';
 		return snapshot.error === 'WebSocket connection error' ? 'Can’t reach the server. Check the address and try again.' : snapshot.error;
 	});
+	/**
+	 * Signing in with a passkey, as last time here, where Create account is beside it: the hint about which passkeys
+	 * work here goes unsaid until something goes wrong. Where passkeys can't create an account, it says to make one another way.
+	 */
+	let quietPasskeyHint = $derived(lastUsed === 'webauthn' && passkeyLogin && passkeyChoice(use) && !errorText);
 
 	// An error is about the server it happened on: naming another one clears it.
 	let errorServer = untrack(() => normalizedInput);
@@ -688,16 +700,16 @@
 </script>
 
 <!-- The header, told the server it shows once it has answered, and how to go back to choosing one. -->
-{#snippet top()}{@render header?.({ server: step === 'sign-in' ? known : undefined, address: normalizedInput, onchange: step === 'sign-in' ? change : undefined })}{/snippet}
+{#snippet top()}{@render header?.({ server: step === 'sign-in' ? known : undefined, address: normalizedInput, onchange: step === 'sign-in' ? change : undefined, returning: signedInBefore })}{/snippet}
 
 <!-- The design system's SignInForm draws the panel; this runs it. -->
 <SignInForm
 	label="Sign in" phase={view.phase} onsubmit={submit}
-	header={top} {schemes} {names} {lastUsed} fields={step === 'sign-in' && !unusable} scheme={chosen} onscheme={(candidate) => { scheme = candidate as Scheme; schemeFor = normalizedInput; }}
+	header={top} {schemes} {names} fields={step === 'sign-in' && !unusable} scheme={chosen} onscheme={(candidate) => { scheme = candidate as Scheme; schemeFor = normalizedInput; }}
 	passkeyChoice={chosen === 'webauthn' && passkeyChoice(use) && !(here && registered)} passkeyMode={passkeyChosen} onpasskeymode={(value) => { passkeyChosen = value; error = ''; notice = ''; pageOffer = undefined; }} passkeyNudge={error === CANCELLED_TRY_CREATE || (continuesOnPage && pageOffer?.needed.action === 'login') ? 'register' : undefined}
 	bind:token bind:email bind:code bind:name={() => (chosen === 'token' ? tokenName : displayName), (value) => (chosen === 'token' ? (tokenName = value) : (displayName = value))} askName={!passkeyLogin && !reader}
 	sent={codeSentTo} onrestart={() => { codeSent = undefined; code = ''; error = ''; client.cancelSignInCode(); }}
-	hint={shownNotice || hint} hintTone={continuesOnPage && shownNotice ? 'warn' : undefined} error={errorText} {busy}
+	hint={shownNotice || (quietPasskeyHint ? '' : hint)} hintTone={continuesOnPage && shownNotice ? 'warn' : undefined} error={errorText} {busy}
 	submit={continuesOnPage ? `Continue on ${pageHost} ↗` : view.primary.label} submitElsewhere={continuesOnPage ? `Continue on ${pageHost}, on the server’s sign-in page` : undefined} submitTestid={view.primary.action}
 	tokenTestid="connect-token-input" emailTestid="connect-email-input" codeTestid="connect-code-input" nameTestid="connect-name-input" passkeyChoiceTestid="passkey-choice"
 	secondary={continuesOnPage ? { label: 'Cancel', onclick: () => { pageOffer = undefined; notice = ''; } } : joinedAsGuest && view.phase === 'ready' ? { label: 'Stay a guest', onclick: finish } : canCancel ? { label: 'Cancel', onclick: () => { client.cancelPasskeyPrompt(); pageAbort?.abort(); greetings.cancel(); oncancel(); } } : codeBusy && pageAbort ? { label: 'Cancel', onclick: () => pageAbort?.abort() } : undefined}

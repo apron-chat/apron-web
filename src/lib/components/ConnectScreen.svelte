@@ -48,7 +48,9 @@
 	let busy = $state(false);
 	let signIn = $state<ReturnType<typeof SignIn>>();
 	/** Each recent server by its title, else its host and path, with its address. */
-	let recent = $derived(recentServers.map((entry) => ({ url: entry.url, label: entry.title ?? (serverLabel(entry.url) || entry.url), avatar: directory.avatarGateFor(entry.url).src(entry.avatar), starred: entry.starred })));
+	/** The server the card shows, while signing in to it: Recent doesn't list it twice. */
+	let inCard = $state<string | undefined>();
+	let recent = $derived(recentServers.filter((entry) => entry.url !== inCard).map((entry) => ({ url: entry.url, label: entry.title ?? (serverLabel(entry.url) || entry.url), avatar: directory.avatarGateFor(entry.url).src(entry.avatar), starred: entry.starred })));
 
 	/** How the server that answered shows itself (§3.1): its title, else its host and path (`serverLabel`), always with its address beside it (§5.3). */
 	function shown(server: ServerParams, address: string) {
@@ -65,7 +67,7 @@
 	{#snippet welcomeHtml()}{@html welcome}{/snippet}
 	{#snippet descriptionHtml()}{@html description}{/snippet}
 	<ConnectHeader
-		bind:url={serverInput} {busy} welcome={welcome ? welcomeHtml : undefined} urlTestid="server-url-input"
+		bind:url={serverInput} {busy} welcome={welcome ? welcomeHtml : undefined} welcomeFolded={step.returning} urlTestid="server-url-input"
 		server={step.server ? shown(step.server, step.address) : undefined} description={description ? descriptionHtml : undefined} serverTestid="connect-server"
 		onchange={step.onchange} linked={linked && linked.server === step.address ? `#${linked.room}` : undefined}
 		warning={step.server ? versionWarning(step.server.apron, PROTOCOL_VERSION) : undefined}
@@ -77,6 +79,6 @@
 	<SignIn
 		bind:this={signIn}
 		{client} {session} bind:serverInput bind:displayName bind:busy {passkeyUnavailable} {canCancel}
-		{initialScheme} {initialEmail} {initialError} {initialChoosing} {header} {onconnect} {onconnected} {oncancel} {onsignout}
+		{initialScheme} {initialEmail} {initialError} {initialChoosing} {header} {onconnect} {onconnected} {oncancel} {onsignout} bind:inCard
 	/>
 </ConnectPage>

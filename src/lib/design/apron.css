@@ -1550,6 +1550,13 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-welcome p + p, .ap-welcome ul, .ap-welcome ol { margin-top: var(--space-1); }
 .ap-welcome ul, .ap-welcome ol { margin-bottom: 0; }
 .ap-welcome :is(ul, ol):not(.ap-task-list) { padding-inline-start: var(--space-6); }
+/* Folded for someone who has signed in here before: its first two lines, fading out, and More. */
+.ap-welcome-folded { display: flex; align-items: flex-end; gap: var(--space-2); }
+.ap-welcome-folded .ap-welcome-body { flex: 1; min-width: 0; max-height: calc(2 * var(--leading-ui)); overflow: hidden; }
+.ap-welcome-clipped .ap-welcome-body { mask-image: linear-gradient(to bottom, #000 50%, transparent); }
+.ap-welcome-more { flex: none; font-size: var(--text-ui); }
+/* Where More leaves focus: the welcome itself, which needs no ring of its own. */
+.ap-welcome-body:focus { outline: none; }
 .ap-connect-actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); margin-top: var(--space-1); }
 .ap-connect-actions .ap-btn { border-radius: var(--radius-sm); }
 .ap-connect-other { align-self: flex-start; font-size: var(--text-ui); }
@@ -1562,6 +1569,8 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-seg-stacked { flex-direction: column; }
 .ap-seg-stacked .ap-seg-item { height: auto; min-height: var(--control-md); padding-block: var(--space-1); text-align: start; white-space: normal; overflow-wrap: anywhere; }
 .ap-seg-on, .ap-seg-on:hover { background: var(--chosen); color: var(--ink); box-shadow: var(--shadow-chosen); }
+/* The sign-in schemes: the chosen one in the accent, as the passkey choice under it, so it reads at a glance. */
+.ap-seg-names .ap-seg-on, .ap-seg-names .ap-seg-on:hover { background: var(--accent-soft); box-shadow: inset 0 0 0 1.5px var(--accent); }
 /* Choice — two paths of equal weight, each a title and a line saying what it does (Sign in · Create account) */
 .ap-choice { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
 .ap-choice-item { font: inherit; display: flex; flex-direction: column; gap: var(--space-0_5); padding: var(--space-2) var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--bg-200); color: var(--ink-muted); text-align: start; cursor: pointer; transition: background-color var(--duration-fast), border-color var(--duration-fast), color var(--duration-fast); }
@@ -1569,6 +1578,13 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-choice-title { font-size: var(--text-ui); line-height: var(--leading-ui); font-weight: 600; }
 .ap-choice-text { font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
 .ap-choice-on, .ap-choice-on:hover:not(:disabled) { background: var(--chosen); border-color: var(--line-strong); color: var(--ink); box-shadow: var(--shadow-chosen); }
+/* The sign-in choice is a radio group: a radio mark by each title, and the chosen one in the accent, so which is on reads at a glance with two. */
+.ap-choice > .ap-choice-item { background: transparent; }
+.ap-choice .ap-choice-title { display: flex; align-items: center; gap: var(--space-2); }
+.ap-choice .ap-choice-title::before { content: ''; flex: none; box-sizing: border-box; width: 14px; height: 14px; border: 1.5px solid var(--line-strong); border-radius: var(--radius-full); }
+.ap-choice .ap-choice-text { padding-inline-start: calc(14px + var(--space-2)); }
+.ap-choice > .ap-choice-on, .ap-choice > .ap-choice-on:hover:not(:disabled) { background: var(--accent-soft); border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.ap-choice > .ap-choice-on .ap-choice-title::before { border: 4px solid var(--accent); background: var(--bg-100); }
 /* A dot in the top end corner (the right, or the left under dir="rtl"), just inside the border, to draw the eye to a choice (SignInForm `passkeyNudge`). */
 .ap-choice-nudge { position: relative; }
 .ap-choice-nudge::after { content: ''; position: absolute; top: 3px; inset-inline-end: 3px; width: 8px; height: 8px; border-radius: var(--radius-full); background: var(--danger); }
@@ -1600,6 +1616,12 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-connect-recent-starred svg { fill: currentColor; }
 .ap-connect-recent-item { font: inherit; display: flex; align-items: center; gap: var(--space-3); padding: var(--space-1) var(--space-2); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink); text-align: start; cursor: pointer; }
 .ap-connect-recent-item:hover { background: var(--hover); }
+.ap-connect-recent-more { align-self: flex-start; margin-inline-start: var(--space-2); font-size: var(--text-ui); }
+/* With a pointer, a row's star and × show while it is hovered or focused (and a star once set). */
+@media (hover: hover) {
+	.ap-connect-recent-row > .ap-iconbtn:not(.ap-connect-recent-starred) { opacity: 0; }
+	.ap-connect-recent-row:is(:hover, :focus-within) > .ap-iconbtn:not(:disabled) { opacity: 1; }
+}
 .ap-connect-tile { width: var(--control-lg); height: var(--control-lg); font-size: var(--text-sm); border-radius: var(--radius-md); background: var(--bg-200); flex: none; }
 /* The server in the field: its name and avatar, which any server can copy, always above its address, which it can't. */
 .ap-connect-server { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
