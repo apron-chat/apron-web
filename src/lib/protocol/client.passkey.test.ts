@@ -374,7 +374,7 @@ describe('the passkey page', () => {
 	const redeem = { code: 'Hk41x9', code_verifier: 'dBjftJ', redirect_uri: 'https://web.example/signed-in/', client_id: 'apron-web' };
 
 	/** Begins `action` and answers with `result`; resolves with what `usePasskey` threw. */
-	async function begin(client: ChatClient, socket: FakeSocket, action: 'login' | 'register', result: Record<string, unknown>, options: { offerPage?: boolean } = {}): Promise<unknown> {
+	async function begin(client: ChatClient, socket: FakeSocket, action: 'login' | 'register', result: Record<string, unknown>, options: { offerPage?: boolean; preferPage?: boolean } = {}): Promise<unknown> {
 		const pending = client.usePasskey(action, undefined, options).then(() => undefined, (cause: unknown) => cause);
 		await settle();
 		await socket.reply('auth', result);
@@ -442,6 +442,39 @@ describe('the passkey page', () => {
 		await settle();
 		client.cancelPasskeyPrompt();
 		expect(await pending).not.toBeInstanceOf(PasskeyPageOffered);
+	});
+
+	it('goes to the page at once where it worked before, without asking the device', async () => {
+		const { client, socket } = await connected();
+		vi.mocked(requestPasskey).mockReset();
+		const needed = await begin(client, socket, 'login', { challenge_id: 'c1', public_key: { challenge: 'x' }, external: page }, { offerPage: true, preferPage: true });
+		expect(needed).toBeInstanceOf(PasskeyPageNeeded);
+		expect(requestPasskey).not.toHaveBeenCalled();
+		// Without a page, the device is asked as always.
+		vi.mocked(requestPasskey).mockRejectedValue(new DOMException('Dismissed', 'NotAllowedError'));
+		await expect(begin(client, socket, 'login', { challenge_id: 'c2', public_key: { challenge: 'x' } }, { preferPage: true })).resolves.toMatchObject({ name: 'NotAllowedError' });
+	});
+
+	it('offers the page when the server refuses the passkey a sign-in gave, but not when it asks to wait', async () => {
+		const { client, socket } = await connected();
+		vi.mocked(requestPasskey).mockResolvedValue({ id: 'cred', type: 'public-key', response: {} });
+		const finishWith = async (error: Record<string, unknown>, options: { offerPage?: boolean } = { offerPage: true }, action: 'login' | 'register' = 'login') => {
+			const pending = client.usePasskey(action, undefined, options).then(() => undefined, (cause: unknown) => cause);
+			await settle();
+			await socket.reply('auth', { challenge_id: 'c', public_key: { challenge: 'x' }, external: page });
+			await settle();
+			socket.receive({ id: socket.request('auth').id, error });
+			await settle();
+			return pending;
+		};
+		// A passkey the server doesn't know (an orphan from a save the server never took).
+		const offered = await finishWith({ code: -32001, message: 'Unknown passkey' });
+		expect(offered).toBeInstanceOf(PasskeyPageOffered);
+		expect((offered as PasskeyPageOffered).needed).toMatchObject({ action: 'login', external: page });
+		// Not without asking, nor for a new passkey, nor for a limit.
+		expect(await finishWith({ code: -32001, message: 'Unknown passkey' }, {})).not.toBeInstanceOf(PasskeyPageOffered);
+		expect(await finishWith({ code: -32001, message: 'Refused' }, { offerPage: true }, 'register')).not.toBeInstanceOf(PasskeyPageOffered);
+		expect(await finishWith({ code: -32002, message: 'Slow down', data: { retry_after: 5 } })).not.toBeInstanceOf(PasskeyPageOffered);
 	});
 
 	it('reads a password manager’s errors by name, as Bitwarden throws them: a plain Error, not a DOMException', async () => {

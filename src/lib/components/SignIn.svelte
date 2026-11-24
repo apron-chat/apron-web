@@ -16,6 +16,7 @@
 	import { greetings } from '$lib/ui/greetings.svelte';
 	import { codeStillFor, type SentCode } from '$lib/ui/sign-in-link';
 	import { isWebAuthnError, PasskeyPageNeeded, PasskeyPageOffered } from '$lib/protocol/passkey-route';
+	import { notePasskeyRoute, prefersPasskeyPage } from '$lib/ui/passkey-route-memory';
 	import { openSignInWindow, signInPageError } from '$lib/ui/sign-in-window';
 	import type { SessionView } from '$lib/ui/session.svelte';
 	import {
@@ -562,14 +563,19 @@
 		const name = action === 'register' ? displayName.trim() || undefined : undefined;
 		// The guest's name, which the connection carries, isn't the account's: it stays as the account has it.
 		if (action === 'login') client.setDisplayName('');
+		const server = client.url;
+		let onPage = false;
 		try {
 			try {
-				await client.usePasskey(action, name, { offerPage: true });
+				await client.usePasskey(action, name, { offerPage: true, preferPage: action === 'login' && prefersPasskeyPage(server) });
 			} catch (cause) {
-				// This page can't use the server's passkeys: its passkey page can.
+				// This page can't use the server's passkeys, or they worked on its passkey page before: that page.
 				if (!(cause instanceof PasskeyPageNeeded)) throw cause;
+				onPage = true;
 				await passkeyPage(cause, name);
 			}
+			// Where a sign-in worked, for the next one on this device.
+			if (action === 'login') notePasskeyRoute(server, onPage);
 			// What the account is called from here on, for the form and the next visit.
 			const kept = name ?? client.snapshot().you?.name;
 			if (kept) {
@@ -580,6 +586,8 @@
 		} catch (cause) {
 			// Still the guest it was: it keeps its name.
 			if (action === 'login' && displayName.trim()) client.setDisplayName(displayName);
+			// The page didn't work this time: the next sign-in asks the device first again.
+			if (action === 'login' && onPage) notePasskeyRoute(server, false);
 			const offered = cause instanceof PasskeyPageOffered ? cause : undefined;
 			const browser = offered ? offered.cause : cause;
 			const refused = isWebAuthnError(browser, 'NotAllowedError');
@@ -599,6 +607,7 @@
 	async function passkeyOnServerPage(): Promise<void> {
 		const needed = pageOffer?.needed;
 		if (!needed || !continuesOnPage) return;
+		const server = pageOffer!.url;
 		error = '';
 		notice = '';
 		pageOffer = undefined;
@@ -606,6 +615,7 @@
 		if (needed.action === 'login') client.setDisplayName('');
 		try {
 			await passkeyPage(needed, name);
+			if (needed.action === 'login') notePasskeyRoute(server, true);
 			const kept = name ?? client.snapshot().you?.name;
 			if (kept) {
 				displayName = kept;
