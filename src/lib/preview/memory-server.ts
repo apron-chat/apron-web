@@ -940,12 +940,12 @@ export class MemoryProtocolServer {
 			const dropped = this.knobs.dropPrivate === (parent ? 'threads' : 'rooms');
 			if (!dropped && (p.private === true || (p.private === undefined && parent && this.rooms.get(parent)?.private))) room.private = true;
 		} else {
-			// An update resubmits every client field; one left out is cleared, except `private`, which is kept,
-			// and `ext`, which merges (§4.2.4, §4.12). It is a new room record.
-			room.title = typeof p.title === 'string' && p.title ? p.title : room.private && !room.parent_room_id ? undefined : room.room_id;
+			// An update merges into the client fields (§4.2.4): one left out keeps its value, and an empty one
+			// clears it. `private` is kept, and `ext` merges (§4.12). It is a new room record.
+			if (p.title !== undefined) room.title = typeof p.title === 'string' && p.title ? p.title : room.private && !room.parent_room_id ? undefined : room.room_id;
 			this.nextLog(room);
 		}
-		room.description = typeof p.description === 'string' && p.description ? p.description : undefined;
+		if (p.description !== undefined || !p.room_id) room.description = typeof p.description === 'string' && p.description ? p.description : undefined;
 		room.ext = mergedExt(room.ext, p.ext);
 		const record = this.roomRecord(room, true);
 		socket.deliver({ method: 'room_update', params: { joined: [record], users: this.users() } });

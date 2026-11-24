@@ -313,16 +313,16 @@ describe('saves', () => {
 		expect(socket.request('room_set').params).toEqual({ parent_room_id: 'general', title: 'Deploy', description: 'Deploy?' });
 		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 'thread', log_id: '21', parent_room_id: 'general', title: 'Side', description: 'Deploy?', ext: { x: { y: 1 } } }] } });
 		quiet(client.updateRoom('thread', { title: 'Renamed' }));
-		// `ext` merges (§4.12): an update never resubmits it.
-		expect(socket.request('room_set').params).toEqual({ room_id: 'thread', title: 'Renamed', description: 'Deploy?' });
-		// A second update before the first is confirmed builds on it; an empty ext value removes that key.
+		// room_set merges (§4.2.4): an update sends only what it changes, and never resubmits ext (§4.12).
+		expect(socket.request('room_set').params).toEqual({ room_id: 'thread', title: 'Renamed' });
+		// A second update before the first is confirmed builds on it; null clears with "", and an empty ext value removes that key.
 		quiet(client.updateRoom('thread', { description: null, ext: { x: {} } }));
-		expect(socket.request('room_set').params).toEqual({ room_id: 'thread', title: 'Renamed', ext: { x: {} } });
+		expect(socket.request('room_set').params).toEqual({ room_id: 'thread', description: '', ext: { x: {} } });
 		// The matching record confirms it; later updates build on the store again.
 		socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'thread', log_id: '22', parent_room_id: 'general', title: 'Renamed', ext: { w: 1 } }] } });
 		socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'thread', log_id: '23', parent_room_id: 'general', title: 'Elsewhere' }] } });
 		quiet(client.updateRoom('thread', { ext: { z: 1 } }));
-		expect(socket.request('room_set').params).toEqual({ room_id: 'thread', title: 'Elsewhere', ext: { z: 1 } });
+		expect(socket.request('room_set').params).toEqual({ room_id: 'thread', ext: { z: 1 } });
 	});
 
 	it('writes ext only to a server with capability ext (§4.12), and still reads what it sends', async () => {
@@ -336,7 +336,7 @@ describe('saves', () => {
 		quiet(client.createRoom({ title: 'Ops', ext: { bot: { on: true } } }));
 		expect(socket.request('room_set').params).toEqual({ title: 'Ops' });
 		quiet(client.updateRoom('thread', { ext: { bot: { on: true } } }));
-		expect(socket.request('room_set').params).toEqual({ room_id: 'thread', title: 'Side', description: 'Why *side*' });
+		expect(socket.request('room_set').params).toEqual({ room_id: 'thread' });
 		void client.updateProfile({ name: 'Ada', ext: { tz: 'Europe/Oslo' } }).catch(() => undefined);
 		expect(socket.request('me').params).toEqual({ name: 'Ada' });
 	});
