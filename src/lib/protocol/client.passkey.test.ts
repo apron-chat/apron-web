@@ -405,6 +405,9 @@ describe('the passkey page', () => {
 		// Without a page, or for a new passkey, it's the browser's error as it was.
 		await expect(begin(client, socket, 'login', { challenge_id: 'c4', public_key: { challenge: 'x' } })).resolves.toMatchObject({ name: 'NotAllowedError' });
 		await expect(begin(client, socket, 'register', { challenge_id: 'c5', public_key: { challenge: 'x' }, external: page })).resolves.toMatchObject({ name: 'NotAllowedError' });
+		// A ceremony this page gave up (AbortError) is no sign that a passkey is elsewhere.
+		vi.mocked(requestPasskey).mockRejectedValue(new DOMException('Aborted', 'AbortError'));
+		await expect(begin(client, socket, 'login', { challenge_id: 'c6', public_key: { challenge: 'x' }, external: page })).resolves.toMatchObject({ name: 'AbortError' });
 	});
 
 	it('goes straight to the page when the server sends no public_key, and says where passkeys work without one', async () => {

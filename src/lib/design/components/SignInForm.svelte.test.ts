@@ -54,13 +54,24 @@ describe('SignInForm', () => {
 		expect(onrestart).toHaveBeenCalledOnce();
 	});
 
-	it('says the hint as a status only when asked, and waits while busy', () => {
+	it('says the hint as a status, which is there before its news, and waits while busy', () => {
 		const form = render({ hint: 'No token needed.', busy: true, secondary: { label: 'Cancel', onclick: () => {} } });
-		expect(byText('No token needed.').hasAttribute('role')).toBe(false);
+		// Already a live region while busy, so that what replaces the hint once the wait ends is announced.
+		expect(byText('No token needed.').getAttribute('role')).toBe('status');
 		expect(form.querySelector('.ap-typing-dots')).not.toBeNull();
 		const submit = dom.button('Connect');
 		expect([submit.type, submit.disabled]).toEqual(['submit', true]);
 		expect(dom.button('Cancel').disabled).toBe(false);
+	});
+
+	it('offers the hint’s action as a link under it, waiting while busy', () => {
+		let taken = 0;
+		render({ hint: 'Didn’t find your passkey? Try on `sso.test`', hintAction: { label: 'Try a passkey here again', onclick: () => taken++ } });
+		dom.button('Try a passkey here again').click();
+		expect(taken).toBe(1);
+		document.body.innerHTML = '';
+		render({ hint: 'Didn’t find your passkey? Try on `sso.test`', hintAction: { label: 'Try a passkey here again', onclick: () => taken++ }, busy: true });
+		expect(dom.button('Try a passkey here again').disabled).toBe(true);
 	});
 
 	it('shows what the hint quotes in backticks as code', () => {

@@ -298,9 +298,11 @@ export const CANCELLED_TRY_CREATE = 'Cancelled. No passkey for this server? Choo
  * A sign-in that used no passkey here, on a server that offered its sign-in
  * page at `host` (`PasskeyPageOffered`): said as a hint while the submit
  * becomes "Continue on <host> ↗", since the page may find one this page can't.
+ * The browser doesn't say whether it found none or the viewer closed it, so
+ * the hint claims neither.
  */
-export function passkeyNotFoundHere(host: string): string {
-	return `No passkey found here, check on \`${host}\`?`;
+export function tryPasskeyOn(host: string): string {
+	return `Didn’t find your passkey? Try on \`${host}\``;
 }
 
 /**
