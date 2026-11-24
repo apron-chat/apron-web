@@ -95,8 +95,6 @@
 	let pageAbort = $state.raw<AbortController | undefined>();
 	// The server's sign-in page, offered after a sign-in here used no passkey: the submit continues there.
 	let pageOffer = $state.raw<PasskeyPageNeeded | undefined>();
-	let continuesOnPage = $derived(pageOffer !== undefined && view.primary.action === 'passkey-login');
-	let pageHost = $derived(pageOffer ? new URL(pageOffer.external.url).host : '');
 	/** The pasted token for the Token scheme; cleared once handed to the client. */
 	let token = $state('');
 	/**
@@ -172,6 +170,9 @@
 		busy: Boolean(snapshot.authBusy) || codeBusy,
 		codeSent: Boolean(codeSentTo)
 	}));
+	// After a sign-in here used no passkey, the submit continues on the server's page (pageOffer).
+	let continuesOnPage = $derived(pageOffer !== undefined && view.primary.action === 'passkey-login');
+	let pageHost = $derived(pageOffer ? new URL(pageOffer.external.url).host : '');
 	/**
 	 * Signing in with a passkey restores an account, name and all: the form
 	 * asks no display name for it, and none is applied to that account.
