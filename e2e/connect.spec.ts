@@ -243,6 +243,8 @@ test.describe('the connect screen for a server signed in to before', () => {
 		await welcome.getByRole('button', { name: 'More', exact: true }).click();
 		await expect(welcome).not.toHaveClass(/ap-welcome-folded/);
 		await expect(welcome.getByRole('button', { name: 'More', exact: true })).toHaveCount(0);
+		// Focus stays where More was, on the welcome it unfolded.
+		await expect(welcome.locator('.ap-welcome-body')).toBeFocused();
 		await expect(welcome.getByRole('link', { name: 'the guide' })).toBeVisible();
 		// Again, from the keyboard: focus on the link under the fold unfolds the welcome.
 		await page.reload();
@@ -252,7 +254,7 @@ test.describe('the connect screen for a server signed in to before', () => {
 		await expect(welcome).not.toHaveClass(/ap-welcome-folded/);
 	});
 
-	test('shows a welcome that fits in two lines as it is, and the whole welcome on a first visit', async ({ preview, page }) => {
+	test('shows a welcome that fits in two lines as it is', async ({ preview, page }) => {
 		await returning(page);
 		await preview.openRoot({ server: { welcome: 'Be kind.' } });
 		await preview.openConnect({ signIn: true });
@@ -284,6 +286,8 @@ test.describe('the recent servers under the card', () => {
 		const addresses = recent.locator('.ap-connect-recent-item .ap-connect-address');
 		await expect(addresses).toHaveText(['wss://a.example/', 'wss://b.example/', 'wss://c.example/', 'wss://d.example/']);
 		await recent.getByRole('button', { name: 'Show 1 more', exact: true }).click();
+		// Focus goes to the row it showed.
+		await expect(recent.locator('.ap-connect-recent-item').nth(4)).toBeFocused();
 		await expect(addresses).toHaveText(['wss://a.example/', 'wss://b.example/', 'wss://c.example/', 'wss://d.example/', 'wss://e.example/']);
 		// Choosing a server again, it is one to choose.
 		await page.getByRole('button', { name: 'Change', exact: true }).click();

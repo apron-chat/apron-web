@@ -1555,6 +1555,8 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-welcome-folded .ap-welcome-body { flex: 1; min-width: 0; max-height: calc(2 * var(--leading-ui)); overflow: hidden; }
 .ap-welcome-clipped .ap-welcome-body { mask-image: linear-gradient(to bottom, #000 50%, transparent); }
 .ap-welcome-more { flex: none; font-size: var(--text-ui); }
+/* Where More leaves focus: the welcome itself, which needs no ring of its own. */
+.ap-welcome-body:focus { outline: none; }
 .ap-connect-actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); margin-top: var(--space-1); }
 .ap-connect-actions .ap-btn { border-radius: var(--radius-sm); }
 .ap-connect-other { align-self: flex-start; font-size: var(--text-ui); }
@@ -1576,7 +1578,6 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-choice-title { font-size: var(--text-ui); line-height: var(--leading-ui); font-weight: 600; }
 .ap-choice-text { font-size: var(--text-sm); line-height: var(--leading-sm); color: var(--ink-muted); }
 .ap-choice-on, .ap-choice-on:hover:not(:disabled) { background: var(--chosen); border-color: var(--line-strong); color: var(--ink); box-shadow: var(--shadow-chosen); }
-/* A dot in the top end corner (the right, or the left under dir="rtl"), just inside the border, to draw the eye to a choice (SignInForm `passkeyNudge`). */
 /* The sign-in choice is a radio group: a radio mark by each title, and the chosen one in the accent, so which is on reads at a glance with two. */
 .ap-choice > .ap-choice-item { background: transparent; }
 .ap-choice .ap-choice-title { display: flex; align-items: center; gap: var(--space-2); }
@@ -1584,6 +1585,7 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-choice .ap-choice-text { padding-inline-start: calc(14px + var(--space-2)); }
 .ap-choice > .ap-choice-on, .ap-choice > .ap-choice-on:hover:not(:disabled) { background: var(--accent-soft); border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 .ap-choice > .ap-choice-on .ap-choice-title::before { border: 4px solid var(--accent); background: var(--bg-100); }
+/* A dot in the top end corner (the right, or the left under dir="rtl"), just inside the border, to draw the eye to a choice (SignInForm `passkeyNudge`). */
 .ap-choice-nudge { position: relative; }
 .ap-choice-nudge::after { content: ''; position: absolute; top: 3px; inset-inline-end: 3px; width: 8px; height: 8px; border-radius: var(--radius-full); background: var(--danger); }
 @media (prefers-reduced-motion: reduce) { .ap-choice-item { transition: none; } }
@@ -1618,7 +1620,7 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 /* With a pointer, a row's star and × show while it is hovered or focused (and a star once set). */
 @media (hover: hover) {
 	.ap-connect-recent-row > .ap-iconbtn:not(.ap-connect-recent-starred) { opacity: 0; }
-	.ap-connect-recent-row:is(:hover, :focus-within) > .ap-iconbtn { opacity: 1; }
+	.ap-connect-recent-row:is(:hover, :focus-within) > .ap-iconbtn:not(:disabled) { opacity: 1; }
 }
 .ap-connect-tile { width: var(--control-lg); height: var(--control-lg); font-size: var(--text-sm); border-radius: var(--radius-md); background: var(--bg-200); flex: none; }
 /* The server in the field: its name and avatar, which any server can copy, always above its address, which it can't. */

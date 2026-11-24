@@ -87,12 +87,10 @@
 <form aria-label={label} data-phase={phase} class={['ap-connect-card', className]} {onsubmit}>
 	{@render header?.()}
 	{#if fields && schemes.length > 1}
-		<div class="ap-fieldlabel">
-			<div class="ap-seg ap-seg-names" role="radiogroup" aria-label="Sign in with" {@attach segFit(JSON.parse(shownNames))}>
-				{#each schemes as candidate (candidate)}
-					<button class="ap-seg-item" class:ap-seg-on={scheme === candidate} type="button" role="radio" aria-checked={scheme === candidate} disabled={busy} onclick={() => onscheme?.(candidate)}>{nameOf(candidate)}</button>
-				{/each}
-			</div>
+		<div class="ap-seg ap-seg-names" role="radiogroup" aria-label="Sign in with" {@attach segFit(JSON.parse(shownNames))}>
+			{#each schemes as candidate (candidate)}
+				<button class="ap-seg-item" class:ap-seg-on={scheme === candidate} type="button" role="radio" aria-checked={scheme === candidate} disabled={busy} onclick={() => onscheme?.(candidate)}>{nameOf(candidate)}</button>
+			{/each}
 		</div>
 	{/if}
 	{#if fields}

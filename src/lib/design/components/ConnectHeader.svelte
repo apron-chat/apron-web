@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Snippet } from 'svelte';
+	import { tick, type Snippet } from 'svelte';
 	import type { ConnectServer } from './types';
 	import { initials } from './util';
 
@@ -36,13 +36,25 @@
 	const folded = $derived(welcomeFolded && unfoldedFor !== (server?.address ?? ''));
 	/** The folded welcome runs past its two lines: it fades out, with More. */
 	let overflows = $state(false);
-	/** Measures the welcome against its fold as it lays out (a ResizeObserver: no layout forced of its own). */
+	/**
+	 * Measures the welcome against its fold as either lays out (a ResizeObserver: no layout forced of its own). The fold is
+	 * watched too: folding changes its height while the welcome keeps its own, as when another server's starts folded.
+	 */
 	function measure(content: HTMLElement) {
-		const observer = new ResizeObserver(() => (overflows = content.offsetHeight > (content.parentElement?.clientHeight ?? 0) + 1));
+		const fold = content.parentElement!;
+		const observer = new ResizeObserver(() => (overflows = content.offsetHeight > fold.clientHeight + 1));
 		observer.observe(content);
+		observer.observe(fold);
 		return () => observer.disconnect();
 	}
 	const unfold = () => (unfoldedFor = server?.address ?? '');
+	let body = $state<HTMLElement>();
+	/** More goes once pressed: focus moves to the welcome it unfolded, not back to the top of the page. */
+	async function more(): Promise<void> {
+		unfold();
+		await tick();
+		body?.focus();
+	}
 </script>
 
 <!--
@@ -66,8 +78,8 @@
 {#if welcome}
 	<!-- Focus on a link under the fold unfolds it, so the keyboard never lands on something hidden. -->
 	<div class={['ap-welcome', folded && 'ap-welcome-folded', folded && overflows && 'ap-welcome-clipped']} onfocusin={(event) => folded && event.target !== event.currentTarget.querySelector('.ap-welcome-more') && unfold()}>
-		<div class="ap-welcome-body"><div class="ap-msg-text" {@attach measure}>{@render welcome()}</div></div>
-		{#if folded && overflows}<button class="ap-link ap-welcome-more" type="button" onclick={unfold}>More</button>{/if}
+		<div class="ap-welcome-body" tabindex="-1" bind:this={body}><div class="ap-msg-text" {@attach measure}>{@render welcome()}</div></div>
+		{#if folded && overflows}<button class="ap-link ap-welcome-more" type="button" onclick={more}>More</button>{/if}
 	</div>
 {/if}
 {#if linked && !server}<p class="ap-connect-intent">A link opened this page to <strong>{linked}</strong> on this server.</p>{/if}
