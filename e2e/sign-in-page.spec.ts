@@ -177,17 +177,24 @@ test.describe('a passkey on the server’s passkey page', () => {
 	}
 	const sheets = (page: Page) => page.evaluate(() => (window as unknown as { sheets: number }).sheets);
 
-	test('offers another try here after a passkey here finds none', async ({ preview, page }) => {
+	test('Cancel takes the offer back, and the next tap tries a passkey here again', async ({ preview, page }) => {
 		await signInPage(page.context(), []);
 		await emptySheet(page);
 		await preview.openRoot({ passkey: { user_id: 'grace', name: 'Grace' }, passkeyPageBeside: PASSKEY_PAGE, sent: [] });
 		await connectAt(page, preview, 'Passkey');
 		const submit = page.getByTestId('passkey-login');
+		const label = await submit.textContent();
 		await submit.click();
 		await expect(submit).toHaveText('Continue on sso.test ↗');
 		await expect(submit).toHaveAccessibleName('Continue on sso.test, on the server’s sign-in page');
 		const form = page.getByRole('form', { name: 'Sign in' });
-		await form.getByRole('button', { name: 'Try a passkey here again' }).click();
+		await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+		// Back as it was: the form stays open, with its usual button and hint.
+		await expect(form).toBeVisible();
+		await expect(submit).toHaveText(label!);
+		await expect(submit).not.toHaveClass(/ap-btn-elsewhere/);
+		await expect(form.getByText('Didn’t find your passkey?')).toHaveCount(0);
+		await submit.click();
 		await expect.poll(() => sheets(page)).toBe(2);
 		// Empty again: the page is offered again.
 		await expect(submit).toHaveText('Continue on sso.test ↗');

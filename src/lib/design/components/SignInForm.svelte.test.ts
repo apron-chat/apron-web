@@ -64,16 +64,6 @@ describe('SignInForm', () => {
 		expect(dom.button('Cancel').disabled).toBe(false);
 	});
 
-	it('offers the hint’s action as a link under it, waiting while busy', () => {
-		let taken = 0;
-		render({ hint: 'Didn’t find your passkey? Try on `sso.test`', hintAction: { label: 'Try a passkey here again', onclick: () => taken++ } });
-		dom.button('Try a passkey here again').click();
-		expect(taken).toBe(1);
-		document.body.innerHTML = '';
-		render({ hint: 'Didn’t find your passkey? Try on `sso.test`', hintAction: { label: 'Try a passkey here again', onclick: () => taken++ }, busy: true });
-		expect(dom.button('Try a passkey here again').disabled).toBe(true);
-	});
-
 	it('shows what the hint quotes in backticks as code', () => {
 		render({ hint: 'Each server has its own accounts: sign in with a passkey you saved for `chat.example`.' });
 		const hint = document.querySelector('.ap-form-hint')!;

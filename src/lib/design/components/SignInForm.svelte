@@ -54,8 +54,6 @@
 		hint?: string;
 		/** The hint in a status's colour, such as `warn` when the submit now does something else. */
 		hintTone?: 'warn';
-		/** A link under the hint, for another way on from what it says. */
-		hintAction?: { label: string; onclick: () => void };
 		/** The server's error `message` when it gave one (§1.1). */
 		error?: string;
 		/** Something is under way: the controls wait, and dots show by the submit. */
@@ -80,7 +78,7 @@
 	}
 	let {
 		header, schemes, names, fields = true, lastUsed, scheme, onscheme, passkeyChoice = false, passkeyMode = 'login', onpasskeymode, passkeyNudge, token = $bindable(''), email = $bindable(''), code = $bindable(''), name = $bindable(''),
-		askName = true, sent, onrestart, hint, hintTone, hintAction, error, busy = false, submit, submitElsewhere, secondary,
+		askName = true, sent, onrestart, hint, hintTone, error, busy = false, submit, submitElsewhere, secondary,
 		submitTestid, tokenTestid, emailTestid, codeTestid, nameTestid, passkeyChoiceTestid, onsubmit, label, phase, class: className
 	}: Props = $props();
 	const nameOf = (candidate: string) => names?.[candidate] ?? LABELS[candidate] ?? candidate;
@@ -140,7 +138,6 @@
 		<button class="ap-link ap-connect-other" type="button" disabled={busy} onclick={onrestart}>Use another address, or send a new code</button>
 	{:else if hint}
 		<p class={['ap-form-hint', hintTone && `ap-tone-${hintTone}`]} role="status">{#each hint?.split('`') ?? [] as part, index (index)}{#if index % 2}<code>{part}</code>{:else}{part}{/if}{/each}</p>
-		{#if hintAction}<button class="ap-link ap-connect-other" type="button" disabled={busy} onclick={hintAction.onclick}>{hintAction.label}</button>{/if}
 	{/if}
 	{#if error}<p class="ap-form-note ap-tone-danger" role="alert">{error}</p>{/if}
 	<div class="ap-connect-actions">
