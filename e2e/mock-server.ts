@@ -86,7 +86,14 @@ export async function mockServer(page: Page, options: MockOptions = {}): Promise
 					}
 					if (options.passkey && frame.params?.scheme === 'webauthn') {
 						// Nothing is verified: `begin` gives a challenge for this server's host, and `finish` signs in as the account.
-						if (frame.params.step === 'begin') return reply({ challenge_id: 'challenge_1', public_key: { challenge: 'AAAA', rpId: new URL(ws.url()).hostname }, ...(options.passkeyPageBeside ? { external: { url: options.passkeyPageBeside } } : {}) });
+						if (frame.params.step === 'begin') {
+							const host = new URL(ws.url()).hostname;
+							// A new passkey's options carry their RP ID in `rp`, as a sign-in's do in `rpId`.
+							const publicKey = frame.params.action === 'register'
+								? { challenge: 'AAAA', rp: { id: host, name: 'Mock Chat' }, user: { id: 'dXNlcl9oYW5kbGU', name: 'grace', displayName: 'Grace' }, pubKeyCredParams: [{ type: 'public-key', alg: -7 }] }
+								: { challenge: 'AAAA', rpId: host };
+							return reply({ challenge_id: 'challenge_1', public_key: publicKey, ...(options.passkeyPageBeside ? { external: { url: options.passkeyPageBeside } } : {}) });
+						}
 						you = { status: 'online', ...options.passkey };
 						return reply({ you });
 					}

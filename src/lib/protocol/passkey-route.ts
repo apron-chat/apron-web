@@ -64,12 +64,14 @@ export class PasskeyPageNeeded extends Error {
 }
 
 /**
- * A sign-in in this page that used no passkey (`NotAllowedError`: the sheet
- * was dismissed, or the device had none for the RP ID; the browser doesn't
- * say which), on a server that also offered its passkey page (§4.10.1). The
- * page may find a passkey this page's ceremony can't, such as one made for
- * the server's previous RP ID, so the caller offers it (`needed`) without
- * opening it: the user may only have said no. `cause` is the browser's error.
+ * A ceremony in this page that failed, on a server that also offered its
+ * passkey page (§4.10.1): the sheet was dismissed or found no passkey for
+ * the RP ID (`NotAllowedError`; the browser doesn't say which), or the
+ * browser or a password manager that runs ceremonies in its place (1Password,
+ * Bitwarden, Dashlane, …) failed some other way. The page may do what this
+ * page can't, such as find a passkey made for the server's previous RP ID, so
+ * the caller offers it (`needed`) without opening it: the user may only have
+ * said no. `cause` is the error, whatever it was.
  */
 export class PasskeyPageOffered extends Error {
 	constructor(readonly needed: PasskeyPageNeeded, cause: unknown) {
