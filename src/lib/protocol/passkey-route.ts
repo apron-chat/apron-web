@@ -59,6 +59,21 @@ export class PasskeyPageNeeded extends Error {
 	}
 }
 
+/**
+ * A sign-in in this page that used no passkey (`NotAllowedError`: the sheet
+ * was dismissed, or the device had none for the RP ID; the browser doesn't
+ * say which), on a server that also offered its passkey page (§4.10.1). The
+ * page may find a passkey this page's ceremony can't, such as one made for
+ * the server's previous RP ID, so the caller offers it (`needed`) without
+ * opening it: the user may only have said no. `cause` is the browser's error.
+ */
+export class PasskeyPageOffered extends Error {
+	constructor(readonly needed: PasskeyPageNeeded, cause: unknown) {
+		super('No passkey was used.', { cause });
+		this.name = 'PasskeyPageOffered';
+	}
+}
+
 /** What to say when a server's passkeys can't be used here and it offers no passkey page. */
 export function passkeysOnlyFirstParty(name: string): string {
 	return `${name}’s passkeys work only in its own apps and website.`;

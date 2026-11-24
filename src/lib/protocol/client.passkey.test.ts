@@ -3,7 +3,7 @@ import type { ChatClient } from './client';
 import { PASSKEY_IDLE_POLL_MS } from './client-internals';
 import { connect, FakeSocket, settle, startClient } from '$lib/test/client';
 import { requestPasskey, signalPasskeyLabel } from './webauthn';
-import { ForeignRpIdError, PasskeyPageNeeded } from './passkey-route';
+import { ForeignRpIdError, PasskeyPageNeeded, PasskeyPageOffered } from './passkey-route';
 
 vi.mock('./webauthn', () => ({
 	requestPasskey: vi.fn(),
@@ -395,9 +395,16 @@ describe('the passkey page', () => {
 		vi.mocked(requestPasskey).mockRejectedValue(new ForeignRpIdError('not its own'));
 		await expect(begin(client, socket, 'login', { challenge_id: 'c2', public_key: { challenge: 'x', rpId: 'other.example' }, external: page })).resolves.toBeInstanceOf(PasskeyPageNeeded);
 
-		// A dismissed sheet is the user's no: it stays one.
+		// A sign-in that used no passkey (dismissed, or none for the RP ID) is the user's no, and stays one:
+		// the page isn't opened, but offered, since it may find a passkey this page can't.
 		vi.mocked(requestPasskey).mockRejectedValue(new DOMException('Dismissed', 'NotAllowedError'));
-		await expect(begin(client, socket, 'login', { challenge_id: 'c3', public_key: { challenge: 'x' }, external: page })).resolves.toMatchObject({ name: 'NotAllowedError' });
+		const offered = await begin(client, socket, 'login', { challenge_id: 'c3', public_key: { challenge: 'x' }, external: page });
+		expect(offered).toBeInstanceOf(PasskeyPageOffered);
+		expect((offered as PasskeyPageOffered).needed).toMatchObject({ action: 'login', external: page });
+		expect((offered as PasskeyPageOffered).cause).toMatchObject({ name: 'NotAllowedError' });
+		// Without a page, or for a new passkey, it's the browser's error as it was.
+		await expect(begin(client, socket, 'login', { challenge_id: 'c4', public_key: { challenge: 'x' } })).resolves.toMatchObject({ name: 'NotAllowedError' });
+		await expect(begin(client, socket, 'register', { challenge_id: 'c5', public_key: { challenge: 'x' }, external: page })).resolves.toMatchObject({ name: 'NotAllowedError' });
 	});
 
 	it('goes straight to the page when the server sends no public_key, and says where passkeys work without one', async () => {

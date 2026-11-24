@@ -5,7 +5,7 @@ import { writeEmbed } from './embeds';
 import { PROPOSAL_MS, SignInConnection, type RpcFailure } from './signin-connection';
 import { PROPOSAL_KEPT_MS, findProposal, forgetProposal, newProposalState, rememberProposal, type ProposalScheme } from './proposals';
 import { parseExternal, type CodeRedemption, type External } from './external';
-import { PasskeyPageNeeded, passkeyRoute, passkeysOnlyFirstParty, usesPage } from './passkey-route';
+import { PasskeyPageNeeded, PasskeyPageOffered, passkeyRoute, passkeysOnlyFirstParty, usesPage } from './passkey-route';
 import {
 	ProtocolStore,
 	compareLogIds,
@@ -1020,6 +1020,8 @@ export class ChatClient {
 		let stage: PasskeyStage = 'waiting';
 		let begun: PasskeyChallenge | undefined;
 		let credential: JsonObject | undefined;
+		// The server's passkey page, where it offered one besides this page's ceremony.
+		let page: PasskeyPageNeeded | undefined;
 		try {
 			await this.readyToSignIn(controller.signal);
 			// Cancelled, or the connection changed, while it waited.
@@ -1035,6 +1037,7 @@ export class ChatClient {
 			const account = action === 'register' && this.authenticated ? this.you?.user_id : undefined;
 			if (route.kind === 'none') throw new Error(passkeysOnlyFirstParty(this.serverTitle()));
 			if (route.kind === 'page') throw new PasskeyPageNeeded(action, route.external, account);
+			if (route.external) page = new PasskeyPageNeeded(action, route.external, account);
 			begun = { challengeId: route.challengeId, options, publicKey: route.publicKey };
 			stage = 'browser';
 			try {
@@ -1059,6 +1062,8 @@ export class ChatClient {
 				const line = `[apron] passkey ${action} failed during ${stage}: ${error.message}`;
 				(isCancelled(error, stage) ? console.info : console.warn)(line, { stage, error, server: report.server });
 			});
+			// A sign-in that used no passkey here: the server's page may find one, so it's offered, not opened.
+			if (action === 'login' && page && stage === 'browser' && cause instanceof DOMException && cause.name === 'NotAllowedError') throw new PasskeyPageOffered(page, cause);
 			throw cause;
 		} finally {
 			if (this.passkeyStarting === controller) this.passkeyStarting = undefined;

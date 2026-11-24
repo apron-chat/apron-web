@@ -132,4 +132,34 @@ test.describe('a passkey on the server’s passkey page', () => {
 		expect(finish!.challenge_id).toBeUndefined();
 		expect(finish!.credential).toBeUndefined();
 	});
+
+	test('offers the server’s page, without opening it, when a passkey here finds none, and signs in there', async ({ preview, page }) => {
+		const requests: URLSearchParams[] = [];
+		await signInPage(page.context(), requests);
+		// A device with no passkey for the server's RP ID: the browser's sheet closes empty (NotAllowedError),
+		// as it does when the viewer dismisses it.
+		await page.addInitScript(() => {
+			navigator.credentials.get = async () => { throw new DOMException('The operation either timed out or was not allowed.', 'NotAllowedError'); };
+		});
+		const options: MockOptions = { passkey: { user_id: 'grace', name: 'Grace' }, passkeyPageBeside: PASSKEY_PAGE, sent: [] };
+		await preview.openRoot(options);
+		await connectAt(page, preview, 'Passkey');
+		let opened = 0;
+		page.context().on('page', () => opened++);
+		await page.getByTestId('passkey-login').click();
+		const form = page.getByRole('form', { name: 'Sign in' });
+		const offer = form.getByRole('button', { name: 'Use the server’s sign-in page' });
+		await expect(offer).toBeVisible();
+		await expect(form.getByRole('alert')).toContainText('No passkey was used. If you have one for this server, its sign-in page may find it');
+		// Offered, not opened: the empty sheet may only have been a no.
+		expect(opened).toBe(0);
+		expect(requests).toEqual([]);
+		const popup = page.waitForEvent('popup');
+		await offer.click();
+		await (await popup).waitForEvent('close');
+		await expect(form).toHaveCount(0);
+		expect(Object.fromEntries(requests[0])).toMatchObject({ action: 'login', response_type: 'code' });
+		const finish = auths(options).find((params) => params.scheme === 'webauthn' && params.step === 'finish');
+		expect(finish).toMatchObject({ action: 'login', code: 'code_1', client_id: 'apron-web' });
+	});
 });

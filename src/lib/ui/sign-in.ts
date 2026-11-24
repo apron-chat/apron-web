@@ -295,6 +295,13 @@ function primaryAction(input: SignInInput): Exclude<SignInAction, 'continue' | '
 export const CANCELLED_TRY_CREATE = 'Cancelled. No passkey for this server? Choose Create account.';
 
 /**
+ * A sign-in that used no passkey here, on a server that offered its sign-in
+ * page (`PasskeyPageOffered`): the page may find one this page can't, so it's
+ * offered with this, besides Create account for someone new.
+ */
+export const PASSKEY_PAGE_OFFERED = 'No passkey was used. If you have one for this server, its sign-in page may find it; if you’re new, choose Create account.';
+
+/**
  * What the panel says about the chosen scheme. `host` names the server in the form, shown as code (`…`), and
  * `guestName` the Guest choice as the panel shows it (`schemeName`), which may be the server's label.
  */
