@@ -137,8 +137,8 @@ test.describe('a description read and edited where it shows', () => {
 		await expect(page.locator('.ap-roomhead-draft')).toHaveText('Unsaved draft');
 		await page.getByRole('button', { name: 'Save', exact: true }).click();
 		const saved = await preview.waitForSent('room_set', (p) => p.room_id === 'general');
-		// The title unchanged goes back as written (the client resends the record whole).
-		expect(saved.title).toBe('general');
+		// The title, unchanged, is not sent: room_set merges (§4.2.4), so it stays as written.
+		expect(saved).not.toHaveProperty('title');
 		expect(saved.description).toMatch(/Rule 12 Then read the rules\.$/);
 		// Saved, it reads again, as saved.
 		await expect(sheet.getByTestId('sheet-description')).toContainText('Then read the rules.');

@@ -482,9 +482,9 @@ export interface CreateRoomOptions {
 }
 
 /**
- * Changes to a room's client fields. Absent keys keep the latest record's
- * value; `null` clears `title` or `description`. `parent_room_id` and
- * `private` are fixed at creation.
+ * Changes to a room's client fields, which `room_set` merges (§4.2.4). Absent
+ * keys keep the room's value; `null` or `""` clears `title` or `description`.
+ * `parent_room_id` and `private` are fixed at creation.
  */
 export interface RoomPatch {
 	title?: string | null;

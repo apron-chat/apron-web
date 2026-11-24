@@ -2107,25 +2107,27 @@ export class ChatClient {
 	}
 
 	/**
-	 * Updates a room's client fields with `room_set` (§4.2.4) from its latest
-	 * record with the patch applied, resubmitting `title` and `description`:
-	 * omitted fields are cleared, so `null` clears one. `ext` is not
-	 * resubmitted: `room_set` merges it (§4.12), so only the patch's keys go,
-	 * and an empty value clears one, and only to a server with capability
-	 * `ext`. `parent_room_id` and `private` are fixed at creation and never sent.
+	 * Updates a room's client fields with `room_set` (§4.2.4), which merges
+	 * them: only the fields the patch changes are sent, and `null` is sent as
+	 * `""`, which clears one. `ext` merges one level into its keys (§4.12),
+	 * so only the patch's keys go, an empty value clears one, and only to a
+	 * server with capability `ext`. `parent_room_id` and `private` are fixed
+	 * at creation and never sent.
 	 */
 	updateRoom(roomId: string, patch: RoomPatch): OperationHandle<RoomResult> {
-		// Build on the latest submitted update while one is unconfirmed.
+		// The record expected back builds on the latest submitted update while one is unconfirmed.
 		const stored = this.store.room(roomId);
-		const current = this.pendingRoomSaves.get(roomId)?.state ?? (stored ? roomClientFields(stored) : {});
+		const state: JsonObject = { ...(this.pendingRoomSaves.get(roomId)?.state ?? (stored ? roomClientFields(stored) : {})) };
 		const params: JsonObject = { room_id: roomId };
 		for (const key of ['title', 'description'] as const) {
-			const value = patch[key] === undefined ? current[key] : patch[key];
-			if (value !== undefined && value !== null) params[key] = value;
+			const value = patch[key];
+			if (value === undefined) continue;
+			params[key] = value ?? '';
+			if (value) state[key] = value;
+			else delete state[key];
 		}
 		if (patch.ext !== undefined && this.hasCap('ext')) params.ext = patch.ext;
 		const handle = this.enqueueRequest<RoomResult>('room_set', params, { visible: true, allowBeforeAuth: false });
-		const { room_id: _id, ...state } = params;
 		this.trackSave(this.pendingRoomSaves, roomId, handle, state, () => this.store.room(roomId)?.log_id);
 		return handle;
 	}
