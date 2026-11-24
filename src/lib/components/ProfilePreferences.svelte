@@ -60,7 +60,7 @@
 	import { receiptSettings } from '$lib/ui/receipt-settings.svelte';
 	import { impliedOrigins } from '$lib/ui/media-settings.svelte';
 	import { addError, passkeyMessage, wayBackNudge, wayBackWords } from '$lib/ui/connection';
-	import { PasskeyPageNeeded, PasskeyPageOffered } from '$lib/protocol/passkey-route';
+	import { isWebAuthnError, PasskeyPageNeeded, PasskeyPageOffered } from '$lib/protocol/passkey-route';
 	import { openSignInWindow, signInPageError } from '$lib/ui/sign-in-window';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { saveDisplayName } from '$lib/ui/storage';
@@ -305,11 +305,12 @@
 					await client.usePasskey('register', you?.name, { offerPage: true });
 				} catch (cause) {
 					// Saving it here failed, however the browser or a password manager said so: the server's page may work, from the next tap.
-					if (cause instanceof PasskeyPageOffered) {
+					// Not when this device already holds that passkey (\`InvalidStateError\`): the page would find the same.
+					if (cause instanceof PasskeyPageOffered && !isWebAuthnError(cause.cause, 'InvalidStateError')) {
 						passkeyPageOffer = cause.needed;
-						passkeyError = 'Couldn’t save a passkey here.';
 						return;
 					}
+					if (cause instanceof PasskeyPageOffered) throw cause.cause;
 					// This page can't create a passkey for the server's RP ID: its passkey page can.
 					if (!(cause instanceof PasskeyPageNeeded)) throw cause;
 					if (!await passkeyOnServerPage(cause)) return;
@@ -405,6 +406,7 @@
 	async function onServerPage(what: 'external' | 'passkey', work: (signal: AbortSignal) => Promise<void>): Promise<boolean> {
 		passkeyError = '';
 		passkeyNotice = '';
+		passkeyPageOffer = undefined;
 		onPage?.abort.abort();
 		const job = { abort: new AbortController(), what };
 		onPage = job;
@@ -440,6 +442,7 @@
 
 	/** Back to what the server keeps for whoever this session is now: the name and the bio. */
 	function resetDraft(): void {
+		passkeyPageOffer = undefined;
 		draft = you?.name || displayName;
 		openedWith = draft;
 		bioDraft = bioOf(you) ?? '';
@@ -525,7 +528,11 @@
 {/snippet}
 {#snippet signinHint()}
 	{#if passkeyError}
-		<span class="ap-form-hint ap-tone-danger" role="alert">{passkeyError}{#if passkeyPageOffer} <button class="ap-link" type="button" onclick={continueOnPasskeyPage}>Continue on {new URL(passkeyPageOffer.external.url).host} ↗</button>{/if}</span>
+		<span class="ap-form-hint ap-tone-danger" role="alert">{passkeyError}</span>
+	{:else if passkeyPageOffer}
+		<!-- Not an error: the sheet may only have been closed. The server's page may save it where this page couldn't. -->
+		{@const host = new URL(passkeyPageOffer.external.url).host}
+		<span class="ap-form-hint" role="status">Passkey not saved here. <button class="ap-link" type="button" aria-label={`Continue on ${host}, on the server’s sign-in page`} onclick={continueOnPasskeyPage}>Continue on {host} ↗</button></span>
 	{:else if passkeyNotice}
 		<span class="ap-form-hint ap-tone-ok" role="status">{passkeyNotice}</span>
 	{:else if passkeyUnavailable && canUsePasskey && !canUseEmail && !canUseExternal}

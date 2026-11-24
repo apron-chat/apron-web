@@ -1074,8 +1074,9 @@ export class ChatClient {
 			// empty sheet, or any other error), or the server refused the passkey a sign-in gave: the
 			// server's page may work, so it's offered, not opened. Not when this page gave the ceremony up
 			// itself (Cancel, or the connection changed), nor when the server only asked to wait.
-			const refused = action === 'login' && typeof (cause as { code?: unknown } | undefined)?.code === 'number' && !(cause instanceof RateLimitError);
-			if (choices.offerPage && page && (stage === 'browser' ? !controller.signal.aborted : stage === 'finish' && refused)) throw new PasskeyPageOffered(page, cause);
+			// Refused is `denied` (§1.1): not a malformed request, the server's own failure, or a wait (`RateLimitError`).
+			const refused = action === 'login' && (cause as { code?: unknown } | undefined)?.code === -32001 && !(cause instanceof RateLimitError);
+			if (choices.offerPage && page && !controller.signal.aborted && (stage === 'browser' || (stage === 'finish' && refused))) throw new PasskeyPageOffered(page, cause);
 			throw cause;
 		} finally {
 			if (this.passkeyStarting === controller) this.passkeyStarting = undefined;

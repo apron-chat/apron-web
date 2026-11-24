@@ -301,11 +301,31 @@ test.describe('a passkey on the server’s passkey page', () => {
 		await page.getByRole('button', { name: /^Open preferences/ }).click();
 		const preferences = page.getByRole('dialog', { name: 'Preferences' });
 		await preferences.getByRole('group', { name: 'Add a way to sign in' }).getByRole('button', { name: /Passkey/ }).click();
-		await expect(preferences.getByRole('alert')).toContainText('Couldn’t save a passkey here.');
+		// Not an error: the sheet may only have been closed.
+		await expect(preferences.getByRole('alert')).toHaveCount(0);
+		await expect(preferences.getByRole('status')).toContainText('Passkey not saved here.');
 		const popup = page.waitForEvent('popup');
-		await preferences.getByRole('button', { name: 'Continue on sso.test ↗' }).click();
+		await preferences.getByRole('button', { name: 'Continue on sso.test, on the server’s sign-in page' }).click();
 		await (await popup).waitForEvent('close');
 		await expect(preferences.getByRole('status')).toContainText('Passkey saved.');
+	});
+
+	test('a remembered page that doesn’t work is forgotten: the next tap asks the device again', async ({ preview, page }) => {
+		// The server's page declines (access_denied).
+		await signInPage(page.context(), [], true);
+		await emptySheet(page);
+		await preview.openRoot({ passkey: { user_id: 'grace', name: 'Grace' }, passkeyPageBeside: PASSKEY_PAGE, sent: [] });
+		await connectAt(page, preview, 'Passkey');
+		const server = (await page.getByTestId('connect-server').locator('.ap-connect-address').textContent())!;
+		await page.evaluate((url) => localStorage.setItem('apron.passkeyOnPage', JSON.stringify({ [new URL(url).href]: Date.now() })), server);
+		const submit = page.getByTestId('passkey-login');
+		const popup = page.waitForEvent('popup');
+		await submit.click();
+		await (await popup).waitForEvent('close');
+		await expect(page.getByRole('form', { name: 'Sign in' }).getByRole('alert')).toBeVisible();
+		expect(await page.evaluate(() => localStorage.getItem('apron.passkeyOnPage'))).toBe('{}');
+		await submit.click();
+		await expect.poll(() => sheets(page)).toBe(1);
 	});
 
 	test('Change lets the offer go', async ({ preview, page }) => {

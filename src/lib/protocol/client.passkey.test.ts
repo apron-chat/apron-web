@@ -474,6 +474,9 @@ describe('the passkey page', () => {
 		// Not without asking, nor for a new passkey, nor for a limit.
 		expect(await finishWith({ code: -32001, message: 'Unknown passkey' }, {})).not.toBeInstanceOf(PasskeyPageOffered);
 		expect(await finishWith({ code: -32001, message: 'Refused' }, { offerPage: true }, 'register')).not.toBeInstanceOf(PasskeyPageOffered);
+		// Nor for a malformed request, nor the server's own failure: those aren't about the passkey.
+		expect(await finishWith({ code: -32602, message: 'Invalid params' })).not.toBeInstanceOf(PasskeyPageOffered);
+		expect(await finishWith({ code: -32603, message: 'Internal error' })).not.toBeInstanceOf(PasskeyPageOffered);
 		expect(await finishWith({ code: -32002, message: 'Slow down', data: { retry_after: 5 } })).not.toBeInstanceOf(PasskeyPageOffered);
 	});
 
