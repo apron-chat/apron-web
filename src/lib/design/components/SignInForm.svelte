@@ -28,8 +28,6 @@
 		names?: Record<string, string>;
 		/** Shows the chosen scheme's fields; off before the server has said which schemes it offers, when the card is its address alone. */
 		fields?: boolean;
-		/** The scheme last used to sign in to this server on this device: marked among the schemes as Last used. */
-		lastUsed?: string;
 		/** The scheme shown; its fields follow (Token a token, Email an address). */
 		scheme: string;
 		onscheme?: (scheme: string) => void;
@@ -77,7 +75,7 @@
 		class?: ClassValue;
 	}
 	let {
-		header, schemes, names, fields = true, lastUsed, scheme, onscheme, passkeyChoice = false, passkeyMode = 'login', onpasskeymode, passkeyNudge, token = $bindable(''), email = $bindable(''), code = $bindable(''), name = $bindable(''),
+		header, schemes, names, fields = true, scheme, onscheme, passkeyChoice = false, passkeyMode = 'login', onpasskeymode, passkeyNudge, token = $bindable(''), email = $bindable(''), code = $bindable(''), name = $bindable(''),
 		askName = true, sent, onrestart, hint, hintTone, error, busy = false, submit, submitElsewhere, secondary,
 		submitTestid, tokenTestid, emailTestid, codeTestid, nameTestid, passkeyChoiceTestid, onsubmit, label, phase, class: className
 	}: Props = $props();
@@ -89,13 +87,10 @@
 <form aria-label={label} data-phase={phase} class={['ap-connect-card', className]} {onsubmit}>
 	{@render header?.()}
 	{#if fields && schemes.length > 1}
-		<div class="ap-fieldlabel">
-			<span>Sign in with{#if lastUsed && schemes.includes(lastUsed)}{' '}<span class="ap-fieldlabel-hint">· last used: {nameOf(lastUsed)}</span>{/if}</span>
-			<div class="ap-seg ap-seg-names" role="radiogroup" aria-label="Sign in with" {@attach segFit(JSON.parse(shownNames))}>
-				{#each schemes as candidate (candidate)}
-					<button class="ap-seg-item" class:ap-seg-on={scheme === candidate} type="button" role="radio" aria-checked={scheme === candidate} disabled={busy} onclick={() => onscheme?.(candidate)}>{nameOf(candidate)}</button>
-				{/each}
-			</div>
+		<div class="ap-seg ap-seg-names" role="radiogroup" aria-label="Sign in with" {@attach segFit(JSON.parse(shownNames))}>
+			{#each schemes as candidate (candidate)}
+				<button class="ap-seg-item" class:ap-seg-on={scheme === candidate} type="button" role="radio" aria-checked={scheme === candidate} disabled={busy} onclick={() => onscheme?.(candidate)}>{nameOf(candidate)}</button>
+			{/each}
 		</div>
 	{/if}
 	{#if fields}

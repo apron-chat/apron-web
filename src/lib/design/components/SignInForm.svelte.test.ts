@@ -37,10 +37,9 @@ describe('SignInForm', () => {
 	});
 
 	it('calls each scheme by the name given (a server’s label, §3.2), as text, and the Token field by the token’s', () => {
-		render({ schemes: ['guest', 'external', 'token'], scheme: 'token', lastUsed: 'external', askName: false, names: { external: '<b>Acme</b> SSO', token: 'Invite code' } });
+		render({ schemes: ['guest', 'external', 'token'], scheme: 'token', askName: false, names: { external: '<b>Acme</b> SSO', token: 'Invite code' } });
 		expect([...document.querySelectorAll('[role="radio"]')].map((tab) => tab.textContent)).toEqual(['Guest', '<b>Acme</b> SSO', 'Invite code']);
 		expect(document.querySelector('b')).toBeNull();
-		expect(document.querySelector('.ap-fieldlabel-hint')?.textContent).toBe('· last used: <b>Acme</b> SSO');
 		expect(fields()).toEqual(['Invite code']);
 	});
 

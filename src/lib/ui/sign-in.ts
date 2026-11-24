@@ -38,6 +38,8 @@ export interface ConnectStep {
 	server?: ServerParams;
 	address: string;
 	onchange?: () => void;
+	/** Signed in to this server on this device before: its welcome can start folded. */
+	returning?: boolean;
 }
 
 /** On Passkey: sign in to an account with a saved passkey, or create one with a new passkey. */
