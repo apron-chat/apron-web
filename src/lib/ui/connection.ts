@@ -1,5 +1,6 @@
 import type { ClientSnapshot } from '$lib/protocol/client';
 import type { ServerParams } from '$lib/protocol/types';
+import { isWebAuthnError } from '$lib/protocol/webauthn-error';
 import { retryAfterLabel } from '$lib/words';
 
 export type ConnectionState = 'connected' | 'connecting' | 'reconnecting' | 'offline';
@@ -134,7 +135,7 @@ export function serverLabel(value: string): string {
 
 /** The user-facing reading of a WebAuthn failure. */
 export function passkeyMessage(cause: unknown): string {
-	return cause instanceof DOMException && cause.name === 'NotAllowedError'
+	return isWebAuthnError(cause, 'NotAllowedError')
 		? 'Cancelled.'
 		: cause instanceof Error ? cause.message : 'Unable to use passkey';
 }

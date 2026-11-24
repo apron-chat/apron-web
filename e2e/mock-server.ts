@@ -39,6 +39,8 @@ export type MockOptions = {
 	sentTo?: { url: string; frame: Record<string, any> }[];
 	/** General's history, oldest first, each message's `log_id` its `message_id` (§3.5); none by default. */
 	history?: Record<string, unknown>[];
+	/** Each `room_list` answer is handed here instead of being sent, for the test to send when it likes: a server slow to list its rooms. */
+	holdRoomList?: (send: () => void) => void;
 	/** Set by `mockServer` once the page connects: sends the page a frame, such as a live `message`. */
 	deliver?: (frame: Record<string, unknown>) => void;
 };
@@ -86,7 +88,14 @@ export async function mockServer(page: Page, options: MockOptions = {}): Promise
 					}
 					if (options.passkey && frame.params?.scheme === 'webauthn') {
 						// Nothing is verified: `begin` gives a challenge for this server's host, and `finish` signs in as the account.
-						if (frame.params.step === 'begin') return reply({ challenge_id: 'challenge_1', public_key: { challenge: 'AAAA', rpId: new URL(ws.url()).hostname }, ...(options.passkeyPageBeside ? { external: { url: options.passkeyPageBeside } } : {}) });
+						if (frame.params.step === 'begin') {
+							const host = new URL(ws.url()).hostname;
+							// A new passkey's options carry their RP ID in `rp`, as a sign-in's do in `rpId`.
+							const publicKey = frame.params.action === 'register'
+								? { challenge: 'AAAA', rp: { id: host, name: 'Mock Chat' }, user: { id: 'dXNlcl9oYW5kbGU', name: 'grace', displayName: 'Grace' }, pubKeyCredParams: [{ type: 'public-key', alg: -7 }] }
+								: { challenge: 'AAAA', rpId: host };
+							return reply({ challenge_id: 'challenge_1', public_key: publicKey, ...(options.passkeyPageBeside ? { external: { url: options.passkeyPageBeside } } : {}) });
+						}
 						you = { status: 'online', ...options.passkey };
 						return reply({ you });
 					}
@@ -100,7 +109,10 @@ export async function mockServer(page: Page, options: MockOptions = {}): Promise
 					you = { ...you, ...(typeof frame.params?.name === 'string' ? { name: frame.params.name } : {}) };
 					return reply({ you });
 				}
-				case 'room_list': return reply({ joined: [general], users: [you, ada, bob] });
+				case 'room_list': {
+					const send = () => reply({ joined: [general], users: [you, ada, bob] });
+					return options.holdRoomList ? options.holdRoomList(send) : send();
+				}
 				// Idle reports (§4.5.3): taken, and kept nowhere.
 				case 'status': return reply({});
 				case 'history': return reply({ messages: frame.params?.room_id === 'general' ? history : [], more: false, latest_log_id: latest, history_log_id: oldest });

@@ -303,8 +303,8 @@ export const CANCELLED_TRY_CREATE = 'Cancelled. No passkey for this server? Choo
  * The browser doesn't say whether it found none or the viewer closed it, so
  * the hint claims neither.
  */
-export function tryPasskeyOn(host: string): string {
-	return `Didn’t find your passkey? Try on \`${host}\``;
+export function tryPasskeyOn(host: string, action: 'login' | 'register' = 'login'): string {
+	return action === 'login' ? `Didn’t find your passkey? Try on \`${host}\`` : `Couldn’t save a passkey here? Try on \`${host}\``;
 }
 
 /**

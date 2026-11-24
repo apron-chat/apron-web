@@ -212,6 +212,47 @@ test.describe('a passkey on the server’s passkey page', () => {
 		await expect(page.getByRole('form', { name: 'Sign in' }).getByRole('alert')).toHaveCount(0);
 	});
 
+	test('a password manager’s errors continue on the server’s page too, whatever their kind', async ({ preview, page }) => {
+		await signInPage(page.context(), []);
+		// As Bitwarden's extension throws them: a plain Error, named as a DOMException would be, or not at all.
+		await page.addInitScript(() => {
+			let calls = 0;
+			navigator.credentials.get = async () => { throw ++calls === 1 ? new Error('Something went wrong.') : Object.assign(new Error("'rp.id' cannot be used with the current origin"), { name: 'SecurityError' }); };
+		});
+		const options: MockOptions = { passkey: { user_id: 'grace', name: 'Grace' }, passkeyPageBeside: PASSKEY_PAGE, sent: [] };
+		await preview.openRoot(options);
+		await connectAt(page, preview, 'Passkey');
+		const submit = page.getByTestId('passkey-login');
+		const form = page.getByRole('form', { name: 'Sign in' });
+		// Some other error: offered, from the same button.
+		await submit.click();
+		await expect(submit).toHaveText('Continue on sso.test ↗');
+		await expect(form.getByRole('alert')).toHaveCount(0);
+		await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+		// The RP ID refused: straight to the page, as when the browser refuses it.
+		const popup = page.waitForEvent('popup');
+		await submit.click();
+		await (await popup).waitForEvent('close');
+		await expect(form).toHaveCount(0);
+	});
+
+	test('a new passkey that can’t be saved here is offered on the server’s page', async ({ preview, page }) => {
+		await signInPage(page.context(), []);
+		await page.addInitScript(() => {
+			navigator.credentials.create = async () => { throw new DOMException('The operation either timed out or was not allowed.', 'NotAllowedError'); };
+		});
+		await preview.openRoot({ passkey: { user_id: 'grace', name: 'Grace' }, passkeyPageBeside: PASSKEY_PAGE, sent: [] });
+		await connectAt(page, preview, 'Passkey');
+		const form = page.getByRole('form', { name: 'Sign in' });
+		await page.getByTestId('passkey-choice-register').click();
+		const submit = page.getByTestId('passkey-register');
+		await submit.click();
+		await expect(submit).toHaveText('Continue on sso.test ↗');
+		await expect(form.getByRole('status')).toHaveText('Couldn’t save a passkey here? Try on sso.test');
+		// Already on Create account: nothing nudges toward it.
+		await expect(page.locator('.ap-choice-nudge')).toHaveCount(0);
+	});
+
 	test('Change lets the offer go', async ({ preview, page }) => {
 		await signInPage(page.context(), []);
 		await emptySheet(page);

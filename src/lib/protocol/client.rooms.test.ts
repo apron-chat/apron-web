@@ -569,7 +569,8 @@ describe('room records and membership', () => {
 	it('shows a room description and updates it by room_set, as /topic does', async () => {
 		expect(room('general')?.description).toBe('Ops *chatter*');
 		quiet(client.updateRoom('general', { description: 'Deploys only' }));
-		expect(socket.request('room_set').params).toEqual({ room_id: 'general', title: 'General', description: 'Deploys only' });
+		// room_set merges (§4.2.4): only the changed field goes.
+		expect(socket.request('room_set').params).toEqual({ room_id: 'general', description: 'Deploys only' });
 		socket.receive({ method: 'room_update', params: { updated: [{ room_id: 'general', log_id: '11', title: 'General', description: 'Deploys only' }] } });
 		expect(room('general')?.description).toBe('Deploys only');
 		// An empty description is none.
@@ -586,9 +587,9 @@ describe('room records and membership', () => {
 		quiet(client.createRoom({ title: 'Oops', private: true }));
 		socket.receive({ method: 'room_update', params: { joined: [{ room_id: 's2', log_id: '21', title: 'Oops' }] } });
 		expect(room('s2')?.private).toBeUndefined();
-		// Updates never send `private`: omitted, it is kept (§4.2.4).
+		// Updates never send `private`, nor any other field they leave as it is: omitted, it is kept (§4.2.4).
 		quiet(client.updateRoom('s1', { title: 'Secret 2' }));
-		expect(socket.request('room_set').params).toEqual({ room_id: 's1', title: 'Secret 2', description: 'Just us' });
+		expect(socket.request('room_set').params).toEqual({ room_id: 's1', title: 'Secret 2' });
 		// A thread is created without it, and takes its parent's.
 		quiet(client.createRoom({ parentRoomId: 's1', title: 'Plans' }));
 		expect(socket.request('room_set').params).toEqual({ parent_room_id: 's1', title: 'Plans' });

@@ -1,5 +1,6 @@
 import { DEVICES, expect, test, type Preview } from './fixtures';
-import type { MockOptions } from './mock-server';
+import { mockServer, type MockOptions } from './mock-server';
+import { NOW } from '../scripts/qa/lib/helpers.js';
 
 /** Deep links and the browser's Back and Forward (`src/lib/ui/address.ts`, the page's history entries). */
 
@@ -36,6 +37,21 @@ test.describe('deep links', () => {
 		await page.evaluate(() => (location.hash = 'room=general'));
 		await at(preview, 'general', /#room=general$/);
 		expect(await page.evaluate(() => (window as unknown as { stayed?: boolean }).stayed)).toBe(true);
+	});
+
+	test('a reload whose server is slow to list the rooms opens the room once they are, saying nothing of it', async ({ preview, page }) => {
+		// Only the time after the rooms are listed counts against the link, not connecting and signing in.
+		await page.clock.install({ time: NOW });
+		let listed: (() => void) | undefined;
+		await mockServer(page, { holdRoomList: (send) => (listed = send) });
+		await page.goto(`${process.env.E2E_URL}/#room=general`);
+		await expect.poll(() => listed).toBeDefined();
+		await page.clock.runFor(31_000);
+		listed!();
+		await expect(preview.heading()).toHaveText('General');
+		await expect(page).toHaveURL(/#room=general$/);
+		await page.clock.runFor(31_000);
+		await expect(page.getByText('The linked room isn’t available here.')).toHaveCount(0);
 	});
 
 	test('a link to a message that is not there says so', async ({ preview, page }) => {
