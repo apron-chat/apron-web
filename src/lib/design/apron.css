@@ -1550,6 +1550,16 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-welcome p + p, .ap-welcome ul, .ap-welcome ol { margin-top: var(--space-1); }
 .ap-welcome ul, .ap-welcome ol { margin-bottom: 0; }
 .ap-welcome :is(ul, ol):not(.ap-task-list) { padding-inline-start: var(--space-6); }
+/* Folded for someone who has signed in here before: its first two lines, fading out, and More. */
+.ap-welcome-folded { display: flex; align-items: flex-end; gap: var(--space-2); }
+.ap-welcome-folded .ap-welcome-body { flex: 1; min-width: 0; max-height: calc(2 * var(--leading-ui)); overflow: hidden; mask-image: linear-gradient(to bottom, #000 50%, transparent); }
+.ap-welcome-more { flex: none; font-size: var(--text-ui); }
+/* The other passkey path, under the submit. */
+.ap-connect-switch { margin: 0; text-align: center; font-size: var(--text-ui); color: var(--ink-muted); }
+.ap-connect-switch-nudge { position: relative; }
+.ap-connect-switch-nudge::after { content: ''; position: absolute; top: -2px; inset-inline-end: -8px; width: 6px; height: 6px; border-radius: var(--radius-full); background: var(--danger); }
+/* The scheme last used here: a dot on its tab. */
+.ap-seg-last { display: inline-block; width: 6px; height: 6px; margin-inline-start: var(--space-1_5); vertical-align: middle; border-radius: var(--radius-full); background: var(--accent); }
 .ap-connect-actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); margin-top: var(--space-1); }
 .ap-connect-actions .ap-btn { border-radius: var(--radius-sm); }
 .ap-connect-other { align-self: flex-start; font-size: var(--text-ui); }
@@ -1600,6 +1610,12 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-connect-recent-starred svg { fill: currentColor; }
 .ap-connect-recent-item { font: inherit; display: flex; align-items: center; gap: var(--space-3); padding: var(--space-1) var(--space-2); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--ink); text-align: start; cursor: pointer; }
 .ap-connect-recent-item:hover { background: var(--hover); }
+.ap-connect-recent-more { align-self: flex-start; margin-inline-start: var(--space-2); font-size: var(--text-ui); }
+/* With a pointer, a row's star and × show while it is hovered or focused (and a star once set). */
+@media (hover: hover) {
+	.ap-connect-recent-row > .ap-iconbtn:not(.ap-connect-recent-starred) { opacity: 0; }
+	.ap-connect-recent-row:is(:hover, :focus-within) > .ap-iconbtn { opacity: 1; }
+}
 .ap-connect-tile { width: var(--control-lg); height: var(--control-lg); font-size: var(--text-sm); border-radius: var(--radius-md); background: var(--bg-200); flex: none; }
 /* The server in the field: its name and avatar, which any server can copy, always above its address, which it can't. */
 .ap-connect-server { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }

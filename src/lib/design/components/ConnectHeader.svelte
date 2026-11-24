@@ -8,6 +8,8 @@
 		url?: string;
 		/** `server.welcome` (§3.2): its Markdown, rendered and sanitized by you, shown above the Server field. Each `server` frame replaces it. */
 		welcome?: Snippet;
+		/** Starts the welcome folded to its first lines, with More: for someone who has signed in here before. */
+		welcomeFolded?: boolean;
 		/** Something is under way: the Server field waits. */
 		busy?: boolean;
 		/** `data-testid` on the Server field. */
@@ -28,7 +30,9 @@
 		/** Something to know before signing in that stops nothing, such as another protocol version (§3.1): a bold title, then the text. */
 		warning?: { title: string; text: string };
 	}
-	let { url = $bindable(''), welcome, busy = false, urlTestid, server, description, serverTestid, onchange, linked, warning }: Props = $props();
+	let { url = $bindable(''), welcome, welcomeFolded = false, busy = false, urlTestid, server, description, serverTestid, onchange, linked, warning }: Props = $props();
+	let unfolded = $state(false);
+	const folded = $derived(welcomeFolded && !unfolded);
 </script>
 
 <!--
@@ -36,7 +40,7 @@
 	It has no root of its own: its parts are the card's first rows.
 -->
 <h1 class="ap-connect-title">Apron</h1>
-<p class="ap-connect-tag">Connect to a server</p>
+{#if !server}<p class="ap-connect-tag">Connect to a server</p>{/if}
 {#if server}
 	<div class="ap-connect-server" data-testid={serverTestid}>
 		{#if server.avatar}<img class="ap-rail-tile ap-connect-tile" src={server.avatar} alt="" />{:else}<span class="ap-rail-tile ap-connect-tile" aria-hidden="true">{initials(server.name)}</span>{/if}
@@ -49,7 +53,12 @@
 	{#if description}<div class="ap-connect-server-desc ap-msg-text">{@render description()}</div>{/if}
 {/if}
 {#if warning}<p class="ap-connect-warn"><strong>{warning.title}</strong> {warning.text}</p>{/if}
-{#if welcome}<div class="ap-welcome ap-msg-text">{@render welcome()}</div>{/if}
+{#if welcome}
+	<div class={['ap-welcome', folded && 'ap-welcome-folded']}>
+		<div class="ap-welcome-body ap-msg-text">{@render welcome()}</div>
+		{#if folded}<button class="ap-link ap-welcome-more" type="button" onclick={() => (unfolded = true)}>More</button>{/if}
+	</div>
+{/if}
 {#if linked && !server}<p class="ap-connect-intent">A link opened this page to <strong>{linked}</strong> on this server.</p>{/if}
 {#if !(server && onchange)}
 	<label class="ap-fieldlabel">Server

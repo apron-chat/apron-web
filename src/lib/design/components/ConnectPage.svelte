@@ -26,6 +26,8 @@
 		/** Classes for the page, added to its own. */
 		class?: ClassValue;
 	}
+	const FEW = 4;
+	let all = $state(false);
 	let { children, recent, onpickrecent, onstarrecent, onforgetrecent, busy = false, page = false, class: className }: Props = $props();
 </script>
 
@@ -35,7 +37,7 @@
 	{#if recent && recent.length > 0}
 		<div class="ap-connect-recent" role="group" aria-label="Recent servers">
 			<span class="ap-fieldlabel">Recent</span>
-			{#each recent as r (r.url)}
+			{#each all ? recent : recent.slice(0, FEW) as r (r.url)}
 				{@const name = r.label || r.url}
 				<div class="ap-connect-recent-row">
 					<button class="ap-connect-recent-item" type="button" disabled={busy} onclick={() => onpickrecent?.(r)}>
@@ -53,6 +55,7 @@
 					{/if}
 				</div>
 			{/each}
+			{#if !all && recent.length > FEW}<button class="ap-link ap-connect-recent-more" type="button" onclick={() => (all = true)}>Show {recent.length - FEW} more</button>{/if}
 		</div>
 	{/if}
 </div>
