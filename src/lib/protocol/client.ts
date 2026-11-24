@@ -2163,20 +2163,23 @@ export class ChatClient {
 	/**
 	 * Reports typing in a room as an `activity` notification (capability `activity`,
 	 * §4.6): `typing` seconds while active, `0` to stop. Sends nothing
-	 * to a server without the capability.
+	 * to a server without the capability. Servers limit these per user, stops
+	 * included, so a stop goes only while the last one sent may still show.
 	 */
 	sendTyping(room: string, active: boolean): void {
 		if (room === DEFAULT_ROOM_ID || !this.authenticated || !this.hasCap('activity') || !this.socket || this.socket.readyState !== WebSocket.OPEN) return;
 		const previous = this.sentTypingAt.get(room);
 		const now = Date.now();
 		// Refresh well inside the advertised lifetime, not on every keypress.
-		// Repeated inactive events do not need another notification either.
+		// Repeated inactive events do not need another notification either,
+		// nor does one after the indicator ran out by itself.
 		if (active) {
 			if (previous !== undefined && now - previous < TYPING_REFRESH_MS) return;
 			this.sentTypingAt.set(room, now);
 		} else {
 			if (previous === undefined) return;
 			this.sentTypingAt.delete(room);
+			if (now - previous >= TYPING_TIMEOUT_S * 1000) return;
 		}
 		this.sendFrame({ method: 'activity', params: { room_id: room, typing: active ? TYPING_TIMEOUT_S : 0 } });
 	}
