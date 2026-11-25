@@ -227,7 +227,7 @@ describe('finishing', () => {
 		expect(url.searchParams.has('rp_id_last')).toBe(false);
 	});
 
-	it('tells a login’s passkey page the account last signed in here and the RP ID to try last (§4.10.1)', async () => {
+	it('tells a login’s passkey page the account last signed in here and the RP ID to try last', async () => {
 		const kept = new Map([['apron.lastAccount', JSON.stringify({ 'wss://chat.example/': 'grace' })]]);
 		vi.stubGlobal('localStorage', memoryStorage(kept));
 		const assign = vi.fn();

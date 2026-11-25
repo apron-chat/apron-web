@@ -66,7 +66,7 @@ export function usesPage(cause: unknown): boolean {
  * account a registration adds the passkey to, whose connection alone takes
  * that code. `rpIdLast` is the RP ID of a login ceremony in this page that
  * just ended without a credential, which the page is told (`rp_id_last`,
- * §4.10.1) so it can ask for that RP ID last.
+ * a hint, not in the protocol: `AuthorizationHints`) so it can ask for that RP ID last.
  */
 export class PasskeyPageNeeded extends Error {
 	constructor(readonly action: 'register' | 'login', readonly external: External, readonly account?: string, readonly rpIdLast?: string) {

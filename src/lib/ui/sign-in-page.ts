@@ -264,7 +264,7 @@ export async function passkeyOnPage(
 }
 
 /**
- * The hints a login on `server`'s passkey page goes with (§4.10.1), if any:
+ * The hints a login on `server`'s passkey page goes with (`AuthorizationHints`), if any:
  * `login_hint`, the account last signed in to it on this device (as noted
  * when a session there was ready, else the one whose session is saved
  * there); and `rp_id_last`, the RP ID that a ceremony in this page just

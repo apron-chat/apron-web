@@ -73,7 +73,10 @@ export async function codeChallenge(verifier: string): Promise<string> {
 }
 
 /**
- * Optional hints for a passkey page (§4.10.1), which a server may use to
+ * Optional hints for a passkey page (§4.10.1), not in the protocol: a
+ * convention with Apron's own server (apron-server-cloudflare), whose page
+ * accepts passkeys for two RP IDs. OAuth servers ignore parameters they
+ * don't know, so other servers ignore them. A server may use them to
  * order the RP IDs it asks for, and may ignore: `login_hint`, the `user_id`
  * of the account last signed in to the server on this device, for a login;
  * and `rp_id_last`, the RP ID of a login ceremony in this page that just

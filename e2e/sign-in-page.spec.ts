@@ -178,7 +178,7 @@ test.describe('a passkey on the server’s passkey page', () => {
 	}
 	const sheets = (page: Page) => page.evaluate(() => (window as unknown as { sheets: number }).sheets);
 
-	test('tells the server’s page to try last the RP ID a sign-in here tried, and the account last signed in here, as hints (§4.10.1)', async ({ preview, page }) => {
+	test('tells the server’s page to try last the RP ID a sign-in here tried, and the account last signed in here, as hints', async ({ preview, page }) => {
 		const requests: URLSearchParams[] = [];
 		await signInPage(page.context(), requests);
 		await emptySheet(page);
@@ -381,3 +381,25 @@ test.describe('a passkey on the server’s passkey page', () => {
 		await expect(submit).not.toHaveClass(/ap-btn-elsewhere/);
 	});
 });
+
+test.describe('the account last signed in here, for the server’s passkey page', () => {
+	test.use(DEVICES.desktop);
+	const last = (page: Page) => page.evaluate(() => localStorage.getItem('apron.lastAccount'));
+
+	test('is noted for a signed-in account, not for a guest', async ({ preview, page }) => {
+		await preview.openRoot({});
+		await expect(page.getByTestId('connection-status')).toHaveText('Connected');
+		expect(await last(page)).toBeNull();
+		await preview.openRoot({ token: 'account-session', you: { user_id: 'lovelace', name: 'Ada' } });
+		await expect.poll(() => last(page)).toContain('lovelace');
+	});
+
+	test('is never noted while local history isn’t kept', async ({ preview, page }) => {
+		await page.addInitScript(() => { localStorage.setItem('apron.historyRetention', 'off'); });
+		await preview.openRoot({ token: 'account-session', you: { user_id: 'lovelace', name: 'Ada' } });
+		await expect(page.getByTestId('connection-status')).toHaveText('Connected');
+		await page.waitForTimeout(200);
+		expect(await last(page)).toBeNull();
+	});
+});
+

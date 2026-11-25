@@ -444,7 +444,7 @@ describe('the passkey page', () => {
 		expect(await pending).not.toBeInstanceOf(PasskeyPageOffered);
 	});
 
-	it('tells the page to try last the RP ID a sign-in here tried without a credential, and nothing for a new passkey (§4.10.1)', async () => {
+	it('tells the page to try last the RP ID a sign-in here tried without a credential, and nothing for a new passkey', async () => {
 		const { client, socket } = await connected();
 		vi.mocked(requestPasskey).mockRejectedValue(new DOMException('Dismissed', 'NotAllowedError'));
 		// The RP ID its options asked for.
@@ -461,6 +461,13 @@ describe('the passkey page', () => {
 		vi.mocked(requestPasskey).mockRejectedValue(new DOMException('The RP ID is not valid for this origin', 'SecurityError'));
 		expect(await begin(client, socket, 'login', { challenge_id: 'c4', public_key: { challenge: 'x', rpId: 'fake.test' }, external: page }, { offerPage: true })).toMatchObject({ rpIdLast: undefined });
 		expect(await begin(client, socket, 'login', { challenge_id: 'c5', public_key: { challenge: 'x', rpId: 'fake.test' }, external: page }, { offerPage: true, preferPage: true })).toMatchObject({ rpIdLast: undefined });
+		// Nor where the device was never asked: a failure before the sheet, or a password manager's own error.
+		for (const failure of [new Error('This browser doesn’t support passkeys'), new TypeError('bad options'), Object.assign(new Error('Something went wrong.'), { name: 'Error' })]) {
+			vi.mocked(requestPasskey).mockRejectedValue(failure);
+			const unasked = await begin(client, socket, 'login', { challenge_id: 'c6', public_key: { challenge: 'x', rpId: 'fake.test' }, external: page }, { offerPage: true });
+			expect(unasked).toBeInstanceOf(PasskeyPageOffered);
+			expect((unasked as PasskeyPageOffered).needed.rpIdLast).toBeUndefined();
+		}
 	});
 
 	it('goes to the page at once where it worked before, without asking the device', async () => {

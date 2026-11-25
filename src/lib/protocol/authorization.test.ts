@@ -47,7 +47,7 @@ describe('authorization requests', () => {
 		expect(replaced.getAll('resource')).toEqual(['https://chat.example']);
 	});
 
-	it('adds the passkey page’s hints that are known, and none that aren’t (§4.10.1)', () => {
+	it('adds the passkey page’s hints that are known, and none that aren’t', () => {
 		const hinted = new URL(authorizationUrl('https://chat.example/passkey?action=login', { client, state: 's', challenge: 'c', resource: 'https://chat.example', hints: { login_hint: 'ada', rp_id_last: 'chat.example' } }).url).searchParams;
 		expect(hinted.get('login_hint')).toBe('ada');
 		expect(hinted.get('rp_id_last')).toBe('chat.example');

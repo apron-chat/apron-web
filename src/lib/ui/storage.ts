@@ -56,8 +56,9 @@ const KEY = {
 	lastSignIn: 'apron.lastSignIn',
 	/**
 	 * The account (`user_id`) a session last signed in as on each server on this device, by its address: told to the
-	 * server's passkey page as `login_hint` (§4.10.1), so it can ask for that account's passkey first. Kept through
-	 * signing out, and forgotten with the account's history (`HistoryKeeper.forget`).
+	 * server's passkey page as `login_hint` (a hint, not in the protocol: `AuthorizationHints`), so it can ask for that
+	 * account's passkey first. Kept through signing out, and forgotten with the account's history
+	 * (`HistoryKeeper.forget`); never written while local history isn't kept (Retention: Don't keep).
 	 */
 	lastAccount: 'apron.lastAccount',
 	/** The terminal embeds closed on this device (`closedTerminals`), by `terminalKey`, closed longest ago first. Deleted with the history of the accounts they were closed by. */

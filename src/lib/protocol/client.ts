@@ -6,6 +6,7 @@ import { PROPOSAL_MS, SignInConnection, type RpcFailure } from './signin-connect
 import { PROPOSAL_KEPT_MS, findProposal, forgetProposal, newProposalState, rememberProposal, type ProposalScheme } from './proposals';
 import { parseExternal, type CodeRedemption, type External } from './external';
 import { ceremonyRpId, PasskeyPageNeeded, PasskeyPageOffered, passkeyRoute, passkeysOnlyFirstParty, usesPage } from './passkey-route';
+import { isWebAuthnError } from './webauthn-error';
 import {
 	ProtocolStore,
 	compareLogIds,
@@ -1078,9 +1079,12 @@ export class ChatClient {
 			// Refused is `denied` (§1.1): not a malformed request, the server's own failure, or a wait (`RateLimitError`).
 			const refused = action === 'login' && (cause as { code?: unknown } | undefined)?.code === -32001 && !(cause instanceof RateLimitError);
 			if (choices.offerPage && page && !controller.signal.aborted && (stage === 'browser' || (stage === 'finish' && refused))) {
-				// A sign-in tried the device for its RP ID and has no credential the server takes: the page is told
-				// which RP ID that was (`rp_id_last`, §4.10.1), so it can ask for that one last.
-				const rpIdLast = action === 'login' && begun ? ceremonyRpId(action, begun.publicKey) : '';
+				// A sign-in asked the device for its RP ID and got no credential the server takes (the sheet came back
+				// empty or closed, or the server refused the one it gave): the page is told which RP ID that was
+				// (`rp_id_last`, a hint, not in the protocol), so it can ask for that one last. Not when the device was
+				// never asked: a failure before the sheet, or one a password manager gave for its own reasons.
+				const asked = stage === 'finish' || isWebAuthnError(cause, 'NotAllowedError');
+				const rpIdLast = action === 'login' && begun && asked ? ceremonyRpId(action, begun.publicKey) : '';
 				throw new PasskeyPageOffered(rpIdLast ? new PasskeyPageNeeded(action, page.external, page.account, rpIdLast) : page, cause);
 			}
 			throw cause;

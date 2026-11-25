@@ -973,8 +973,9 @@
 		const account = session.passkeySession ? session.you?.user_id : undefined;
 		const owner = notifyAccount(chat.url, account);
 		untrack(() => {
-			// For the server's passkey page next time (`login_hint`, §4.10.1); a guest's `user_id` lasts one connection.
-			if (account) saveLastAccount(chat.url, account);
+			// For the server's passkey page next time (`login_hint`, a hint, not in the protocol); a guest's `user_id`
+			// lasts one connection. Not while local history isn't kept: nothing would ever forget it.
+			if (account && historySettings.retention !== 'off') saveLastAccount(chat.url, account);
 			const here = (key: string) => draftServer(key) === chat.url;
 			const claim = draftKeeper.claim(chat.url, owner);
 			if (claim === 'dropped') {
