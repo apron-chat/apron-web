@@ -47,6 +47,20 @@ describe('authorization requests', () => {
 		expect(replaced.getAll('resource')).toEqual(['https://chat.example']);
 	});
 
+	it('adds the passkey page’s hints that are known, and none that aren’t (§4.10.1)', () => {
+		const hinted = new URL(authorizationUrl('https://chat.example/passkey?action=login', { client, state: 's', challenge: 'c', resource: 'https://chat.example', hints: { login_hint: 'ada', rp_id_last: 'chat.example' } }).url).searchParams;
+		expect(hinted.get('login_hint')).toBe('ada');
+		expect(hinted.get('rp_id_last')).toBe('chat.example');
+		expect(hinted.get('action')).toBe('login');
+		const one = new URL(authorizationUrl('https://chat.example/passkey', { client, state: 's', challenge: 'c', resource: 'https://chat.example', hints: { rp_id_last: 'example' } }).url).searchParams;
+		expect(one.get('rp_id_last')).toBe('example');
+		expect(one.has('login_hint')).toBe(false);
+		for (const hints of [undefined, {}, { login_hint: '', rp_id_last: '' }]) {
+			const query = new URL(authorizationUrl('https://chat.example/passkey', { client, state: 's', challenge: 'c', resource: 'https://chat.example', ...(hints ? { hints } : {}) }).url).searchParams;
+			expect([query.has('login_hint'), query.has('rp_id_last')]).toEqual([false, false]);
+		}
+	});
+
 	it('makes a request with a fresh state and an S256 challenge, for the server it is connected to', async () => {
 		const request = await authorizationRequest({ url: 'https://chat.example/oauth/authorize' }, 'wss://chat.example/ws', client);
 		const query = new URL(request.url).searchParams;

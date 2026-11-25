@@ -10,6 +10,7 @@ import type { RoomSync } from '$lib/protocol/client';
 import type { RestoredState } from '$lib/protocol/client-types';
 import { loadView, saveView } from '$lib/ui/session-cache';
 import { closedTerminals, terminalKey } from '$lib/ui/terminal-closed.svelte';
+import { loadLastAccount, saveLastAccount } from '$lib/ui/storage';
 import { memoryStorage } from '$lib/test/storage';
 
 const URL = 'wss://chat.example/';
@@ -672,6 +673,25 @@ describe('HistoryKeeper', () => {
 		} finally {
 			vi.unstubAllGlobals();
 			closedTerminals.load();
+		}
+	});
+
+	it('forgets that an account whose history goes was the last signed in to its server', async () => {
+		vi.stubGlobal('localStorage', memoryStorage());
+		try {
+			const keeper = new HistoryKeeper({ indexedDB: new IDBFactory(), locks: null });
+			const other = 'wss://other.example/';
+			saveLastAccount(URL, 'ada');
+			saveLastAccount(other, 'ada');
+			const last = () => [URL, other].map((server) => loadLastAccount(server));
+			await keeper.forget(URL, 'zed');
+			expect(last()).toEqual(['ada', 'ada']);
+			await keeper.forget(URL, 'ada');
+			expect(last()).toEqual([undefined, 'ada']);
+			await keeper.forget();
+			expect(last()).toEqual([undefined, undefined]);
+		} finally {
+			vi.unstubAllGlobals();
 		}
 	});
 

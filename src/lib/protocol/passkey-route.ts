@@ -29,6 +29,16 @@ export function passkeyRoute(begun: JsonObject): PasskeyRoute {
 	return external ? { kind: 'page', external } : { kind: 'none' };
 }
 
+/**
+ * The RP ID a ceremony with `publicKey` runs for, lowercased: `rp.id` when
+ * creating, `rpId` when signing in, else this page's host, as the browser
+ * takes it. Empty without either.
+ */
+export function ceremonyRpId(action: 'register' | 'login', publicKey: JsonObject): string {
+	const requested = action === 'register' ? (isJsonObject(publicKey.rp) ? publicKey.rp.id : undefined) : publicKey.rpId;
+	return (typeof requested === 'string' ? requested : globalThis.location?.hostname ?? '').toLowerCase();
+}
+
 /** `public_key`'s RP ID isn't the server's (§4.10): the ceremony must not run in this page. */
 export class ForeignRpIdError extends Error {
 	constructor(message: string) {
@@ -54,10 +64,12 @@ export function usesPage(cause: unknown): boolean {
  * caller sends the user there (`external`) and finishes `action` with the
  * code that comes back (`finishPasskeyWithCode`). `account` is the signed-in
  * account a registration adds the passkey to, whose connection alone takes
- * that code.
+ * that code. `rpIdLast` is the RP ID of a login ceremony in this page that
+ * just ended without a credential, which the page is told (`rp_id_last`,
+ * §4.10.1) so it can ask for that RP ID last.
  */
 export class PasskeyPageNeeded extends Error {
-	constructor(readonly action: 'register' | 'login', readonly external: External, readonly account?: string) {
+	constructor(readonly action: 'register' | 'login', readonly external: External, readonly account?: string, readonly rpIdLast?: string) {
 		super('Continue with your passkey on the server’s page.');
 		this.name = 'PasskeyPageNeeded';
 	}

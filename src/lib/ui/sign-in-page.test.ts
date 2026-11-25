@@ -5,7 +5,7 @@ import { memoryStorage } from '$lib/test/storage';
 import metadataText from '../../../static/client-metadata.json?raw';
 import {
 	CALLBACK_PATH, CHANNEL, CLIENT_METADATA_PATH, OTHER_CLIENT_ID, PENDING_KEY, PRODUCTION_ORIGIN, RETURNED_KEY, answerFrom, appClient, authorize, finishAuthorization, findAuthorization,
-	forgetAuthorization, openSignInWindow, passkeyOnPage, rememberAuthorization, takeReturned, type AuthorizationFinisher, type PendingAuthorization
+	forgetAuthorization, openSignInWindow, passkeyOnPage, passkeyPageHints, rememberAuthorization, takeReturned, type AuthorizationFinisher, type PendingAuthorization
 } from './sign-in-page';
 import * as callback from './sign-in-callback';
 import { receiveCallback } from './sign-in-callback';
@@ -222,5 +222,44 @@ describe('finishing', () => {
 		expect(url.searchParams.get('action')).toBe('register');
 		expect(url.searchParams.get('request')).toBe('rq_7');
 		expect(findAuthorization(url.searchParams.get('state')!)).toMatchObject({ mode: 'page', name: 'Ada', purpose: { scheme: 'webauthn', action: 'register', account: 'ada' } });
+		// A registration's page isn't told who signed in last, or an RP ID to try last.
+		expect(url.searchParams.has('login_hint')).toBe(false);
+		expect(url.searchParams.has('rp_id_last')).toBe(false);
+	});
+
+	it('tells a login’s passkey page the account last signed in here and the RP ID to try last (§4.10.1)', async () => {
+		const kept = new Map([['apron.lastAccount', JSON.stringify({ 'wss://chat.example/': 'grace' })]]);
+		vi.stubGlobal('localStorage', memoryStorage(kept));
+		const assign = vi.fn();
+		vi.stubGlobal('window', { open: () => null, location: { origin: 'https://web.example', assign } });
+		void passkeyOnPage(finisher(), new PasskeyPageNeeded('login', { url: 'https://chat.example/passkey?action=login' }, undefined, 'example'), { popup: null });
+		await vi.waitFor(() => expect(assign).toHaveBeenCalled());
+		const url = new URL(assign.mock.calls[0][0] as string);
+		expect(url.searchParams.get('login_hint')).toBe('grace');
+		expect(url.searchParams.get('rp_id_last')).toBe('example');
+	});
+});
+
+describe('passkey page hints', () => {
+	const login = (rpIdLast?: string) => new PasskeyPageNeeded('login', { url: 'https://chat.example/passkey' }, undefined, rpIdLast);
+
+	it('names the account last signed in to the server here, else the one whose session is saved there, else none', () => {
+		const kept = new Map<string, string>();
+		vi.stubGlobal('localStorage', memoryStorage(kept));
+		expect(passkeyPageHints(login(), 'wss://chat.example/')).toBeUndefined();
+		kept.set('apron.session-user:wss://chat.example/', 'ada');
+		expect(passkeyPageHints(login(), 'wss://chat.example/')).toEqual({ login_hint: 'ada' });
+		kept.set('apron.lastAccount', JSON.stringify({ 'wss://chat.example/': 'grace', 'wss://other.example/': 'bob' }));
+		expect(passkeyPageHints(login(), 'wss://chat.example/')).toEqual({ login_hint: 'grace' });
+		// Only this server's.
+		expect(passkeyPageHints(login(), 'wss://third.example/')).toBeUndefined();
+	});
+
+	it('passes on the RP ID to try last, for a login only: a registration has no hints', () => {
+		const kept = new Map([['apron.lastAccount', JSON.stringify({ 'wss://chat.example/': 'grace' })]]);
+		vi.stubGlobal('localStorage', memoryStorage(kept));
+		expect(passkeyPageHints(login('server.chat.example'), 'wss://chat.example/')).toEqual({ login_hint: 'grace', rp_id_last: 'server.chat.example' });
+		expect(passkeyPageHints(login('server.chat.example'), 'wss://third.example/')).toEqual({ rp_id_last: 'server.chat.example' });
+		expect(passkeyPageHints(new PasskeyPageNeeded('register', { url: 'https://chat.example/passkey' }), 'wss://chat.example/')).toBeUndefined();
 	});
 });

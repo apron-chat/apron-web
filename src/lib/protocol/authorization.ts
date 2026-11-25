@@ -73,15 +73,28 @@ export async function codeChallenge(verifier: string): Promise<string> {
 }
 
 /**
+ * Optional hints for a passkey page (§4.10.1), which a server may use to
+ * order the RP IDs it asks for, and may ignore: `login_hint`, the `user_id`
+ * of the account last signed in to the server on this device, for a login;
+ * and `rp_id_last`, the RP ID of a login ceremony in this page that just
+ * ended without a credential, for the page to try last (never to leave out).
+ * Each is sent only when known.
+ */
+export interface AuthorizationHints {
+	login_hint?: string;
+	rp_id_last?: string;
+}
+
+/**
  * `external.url` with this client's parameters added (§4.12.2): its own
  * query is kept, and this client's parameters, its own `client_id` among
  * them, replace any the server put there (§4.12.1 says it puts none).
- * Returns the URL and the `client_id` it carries, which redeeming the code
- * repeats.
+ * `hints` that are known are added too (`AuthorizationHints`). Returns the
+ * URL and the `client_id` it carries, which redeeming the code repeats.
  */
 export function authorizationUrl(
 	page: string,
-	params: { client: AuthorizationClient; state: string; challenge: string; resource: string }
+	params: { client: AuthorizationClient; state: string; challenge: string; resource: string; hints?: AuthorizationHints }
 ): { url: string; clientId: string } {
 	const url = new URL(page);
 	const query = url.searchParams;
@@ -93,6 +106,10 @@ export function authorizationUrl(
 	query.set('code_challenge_method', 'S256');
 	query.set('state', params.state);
 	query.set('resource', params.resource);
+	for (const key of ['login_hint', 'rp_id_last'] as const) {
+		const value = params.hints?.[key];
+		if (value) query.set(key, value);
+	}
 	return { url: url.toString(), clientId };
 }
 
@@ -100,16 +117,16 @@ export function authorizationUrl(
  * A new authorization request for `external`, from a server at the
  * WebSocket address `server`: a fresh `state` and PKCE verifier, and
  * `resource` worked out from that address, never from anything the server
- * said (§4.12.2).
+ * said (§4.12.2), and any `hints` for a passkey page.
  */
-export async function authorizationRequest(external: External, server: string, client: AuthorizationClient): Promise<AuthorizationRequest> {
+export async function authorizationRequest(external: External, server: string, client: AuthorizationClient, hints?: AuthorizationHints): Promise<AuthorizationRequest> {
 	const resource = serverOrigin(server);
 	if (!resource) throw new Error('The server’s address isn’t a WebSocket URL.');
 	const page = pageUrl(external.url);
 	if (!page) throw new Error('The server sent a sign-in page this app can’t open.');
 	const state = randomToken();
 	const codeVerifier = randomToken();
-	const { url, clientId } = authorizationUrl(page, { client, state, challenge: await codeChallenge(codeVerifier), resource });
+	const { url, clientId } = authorizationUrl(page, { client, state, challenge: await codeChallenge(codeVerifier), resource, ...(hints ? { hints } : {}) });
 	return { url, state, codeVerifier, redirectUri: client.redirectUri, clientId, resource };
 }
 

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { pushIdFor, loadLastSignIn, saveLastSignIn, loadRecentServers, refreshRecentServer, rememberServer, starServer, forgetServer, hideDescription, showDescription, loadAppearance, loadClosedTerminals, saveTerminalClosed, loadShutMemberSections, saveShutMemberSections, loadSidebarFolds, saveSidebarFolds, loadHiddenDescriptions, loadAddedRooms, saveAddedRooms, loadThreadFolds, saveThreadFolds, loadRoomOrder, saveRoomOrder, descriptionHidden, descriptionUpdated, loadNotificationsEnabled, loadNotifyScopes, loadWebPushAccounts, notificationsChosen, loadWebPushOwner, saveAppearance, saveNotificationsEnabled, saveNotifyScopes, saveWebPushEnabled, saveWebPushOwner } from './storage';
+import { pushIdFor, loadLastSignIn, saveLastSignIn, loadLastAccount, saveLastAccount, forgetLastAccount, loadRecentServers, refreshRecentServer, rememberServer, starServer, forgetServer, hideDescription, showDescription, loadAppearance, loadClosedTerminals, saveTerminalClosed, loadShutMemberSections, saveShutMemberSections, loadSidebarFolds, saveSidebarFolds, loadHiddenDescriptions, loadAddedRooms, saveAddedRooms, loadThreadFolds, saveThreadFolds, loadRoomOrder, saveRoomOrder, descriptionHidden, descriptionUpdated, loadNotificationsEnabled, loadNotifyScopes, loadWebPushAccounts, notificationsChosen, loadWebPushOwner, saveAppearance, saveNotificationsEnabled, saveNotifyScopes, saveWebPushEnabled, saveWebPushOwner } from './storage';
 import { notifyAccount } from './notify-scopes';
 import { memoryStorage } from '$lib/test/storage';
 
@@ -125,6 +125,27 @@ describe('preference storage', () => {
 		expect(loadLastSignIn('wss://chat.example/')).toBeUndefined();
 		values.set('apron.lastSignIn', 'not json');
 		expect(loadLastSignIn('wss://chat.example/')).toBeUndefined();
+	});
+
+	it('keeps the account each server was last signed in to as, by its address, until its history is forgotten', () => {
+		expect(loadLastAccount('wss://chat.example/')).toBeUndefined();
+		saveLastAccount('WSS://Chat.Example:443', 'ada');
+		expect(loadLastAccount('wss://chat.example/')).toBe('ada');
+		saveLastAccount('wss://other.example/', 'bob');
+		saveLastAccount('wss://chat.example/', 'grace');
+		expect(JSON.parse(values.get('apron.lastAccount')!)).toEqual({ 'wss://other.example/': 'bob', 'wss://chat.example/': 'grace' });
+		// Another account's forgetting leaves it; its own takes it.
+		forgetLastAccount('wss://chat.example/', 'ada');
+		expect(loadLastAccount('wss://chat.example/')).toBe('grace');
+		forgetLastAccount('wss://chat.example/', 'grace');
+		expect(loadLastAccount('wss://chat.example/')).toBeUndefined();
+		expect(loadLastAccount('wss://other.example/')).toBe('bob');
+		forgetLastAccount();
+		expect(loadLastAccount('wss://other.example/')).toBeUndefined();
+		values.set('apron.lastAccount', '{"wss://chat.example/":7}');
+		expect(loadLastAccount('wss://chat.example/')).toBeUndefined();
+		values.set('apron.lastAccount', 'not json');
+		expect(loadLastAccount('wss://chat.example/')).toBeUndefined();
 	});
 
 	it('keeps notifications off until chosen', () => {

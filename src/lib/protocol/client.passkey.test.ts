@@ -444,6 +444,25 @@ describe('the passkey page', () => {
 		expect(await pending).not.toBeInstanceOf(PasskeyPageOffered);
 	});
 
+	it('tells the page to try last the RP ID a sign-in here tried without a credential, and nothing for a new passkey (§4.10.1)', async () => {
+		const { client, socket } = await connected();
+		vi.mocked(requestPasskey).mockRejectedValue(new DOMException('Dismissed', 'NotAllowedError'));
+		// The RP ID its options asked for.
+		const offered = await begin(client, socket, 'login', { challenge_id: 'c1', public_key: { challenge: 'x', rpId: 'Server.Fake.Test' }, external: page }, { offerPage: true });
+		expect((offered as PasskeyPageOffered).needed).toMatchObject({ action: 'login', external: page, rpIdLast: 'server.fake.test' });
+		// Without one, the browser's: this page's host.
+		vi.stubGlobal('location', { hostname: 'web.fake.test' });
+		const unnamed = await begin(client, socket, 'login', { challenge_id: 'c2', public_key: { challenge: 'x' }, external: page }, { offerPage: true });
+		expect((unnamed as PasskeyPageOffered).needed.rpIdLast).toBe('web.fake.test');
+		// A new passkey wasn't looked for under either RP ID.
+		const created = await begin(client, socket, 'register', { challenge_id: 'c3', public_key: { challenge: 'x', rp: { id: 'fake.test' } }, external: page }, { offerPage: true });
+		expect((created as PasskeyPageOffered).needed.rpIdLast).toBeUndefined();
+		// Where the page is needed at once, or where it worked before, nothing was tried here.
+		vi.mocked(requestPasskey).mockRejectedValue(new DOMException('The RP ID is not valid for this origin', 'SecurityError'));
+		expect(await begin(client, socket, 'login', { challenge_id: 'c4', public_key: { challenge: 'x', rpId: 'fake.test' }, external: page }, { offerPage: true })).toMatchObject({ rpIdLast: undefined });
+		expect(await begin(client, socket, 'login', { challenge_id: 'c5', public_key: { challenge: 'x', rpId: 'fake.test' }, external: page }, { offerPage: true, preferPage: true })).toMatchObject({ rpIdLast: undefined });
+	});
+
 	it('goes to the page at once where it worked before, without asking the device', async () => {
 		const { client, socket } = await connected();
 		vi.mocked(requestPasskey).mockReset();
@@ -461,7 +480,7 @@ describe('the passkey page', () => {
 		const finishWith = async (error: Record<string, unknown>, options: { offerPage?: boolean } = { offerPage: true }, action: 'login' | 'register' = 'login') => {
 			const pending = client.usePasskey(action, undefined, options).then(() => undefined, (cause: unknown) => cause);
 			await settle();
-			await socket.reply('auth', { challenge_id: 'c', public_key: { challenge: 'x' }, external: page });
+			await socket.reply('auth', { challenge_id: 'c', public_key: { challenge: 'x', rpId: 'fake.test' }, external: page });
 			await settle();
 			socket.receive({ id: socket.request('auth').id, error });
 			await settle();
@@ -470,7 +489,8 @@ describe('the passkey page', () => {
 		// A passkey the server doesn't know (an orphan from a save the server never took).
 		const offered = await finishWith({ code: -32001, message: 'Unknown passkey' });
 		expect(offered).toBeInstanceOf(PasskeyPageOffered);
-		expect((offered as PasskeyPageOffered).needed).toMatchObject({ action: 'login', external: page });
+		// The device gave a passkey for that RP ID, which the server refused: that RP ID goes last too.
+		expect((offered as PasskeyPageOffered).needed).toMatchObject({ action: 'login', external: page, rpIdLast: 'fake.test' });
 		// Not without asking, nor for a new passkey, nor for a limit.
 		expect(await finishWith({ code: -32001, message: 'Unknown passkey' }, {})).not.toBeInstanceOf(PasskeyPageOffered);
 		expect(await finishWith({ code: -32001, message: 'Refused' }, { offerPage: true }, 'register')).not.toBeInstanceOf(PasskeyPageOffered);

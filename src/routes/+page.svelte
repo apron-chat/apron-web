@@ -77,7 +77,7 @@
 	import { MEMBER_LIST_WIDTHS, ROOMS_LIST_WIDTHS, SidebarLayout } from '$lib/ui/sidebar.svelte';
 	import { NARROW_MAX, WIDE_MIN } from '$lib/ui/breakpoints';
 	import { closedTerminals } from '$lib/ui/terminal-closed.svelte';
-	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, installOfferAnswered, answerInstallOffer, loadRecentReactions, saveRecentReactions, loadRecentServers, loadServerUrl, loadSidebarPrefs, refreshRecentServer, rememberServer, saveDisplayName, saveLastSignIn, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, HIDDEN_DESCRIPTIONS_KEY, INSTALL_OFFER_KEY, loadAddedRooms, saveAddedRooms, loadHiddenDescriptions, hideDescription, showDescription, descriptionHidden, descriptionUpdated, type RecentServer } from '$lib/ui/storage';
+	import { loadDisplayName, loadMemberListPrefs, loadNotificationsEnabled, notificationsChosen, installOfferAnswered, answerInstallOffer, loadRecentReactions, saveRecentReactions, loadRecentServers, loadServerUrl, loadSidebarPrefs, refreshRecentServer, rememberServer, saveDisplayName, saveLastSignIn, saveMemberListPrefs, saveServerUrl, saveNotificationsEnabled, saveSidebarPrefs, loadNotifyScopes, saveNotifyScopes, NOTIFY_SCOPES_KEY, HIDDEN_DESCRIPTIONS_KEY, INSTALL_OFFER_KEY, loadAddedRooms, saveAddedRooms, saveLastAccount, loadHiddenDescriptions, hideDescription, showDescription, descriptionHidden, descriptionUpdated, type RecentServer } from '$lib/ui/storage';
 	import TimelineLoading from '$lib/design/components/TimelineLoading.svelte';
 	import RateLimitNotice from '$lib/design/components/RateLimitNotice.svelte';
 	import SystemLine from '$lib/design/components/SystemLine.svelte';
@@ -965,12 +965,16 @@
 		return userId === undefined ? undefined : notifyAccount(server, userId);
 	}
 	// Signed in: the drafts this page holds for the server are this account's (or its guests'). A guest's become the
-	// account's it signs in as; another account's go. What waited to know whose it is is read now.
+	// account's it signs in as; another account's go. What waited to know whose it is is read now. An account (not a
+	// guest) is noted as the one last signed in to the server here.
 	$effect(() => {
 		const chat = client;
 		if (!chat || !session.ready) return;
-		const owner = notifyAccount(chat.url, session.passkeySession ? session.you?.user_id : undefined);
+		const account = session.passkeySession ? session.you?.user_id : undefined;
+		const owner = notifyAccount(chat.url, account);
 		untrack(() => {
+			// For the server's passkey page next time (`login_hint`, §4.10.1); a guest's `user_id` lasts one connection.
+			if (account) saveLastAccount(chat.url, account);
 			const here = (key: string) => draftServer(key) === chat.url;
 			const claim = draftKeeper.claim(chat.url, owner);
 			if (claim === 'dropped') {

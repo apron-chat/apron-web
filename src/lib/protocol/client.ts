@@ -5,7 +5,7 @@ import { writeEmbed } from './embeds';
 import { PROPOSAL_MS, SignInConnection, type RpcFailure } from './signin-connection';
 import { PROPOSAL_KEPT_MS, findProposal, forgetProposal, newProposalState, rememberProposal, type ProposalScheme } from './proposals';
 import { parseExternal, type CodeRedemption, type External } from './external';
-import { PasskeyPageNeeded, PasskeyPageOffered, passkeyRoute, passkeysOnlyFirstParty, usesPage } from './passkey-route';
+import { ceremonyRpId, PasskeyPageNeeded, PasskeyPageOffered, passkeyRoute, passkeysOnlyFirstParty, usesPage } from './passkey-route';
 import {
 	ProtocolStore,
 	compareLogIds,
@@ -1011,7 +1011,8 @@ export class ChatClient {
 	 * throws `PasskeyPageOffered`, for the caller to offer the page: when the
 	 * device's ceremony fails, or the server refuses the passkey it gave for a
 	 * sign-in (one the server doesn't know, such as one saved where saving it
-	 * on the server then failed). With `preferPage`, such a server's page is
+	 * on the server then failed); a sign-in's names the RP ID it tried
+	 * (`PasskeyPageNeeded.rpIdLast`). With `preferPage`, such a server's page is
 	 * used at once (`PasskeyPageNeeded`), as where it worked before.
 	 */
 	async usePasskey(action: 'register' | 'login', name?: string, choices: { offerPage?: boolean; preferPage?: boolean } = {}): Promise<OperationHandle | undefined> {
@@ -1076,7 +1077,12 @@ export class ChatClient {
 			// itself (Cancel, or the connection changed), nor when the server only asked to wait.
 			// Refused is `denied` (§1.1): not a malformed request, the server's own failure, or a wait (`RateLimitError`).
 			const refused = action === 'login' && (cause as { code?: unknown } | undefined)?.code === -32001 && !(cause instanceof RateLimitError);
-			if (choices.offerPage && page && !controller.signal.aborted && (stage === 'browser' || (stage === 'finish' && refused))) throw new PasskeyPageOffered(page, cause);
+			if (choices.offerPage && page && !controller.signal.aborted && (stage === 'browser' || (stage === 'finish' && refused))) {
+				// A sign-in tried the device for its RP ID and has no credential the server takes: the page is told
+				// which RP ID that was (`rp_id_last`, §4.10.1), so it can ask for that one last.
+				const rpIdLast = action === 'login' && begun ? ceremonyRpId(action, begun.publicKey) : '';
+				throw new PasskeyPageOffered(rpIdLast ? new PasskeyPageNeeded(action, page.external, page.account, rpIdLast) : page, cause);
+			}
 			throw cause;
 		} finally {
 			if (this.passkeyStarting === controller) this.passkeyStarting = undefined;
