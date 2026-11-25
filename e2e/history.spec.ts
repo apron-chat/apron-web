@@ -126,6 +126,28 @@ test('a reload shows what it kept, and asks only for what came since', async ({ 
 	await expect.poll(() => keptServers(page)).toBe(0);
 });
 
+test('a reload opens at the New divider above what came since, not at the latest it then catches up to', async ({ page }) => {
+	const base = process.env.E2E_URL;
+	await page.clock.install();
+	await page.clock.setFixedTime(NOW);
+	const start = NOW.getTime() - 2 * DAY;
+	const message = (n: number) => ({ message_id: String(start + n * 1000), log_id: String(start + n * 1000), room_id: 'general', from: ada, body: { text: `Message ${n}` } });
+	const messages = Array.from({ length: 80 }, (_, n) => message(n));
+	await keptServer(page, messages, []);
+
+	// Read to the latest, and kept.
+	await page.goto(`${base}/`);
+	await expect(page.getByText('Message 79', { exact: true })).toBeInViewport();
+	await keptAfterFlush(page, 80);
+
+	// Away: 40 more. The reload shows what it kept before they arrive, but opens at the first of them once they have.
+	messages.push(...Array.from({ length: 40 }, (_, n) => message(80 + n)));
+	await page.reload();
+	await expect(page.locator('.ap-divider-new')).toBeInViewport();
+	await expect(page.getByText('Message 80', { exact: true })).toBeInViewport();
+	await expect(page.getByText('Message 119', { exact: true })).not.toBeInViewport();
+});
+
 test('a reload draws the avatars it kept from the media origin the server named, before the server answers', async ({ page }) => {
 	const base = process.env.E2E_URL;
 	await page.clock.install();

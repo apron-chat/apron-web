@@ -62,6 +62,11 @@ export interface TimelineViewportHost {
 	readonly paneHeldBack: boolean;
 	/** The open pane is catching up: its history is recovering or loading, or it shows a copy held from before. */
 	readonly paneCatchingUp: boolean;
+	/**
+	 * The open pane has what the server has: this connection's rooms are listed and the pane isn't catching up. A
+	 * room restored from history kept on this device is `loaded` before then, and may be missing what came since.
+	 */
+	readonly paneCaughtUp: boolean;
 	/** The page is in view. */
 	readonly visible: boolean;
 	readonly mentions: Pick<MentionTracker, 'clearUnseen'>;
@@ -248,8 +253,10 @@ export class TimelineViewport {
 
 	/**
 	 * The New divider, placed once per visit from your read position (kept on this device, the server's cursor, or your
-	 * newest message) once the pane's history has loaded, and the pane opening at it then: the one place a landing
-	 * starts, so there is one per visit.
+	 * newest message) once the pane's history has loaded and caught up with the server (`paneCaughtUp`), and the pane
+	 * opening at it then: the one place a landing starts, so there is one per visit. Placed against history kept on
+	 * this device before what came since has arrived, it would find nothing new, and the pane would stay at the latest
+	 * and follow what came in, reading it all.
 	 */
 	watchDivider(): void {
 		const host = this.#host;
@@ -257,7 +264,7 @@ export class TimelineViewport {
 			const room = host.paneRoom;
 			if (!room) return;
 			if (this.#divider.pane !== room.id) this.#divider = { pane: room.id, phase: 'waiting' };
-			else if (this.#divider.phase === 'waiting' && room.loaded) {
+			else if (this.#divider.phase === 'waiting' && room.loaded && host.paneCaughtUp) {
 				untrack(() => {
 					const divider: Divider = { pane: room.id, after: host.readThrough(room), phase: 'landing' };
 					this.#divider = divider;

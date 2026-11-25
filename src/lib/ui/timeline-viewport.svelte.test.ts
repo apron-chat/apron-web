@@ -62,7 +62,7 @@ const ids = (from: number, to: number) => Array.from({ length: to - from + 1 }, 
 
 /** A viewport over the pane `room`, with `messages`, as the page makes one. */
 function setup(room: RoomSnapshot, messages: MessageRecord[] = []) {
-	const state = $state({ room, messages });
+	const state = $state({ room, messages, caughtUp: true });
 	const loadOlder = vi.fn(async (_roomId: string) => {});
 	const readThrough = vi.fn((_room: RoomSnapshot): string | undefined => undefined);
 	const viewport = new TimelineViewport({
@@ -74,6 +74,7 @@ function setup(room: RoomSnapshot, messages: MessageRecord[] = []) {
 		you: undefined,
 		paneHeldBack: false,
 		paneCatchingUp: false,
+		get paneCaughtUp() { return state.caughtUp; },
 		visible: true,
 		mentions: { clearUnseen: () => undefined },
 		readThrough
@@ -210,6 +211,32 @@ describe('TimelineViewport', () => {
 		flushSync();
 		expect(viewport.newDividerAt).toBeUndefined();
 		expect(viewport.readingLatest).toBe(false);
+		stop();
+	});
+
+	it('places the New divider only once the pane has caught up, not against history kept on this device', async () => {
+		// Restored from this device's history: loaded, but what came since is still to arrive.
+		const { state, viewport, readThrough } = setup(roomSnapshot('general'), ids(1, 5));
+		state.caughtUp = false;
+		readThrough.mockReturnValue('5');
+		const list = new List(2000, 400, 1600);
+		list.rows.set('.ap-divider-new', new Row(list, 1000));
+		viewport.messageScroll = asList(list);
+		const stop = $effect.root(() => viewport.watchDivider());
+		flushSync();
+		await settle();
+		expect(readThrough).not.toHaveBeenCalled();
+		expect(viewport.readingLatest).toBe(false);
+
+		// What came while away has arrived: the divider goes above it, and the pane lands there.
+		state.messages = ids(1, 9);
+		state.room = roomSnapshot('general');
+		state.caughtUp = true;
+		flushSync();
+		expect(viewport.newDividerAt).toBe('6');
+		await vi.waitFor(() => expect(viewport.readingLatest).toBe(true));
+		expect(list.scrollTop).toBe(952);
+		expect(readThrough).toHaveBeenCalledTimes(1);
 		stop();
 	});
 
