@@ -129,6 +129,27 @@ describe('TimelineViewport', () => {
 		expect(list.scrollTop).toBe(300);
 	});
 
+	it('keeps the place a jump or landing moved to while an older page was on its way, not the one before it', async () => {
+		vi.stubGlobal('CSS', { escape: (text: string) => text });
+		const { viewport, loadOlder } = setup(roomSnapshot('general', [messageRecord(10)], { olderAvailable: true }));
+		const list = new List(1000, 400);
+		list.rows.set('article[data-message-id="3"]', new Row(list, 700));
+		viewport.messageScroll = asList(list);
+		scrollBack(viewport, list, 0);
+		let landed!: () => void;
+		loadOlder.mockImplementationOnce(() => new Promise<void>((resolve) => (landed = () => {
+			list.scrollHeight = 1600;
+			resolve();
+		})));
+		const older = viewport.showOlder();
+		await viewport.jumpTo('3', true);
+		expect(list.scrollTop).toBe(500);
+		landed();
+		await older;
+		// From where the jump left it, 600px of older messages above: not back to where the page was asked for.
+		expect(list.scrollTop).toBe(1100);
+	});
+
 	it('keeps no place while it follows the latest, nor in a list it no longer shows', async () => {
 		const { viewport, loadOlder } = setup(roomSnapshot('general', [messageRecord(10)], { olderAvailable: true }));
 		const list = new List(1000, 400, 100);
