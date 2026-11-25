@@ -195,6 +195,7 @@
 		get you() { return session.you; },
 		get paneHeldBack() { return paneHeldBack; },
 		get paneCatchingUp() { return paneCatchingUp; },
+		get paneCaughtUp() { return paneCaughtUp; },
 		get visible() { return presence.visible; },
 		mentions,
 		readThrough: (room) => readPositions.through(room, session.you, true)
@@ -592,6 +593,8 @@
 	 * (a reconnect, or a reload) until the live one replaces it. The timeline says so at its foot.
 	 */
 	let paneCatchingUp = $derived(Boolean(paneRoom && (paneRoom.recovering || paneRoom.loading || historyWait || session.showingHeld || (activeThread ? shownThreadRoom !== threadRoom : session.activeRoomHeld || awaitingThreads))));
+	/** The open pane has what the server has: this connection's rooms are listed, and it isn't catching up. */
+	let paneCaughtUp = $derived(session.roomsListed && !paneCatchingUp);
 	/** `paneCatchingUp` or a quiet reconnect, as the floating pill shows it: only once it outlasts a moment, then for a moment at least. */
 	let checkingShown = $state(false);
 	const checking = new SettleFlag((on) => (checkingShown = on));
@@ -1940,7 +1943,7 @@
 			}
 		}
 		// Until it has all opened, the URL keeps naming the whole link, so a reload tries it again.
-		const keepLink = () => scrubUrl(addressOf(target.room, target.thread, target.message));
+		const keepLink = () => scrubUrl(addressOf(target.room, target.thread, target.message, target.user));
 		if (activeRoom?.id !== target.room) {
 			if (!listed(target.room) && !client.viewRoom(target.room)) {
 				// Not among the rooms to join either, once those are listed: this server doesn't show it here.
@@ -1981,7 +1984,7 @@
 		}
 		mobilePane = 'main';
 		if (target.message) void revealLinkedMessage(target.room, target.thread, target.message, () => abandonLink('message', target.searched));
-		if (target.user) void revealLinkedUser(target.thread ?? target.room, target.user);
+		if (target.user) void revealLinkedUser(target.room, target.thread, target.user);
 	}
 
 	/**
@@ -2067,16 +2070,18 @@
 	 * opens either way, and says whether they are in the room. It sits by
 	 * their row in the member list when that shows them, else by the room's name.
 	 */
-	async function revealLinkedUser(roomId: string, userId: string): Promise<void> {
+	async function revealLinkedUser(roomId: string, thread: string | undefined, userId: string): Promise<void> {
 		const chat = client;
 		if (!chat) return;
-		const room = session.rooms.find((candidate) => candidate.id === roomId);
-		const member = room?.members?.some((candidate) => candidate.user_id === userId) || await chat.findMember(roomId, userId).catch(() => false);
-		if (client !== chat || (activeThread ?? activeRoom?.id) !== roomId) return;
+		const paneId = thread ?? roomId;
+		const room = session.rooms.find((candidate) => candidate.id === paneId);
+		const member = room?.members?.some((candidate) => candidate.user_id === userId) || await chat.findMember(paneId, userId).catch(() => false);
+		if (client !== chat || activeRoom?.id !== roomId || activeThread !== thread) return;
 		await tick();
 		const anchor = document.querySelector<HTMLElement>(`button.ap-member-who[data-user-id="${CSS.escape(userId)}"]`)
 			?? document.querySelector<HTMLElement>('.ap-roomhead-name');
 		if (anchor && !profileCard.current) profileCard.toggle({ anchor, userId, member });
+		consumeAnchors(roomId, thread, 'user');
 	}
 
 	/**
@@ -2091,7 +2096,9 @@
 		const pane = () => session.rooms.find((room) => room.id === paneId);
 		const isOpen = () => activeRoom?.id === roomId && activeThread === thread;
 		const found = () => Boolean(pane()?.timeline.events[id]);
-		await until(() => Boolean(pane()?.loaded) || !isOpen(), JUMP_WAIT_MS * 2);
+		// Loaded and caught up: a room restored from history kept on this device is loaded before what came since
+		// arrives, and a message from then (a notification's, as often as not) would read as not there.
+		await until(() => Boolean(pane()?.loaded && paneCaughtUp) || !isOpen(), JUMP_WAIT_MS * 2);
 		for (let page = 0; page < LINKED_MESSAGE_PAGES && client && isOpen() && !found(); page++) {
 			const room = pane();
 			const oldest = room?.timeline.order[0];
@@ -2107,18 +2114,31 @@
 			missing();
 			return;
 		}
-		await jumpToMessage(id);
-		scrubUrl(addressOf(roomId, thread, id));
+		// Not shown (its row didn't draw in time): the address keeps it, so a reload tries again.
+		if (await jumpToMessage(id)) consumeAnchors(roomId, thread, 'message');
+	}
+
+	/**
+	 * A link's message or user (or a notification's message) has been shown: it only says where to look once, so the
+	 * URL stops naming it. Kept, a reload (the update notice's Reload, a tab or an app brought back at its address)
+	 * would go back to that message or card every time, however far you had read since, rather than open the pane as
+	 * any visit does, at its New divider. The other, if the link named both and it is still opening, stays until it
+	 * has been shown too. Not once the page has gone elsewhere: its URL names that place now.
+	 */
+	function consumeAnchors(roomId: string, thread: string | undefined, shown: 'message' | 'user'): void {
+		if (activeRoom?.id !== roomId || activeThread !== thread) return;
+		const named = readDestination(window.location);
+		scrubUrl(addressOf(roomId, thread, shown === 'message' ? undefined : named.message, shown === 'user' ? undefined : named.user));
 	}
 
 	/**
 	 * The page's URL for a destination: its server (left out where it's the one
-	 * the page connects to anyway), room, thread and message. Never anything
-	 * that signs in.
+	 * the page connects to anyway), room, thread, and a link's message and user
+	 * while it opens. Never anything that signs in.
 	 */
-	function addressOf(roomId: string | undefined, thread?: string, message?: string): string {
+	function addressOf(roomId: string | undefined, thread?: string, message?: string, user?: string): string {
 		const server = client && !previewMode ? { server: client.url } : {};
-		return destinationUrl(window.location.href, { ...server, ...(roomId ? { room: roomId } : {}), ...(thread ? { thread } : {}), ...(message ? { message } : {}) }, homeServer());
+		return destinationUrl(window.location.href, { ...server, ...(roomId ? { room: roomId } : {}), ...(thread ? { thread } : {}), ...(message ? { message } : {}), ...(user ? { user } : {}) }, homeServer());
 	}
 
 	/** The server the page connects to when nothing says otherwise: a URL without `server` names it. */
@@ -2227,6 +2247,10 @@
 	function openRooms(): void {
 		mobilePane = 'rooms';
 		if (page.state.rooms || selectedRoomId === undefined) return;
+		// A link's message or user still opening goes from the address first: its entry, and the list's above it,
+		// would otherwise differ only once it was shown, and Back to the room would take the link again.
+		const address = addressOf(selectedRoomId, activeThread);
+		if (address !== window.location.href) scrubUrl(address);
 		try {
 			pushState('', { ...(activeThread ? { room: selectedRoomId, thread: activeThread } : { room: selectedRoomId }), rooms: true });
 		} catch {
@@ -3152,18 +3176,19 @@
 	 * Scrolls the timeline to a message and highlights it for a moment, first
 	 * opening the room or thread it lives in (and loading a thread's history).
 	 */
-	async function jumpToMessage(id: string): Promise<void> {
+	async function jumpToMessage(id: string): Promise<boolean> {
 		const target = resolveMessage(id);
 		const destination = target ? destinationOf(target) : undefined;
-		if (!destination) return;
+		if (!destination) return false;
 		const opening = destination.room !== activeRoom?.id || destination.thread !== activeThread;
 		if (opening) openDestination(destination.room, destination.thread);
 		const node = await viewport.jumpTo(id, opening);
-		if (!node) return;
+		if (!node) return false;
 		node.focus({ preventScroll: true });
 		highlightedId = id;
 		if (highlightTimer) clearTimeout(highlightTimer);
 		highlightTimer = setTimeout(() => (highlightedId = undefined), 1600);
+		return true;
 	}
 
 	/** Takes you to the oldest mention that arrived while you were reading back. */

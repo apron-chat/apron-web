@@ -21,10 +21,23 @@ test.describe('deep links', () => {
 		await expect(preview.message('Thread replies are ordinary messages')).toBeVisible();
 	});
 
-	test('a message link scrolls to the message and keeps it in the address', async ({ preview, page }) => {
+	test('a message link scrolls to the message, then the address names the room alone, so a reload doesn’t go back to it', async ({ preview, page }) => {
 		await preview.open('#room=general&message=1710000000001');
 		await expect(preview.message('Welcome to Apron!')).toBeInViewport();
-		await expect(page).toHaveURL(/#room=general&message=1710000000001$/);
+		await expect(page).toHaveURL(/#room=general$/);
+	});
+
+	test('a user link opens their profile card, then the address names the room alone', async ({ preview, page }) => {
+		await preview.open('#room=general&user=linus');
+		await expect(page.getByTestId('profile-card')).toContainText('Linus');
+		await expect(page).toHaveURL(/#room=general$/);
+	});
+
+	test('a link naming both a message and a user shows both before the address names the room alone', async ({ preview, page }) => {
+		await preview.open('#room=general&message=1710000000001&user=linus');
+		await expect(page.getByTestId('profile-card')).toContainText('Linus');
+		await expect(preview.message('Welcome to Apron!')).toBeInViewport();
+		await expect(page).toHaveURL(/#room=general$/);
 	});
 
 	test('a place pasted into the open tab goes there without reloading, a room’s closing its open thread', async ({ preview, page }) => {
@@ -93,7 +106,8 @@ test.describe('a window opened for a push notification', () => {
 		await expect(preview.heading()).toHaveText('General');
 		await expect(page.locator('article[data-message-id="1003"]')).toBeInViewport();
 		await expect(page.locator('article[data-message-id="1060"]')).not.toBeInViewport();
-		await expect(page).not.toHaveURL(/push_/);
+		// Nor the message it opened at: a reload opens the room as any visit does, not at that message again.
+		await expect(page).toHaveURL(/#room=general$/);
 	});
 
 	test('a click in a tab already at the room’s latest keeps it following the messages that come after', async ({ preview, page }) => {

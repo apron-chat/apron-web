@@ -62,6 +62,11 @@ export interface TimelineViewportHost {
 	readonly paneHeldBack: boolean;
 	/** The open pane is catching up: its history is recovering or loading, or it shows a copy held from before. */
 	readonly paneCatchingUp: boolean;
+	/**
+	 * The open pane has what the server has: this connection's rooms are listed and the pane isn't catching up. A
+	 * room restored from history kept on this device is `loaded` before then, and may be missing what came since.
+	 */
+	readonly paneCaughtUp: boolean;
 	/** The page is in view. */
 	readonly visible: boolean;
 	readonly mentions: Pick<MentionTracker, 'clearUnseen'>;
@@ -84,13 +89,14 @@ interface Divider {
 
 /**
  * Where the reader was, noted before older items land above them (`keepPlace`): the list, its scroll top and height,
- * and the pane it showed, so that a page or chunk that lands after the pane went elsewhere moves nothing.
+ * and the pane it showed, so that a page or chunk that lands after the pane went elsewhere moves nothing. A jump or a
+ * landing meanwhile notes it again where that left the list (`settle`).
  */
 interface Place {
 	readonly pane: string | undefined;
 	readonly scroller: HTMLElement;
-	readonly top: number;
-	readonly height: number;
+	top: number;
+	height: number;
 }
 
 /** Whether the list is scrolled to (near enough) its end. */
@@ -142,6 +148,8 @@ export class TimelineViewport {
 	#divider = $state.raw<Divider>({ pane: '', phase: 'waiting' });
 	/** The divider the pane is opening at, until it has: sending or jumping to the latest (`pin`) stops it there. */
 	#landing: Divider | undefined;
+	/** Places noted for older items still to land above (`place`), until they are kept (`keepPlace`). */
+	readonly #places = new Set<Place>();
 	/** The open pane has no messages yet: its first items with them render newest first (`ARRIVAL_ITEMS`). */
 	#arriving = $state(false);
 	/**
@@ -248,8 +256,10 @@ export class TimelineViewport {
 
 	/**
 	 * The New divider, placed once per visit from your read position (kept on this device, the server's cursor, or your
-	 * newest message) once the pane's history has loaded, and the pane opening at it then: the one place a landing
-	 * starts, so there is one per visit.
+	 * newest message) once the pane's history has loaded and caught up with the server (`paneCaughtUp`), and the pane
+	 * opening at it then: the one place a landing starts, so there is one per visit. Placed against history kept on
+	 * this device before what came since has arrived, it would find nothing new, and the pane would stay at the latest
+	 * and follow what came in, reading it all.
 	 */
 	watchDivider(): void {
 		const host = this.#host;
@@ -257,7 +267,7 @@ export class TimelineViewport {
 			const room = host.paneRoom;
 			if (!room) return;
 			if (this.#divider.pane !== room.id) this.#divider = { pane: room.id, phase: 'waiting' };
-			else if (this.#divider.phase === 'waiting' && room.loaded) {
+			else if (this.#divider.phase === 'waiting' && room.loaded && host.paneCaughtUp) {
 				untrack(() => {
 					const divider: Divider = { pane: room.id, after: host.readThrough(room), phase: 'landing' };
 					this.#divider = divider;
@@ -478,6 +488,12 @@ export class TimelineViewport {
 	#settle(scroller: HTMLElement): void {
 		this.#lastScrollTop = scroller.scrollTop;
 		this.#stickToBottom = atLatest(scroller);
+		// What is still to land above was noted where the list was before: kept from there, it would undo the move.
+		for (const place of this.#places) {
+			if (place.scroller !== scroller) continue;
+			place.top = scroller.scrollTop;
+			place.height = scroller.scrollHeight;
+		}
 	}
 
 	/**
@@ -611,6 +627,7 @@ export class TimelineViewport {
 		try {
 			await host.client.loadOlder(room.id);
 		} catch {
+			this.#places.delete(place);
 			return; // The next scroll back tries again.
 		}
 		await tick();
@@ -669,7 +686,10 @@ export class TimelineViewport {
 	/** Where the reader is in the open pane, before older items land above: `keepPlace` keeps them there after. */
 	#place(): Place | undefined {
 		const scroller = this.#messageScroll;
-		return scroller && { pane: this.#paneId, scroller, top: scroller.scrollTop, height: scroller.scrollHeight };
+		if (!scroller) return undefined;
+		const place: Place = { pane: this.#paneId, scroller, top: scroller.scrollTop, height: scroller.scrollHeight };
+		this.#places.add(place);
+		return place;
 	}
 
 	/**
@@ -679,6 +699,7 @@ export class TimelineViewport {
 	 * on to another room or thread would otherwise move that one.
 	 */
 	#keepPlace(place: Place | undefined): void {
+		if (place) this.#places.delete(place);
 		if (!place || !this.#shows(place.pane, place.scroller) || this.#stickToBottom) return;
 		const { scroller } = place;
 		scroller.scrollTop = place.top + (scroller.scrollHeight - place.height);
