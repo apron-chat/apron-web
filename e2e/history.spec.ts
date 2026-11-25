@@ -148,6 +148,28 @@ test('a reload opens at the New divider above what came since, not at the latest
 	await expect(page.getByText('Message 119', { exact: true })).not.toBeInViewport();
 });
 
+test('a link to a message that came while away opens at it once the room has caught up, not saying it isn’t there', async ({ page }) => {
+	const base = process.env.E2E_URL;
+	await page.clock.install();
+	await page.clock.setFixedTime(NOW);
+	const start = NOW.getTime() - 2 * DAY;
+	const message = (n: number) => ({ message_id: String(start + n * 1000), log_id: String(start + n * 1000), room_id: 'general', from: ada, body: { text: `Message ${n}` } });
+	const messages = Array.from({ length: 80 }, (_, n) => message(n));
+	await keptServer(page, messages, []);
+	await page.goto(`${base}/`);
+	await expect(page.getByText('Message 79', { exact: true })).toBeInViewport();
+	await keptAfterFlush(page, 80);
+
+	// Away: 40 more, and a link (or a notification) to one of them opens the app.
+	messages.push(...Array.from({ length: 40 }, (_, n) => message(80 + n)));
+	// Opened afresh, as a link or a notification opens the app: not a change to the open page's fragment.
+	await page.goto('about:blank');
+	await page.goto(`${base}/#room=general&message=${message(100).message_id}`);
+	await expect(page.getByText('Message 100', { exact: true })).toBeInViewport();
+	await expect(page.getByText('The linked message isn’t available here.')).toHaveCount(0);
+	await expect(page).toHaveURL(/#room=general$/);
+});
+
 test('a reload draws the avatars it kept from the media origin the server named, before the server answers', async ({ page }) => {
 	const base = process.env.E2E_URL;
 	await page.clock.install();

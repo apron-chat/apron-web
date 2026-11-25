@@ -2081,7 +2081,7 @@
 		const anchor = document.querySelector<HTMLElement>(`button.ap-member-who[data-user-id="${CSS.escape(userId)}"]`)
 			?? document.querySelector<HTMLElement>('.ap-roomhead-name');
 		if (anchor && !profileCard.current) profileCard.toggle({ anchor, userId, member });
-		consumeAnchors(roomId, thread);
+		consumeAnchors(roomId, thread, 'user');
 	}
 
 	/**
@@ -2096,7 +2096,9 @@
 		const pane = () => session.rooms.find((room) => room.id === paneId);
 		const isOpen = () => activeRoom?.id === roomId && activeThread === thread;
 		const found = () => Boolean(pane()?.timeline.events[id]);
-		await until(() => Boolean(pane()?.loaded) || !isOpen(), JUMP_WAIT_MS * 2);
+		// Loaded and caught up: a room restored from history kept on this device is loaded before what came since
+		// arrives, and a message from then (a notification's, as often as not) would read as not there.
+		await until(() => Boolean(pane()?.loaded && paneCaughtUp) || !isOpen(), JUMP_WAIT_MS * 2);
 		for (let page = 0; page < LINKED_MESSAGE_PAGES && client && isOpen() && !found(); page++) {
 			const room = pane();
 			const oldest = room?.timeline.order[0];
@@ -2112,20 +2114,21 @@
 			missing();
 			return;
 		}
-		await jumpToMessage(id);
-		consumeAnchors(roomId, thread);
+		// Not shown (its row didn't draw in time): the address keeps it, so a reload tries again.
+		if (await jumpToMessage(id)) consumeAnchors(roomId, thread, 'message');
 	}
 
 	/**
-	 * A link's message or user (or a notification's message) has been shown: they only say where to look once, so the
-	 * URL goes back to naming the room or thread alone. Kept, a reload (the update notice's Reload, a tab or an app
-	 * brought back at its address) would go back to that message or card every time, however far you had read since,
-	 * rather than open the pane as any visit does, at its New divider. Not once the page has gone elsewhere: its URL
-	 * names that place now.
+	 * A link's message or user (or a notification's message) has been shown: it only says where to look once, so the
+	 * URL stops naming it. Kept, a reload (the update notice's Reload, a tab or an app brought back at its address)
+	 * would go back to that message or card every time, however far you had read since, rather than open the pane as
+	 * any visit does, at its New divider. The other, if the link named both and it is still opening, stays until it
+	 * has been shown too. Not once the page has gone elsewhere: its URL names that place now.
 	 */
-	function consumeAnchors(roomId: string, thread: string | undefined): void {
+	function consumeAnchors(roomId: string, thread: string | undefined, shown: 'message' | 'user'): void {
 		if (activeRoom?.id !== roomId || activeThread !== thread) return;
-		scrubUrl(addressOf(roomId, thread));
+		const named = readDestination(window.location);
+		scrubUrl(addressOf(roomId, thread, shown === 'message' ? undefined : named.message, shown === 'user' ? undefined : named.user));
 	}
 
 	/**
@@ -2244,6 +2247,10 @@
 	function openRooms(): void {
 		mobilePane = 'rooms';
 		if (page.state.rooms || selectedRoomId === undefined) return;
+		// A link's message or user still opening goes from the address first: its entry, and the list's above it,
+		// would otherwise differ only once it was shown, and Back to the room would take the link again.
+		const address = addressOf(selectedRoomId, activeThread);
+		if (address !== window.location.href) scrubUrl(address);
 		try {
 			pushState('', { ...(activeThread ? { room: selectedRoomId, thread: activeThread } : { room: selectedRoomId }), rooms: true });
 		} catch {
@@ -3169,18 +3176,19 @@
 	 * Scrolls the timeline to a message and highlights it for a moment, first
 	 * opening the room or thread it lives in (and loading a thread's history).
 	 */
-	async function jumpToMessage(id: string): Promise<void> {
+	async function jumpToMessage(id: string): Promise<boolean> {
 		const target = resolveMessage(id);
 		const destination = target ? destinationOf(target) : undefined;
-		if (!destination) return;
+		if (!destination) return false;
 		const opening = destination.room !== activeRoom?.id || destination.thread !== activeThread;
 		if (opening) openDestination(destination.room, destination.thread);
 		const node = await viewport.jumpTo(id, opening);
-		if (!node) return;
+		if (!node) return false;
 		node.focus({ preventScroll: true });
 		highlightedId = id;
 		if (highlightTimer) clearTimeout(highlightTimer);
 		highlightTimer = setTimeout(() => (highlightedId = undefined), 1600);
+		return true;
 	}
 
 	/** Takes you to the oldest mention that arrived while you were reading back. */

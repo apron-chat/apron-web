@@ -33,6 +33,13 @@ test.describe('deep links', () => {
 		await expect(page).toHaveURL(/#room=general$/);
 	});
 
+	test('a link naming both a message and a user shows both before the address names the room alone', async ({ preview, page }) => {
+		await preview.open('#room=general&message=1710000000001&user=linus');
+		await expect(page.getByTestId('profile-card')).toContainText('Linus');
+		await expect(preview.message('Welcome to Apron!')).toBeInViewport();
+		await expect(page).toHaveURL(/#room=general$/);
+	});
+
 	test('a place pasted into the open tab goes there without reloading, a room’s closing its open thread', async ({ preview, page }) => {
 		await preview.open('#room=general&thread=thread_deploy');
 		await page.evaluate(() => ((window as unknown as { stayed: boolean }).stayed = true));
