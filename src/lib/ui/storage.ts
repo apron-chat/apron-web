@@ -54,6 +54,13 @@ const KEY = {
 	 * `token`), by its address: chosen first on its connect screen next time. Kept through signing out.
 	 */
 	lastSignIn: 'apron.lastSignIn',
+	/**
+	 * The account (`user_id`) a session last signed in as on each server on this device, by its address: told to the
+	 * server's passkey page as `login_hint` (a hint, not in the protocol: `AuthorizationHints`), so it can ask for that
+	 * account's passkey first. Kept through signing out, and forgotten with the account's history
+	 * (`HistoryKeeper.forget`); never written while local history isn't kept (Retention: Don't keep).
+	 */
+	lastAccount: 'apron.lastAccount',
 	/** The terminal embeds closed on this device (`closedTerminals`), by `terminalKey`, closed longest ago first. Deleted with the history of the accounts they were closed by. */
 	closedTerminals: 'apron.closedTerminals',
 	/**
@@ -190,6 +197,48 @@ export function saveLastSignIn(url: string, scheme: string): void {
 	if (!address) return;
 	const { [address]: _, ...rest } = lastSignIns();
 	write(KEY.lastSignIn, JSON.stringify(Object.fromEntries([...Object.entries(rest), [address, scheme]].slice(-LAST_SIGN_IN_MAX))));
+}
+
+/** The accounts servers were last signed in to as, by address, oldest first. */
+function lastAccounts(): Record<string, string> {
+	try {
+		const parsed: unknown = JSON.parse(read(KEY.lastAccount) ?? '{}');
+		if (!isJsonObject(parsed)) return {};
+		return Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1] !== ''));
+	} catch {
+		return {};
+	}
+}
+
+/** The account (`user_id`) the server at `url` was last signed in to as on this device, if one was. */
+export function loadLastAccount(url: string): string | undefined {
+	const address = addressOf(url);
+	return address ? lastAccounts()[address] : undefined;
+}
+
+/** Remembers `userId` as the account the server at `url` was last signed in to as, as the newest of those kept. */
+export function saveLastAccount(url: string, userId: string): void {
+	const address = addressOf(url);
+	if (!address || !userId) return;
+	const kept = lastAccounts();
+	const entries = Object.entries(kept);
+	// Already the newest: nothing to write.
+	if (entries.at(-1)?.[0] === address && kept[address] === userId) return;
+	const { [address]: _, ...rest } = kept;
+	write(KEY.lastAccount, JSON.stringify(Object.fromEntries([...Object.entries(rest), [address, userId]].slice(-LAST_SIGN_IN_MAX))));
+}
+
+/**
+ * Forgets the accounts remembered as last signed in (`loadLastAccount`): `userId`'s on `server`, any account's on
+ * `server`, or, with neither, every one.
+ */
+export function forgetLastAccount(server?: string, userId?: string): void {
+	const address = server === undefined ? undefined : addressOf(server);
+	if (server !== undefined && !address) return;
+	const kept = lastAccounts();
+	const left = Object.entries(kept).filter(([at, id]) => !((address === undefined || at === address) && (userId === undefined || id === userId)));
+	if (left.length === Object.keys(kept).length) return;
+	write(KEY.lastAccount, JSON.stringify(Object.fromEntries(left)));
 }
 
 /**

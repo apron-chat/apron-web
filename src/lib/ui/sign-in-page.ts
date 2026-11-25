@@ -1,8 +1,10 @@
 import {
 	AuthorizationError, authorizationRequest, redemption,
-	type AuthorizationClient, type AuthorizationRequest, type AuthorizationResponse, type CodeRedemption, type External
+	type AuthorizationClient, type AuthorizationHints, type AuthorizationRequest, type AuthorizationResponse, type CodeRedemption, type External
 } from '$lib/protocol/authorization';
+import { loadKeptSessionUser } from '$lib/protocol/client-internals';
 import type { PasskeyPageNeeded } from '$lib/protocol/passkey-route';
+import { loadLastAccount } from './storage';
 import { CHANNEL, PENDING_KEY, RETURNED_KEY } from './sign-in-window';
 
 export { CHANNEL, PENDING_KEY, RETURNED_KEY, openSignInWindow, returnedWaiting, signInPageError } from './sign-in-window';
@@ -105,17 +107,17 @@ export function forgetAuthorization(state: string, now = Date.now()): void {
  * app, and never resolves: the answer comes back to a fresh page load
  * (`takeReturned`). Rejects with an `AuthorizationError` for a decline, a
  * closed window, or an answer that isn't this request's; aborting `signal`
- * closes the window.
+ * closes the window. `hints` go along in the page's URL (`AuthorizationHints`).
  */
 export async function authorize(
 	external: External, server: string, purpose: AuthorizationPurpose,
-	options: { popup: Window | null; name?: string; signal?: AbortSignal; location?: Pick<Location, 'origin' | 'assign'> }
+	options: { popup: Window | null; name?: string; signal?: AbortSignal; hints?: AuthorizationHints; location?: Pick<Location, 'origin' | 'assign'> }
 ): Promise<CodeRedemption> {
 	const { popup } = options;
 	const location = options.location ?? window.location;
 	let request: AuthorizationRequest;
 	try {
-		request = await authorizationRequest(external, server, appClient(location.origin));
+		request = await authorizationRequest(external, server, appClient(location.origin), options.hints);
 		options.signal?.throwIfAborted();
 	} catch (cause) {
 		popup?.close();
@@ -248,15 +250,33 @@ export async function finishAuthorization(
  * from `usePasskey`) and finishes it on `chat`'s connection, in `popup`
  * (`openSignInWindow`, opened by the caller as soon as it knew: after a
  * ceremony this page couldn't run, a browser may block it, and the page
- * then opens in this tab).
+ * then opens in this tab). A login tells the page what helps it choose the
+ * RP ID to ask for first (`passkeyPageHints`).
  */
 export async function passkeyOnPage(
 	chat: AuthorizationFinisher, needed: PasskeyPageNeeded, options: { popup: Window | null; name?: string; signal?: AbortSignal }
 ): Promise<void> {
 	const purpose: AuthorizationPurpose = { scheme: 'webauthn', action: needed.action, ...(needed.account !== undefined ? { account: needed.account } : {}) };
 	const server = chat.url;
-	const redeem = await authorize(needed.external, server, purpose, options);
+	const hints = passkeyPageHints(needed, server);
+	const redeem = await authorize(needed.external, server, purpose, { ...options, ...(hints ? { hints } : {}) });
 	await finishAuthorization(chat, { server, purpose, ...(options.name ? { name: options.name } : {}) }, redeem);
+}
+
+/**
+ * The hints a login on `server`'s passkey page goes with (`AuthorizationHints`), if any:
+ * `login_hint`, the account last signed in to it on this device (as noted
+ * when a session there was ready, else the one whose session is saved
+ * there); and `rp_id_last`, the RP ID that a ceremony in this page just
+ * tried without a credential (`needed.rpIdLast`), for the page to ask for
+ * last. A registration has none: it is for
+ * a new passkey, not one already made for either RP ID.
+ */
+export function passkeyPageHints(needed: Pick<PasskeyPageNeeded, 'action' | 'rpIdLast'>, server: string): AuthorizationHints | undefined {
+	if (needed.action !== 'login') return undefined;
+	const account = loadLastAccount(server) ?? loadKeptSessionUser(server);
+	const hints: AuthorizationHints = { ...(account ? { login_hint: account } : {}), ...(needed.rpIdLast ? { rp_id_last: needed.rpIdLast } : {}) };
+	return hints.login_hint || hints.rp_id_last ? hints : undefined;
 }
 
 function readResponse(value: unknown): AuthorizationResponse | undefined {

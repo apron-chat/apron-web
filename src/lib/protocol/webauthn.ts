@@ -1,6 +1,6 @@
 import { noteCredentialSource, type CredentialSource } from './passkey-notes';
 import { isJsonObject, type JsonObject } from './types';
-import { ForeignRpIdError } from './passkey-route';
+import { ceremonyRpId, ForeignRpIdError } from './passkey-route';
 
 export function passkeySupportError(): string | undefined {
 	if (!globalThis.isSecureContext) return 'Passkeys require HTTPS or a localhost connection.';
@@ -28,8 +28,7 @@ export function passkeyPublicKeyOptions(options: JsonObject): JsonObject | undef
  * server shares.
  */
 export function passkeyRpIdError(action: 'register' | 'login', publicKey: JsonObject, server: string): string | undefined {
-	const requested = action === 'register' ? (isJsonObject(publicKey.rp) ? publicKey.rp.id : undefined) : publicKey.rpId;
-	const rpId = (typeof requested === 'string' ? requested : globalThis.location?.hostname ?? '').toLowerCase();
+	const rpId = ceremonyRpId(action, publicKey);
 	let host: string;
 	try {
 		host = new URL(server).hostname.toLowerCase();

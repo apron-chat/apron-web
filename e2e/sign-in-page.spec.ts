@@ -178,6 +178,41 @@ test.describe('a passkey on the server’s passkey page', () => {
 	}
 	const sheets = (page: Page) => page.evaluate(() => (window as unknown as { sheets: number }).sheets);
 
+	test('tells the server’s page to try last the RP ID a sign-in here tried, and the account last signed in here, as hints', async ({ preview, page }) => {
+		const requests: URLSearchParams[] = [];
+		await signInPage(page.context(), requests);
+		await emptySheet(page);
+		await preview.openRoot({ passkey: { user_id: 'grace', name: 'Grace' }, passkeyPageBeside: PASSKEY_PAGE, sent: [] });
+		await connectAt(page, preview, 'Passkey');
+		const server = (await page.getByTestId('connect-server').locator('.ap-connect-address').textContent())!;
+		// Ada signed in to this server here before.
+		await page.evaluate((url) => localStorage.setItem('apron.lastAccount', JSON.stringify({ [new URL(url).href]: 'ada' })), server);
+		const submit = page.getByTestId('passkey-login');
+		await submit.click();
+		await expect(submit).toHaveText('Continue on sso.test ↗');
+		const popup = page.waitForEvent('popup');
+		await submit.click();
+		await (await popup).waitForEvent('close');
+		await expect(page.getByRole('form', { name: 'Sign in' })).toHaveCount(0);
+		// The sheet asked for the server's host, which its options named as the RP ID.
+		expect(Object.fromEntries(requests[0])).toMatchObject({ action: 'login', login_hint: 'ada', rp_id_last: new URL(server).hostname });
+		// Grace signed in this time: she is the one the page hears of next.
+		await expect.poll(() => page.evaluate(() => localStorage.getItem('apron.lastAccount'))).toBe(JSON.stringify({ [new URL(server).href]: 'grace' }));
+	});
+
+	test('a sign-in that goes to the server’s page without trying here sends no rp_id_last, and nothing it doesn’t know', async ({ preview, page }) => {
+		const requests: URLSearchParams[] = [];
+		await signInPage(page.context(), requests);
+		await preview.openRoot({ passkey: { user_id: 'grace', name: 'Grace' }, passkeyPage: PASSKEY_PAGE, sent: [] });
+		await connectAt(page, preview, 'Passkey');
+		const popup = page.waitForEvent('popup');
+		await page.getByTestId('passkey-login').click();
+		await (await popup).waitForEvent('close');
+		await expect(page.getByRole('form', { name: 'Sign in' })).toHaveCount(0);
+		expect(requests[0].has('rp_id_last')).toBe(false);
+		expect(requests[0].has('login_hint')).toBe(false);
+	});
+
 	test('Cancel takes the offer back, and the next tap tries a passkey here again', async ({ preview, page }) => {
 		await signInPage(page.context(), []);
 		await emptySheet(page);
@@ -346,3 +381,25 @@ test.describe('a passkey on the server’s passkey page', () => {
 		await expect(submit).not.toHaveClass(/ap-btn-elsewhere/);
 	});
 });
+
+test.describe('the account last signed in here, for the server’s passkey page', () => {
+	test.use(DEVICES.desktop);
+	const last = (page: Page) => page.evaluate(() => localStorage.getItem('apron.lastAccount'));
+
+	test('is noted for a signed-in account, not for a guest', async ({ preview, page }) => {
+		await preview.openRoot({});
+		await expect(page.getByTestId('connection-status')).toHaveText('Connected');
+		expect(await last(page)).toBeNull();
+		await preview.openRoot({ token: 'account-session', you: { user_id: 'lovelace', name: 'Ada' } });
+		await expect.poll(() => last(page)).toContain('lovelace');
+	});
+
+	test('is never noted while local history isn’t kept', async ({ preview, page }) => {
+		await page.addInitScript(() => { localStorage.setItem('apron.historyRetention', 'off'); });
+		await preview.openRoot({ token: 'account-session', you: { user_id: 'lovelace', name: 'Ada' } });
+		await expect(page.getByTestId('connection-status')).toHaveText('Connected');
+		await page.waitForTimeout(200);
+		expect(await last(page)).toBeNull();
+	});
+});
+
