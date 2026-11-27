@@ -3809,8 +3809,8 @@
 <svelte:head>
 	<title>{tabTitle(unreadAlerting, presence.titleFlash)}</title>
 	<meta name="description" content="Apron, a chat frontend for the Apron Chat Protocol." />
-	<!-- absentMentionsCss escapes every ID: nothing in it can end the <style>. -->
-	{@html absentMentionsStyle && `<style>${absentMentionsStyle}</style>`}
+	<!-- Its text, set as text: whom the pane's messages mention who isn't here, greyed (absentMentionsCss). -->
+	<svelte:element this={'style'}>{absentMentionsStyle}</svelte:element>
 	<!-- Link previews. og.png is apron.chat's `npm run screenshot -- og`; absolute, as crawlers require. -->
 	<meta property="og:type" content="website" />
 	<meta property="og:site_name" content="Apron" />

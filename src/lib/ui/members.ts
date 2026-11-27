@@ -63,8 +63,8 @@ export function absentInMessages(messages: readonly { body?: { mentions?: readon
 /**
  * A stylesheet that greys, in a pane's message text, the mention chips of `userIds` (those not in the room), the way
  * the composer greys a draft's (`ap-mention-quiet` in apron.css). The browser matches it, so no row draws again as
- * people join or leave. Each ID is escaped to hex beyond `[A-Za-z0-9_-]`, so nothing in one ends the rule or the
- * `<style>`. Empty for no one.
+ * people join or leave. Each ID is escaped to hex beyond `[A-Za-z0-9_-]`, so nothing in one ends the rule. Empty
+ * for no one.
  */
 export function absentMentionsCss(userIds: readonly string[]): string {
 	if (!userIds.length) return '';
