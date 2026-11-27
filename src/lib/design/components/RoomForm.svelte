@@ -5,7 +5,7 @@
 	import Button from './Button.svelte';
 	import Dialog from './Dialog.svelte';
 	import MarkdownEditor from './MarkdownEditor.svelte';
-	import { descriptionField, type RoomFormField } from './types';
+	import { descriptionField, firstMessageField, type RoomFormField } from './types';
 
 	interface Props {
 		/** Shown as a centered modal while true; bindable, and set false however it closes. */
@@ -23,8 +23,6 @@
 		 * says so.
 		 */
 		private?: boolean;
-		/** Starting a thread from a message: who wrote it and its first lines, quoted above the fields, not editable. */
-		from?: { sender: string; text: string };
 		/** Starting a thread for this many selected messages, which move into it: said in the heading, a note and the button. */
 		moving?: number;
 		/** Title. `bind:name`. Focused and selected when it opens, so typing replaces a suggestion. */
@@ -36,6 +34,13 @@
 		 * formatting, a preview and mentions as chips. It is yours to fill and read (`description` then goes unused).
 		 */
 		field?: Snippet<[RoomFormField]>;
+		/**
+		 * A new thread's first message: its field, yours to fill and read like `field`. Offered behind "Add first message",
+		 * ahead of "Add description", when starting a thread that moves no messages; sent in it once it exists.
+		 */
+		firstMessage?: Snippet<[RoomFormField]>;
+		/** Whether the first message's field shows; `bind:showFirstMessage`. Hidden until "Add first message"; once shown it stays. */
+		showFirstMessage?: boolean;
 		/**
 		 * Whether the description field shows; `bind:showDescription`. Starting a thread with no description, it waits
 		 * behind "Add description" at the start of the footer, so it isn't taken for the thread's first message; a thread
@@ -53,7 +58,7 @@
 		/** Classes for its Dialog's `<dialog>`, added to its own. */
 		class?: ClassValue;
 	}
-	let { open = $bindable(false), kind = 'thread', subtitle, private: isPrivate = $bindable(false), from, moving = 0, name = $bindable(''), description = $bindable(''), field, showDescription = $bindable(), status = 'idle', error, disabled = false, onsubmit, onclose, class: className }: Props = $props();
+	let { open = $bindable(false), kind = 'thread', subtitle, private: isPrivate = $bindable(false), moving = 0, name = $bindable(''), description = $bindable(''), field, firstMessage, showFirstMessage = $bindable(false), showDescription = $bindable(), status = 'idle', error, disabled = false, onsubmit, onclose, class: className }: Props = $props();
 	const uid = $props.id();
 	const saving = $derived(status === 'saving');
 	const thread = $derived(kind === 'thread');
@@ -64,21 +69,36 @@
 		: (saving ? 'Starting…' : 'Start thread'));
 	/** What starting a thread will do, in a line under the fields. */
 	const note = $derived(thread ? [
-		from ? `Next, you’ll write the thread’s first message, as a reply to ${from.sender}’s.` : '',
 		moves ? `${moves === 1 ? 'The selected message moves' : `The ${moves} selected messages move`} into the new thread.` : '',
 		isPrivate ? 'Private, like its room: only the room’s members see it.' : ''
 	].filter(Boolean).join(' ') : '');
 	let nameInput = $state<HTMLInputElement | undefined>();
 	let descriptionBox = $state<HTMLElement | undefined>();
+	let firstMessageBox = $state<HTMLElement | undefined>();
+	/** A first message is offered when starting a thread that moves none: one that does starts with those. */
+	const offersFirstMessage = $derived(thread && !moves && firstMessage !== undefined);
 	// Hidden only when starting a thread with nothing in it; once shown it stays.
 	if (showDescription === undefined) showDescription = untrack(() => !(thread && !description.trim()));
-	async function addDescription(): Promise<void> {
-		showDescription = true;
+	/** Shows a field put away, and puts the cursor in it. */
+	async function reveal(box: () => HTMLElement | undefined): Promise<void> {
 		await tick();
-		descriptionBox?.querySelector<HTMLElement>('[contenteditable]:not([contenteditable="false"]), textarea')?.focus();
+		box()?.querySelector<HTMLElement>('[contenteditable]:not([contenteditable="false"]), textarea')?.focus();
+	}
+	function addFirstMessage(): void {
+		showFirstMessage = true;
+		void reveal(() => firstMessageBox);
+	}
+	function addDescription(): void {
+		showDescription = true;
+		void reveal(() => descriptionBox);
 	}
 	/** What the description's field is drawn with, yours or the MarkdownEditor's, kept as one object while its parts are the same. */
 	const fieldArgs = $derived<RoomFormField>(descriptionField(thread, {
+		disabled: saving,
+		rows: 4,
+		submit: () => { if (!saving && !disabled) onsubmit?.(); }
+	}));
+	const firstMessageArgs = $derived<RoomFormField>(firstMessageField({
 		disabled: saving,
 		rows: 4,
 		submit: () => { if (!saving && !disabled) onsubmit?.(); }
@@ -96,17 +116,16 @@
 <!-- Escape, the close button and Cancel do nothing while it saves. -->
 <Dialog class={['ap-roomform', className]} bind:open size="md" title={heading} {subtitle} locked={saving} {error} {onclose}
 	onsubmit={(event) => { event.preventDefault(); if (!saving && !disabled) onsubmit?.(); }}>
-	{#if from}
-		<figure class="ap-roomform-from">
-			<figcaption class="ap-fieldlabel-hint">Starting from {from.sender}’s message</figcaption>
-			<blockquote dir="auto">{from.text}</blockquote>
-		</figure>
-	{/if}
 	<label class="ap-fieldlabel" for="{uid}-name">Title
 		<input id="{uid}-name" class="ap-field" aria-label="{thread ? 'Thread' : 'Room'} title" aria-required="true" bind:this={nameInput} bind:value={name} disabled={saving} maxlength="120" autocomplete="off" spellcheck="true" dir="auto"
 			placeholder={thread ? 'What it’s about' : 'What to call it'} />
 	</label>
-	<!-- The field is named by its `label`; this heads it. -->
+	<!-- Each field is named by its `label`; these head them. -->
+	{#if offersFirstMessage && showFirstMessage}
+	<div class="ap-fieldlabel" bind:this={firstMessageBox}><span class="ap-fieldlabel-row"><span>First message</span><span class="ap-fieldlabel-hint">Optional</span></span>
+		{@render firstMessage?.(firstMessageArgs)}
+	</div>
+	{/if}
 	{#if showDescription}
 	<div class="ap-fieldlabel" bind:this={descriptionBox}><span class="ap-fieldlabel-row"><span>Description</span><span class="ap-fieldlabel-hint">Markdown, optional</span></span>
 		{#if field}{@render field(fieldArgs)}{:else}<MarkdownEditor bind:value={description} label={fieldArgs.label} placeholder={fieldArgs.placeholder} disabled={saving} rows={fieldArgs.rows} />{/if}
@@ -120,8 +139,14 @@
 	{/if}
 	{#if note}<p class="ap-roomform-note">{note}</p>{/if}
 	{#snippet footer()}
-		{#if !showDescription}<Button variant="ghost" size="sm" class="ap-roomform-addbtn" onclick={addDescription} disabled={saving}><Plus size={14} aria-hidden="true" />Add description</Button>{/if}
-		<!-- Together, so a footer too narrow for all three puts these on a line of their own. -->
+		{#if (offersFirstMessage && !showFirstMessage) || !showDescription}
+			<!-- Together at the start of the footer, so a narrow one puts Cancel and the action on a line of their own. -->
+			<span class="ap-roomform-adds">
+				{#if offersFirstMessage && !showFirstMessage}<Button variant="ghost" size="sm" class="ap-roomform-addbtn" onclick={addFirstMessage} disabled={saving}><Plus size={14} aria-hidden="true" />Add first message</Button>{/if}
+				{#if !showDescription}<Button variant="ghost" size="sm" class="ap-roomform-addbtn" onclick={addDescription} disabled={saving}><Plus size={14} aria-hidden="true" />Add description</Button>{/if}
+			</span>
+		{/if}
+		<!-- Together, so a footer too narrow for them all puts these on a line of their own. -->
 		<span class="ap-roomform-actions">
 			<Button variant="ghost" size="sm" onclick={() => (open = false)} disabled={saving} label="Cancel" />
 			<Button type="submit" variant="primary" size="sm" disabled={saving || disabled} label={action} />

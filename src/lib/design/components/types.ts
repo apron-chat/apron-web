@@ -266,6 +266,11 @@ export function descriptionField(thread: boolean, field: Omit<RoomFormField, 'la
 	};
 }
 
+/** What RoomForm draws a new thread's first message with: its name and placeholder, with the height and submit it's given. */
+export function firstMessageField(field: Omit<RoomFormField, 'label' | 'placeholder'>): RoomFormField {
+	return { label: 'First message', placeholder: 'The thread’s first message, sent as you start it.', ...field };
+}
+
 /** What the MessageEditor gives your own `field`: put both on it, for the editor's look and the field's name. */
 export interface MessageEditorField {
 	/** The editor's field class, `ap-msgedit-field`. */

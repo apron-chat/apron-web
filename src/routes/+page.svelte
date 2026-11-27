@@ -101,7 +101,7 @@
 	import { onlyPreferencesDiffer, preferencesOpener } from '$lib/ui/preferences.svelte';
 	import { nextRoomRow } from '$lib/ui/room-steps';
 	import { articleOf, isMessageRow, isTimelineItem, MESSAGE_STEPS, messageRows, rowControls, stepMessage, tabbableOutside, timelineItems } from '$lib/ui/message-focus';
-	import { buildRoomTimeline, steady, threadEntries, threadStartedFrom, threadTitleFor, type ThreadEntry, type TimelineItem } from '$lib/ui/timeline';
+	import { buildRoomTimeline, steady, threadEntries, threadStartedFrom, threadDescriptionFor, threadTitleFor, type ThreadEntry, type TimelineItem } from '$lib/ui/timeline';
 	import { takeSignInLink } from '$lib/ui/sign-in-link';
 	import { returnedWaiting } from '$lib/ui/sign-in-window';
 	import { SignInLinks } from '$lib/ui/link-controller.svelte';
@@ -142,8 +142,6 @@
 		title: string;
 		description: string;
 		message?: string;
-		/** The message it starts from, shown in the dialog as a quote that can't be typed into. */
-		from?: { sender: string; text: string };
 		moving?: number;
 	};
 
@@ -3553,7 +3551,7 @@
 			chooseThread(existing);
 			return;
 		}
-		askNewThread({ title: threadTitleFor(event), description: '', message: id, from: { sender: senderName(event), text: messageSnippet(event, 3, 280) } });
+		askNewThread({ title: threadTitleFor(event), description: threadDescriptionFor(event) ?? '', message: id });
 	}
 
 	/**
@@ -3562,7 +3560,7 @@
 	 * select mode the selection then moves into it. A rejection is shown in the
 	 * dialog, which stays open, so it only rejects while no thread exists.
 	 */
-	async function createThread(start: NewThread, thread: { title: string; description?: string }): Promise<void> {
+	async function createThread(start: NewThread, thread: { title: string; description?: string }, first?: { text: string; mentions: string[] }): Promise<void> {
 		if (!client) throw new Error('Not connected');
 		const roomId = start.room.id;
 		if (start.moving) {
@@ -3592,7 +3590,20 @@
 		if (start.message !== undefined) startedThreads.set(start.message, result.room_id);
 		arrivals.mine(result.room_id);
 		includeMembers(start.room, result.room_id);
-		pendingOpen = { room: roomId, thread: result.room_id, ...(start.message !== undefined ? { replyTo: start.message } : {}) };
+		if (first) sendFirstMessage(client, result.room_id, first, start.message);
+		// Without a first message, the thread opens with its composer replying to the message it was started on.
+		pendingOpen = { room: roomId, thread: result.room_id, ...(start.message !== undefined && !first ? { replyTo: start.message } : {}) };
+	}
+
+	/**
+	 * A new thread's first message, written in the NewThreadDialog: sent in it once it exists, replying to the message
+	 * the thread was started on, as one written in its composer would. Should it fail, it waits as the thread's draft.
+	 */
+	function sendFirstMessage(chat: ChatClient, threadId: string, first: { text: string; mentions: string[] }, replyTo: string | undefined): void {
+		const options = { ...(replyTo !== undefined ? { replyTo } : {}), ...(first.mentions.length ? { mentions: first.mentions } : {}) };
+		feedback.track(chat.send(threadId, first.text, 'markdown', options), 'Sending…', () => {
+			if (drafts.restore(draftKey(threadId), first.text, replyTo)) composer?.focus();
+		});
 	}
 
 	/**
@@ -4113,10 +4124,10 @@
 		{@const start = newThread}
 		{@const NewThreadDialog = newThreadDialog.component}
 		{#key start}
-			<NewThreadDialog room={start.room} title={start.title} description={start.description} from={start.from} moving={start.moving}
+			<NewThreadDialog room={start.room} title={start.title} description={start.description} moving={start.moving}
 				enabled={canStartThreads && canCompose && (!start.moving || session.canEdit)}
 				{people} rooms={roomSuggestions} onmention={refreshMembers}
-				oncreate={(thread) => createThread(start, thread)} onclose={() => (newThread = undefined)} />
+				oncreate={(thread, first) => createThread(start, thread, first)} onclose={() => (newThread = undefined)} />
 		{/key}
 	{/if}
 	{#if searchMode && client && searchDialog.component}
