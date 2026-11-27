@@ -59,6 +59,23 @@ test.describe('a server that drops private from new threads', () => {
 		await expect(preview.composer()).toHaveAttribute('aria-placeholder', 'Message Secret plans');
 		expect((await preview.sent('message')).filter((p) => p.room_id !== undefined && p.room_id.startsWith('thread_'))).toEqual([]);
 	});
+
+	test('sends no first message written as it was started, which waits in the room instead', async ({ preview, page }) => {
+		await preview.open();
+		await createRoom(preview, 'Secret plans', { private: true });
+		await page.getByRole('button', { name: 'New thread in Secret plans', exact: true }).click();
+		const dialog = page.getByRole('dialog');
+		await dialog.getByRole('textbox', { name: 'Thread title', exact: true }).fill('Hidden thread');
+		await dialog.getByRole('button', { name: 'Add first message', exact: true }).click();
+		await page.keyboard.type('The launch date is March 3');
+		await dialog.getByRole('button', { name: 'Start thread', exact: true }).click();
+		await expect(dialog).toBeHidden();
+
+		await expect(page.getByText(PRIVACY_LOST)).toBeVisible();
+		await expect(preview.heading()).toHaveText('Secret plans');
+		await expect(preview.composer()).toHaveText('The launch date is March 3');
+		expect((await preview.sent('message')).filter((p) => p.body?.text === 'The launch date is March 3')).toEqual([]);
+	});
 });
 
 test.describe('a server that drops private from new rooms', () => {

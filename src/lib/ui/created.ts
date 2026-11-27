@@ -33,6 +33,11 @@ export interface PendingThread {
 	room: string;
 	thread: string;
 	replyTo?: string;
+	/**
+	 * Its first message, written as it was started: sent once it opens, replying to `replyTo`. Never sent to one refused,
+	 * which others than the room's members could read.
+	 */
+	first?: { text: string; mentions: string[] };
 	/** Messages were moved into it already: it opens whatever privacy its record shows, as that was checked before they moved. */
 	moved?: true;
 }

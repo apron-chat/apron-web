@@ -1327,12 +1327,17 @@
 		pendingOpen = undefined;
 		// A thread of a private room is private too (§4.2.4); one the server made visible isn't opened to reply in.
 		if (step !== 'open') {
-			untrack(() => feedback.error(step.refuse));
+			untrack(() => {
+				feedback.error(step.refuse);
+				// Not sent there: it waits in the room, the reply it was.
+				if (pending.first) drafts.restore(draftKey(pending.room), pending.first.text, pending.replyTo);
+			});
 			return;
 		}
 		untrack(() => {
 			openDestination(pending.room, pending.thread);
-			if (pending.replyTo !== undefined && !drafts.reply) drafts.setReply(pending.replyTo);
+			if (pending.first && client) sendFirstMessage(client, pending.thread, pending.first, pending.replyTo);
+			else if (pending.replyTo !== undefined && !drafts.reply) drafts.setReply(pending.replyTo);
 		});
 	});
 
@@ -3592,13 +3597,13 @@
 		if (start.message !== undefined) startedThreads.set(start.message, result.room_id);
 		arrivals.mine(result.room_id);
 		includeMembers(start.room, result.room_id);
-		if (first) sendFirstMessage(client, result.room_id, first, start.message);
-		// Without a first message, the thread opens with its composer replying to the message it was started on.
-		pendingOpen = { room: roomId, thread: result.room_id, ...(start.message !== undefined && !first ? { replyTo: start.message } : {}) };
+		// The first message goes once it opens (not to one whose privacy was lost); without one, the thread opens with its
+		// composer replying to the message it was started on.
+		pendingOpen = { room: roomId, thread: result.room_id, ...(start.message !== undefined ? { replyTo: start.message } : {}), ...(first ? { first } : {}) };
 	}
 
 	/**
-	 * A new thread's first message, written in the NewThreadDialog: sent in it once it exists, replying to the message
+	 * A new thread's first message, written in the NewThreadDialog: sent in it once it opens, replying to the message
 	 * the thread was started on, as one written in its composer would. Should it fail, it waits as the thread's draft.
 	 */
 	function sendFirstMessage(chat: ChatClient, threadId: string, first: { text: string; mentions: string[] }, replyTo: string | undefined): void {
