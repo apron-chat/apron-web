@@ -101,7 +101,7 @@
 	import { onlyPreferencesDiffer, preferencesOpener } from '$lib/ui/preferences.svelte';
 	import { nextRoomRow } from '$lib/ui/room-steps';
 	import { articleOf, isMessageRow, isTimelineItem, MESSAGE_STEPS, messageRows, rowControls, stepMessage, tabbableOutside, timelineItems } from '$lib/ui/message-focus';
-	import { buildRoomTimeline, steady, threadEntries, threadStartedFrom, threadDescriptionFor, threadTitleFor, type ThreadEntry, type TimelineItem } from '$lib/ui/timeline';
+	import { buildRoomTimeline, steady, threadEntries, threadStartedFrom, threadTitleFor, type ThreadEntry, type TimelineItem } from '$lib/ui/timeline';
 	import { takeSignInLink } from '$lib/ui/sign-in-link';
 	import { returnedWaiting } from '$lib/ui/sign-in-window';
 	import { SignInLinks } from '$lib/ui/link-controller.svelte';
@@ -142,6 +142,8 @@
 		title: string;
 		description: string;
 		message?: string;
+		/** The message it starts from, shown in the dialog as a quote that can't be typed into. */
+		from?: { sender: string; text: string };
 		moving?: number;
 	};
 
@@ -3551,7 +3553,7 @@
 			chooseThread(existing);
 			return;
 		}
-		askNewThread({ title: threadTitleFor(event), description: threadDescriptionFor(event) ?? '', message: id });
+		askNewThread({ title: threadTitleFor(event), description: '', message: id, from: { sender: senderName(event), text: messageSnippet(event, 3, 280) } });
 	}
 
 	/**
@@ -4111,7 +4113,7 @@
 		{@const start = newThread}
 		{@const NewThreadDialog = newThreadDialog.component}
 		{#key start}
-			<NewThreadDialog room={start.room} title={start.title} description={start.description} moving={start.moving}
+			<NewThreadDialog room={start.room} title={start.title} description={start.description} from={start.from} moving={start.moving}
 				enabled={canStartThreads && canCompose && (!start.moving || session.canEdit)}
 				{people} rooms={roomSuggestions} onmention={refreshMembers}
 				oncreate={(thread) => createThread(start, thread)} onclose={() => (newThread = undefined)} />

@@ -11,7 +11,7 @@ function field<T extends HTMLElement>(selector: string): T {
 }
 
 describe('NewThreadDialog', () => {
-	type Props = { room?: { id: string; title: string; private?: boolean }; title?: string; description?: string; moving?: number; people?: { id: string; name?: string }[] };
+	type Props = { room?: { id: string; title: string; private?: boolean }; title?: string; description?: string; from?: { sender: string; text: string }; moving?: number; people?: { id: string; name?: string }[] };
 	function render(props: Props = {}, oncreate = vi.fn((_thread: { title: string; description?: string }) => Promise.resolve())) {
 		const onclose = vi.fn();
 		dom.render(NewThreadDialog, { room: { id: 'ops', title: 'ops' }, enabled: true, oncreate, onclose, ...props });
@@ -20,23 +20,36 @@ describe('NewThreadDialog', () => {
 	const text = () => field('dialog').textContent ?? '';
 	const submitLabel = () => field('dialog button[type="submit"]').textContent;
 
-	it('starts from a message: its first line as the title, selected, and the message quoted as the description, its mentions as chips', async () => {
-		const { oncreate, onclose } = render({ title: 'Deploy failed', description: '> Deploy failed\n>\n> @ada says the runner looked fine.', people: [{ id: 'ada', name: 'Ada Lovelace' }] });
+	it('starts from a message: its first line as the title, selected, the message quoted where it can’t be typed into, and the description put away', async () => {
+		const { oncreate, onclose } = render({ title: 'Deploy failed', from: { sender: 'Ada Lovelace', text: 'Deploy failed\nThe runner looked fine.' } });
 		const dialog = field<HTMLDialogElement>('dialog');
 		expect(dialog.open).toBe(true);
 		expect(text()).toContain('Start thread');
 		expect(text()).toContain('In ops');
-		const description = field('[data-testid="description-input"]');
-		expect(description.querySelector('[data-user-id="ada"]')?.textContent).toContain('Ada Lovelace');
+		const quote = field('.ap-roomform-from');
+		expect(quote.textContent).toContain('Starting from Ada Lovelace’s message');
+		expect(quote.querySelector('blockquote')?.textContent).toBe('Deploy failed\nThe runner looked fine.');
+		expect(quote.querySelector('input, textarea, [contenteditable]')).toBeNull();
+		expect(text()).toContain('Next, you’ll write the thread’s first message, as a reply to Ada Lovelace’s.');
+		// Not taken for the first message: the description waits behind "Add description".
+		expect(document.querySelector('[data-testid="description-input"]')).toBeNull();
+		expect([...document.querySelectorAll('dialog button')].some((b) => b.textContent?.trim() === 'Add description')).toBe(true);
 		await tick();
 		const input = field<HTMLInputElement>('input.ap-field');
 		expect(document.activeElement).toBe(input);
 		expect([input.selectionStart, input.selectionEnd]).toEqual([0, 'Deploy failed'.length]);
 		dom.type(input, '  Why the 4pm deploy failed ');
 		await dom.submit();
-		// Sent as it was written: the chip is its `@ada`.
-		expect(oncreate).toHaveBeenCalledWith({ title: 'Why the 4pm deploy failed', description: '> Deploy failed\n>\n> @ada says the runner looked fine.' });
+		expect(oncreate).toHaveBeenCalledWith({ title: 'Why the 4pm deploy failed' });
 		expect(onclose).toHaveBeenCalled();
+	});
+
+	it('shows a description it starts with, its mentions as chips, and sends it as written', async () => {
+		const { oncreate } = render({ title: 'Deploy', description: '> @ada says the runner looked fine.', people: [{ id: 'ada', name: 'Ada Lovelace' }] });
+		expect(field('[data-testid="description-input"]').querySelector('[data-user-id="ada"]')?.textContent).toContain('Ada Lovelace');
+		await dom.submit();
+		// The chip is its `@ada`.
+		expect(oncreate).toHaveBeenCalledWith({ title: 'Deploy', description: '> @ada says the runner looked fine.' });
 	});
 
 	it('starts from a room with nothing filled in, needs a title, and stays open with the reason when creating fails', async () => {

@@ -23,6 +23,8 @@
 		 * says so.
 		 */
 		private?: boolean;
+		/** Starting a thread from a message: who wrote it and its first lines, quoted above the fields, not editable. */
+		from?: { sender: string; text: string };
 		/** Starting a thread for this many selected messages, which move into it: said in the heading, a note and the button. */
 		moving?: number;
 		/** Title. `bind:name`. Focused and selected when it opens, so typing replaces a suggestion. */
@@ -51,7 +53,7 @@
 		/** Classes for its Dialog's `<dialog>`, added to its own. */
 		class?: ClassValue;
 	}
-	let { open = $bindable(false), kind = 'thread', subtitle, private: isPrivate = $bindable(false), moving = 0, name = $bindable(''), description = $bindable(''), field, showDescription = $bindable(), status = 'idle', error, disabled = false, onsubmit, onclose, class: className }: Props = $props();
+	let { open = $bindable(false), kind = 'thread', subtitle, private: isPrivate = $bindable(false), from, moving = 0, name = $bindable(''), description = $bindable(''), field, showDescription = $bindable(), status = 'idle', error, disabled = false, onsubmit, onclose, class: className }: Props = $props();
 	const uid = $props.id();
 	const saving = $derived(status === 'saving');
 	const thread = $derived(kind === 'thread');
@@ -62,6 +64,7 @@
 		: (saving ? 'Starting…' : 'Start thread'));
 	/** What starting a thread will do, in a line under the fields. */
 	const note = $derived(thread ? [
+		from ? `Next, you’ll write the thread’s first message, as a reply to ${from.sender}’s.` : '',
 		moves ? `${moves === 1 ? 'The selected message moves' : `The ${moves} selected messages move`} into the new thread.` : '',
 		isPrivate ? 'Private, like its room: only the room’s members see it.' : ''
 	].filter(Boolean).join(' ') : '');
@@ -93,6 +96,12 @@
 <!-- Escape, the close button and Cancel do nothing while it saves. -->
 <Dialog class={['ap-roomform', className]} bind:open size="md" title={heading} {subtitle} locked={saving} {error} {onclose}
 	onsubmit={(event) => { event.preventDefault(); if (!saving && !disabled) onsubmit?.(); }}>
+	{#if from}
+		<figure class="ap-roomform-from">
+			<figcaption class="ap-fieldlabel-hint">Starting from {from.sender}’s message</figcaption>
+			<blockquote dir="auto">{from.text}</blockquote>
+		</figure>
+	{/if}
 	<label class="ap-fieldlabel" for="{uid}-name">Title
 		<input id="{uid}-name" class="ap-field" aria-label="{thread ? 'Thread' : 'Room'} title" aria-required="true" bind:this={nameInput} bind:value={name} disabled={saving} maxlength="120" autocomplete="off" spellcheck="true" dir="auto"
 			placeholder={thread ? 'What it’s about' : 'What to call it'} />
