@@ -87,6 +87,52 @@ describe('NewThreadDialog', () => {
 		expect(button('Add reply')).toBeUndefined();
 	});
 
+	const editor = (name: string) => field(`[data-testid="${name}-editor"]`);
+
+	it('draws the reply plain, as the composer, and the description with its formatting and Preview, neither with a hint', async () => {
+		render({ title: 'Deploy failed', replyTo: 'Ada Lovelace' });
+		button('Add reply')!.click();
+		button('Add description')!.click();
+		await tick();
+		await tick();
+		expect(editor('first-message').querySelector('.ap-mdhead')).toBeNull();
+		expect(editor('description').querySelector('.ap-mdhead')).not.toBeNull();
+		expect(document.querySelector('dialog .ap-fieldlabel-hint')).toBeNull();
+		expect(text()).not.toContain('Markdown, optional');
+	});
+
+	it('puts a field back behind its button with its ×, starting over: the reply empty, the description with its suggestion', async () => {
+		const { oncreate } = render({ title: 'Deploy failed', description: '> Deploy failed', replyTo: 'Ada Lovelace' });
+		button('Add reply')!.click();
+		await tick();
+		await tick();
+		const reply = field('[data-testid="first-message-input"]');
+		reply.textContent = 'Still broken?';
+		reply.dispatchEvent(new Event('input', { bubbles: true }));
+		await tick();
+		dom.byRole<HTMLButtonElement>('button', 'Remove reply').click();
+		await tick();
+		await tick();
+		expect(document.querySelector('[data-testid="first-message-input"]')).toBeNull();
+		expect(document.activeElement).toBe(button('Add reply'));
+		button('Add reply')!.click();
+		await tick();
+		await tick();
+		expect(field('[data-testid="first-message-input"]').textContent).toBe('');
+
+		button('Add description')!.click();
+		await tick();
+		await tick();
+		dom.byRole<HTMLButtonElement>('button', 'Remove description').click();
+		await tick();
+		await tick();
+		expect(document.querySelector('[data-testid="description-input"]')).toBeNull();
+		expect(document.activeElement).toBe(button('Add description'));
+		// Nothing put away is sent.
+		await dom.submit();
+		expect(oncreate).toHaveBeenCalledWith({ title: 'Deploy failed' }, undefined);
+	});
+
 	it('offers no first message when moving messages, which start the thread', () => {
 		render({ title: 'Offer', moving: 2 });
 		expect(button('Add first message')).toBeUndefined();

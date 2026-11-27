@@ -41,6 +41,18 @@
 	let firstMessage = $state('');
 	let firstMentions = $state<string[]>([]);
 	let showFirstMessage = $state(false);
+	/** Removed by its ×, a field starts over: empty, or the description with its suggestion. */
+	function setShowDescription(show: boolean | undefined): void {
+		if (!show) description = suggestedDescription;
+		showDescription = show;
+	}
+	function setShowFirstMessage(show: boolean): void {
+		if (!show) {
+			firstMessage = '';
+			firstMentions = [];
+		}
+		showFirstMessage = show;
+	}
 	/** Starting it, and why it didn't start. */
 	const task = new Task<'saving', string>();
 
@@ -57,11 +69,11 @@
 	}
 </script>
 
-<RoomForm bind:open kind="thread" subtitle="In {room.title}" private={room.private === true} {moving} {replyTo} bind:showDescription bind:showFirstMessage bind:name={title} field={descriptionField} firstMessage={firstMessageField} status={task.busy ? 'saving' : 'idle'} error={task.note} disabled={!enabled} onsubmit={start} {onclose} />
+<RoomForm bind:open kind="thread" subtitle="In {room.title}" private={room.private === true} {moving} {replyTo} bind:showDescription={() => showDescription, setShowDescription} bind:showFirstMessage={() => showFirstMessage, setShowFirstMessage} bind:name={title} field={descriptionField} firstMessage={firstMessageField} status={task.busy ? 'saving' : 'idle'} error={task.note} disabled={!enabled} onsubmit={start} {onclose} />
 
 {#snippet descriptionField(form: RoomFormField)}
 	<DescriptionField bind:value={description} {form} {people} {rooms} {onmention} />
 {/snippet}
 {#snippet firstMessageField(form: RoomFormField)}
-	<DescriptionField bind:value={firstMessage} bind:mentions={firstMentions} {form} {people} {rooms} {onmention} testid="first-message" />
+	<DescriptionField bind:value={firstMessage} bind:mentions={firstMentions} {form} {people} {rooms} {onmention} formatting={false} testid="first-message" />
 {/snippet}

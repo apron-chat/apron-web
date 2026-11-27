@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { tick, untrack, type Snippet } from 'svelte';
 	import Plus from '@lucide/svelte/icons/plus';
+	import X from '@lucide/svelte/icons/x';
 	import type { ClassValue } from 'svelte/elements';
 	import Button from './Button.svelte';
 	import Dialog from './Dialog.svelte';
@@ -42,12 +43,12 @@
 		firstMessage?: Snippet<[RoomFormField]>;
 		/** Starting a thread on a message: the name of who wrote it, whom the first message replies to (across rooms, §3.5.4). */
 		replyTo?: string;
-		/** Whether the first message's field shows; `bind:showFirstMessage`. Hidden until it's added; once shown it stays. */
+		/** Whether the first message's field shows; `bind:showFirstMessage`. Hidden until it's added, and again once removed. */
 		showFirstMessage?: boolean;
 		/**
 		 * Whether the description field shows; `bind:showDescription`. Starting a thread with no description, it waits
-		 * behind "Add description" at the start of the footer, so it isn't taken for the thread's first message; a thread
-		 * that starts with one (from a message), and a room, show it from the start.
+		 * behind "Add description" at the start of the footer, so it isn't taken for the thread's first message, and its ×
+		 * puts it back there; a thread that starts with one, and a room, show it from the start.
 		 */
 		showDescription?: boolean;
 		status?: 'idle' | 'saving';
@@ -95,13 +96,21 @@
 		showDescription = true;
 		void reveal(() => descriptionBox);
 	}
+	/** A thread's field put away again by its ×, back behind its Add button, which takes the keyboard. */
+	async function remove(which: 'first' | 'description'): Promise<void> {
+		const form = nameInput?.form;
+		if (which === 'first') showFirstMessage = false;
+		else showDescription = false;
+		await tick();
+		form?.querySelector<HTMLElement>(`[data-add="${which}"]`)?.focus();
+	}
 	/** What the description's field is drawn with, yours or the MarkdownEditor's, kept as one object while its parts are the same. */
 	const fieldArgs = $derived<RoomFormField>(descriptionField(thread, {
 		disabled: saving,
 		rows: 4,
 		submit: () => { if (!saving && !disabled) onsubmit?.(); }
 	}));
-	const firstMessageArgs = $derived<RoomFormField>(firstMessageField(replyTo, {
+	const firstMessageArgs = $derived(firstMessageField(replyTo, {
 		disabled: saving,
 		rows: 4,
 		submit: () => { if (!saving && !disabled) onsubmit?.(); }
@@ -125,12 +134,12 @@
 	</label>
 	<!-- Each field is named by its `label`; these head them. -->
 	{#if offersFirstMessage && showFirstMessage}
-	<div class="ap-fieldlabel" bind:this={firstMessageBox}><span class="ap-fieldlabel-row"><span>{replyTo !== undefined ? `Reply to ${replyTo}` : 'First message'}</span><span class="ap-fieldlabel-hint">Optional</span></span>
+	<div class="ap-fieldlabel" bind:this={firstMessageBox}><span class="ap-fieldlabel-row"><span>{firstMessageArgs.heading}</span>{@render removeButton('first', firstMessageArgs.label)}</span>
 		{@render firstMessage?.(firstMessageArgs)}
 	</div>
 	{/if}
 	{#if showDescription}
-	<div class="ap-fieldlabel" bind:this={descriptionBox}><span class="ap-fieldlabel-row"><span>Description</span><span class="ap-fieldlabel-hint">Markdown, optional</span></span>
+	<div class="ap-fieldlabel" bind:this={descriptionBox}><span class="ap-fieldlabel-row"><span>Description</span>{#if thread}{@render removeButton('description', 'description')}{/if}</span>
 		{#if field}{@render field(fieldArgs)}{:else}<MarkdownEditor bind:value={description} label={fieldArgs.label} placeholder={fieldArgs.placeholder} disabled={saving} rows={fieldArgs.rows} />{/if}
 	</div>
 	{/if}
@@ -145,8 +154,8 @@
 		{#if (offersFirstMessage && !showFirstMessage) || !showDescription}
 			<!-- Together at the start of the footer, so a narrow one puts Cancel and the action on a line of their own. -->
 			<span class="ap-roomform-adds">
-				{#if offersFirstMessage && !showFirstMessage}<Button variant="ghost" size="sm" class="ap-roomform-addbtn" onclick={addFirstMessage} disabled={saving}><Plus size={14} aria-hidden="true" />{replyTo !== undefined ? 'Add reply' : 'Add first message'}</Button>{/if}
-				{#if !showDescription}<Button variant="ghost" size="sm" class="ap-roomform-addbtn" onclick={addDescription} disabled={saving}><Plus size={14} aria-hidden="true" />Add description</Button>{/if}
+				{#if offersFirstMessage && !showFirstMessage}<Button variant="ghost" size="sm" class="ap-roomform-addbtn" data-add="first" onclick={addFirstMessage} disabled={saving}><Plus size={14} aria-hidden="true" />{replyTo !== undefined ? 'Add reply' : 'Add first message'}</Button>{/if}
+				{#if !showDescription}<Button variant="ghost" size="sm" class="ap-roomform-addbtn" data-add="description" onclick={addDescription} disabled={saving}><Plus size={14} aria-hidden="true" />Add description</Button>{/if}
 			</span>
 		{/if}
 		<!-- Together, so a footer too narrow for them all puts these on a line of their own. -->
@@ -156,3 +165,7 @@
 		</span>
 	{/snippet}
 </Dialog>
+
+{#snippet removeButton(which: 'first' | 'description', name: string)}
+	<button type="button" class="ap-iconbtn ap-roomform-remove" aria-label="Remove {name.toLowerCase()}" title="Remove {name.toLowerCase()}" disabled={status === 'saving'} onclick={() => void remove(which)}><X size={14} aria-hidden="true" /></button>
+{/snippet}
