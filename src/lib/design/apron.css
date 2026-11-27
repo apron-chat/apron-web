@@ -1298,8 +1298,9 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 /* The card is about one person: their face leads it, larger than --avatar-lg elsewhere, with room around it. */
 .ap-profcard { --profcard-pad: calc(var(--space-4) + var(--space-1)); gap: var(--space-3); padding: var(--profcard-pad); }
 .ap-profcard.ap-popover-sheet { padding-bottom: calc(var(--profcard-pad) + env(safe-area-inset-bottom) + var(--corner-clear)); }
-.ap-profcard .ap-avatar-lg { width: 80px; height: 80px; font-size: 26px; }
-.ap-profcard .ap-avatar-status-lg { --presence-d: 16px; --presence-gap: 4px; }
+/* Who they are first: a 64px avatar beside the name, @user_id and status; then what you can do; then the room, under a rule. */
+.ap-profcard .ap-avatar-lg { width: 64px; height: 64px; font-size: 22px; }
+.ap-profcard .ap-avatar-status-lg { --presence-d: 14px; --presence-gap: 3px; }
 .ap-profcard-who { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
 .ap-profcard-names { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .ap-profcard-nameline { display: flex; align-items: baseline; gap: var(--space-1); min-width: 0; }
@@ -1308,7 +1309,9 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-profcard-handleline { display: flex; align-items: center; gap: var(--space-1); min-width: 0; }
 .ap-profcard-handle { min-width: 0; color: var(--ink-muted); font-size: var(--text-ui); line-height: var(--leading-ui); overflow-wrap: anywhere; user-select: all; }
 .ap-profcard-copy { flex: none; width: var(--control-xs); height: var(--control-xs); margin: -2px 0; }
-.ap-profcard-status, .ap-profcard-seen { color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); overflow-wrap: anywhere; }
+/* Status and when they were last seen, as one line: the dot on the avatar already says which. */
+.ap-profcard-statusline { display: flex; flex-wrap: wrap; column-gap: 6px; color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); }
+.ap-profcard-status, .ap-profcard-seen { overflow-wrap: anywhere; }
 .ap-profcard-literal { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--ink); }
 /* With room for more than one row, every badge shows, wrapping; one wider than the card ellipsizes. */
 .ap-profcard-names .ap-roles { align-self: flex-start; height: auto; overflow: visible; margin: 2px 0 0; }
@@ -1316,8 +1319,15 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-profcard-note { color: var(--ap-tone, var(--ink-muted)); }
 .ap-profcard-bio { margin: 0; font-size: var(--text-ui); line-height: var(--leading-ui); color: var(--ink); white-space: pre-line; overflow-wrap: anywhere; }
 .ap-profcard-bio a { color: var(--denim); }
-.ap-profcard-warn { padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); background: var(--bg-300); color: var(--ink); }
-.ap-profcard-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.ap-profcard-warn { display: flex; align-items: flex-start; gap: var(--space-2); padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); background: color-mix(in srgb, var(--warn) 12%, transparent); color: var(--ink); font-size: var(--text-sm); line-height: var(--leading-sm); }
+.ap-profcard-warn > svg { flex: none; margin-top: 2px; color: var(--warn); }
+/* Message and Mention: the same size, side by side, filling the row; one alone fills it. */
+.ap-profcard-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: var(--space-2); }
+.ap-profcard-actions .ap-btn { justify-content: center; min-width: 0; }
+.ap-profcard-room { display: flex; align-items: center; gap: var(--space-2); min-height: var(--control-md); margin: 0 calc(-1 * var(--profcard-pad)); padding: var(--space-3) var(--profcard-pad) 0; border-top: 1px solid var(--line); color: var(--ink-muted); font-size: var(--text-ui); line-height: var(--leading-ui); }
+.ap-profcard-room > svg { flex: none; }
+.ap-profcard-membership { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.ap-profcard-room .ap-btn.ap-profcard-add { flex: none; height: var(--control-sm); padding: 0 var(--space-3); font-size: var(--text-sm); }
 
 /* ReactorsPopover — who reacted with an emoji; the list scrolls past 320px, so a crowd doesn't run off the screen */
 .ap-reactors { gap: var(--space-2); padding: var(--space-3); }

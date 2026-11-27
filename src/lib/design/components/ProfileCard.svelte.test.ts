@@ -90,9 +90,25 @@ describe('ProfileCard', () => {
 	it('offers only the actions it is given, and says Add to room is in flight', () => {
 		const noop = () => undefined;
 		const box = render({ userId: 'ada', onmention: noop, oncopyid: noop, onaddtoroom: noop, adding: true, note: { text: 'Nope', error: true } });
-		expect([...box.querySelectorAll('.ap-profcard-actions button')].map((b) => b.textContent)).toEqual(['Mention', 'Adding…']);
+		expect([...box.querySelectorAll('.ap-profcard-actions button')].map((b) => b.textContent)).toEqual(['Mention']);
+		// Add sits on the room's line, beside whether they're in it.
+		expect(dom.button('Adding…', box).closest('.ap-profcard-room')).not.toBeNull();
 		expect(dom.button('Adding…', box).disabled).toBe(true);
 		expect(dom.byRole('alert', undefined, box).textContent).toBe('Nope');
+	});
+
+	it('says whether they are in the room on its own line, with Add, named Add to room, only when given', () => {
+		const onaddtoroom = vi.fn();
+		let box = render({ userId: 'ada', membership: 'Not in design', onaddtoroom });
+		const room = box.querySelector('.ap-profcard-room')!;
+		expect(room.querySelector('.ap-profcard-membership')?.textContent).toBe('Not in design');
+		dom.button('Add to room', box).click();
+		expect(onaddtoroom).toHaveBeenCalledOnce();
+		dom.unmount();
+		box = render({ userId: 'ada', membership: 'Member of design' });
+		expect(box.querySelector('.ap-profcard-room button')).toBeNull();
+		dom.unmount();
+		expect(render({ userId: 'ada' }).querySelector('.ap-profcard-room')).toBeNull();
 	});
 
 	it('leads with Message, the primary action, which says when it is opening', () => {
