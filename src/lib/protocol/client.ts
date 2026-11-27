@@ -3840,10 +3840,31 @@ export class ChatClient {
 		} else if (isIdentity(params.new)) {
 			const current = this.noteUser(cloneJson(params.new));
 			if (isIdentity(params.old) && params.old.user_id !== current.user_id) this.retireUserId(params.old.user_id, current.user_id);
+		} else if (isJsonObject(params.new) && Object.keys(params.new).length === 0 && isIdentity(params.old)) {
+			this.removeUser(params.old.user_id);
 		} else {
 			return;
 		}
 		this.emit();
+	}
+
+	/**
+	 * A user the server removed with their records (`new` of `{}`, §3.3.3): forgotten here under their `user_id` and
+	 * every one retired into it, with what they sent, reacted and joined, so nobody shows under their name any more.
+	 * Never you: the server closes your own connections instead.
+	 */
+	private removeUser(userId: string): void {
+		if (userId === this.you?.user_id) return;
+		const ids = [userId, ...[...this.userAliases].filter(([, current]) => current === userId).map(([retired]) => retired)];
+		for (const id of ids) {
+			this.users.delete(id);
+			this.recordedUsers.delete(id);
+			this.userAliases.delete(id);
+			this.sawOffline.delete(id);
+			for (const readers of this.reads.values()) readers.delete(id);
+			for (const typing of [...this.typing.values()]) if (typing.from.user_id === id) this.removeTyping(typing.room, id);
+			this.store.removeUser(id);
+		}
 	}
 
 	/**

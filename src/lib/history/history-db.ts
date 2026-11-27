@@ -215,7 +215,7 @@ function roomRange(room: string, below?: number): IDBKeyRange {
 }
 
 /** Calls `visit` for each row in `range`, which may delete it, then resolves. */
-function eachRow(store: IDBObjectStore, range: IDBKeyRange, visit: (row: RecordRow, cursor: IDBCursorWithValue) => void): Promise<void> {
+function eachRow(store: IDBObjectStore, range: IDBKeyRange | undefined, visit: (row: RecordRow, cursor: IDBCursorWithValue) => void): Promise<void> {
 	return new Promise((resolve, reject) => {
 		const request = store.openCursor(range);
 		request.onsuccess = () => {
@@ -445,6 +445,21 @@ async function writeIn(transaction: IDBTransaction, write: HistoryWrite, kept: R
 				await eachRow(records, roomRange(change.room), (row, cursor) => { if (row.kind !== 'j') cursor.delete(); });
 				const row = await done(rooms.get(change.room)) as RoomRow | undefined;
 				if (row?.sync) rooms.put({ room: change.room, ...(row.record ? { record: row.record } : {}) });
+				break;
+			}
+			case 'removeUser': {
+				// A user the server removed (§3.3.3), in every room kept: the messages they sent with every reaction set
+				// on them, wherever those are logged, their reaction sets, and their memberships.
+				const user = change.user;
+				const removed: string[] = [];
+				await eachRow(records, undefined, (row, cursor) => {
+					const mine = row.kind === 'j' ? row.id === user : (row.value as MessageRecord | ReactionSet).from.user_id === user;
+					if (!mine) return;
+					if (row.kind === 'm') removed.push(row.id);
+					cursor.delete();
+				});
+				const sets = await Promise.all(removed.map((id) => done(byKey.getAllKeys(IDBKeyRange.bound(['r', `${id} `], ['r', `${id}!`], false, true)))));
+				for (const key of sets.flat()) records.delete(key);
 				break;
 			}
 			// A room record goes with its room's row; `clear` stops the writer before it gets here.

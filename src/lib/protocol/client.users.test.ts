@@ -66,6 +66,40 @@ describe('kept and recorded users', () => {
 		expect(snapshot.userAliases.bob).toBeUndefined();
 	});
 
+	it('forgets a removed user (new of {}) and every user_id retired into them, with what they sent, reacted and joined', async () => {
+		await connect();
+		// Two users show as Ada L; one of them was a guest before.
+		socket.receive({ method: 'user', params: { new: { user_id: 'ada', name: 'Ada L' }, old: { user_id: 'guest_9' } } });
+		socket.receive({ method: 'user', params: { new: { user_id: 'carol', name: 'Ada L' } } });
+		socket.receive({ method: 'room_update', params: { memberships: [{ log_id: '11', room_id: 'general', members: [{ user: { user_id: 'ada', name: 'Ada L' }, joined: true }, { user: { user_id: 'carol', name: 'Ada L' }, joined: true }] }] } });
+		socket.receive({ method: 'message', params: { message_id: '12', log_id: '12', room_id: 'general', from: { user_id: 'ada', name: 'Ada L' }, body: { text: 'hi' } } });
+		socket.receive({ method: 'message', params: { message_id: '13', log_id: '13', room_id: 'general', from: { user_id: 'carol', name: 'Ada L' }, body: { text: 'hello' } } });
+		socket.receive({ method: 'reactions', params: { log_id: '14', message_id: '12', room_id: 'general', reactions: [{ from: { user_id: 'carol' }, emojis: ['👍'] }] } });
+		socket.receive({ method: 'reactions', params: { log_id: '15', message_id: '13', room_id: 'general', reactions: [{ from: { user_id: 'ada' }, emojis: ['👍'] }, { from: { user_id: 'carol' }, emojis: ['🎉'] }] } });
+		socket.receive({ method: 'activity', params: { room_id: 'general', from: { user_id: 'ada' }, typing: 5 } });
+		const general = () => snapshot.rooms.find((room) => room.id === 'general')!;
+		expect(general().timeline.order).toEqual(['12', '13']);
+		expect(snapshot.typing.map((typing) => typing.from.user_id)).toEqual(['ada']);
+
+		socket.receive({ method: 'user', params: { new: {}, old: { user_id: 'ada' } } });
+		expect(snapshot.users.ada).toBeUndefined();
+		expect(snapshot.recordedUsers.ada).toBeUndefined();
+		expect(snapshot.userAliases.guest_9).toBeUndefined();
+		expect(snapshot.typing).toEqual([]);
+		// Their message goes with the reactions on it; their reaction elsewhere goes, others' stay.
+		expect(general().timeline.order).toEqual(['13']);
+		expect(general().timeline.reactions['13']?.map((reaction) => reaction.emoji)).toEqual(['🎉']);
+		expect(general().members?.map((member) => member.user_id)).toEqual(['carol']);
+		expect(general().timeline.memberships).toEqual([{ log_id: '11', entries: [{ user: { user_id: 'carol', name: 'Ada L' }, joined: true }] }]);
+		expect(snapshot.users.carol).toEqual({ user_id: 'carol', name: 'Ada L' });
+
+		// Not without `old`, and never you: the server closes your own connections instead.
+		socket.receive({ method: 'user', params: { new: {} } });
+		socket.receive({ method: 'user', params: { new: {}, old: { user_id: 'guest_1' } } });
+		expect(snapshot.you?.user_id).toBe('guest_1');
+		expect(snapshot.users.carol).toEqual({ user_id: 'carol', name: 'Ada L' });
+	});
+
 	it('changes nothing for "ext": {}, keeps null as an ordinary value, and keeps a cleared field cleared', async () => {
 		await connect();
 		socket.receive({ method: 'user', params: { new: { user_id: 'bob', name: 'Bob', avatar: 'https://example.com/b.png', roles: ['bot'], ext: { irc: { network: 'libera' } } } } });
