@@ -699,18 +699,30 @@
 	 */
 	let absentMentionsStyle = $derived.by(() => {
 		const ids = absentInMessages(messages, knownMemberIds(paneMembers, paneMemberCount)).filter((userId) => !notMentionable(directory.person({ user_id: userId }) ?? { user_id: userId }));
-		greyedMentions = new Set(ids);
+		const last = greyedMentions;
+		if (ids.length !== last.size || ids.some((userId) => !last.has(userId))) {
+			greyedMentions = new Set(ids);
+			// Chips already told why say so again, also under a pointer that hasn't moved; after the page draws.
+			queueMicrotask(renoteGreyedMentions);
+		}
 		return absentMentionsCss(ids);
 	});
+	const greyedNote = (): string => (activeThread ? 'Not in this thread' : 'Not in this room');
 	/** A greyed chip says why as the pointer or focus reaches it. */
-	const noteGreyedMention = (event: Event): void => noteAbsentMention(event.target, greyedMentions, activeThread ? 'Not in this thread' : 'Not in this room');
+	const noteGreyedMention = (event: Event): void => noteAbsentMention(event.target, greyedMentions, greyedNote());
+	/** The chips `noteAbsentMention` has touched, as who is greyed changes. */
+	function renoteGreyedMentions(): void {
+		for (const chip of viewport.messageScroll?.querySelectorAll<HTMLElement>('.ap-msg-text .ap-mention[data-own-title]') ?? []) noteAbsentMention(chip, greyedMentions, greyedNote());
+	}
 	/**
 	 * The timeline's own listener rather than `onpointerover`: Svelte hands a delegated event to each ancestor of what
 	 * the pointer crossed, on every move between elements. A chip holds only its text, so it is the target itself.
 	 */
 	const greyedMentionTips: SvelteAttachment<HTMLElement> = (timeline) => {
 		const over = (event: PointerEvent) => {
-			if (greyedMentions.size && event.target instanceof HTMLElement && event.target.dataset.userId) noteGreyedMention(event);
+			// A chip told why before is set right also when no one is greyed now.
+			const chip = event.target;
+			if (chip instanceof HTMLElement && chip.dataset.userId && (greyedMentions.size || chip.dataset.ownTitle !== undefined)) noteGreyedMention(event);
 		};
 		timeline.addEventListener('pointerover', over, { passive: true });
 		return () => timeline.removeEventListener('pointerover', over);
