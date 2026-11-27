@@ -1415,13 +1415,16 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 /* ThreadDescription — a room's or thread's description, its first lines under the header as the conversation opens: the
    DescriptionSheet folded, on its raised ground, rounded at its foot and lifted off the conversation; the description icon
    in its top left corner as × is in its top right. Set as the sheet sets it, in the same column, but clear of both
-   corners where the column comes nearer the edges (a phone). The whole of it opens the rest, so it lifts a shade under
-   the pointer. */
+   corners where the column comes nearer the edges (a phone), the far one wider when it holds the pencil too. Cut off,
+   the whole of it opens the rest, so it lifts a shade under the pointer. Its lines and the bar under them are the
+   sheet's too, which measures against them whether a description outgrows its first lines. */
+:is(.ap-description, .ap-descsheet) { --ap-description-bar: 48px; --ap-description-lines: 4; }
 .ap-description {
-	--ap-description-ground: var(--bg-200); --ap-description-bar: 48px; --ap-description-lines: 4;
-	--ap-description-foot: calc(var(--control-md) + var(--space-2));
-	--ap-description-inline: max(var(--ap-doc-start, var(--space-4)), var(--ap-description-corner, 44px)) max(var(--ap-doc-end, var(--space-4)), var(--ap-description-corner, 44px));
-	position: relative; flex: none; padding-block: var(--space-4) var(--space-3); padding-inline: var(--ap-description-inline);
+	--ap-description-ground: var(--bg-200);
+	--ap-description-foot: calc(var(--control-md) + var(--space-2)); --ap-description-pad-end: var(--space-3);
+	--ap-description-corner-end: var(--ap-description-corner, 44px);
+	--ap-description-inline: max(var(--ap-doc-start, var(--space-4)), var(--ap-description-corner, 44px)) max(var(--ap-doc-end, var(--space-4)), var(--ap-description-corner-end));
+	position: relative; flex: none; padding-block: var(--space-4) var(--ap-description-pad-end); padding-inline: var(--ap-description-inline);
 	background: var(--ap-description-ground); border-radius: 0 0 var(--radius-lg) var(--radius-lg); box-shadow: var(--shadow-popover);
 }
 .ap-description-opens { cursor: pointer; }
@@ -1429,25 +1432,28 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
    ground changed on the panel instead would restyle everything in it, as every element inherits it. */
 .ap-description-opens:hover { background: var(--bg-300); }
 .ap-description-opens:hover .ap-description-foot { --ap-description-ground: var(--bg-300); }
-/* The icon and ×, each in a box of a small control's size, as far in from their corners and level with the first line. */
-:is(.ap-description-icon, .ap-description-close) { position: absolute; top: calc(var(--space-4) + (var(--leading-body) - var(--control-sm)) / 2); width: var(--control-sm); height: var(--control-sm); }
+/* The icon and × (and the pencil before ×), each in a box of a small control's size, as far in from their corners and
+   level with the first line. */
+:is(.ap-description-icon, .ap-description-close, .ap-description-edit) { position: absolute; top: calc(var(--space-4) + (var(--leading-body) - var(--control-sm)) / 2); width: var(--control-sm); height: var(--control-sm); }
 .ap-description-icon { inset-inline-start: var(--space-3); display: grid; place-items: center; color: var(--ink-muted); }
 .ap-description-close { z-index: var(--z-raised); inset-inline-end: var(--space-3); }
-/* Its text shows to its lines (four, six on a phone, which is narrower) and a bar's height more. Its foot, holding the
-   chevron (and Unsaved draft), lies over the panel's last row, kept for it (`--ap-description-foot`). Cut off, the text
-   runs on into that row, and the foot reaches up as a bar that fades from clear to the panel's ground: the next lines
-   show faintly through it, so the cut reads as more to come. The box, and the panel, are as tall either way: the bar
+.ap-description-edit { z-index: var(--z-raised); inset-inline-end: calc(var(--space-3) + var(--control-sm) + var(--space-1)); }
+.ap-description-edits { --ap-description-corner-end: calc(var(--ap-description-corner, 44px) + var(--control-sm) + var(--space-1)); }
+/* Its text shows to its lines (four, six on a phone, which is narrower) and a bar's height more. Cut off, its foot,
+   holding Read all, lies over that bar, fading from clear to the panel's ground, solid where Read all sits: the next
+   line shows faintly through it, so the cut reads as more to come. Not cut off, there is no foot. Either way the panel is as tall as its text: Read all
    coming changes no size, so neither what's cut nor the conversation under it, which its measure would otherwise move
-   within the same frame (a ResizeObserver loop). */
+   within the same frame (a ResizeObserver loop). Unsaved draft, which no measure brings, has a row kept for it at the
+   panel's foot (`--ap-description-foot`), where it lies with Read all, the text running on into that row when cut. */
 .ap-description-text { max-height: calc(var(--leading-body) * var(--ap-description-lines) + var(--ap-description-bar)); overflow: hidden; }
-.ap-description-footed { padding-bottom: var(--ap-description-foot); }
-.ap-description-foot { position: absolute; inset-inline: 0; bottom: 0; box-sizing: border-box; height: var(--ap-description-foot); padding-bottom: var(--space-1); display: flex; justify-content: center; align-items: flex-end; gap: var(--space-2); border-radius: inherit; pointer-events: none; }
+.ap-description-footed { --ap-description-pad-end: var(--ap-description-foot); }
+.ap-description-foot { position: absolute; inset-inline: 0; bottom: 0; box-sizing: border-box; height: var(--ap-description-pad-end); padding-bottom: var(--space-1); display: flex; justify-content: center; align-items: flex-end; gap: var(--space-2); border-radius: inherit; pointer-events: none; }
 .ap-description-foot > * { pointer-events: auto; }
 .ap-description-clipped .ap-description-text { mask-image: none; }
-.ap-description-clipped .ap-description-foot { height: calc(var(--ap-description-bar) - var(--space-3) + var(--ap-description-foot)); background: linear-gradient(to bottom, transparent, var(--ap-description-ground) calc(var(--ap-description-bar) - var(--space-3))); }
-.ap-description-more { width: var(--control-lg); height: var(--control-sm); color: var(--ink-muted); }
+.ap-description-clipped .ap-description-foot { height: calc(var(--ap-description-bar) + var(--ap-description-pad-end)); background: linear-gradient(to bottom, transparent, var(--ap-description-ground) calc(100% - var(--control-md) - var(--space-1))); }
+.ap-description-more { gap: var(--space-1); color: var(--ink-muted); }
 .ap-description-opens:hover .ap-description-more { color: var(--ink); }
-@container (max-width: 560px) { .ap-description { --ap-description-lines: 6; } }
+@container (max-width: 560px) { :is(.ap-description, .ap-descsheet) { --ap-description-lines: 6; } }
 /* An edit kept as a draft, here and in the header: an accent dot before what says so. */
 :is(.ap-description-draft, .ap-roomhead-draft)::before { content: ''; flex: none; width: 7px; height: 7px; border-radius: var(--radius-full); background: var(--accent); }
 
@@ -1467,7 +1473,9 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-descsheet-body:focus { outline: none; }
 /* Opened by the keyboard, the description wears the focus ring; opened by the pointer, it doesn't (`data-pointer`). */
 .ap-descsheet-body:not([data-pointer]):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset-inset); }
-/* Read, ⌃ at its foot folds it back into its first lines under the header, where their ⌄ opened it. */
+/* Read, and longer than its first lines show, Show less at its foot folds it back into them under the header, where
+   their Read all opened it. What it's measured against: its first lines' box, as tall as theirs, out of sight. */
+.ap-descsheet-probe { position: absolute; top: 0; width: 0; visibility: hidden; pointer-events: none; height: calc(var(--leading-body) * var(--ap-description-lines) + var(--ap-description-bar)); }
 .ap-descsheet-foot { flex: none; display: flex; justify-content: center; padding-bottom: var(--space-1); }
 .ap-descsheet-folds .ap-descsheet-body { padding-bottom: var(--space-2); }
 .ap-descsheet-editing .ap-descsheet-body { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding-block: var(--space-4) var(--space-6); }
