@@ -73,6 +73,26 @@ export function absentMentionsCss(userIds: readonly string[]): string {
 	return `${selectors.join(',\n')} { background: color-mix(in srgb, var(--ink-muted) 14%, transparent); color: var(--ink-muted); }`;
 }
 
+/**
+ * Says on a mention chip in a message why it's greyed (`absentMentionsCss`): while its person is among `absent`, its
+ * tooltip and accessible description add `note`; once they aren't, they're as rendered. For the chip at or around
+ * `target`, as the pointer or focus reaches it, so no row draws again for it.
+ */
+export function noteAbsentMention(target: EventTarget | null, absent: ReadonlySet<string>, note: string): void {
+	if (!(target instanceof Element)) return;
+	const chip = target.closest<HTMLElement>('.ap-msg-text .ap-mention[data-user-id]');
+	if (!chip) return;
+	const own = (chip.dataset.ownTitle ??= chip.title);
+	if (absent.has(chip.dataset.userId ?? '')) {
+		chip.title = own ? `${own} · ${note}` : note;
+		chip.setAttribute('aria-description', note);
+	} else {
+		if (own) chip.title = own;
+		else chip.removeAttribute('title');
+		chip.removeAttribute('aria-description');
+	}
+}
+
 const NO_ONE: MentionPerson[] = [];
 
 /**

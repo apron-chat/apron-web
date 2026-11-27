@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { commandReference, docViewerHost, editorsNudge, fileUpload, installNudge, descriptionSheet, mentionAddLine, messageEditor, newPrivateDialog, newThreadDialog, profileCardHost, reactorsPopover, searchDialog, selectionBar, serverPaneHost, shortcutsDialog, signInLinkDialog } from '$lib/components/lazy';
 	import { onMount, tick, untrack } from 'svelte';
-	import { fromAction } from 'svelte/attachments';
+	import { fromAction, type Attachment as SvelteAttachment } from 'svelte/attachments';
 	import { pushState, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { passkeySupportError } from '$lib/protocol/webauthn';
@@ -51,7 +51,7 @@
 	import PrivateIntro from '$lib/design/components/PrivateIntro.svelte';
 	import AddedBanner from '$lib/design/components/AddedBanner.svelte';
 	import { ArrivalWatch, addRoomMembers, aloneIn, othersIn, reachesStart } from '$lib/ui/private-rooms';
-	import { absentInMessages, absentMentions, absentMentionsCss, addMembers, knownMemberIds, couldNotAdd, isGuest, unheldRoleHolders, outsidersOf } from '$lib/ui/members';
+	import { absentInMessages, absentMentions, absentMentionsCss, addMembers, knownMemberIds, noteAbsentMention, couldNotAdd, isGuest, unheldRoleHolders, outsidersOf } from '$lib/ui/members';
 	import { faceOf, roomFaces } from '$lib/ui/faces';
 	import { receiptsByMessage, steadyReceipts } from '$lib/ui/receipts';
 	import { attachmentLimits, composerAction } from '$lib/ui/commands';
@@ -690,12 +690,31 @@
 	let paneMembers = $derived(paneRoom?.members);
 	let paneMemberCount = $derived(paneRoom?.memberCount);
 	let outsiders = $derived(outsidersOf(directory.known(), paneMembers, paneMemberCount, notMentionable));
+	/** Whose mentions `absentMentionsStyle` greys, for their chips' tooltips (`noteAbsentMention`): read on hover and focus. */
+	let greyedMentions: ReadonlySet<string> = new Set();
 	/**
 	 * Whom the pane's messages mention who isn't a member, greyed in their text as the composer greys a draft's: now, not
 	 * as it was when they were sent. A rule rather than a class on each chip, and a string, so it's drawn again only as
 	 * it changes and no row draws again for it.
 	 */
-	let absentMentionsStyle = $derived(absentMentionsCss(absentInMessages(messages, knownMemberIds(paneMembers, paneMemberCount)).filter((userId) => !notMentionable(directory.person({ user_id: userId }) ?? { user_id: userId }))));
+	let absentMentionsStyle = $derived.by(() => {
+		const ids = absentInMessages(messages, knownMemberIds(paneMembers, paneMemberCount)).filter((userId) => !notMentionable(directory.person({ user_id: userId }) ?? { user_id: userId }));
+		greyedMentions = new Set(ids);
+		return absentMentionsCss(ids);
+	});
+	/** A greyed chip says why as the pointer or focus reaches it. */
+	const noteGreyedMention = (event: Event): void => noteAbsentMention(event.target, greyedMentions, activeThread ? 'Not in this thread' : 'Not in this room');
+	/**
+	 * The timeline's own listener rather than `onpointerover`: Svelte hands a delegated event to each ancestor of what
+	 * the pointer crossed, on every move between elements. A chip holds only its text, so it is the target itself.
+	 */
+	const greyedMentionTips: SvelteAttachment<HTMLElement> = (timeline) => {
+		const over = (event: PointerEvent) => {
+			if (greyedMentions.size && event.target instanceof HTMLElement && event.target.dataset.userId) noteGreyedMention(event);
+		};
+		timeline.addEventListener('pointerover', over, { passive: true });
+		return () => timeline.removeEventListener('pointerover', over);
+	};
 	/**
 	 * The line's checkbox, as changed for each pane's draft (by its room's or thread's ID): whether Send adds those it
 	 * names first. Until changed, ticked, but in a private room, where adding someone may show them what was said before.
@@ -3258,6 +3277,7 @@
 	 * else the newest message, rather than on the first or last of its links: the timeline is a single Tab stop.
 	 */
 	function timelineFocusin(event: FocusEvent): void {
+		noteGreyedMention(event);
 		const target = event.target;
 		const list = viewport.messageScroll;
 		if (!(target instanceof HTMLElement) || !list) return;
@@ -3977,7 +3997,7 @@
 			{#if olderLoading}<TimelineLoading top label={activeThread ? 'Loading earlier replies…' : 'Loading earlier messages…'} />{/if}
 			<!-- The log's rows take the keyboard (timelineKey): its keys move between them. -->
 			<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-			<div class={['ap-timeline', pickingRow && 'ap-timeline-picking']} bind:this={viewport.messageScroll} onscroll={trackScroll} onkeydown={timelineKey} onfocusin={timelineFocusin} {@attach markFirstMessages} data-testid="message-list" role="log" aria-live="polite" aria-label={`${activeThread ? threadTitle(activeThread) : activeRoom.title} messages`}>
+			<div class={['ap-timeline', pickingRow && 'ap-timeline-picking']} bind:this={viewport.messageScroll} onscroll={trackScroll} onkeydown={timelineKey} onfocusin={timelineFocusin} {@attach greyedMentionTips} {@attach markFirstMessages} data-testid="message-list" role="log" aria-live="polite" aria-label={`${activeThread ? threadTitle(activeThread) : activeRoom.title} messages`}>
 				<FloatingDayPill label={viewport.floatingDay.label} shown={viewport.floatingDay.shown && !olderLoading} testid="floating-day" />
 				{#if session.showReconnectDivider}
 					<TimelineDivider kind="gap" testid="reconnect-divider" />
