@@ -77,44 +77,25 @@
 		isPrivate ? 'Private, like its room: only the room’s members see it.' : ''
 	].filter(Boolean).join(' ') : '');
 	let nameInput = $state<HTMLInputElement | undefined>();
-	let descriptionBox = $state<HTMLElement | undefined>();
-	let firstMessageBox = $state<HTMLElement | undefined>();
 	/** A first message is offered when starting a thread that moves none: one that does starts with those. */
 	const offersFirstMessage = $derived(thread && !moves && firstMessage !== undefined);
-	// Hidden only when starting a thread with nothing in it; once shown it stays.
+	// Hidden only when starting a thread with nothing in it; once shown it stays until its ×.
 	if (showDescription === undefined) showDescription = untrack(() => !(thread && !description.trim()));
-	/** Shows a field put away, and puts the cursor in it. */
-	async function reveal(box: () => HTMLElement | undefined): Promise<void> {
-		await tick();
-		box()?.querySelector<HTMLElement>('[contenteditable]:not([contenteditable="false"]), textarea')?.focus();
-	}
-	function addFirstMessage(): void {
-		showFirstMessage = true;
-		void reveal(() => firstMessageBox);
-	}
-	function addDescription(): void {
-		showDescription = true;
-		void reveal(() => descriptionBox);
-	}
-	/** A thread's field put away again by its ×, back behind its Add button, which takes the keyboard. */
-	async function remove(which: 'first' | 'description'): Promise<void> {
+	type Part = 'first' | 'description';
+	/** Shows a field put away (its Add button), or puts it away again (its ×); the keyboard goes to what takes its place. */
+	async function show(part: Part, on: boolean): Promise<void> {
 		const form = nameInput?.form;
-		if (which === 'first') showFirstMessage = false;
-		else showDescription = false;
+		if (part === 'first') showFirstMessage = on;
+		else showDescription = on;
 		await tick();
-		form?.querySelector<HTMLElement>(`[data-add="${which}"]`)?.focus();
+		form?.querySelector<HTMLElement>(on ? `[data-part="${part}"] :is([contenteditable]:not([contenteditable="false"]), textarea)` : `[data-add="${part}"]`)?.focus();
 	}
-	/** What the description's field is drawn with, yours or the MarkdownEditor's, kept as one object while its parts are the same. */
-	const fieldArgs = $derived<RoomFormField>(descriptionField(thread, {
-		disabled: saving,
-		rows: 4,
-		submit: () => { if (!saving && !disabled) onsubmit?.(); }
-	}));
-	const firstMessageArgs = $derived(firstMessageField(replyTo, {
-		disabled: saving,
-		rows: 4,
-		submit: () => { if (!saving && !disabled) onsubmit?.(); }
-	}));
+	function submit(): void {
+		if (!saving && !disabled) onsubmit?.();
+	}
+	/** What the fields are drawn with, yours or the MarkdownEditor's, each kept as one object while its parts are the same. */
+	const fieldArgs = $derived<RoomFormField>(descriptionField(thread, { disabled: saving, rows: 4, submit }));
+	const firstMessageArgs = $derived(firstMessageField(replyTo, { disabled: saving, rows: 4, submit }));
 
 	$effect(() => {
 		if (!open) return;
@@ -127,19 +108,19 @@
 
 <!-- Escape, the close button and Cancel do nothing while it saves. -->
 <Dialog class={['ap-roomform', className]} bind:open size="md" title={heading} {subtitle} locked={saving} {error} {onclose}
-	onsubmit={(event) => { event.preventDefault(); if (!saving && !disabled) onsubmit?.(); }}>
+	onsubmit={(event) => { event.preventDefault(); submit(); }}>
 	<label class="ap-fieldlabel" for="{uid}-name">Title
 		<input id="{uid}-name" class="ap-field" aria-label="{thread ? 'Thread' : 'Room'} title" aria-required="true" bind:this={nameInput} bind:value={name} disabled={saving} maxlength="120" autocomplete="off" spellcheck="true" dir="auto"
 			placeholder={thread ? 'What it’s about' : 'What to call it'} />
 	</label>
 	<!-- Each field is named by its `label`; these head them. -->
 	{#if offersFirstMessage && showFirstMessage}
-	<div class="ap-fieldlabel" bind:this={firstMessageBox}><span class="ap-fieldlabel-row"><span>{firstMessageArgs.heading}</span>{@render removeButton('first', firstMessageArgs.label)}</span>
+	<div class="ap-fieldlabel" data-part="first">{@render head('first', firstMessageArgs.heading, firstMessageArgs.label)}
 		{@render firstMessage?.(firstMessageArgs)}
 	</div>
 	{/if}
 	{#if showDescription}
-	<div class="ap-fieldlabel" bind:this={descriptionBox}><span class="ap-fieldlabel-row"><span>Description</span>{#if thread}{@render removeButton('description', 'description')}{/if}</span>
+	<div class="ap-fieldlabel" data-part="description">{@render head('description', 'Description', 'description')}
 		{#if field}{@render field(fieldArgs)}{:else}<MarkdownEditor bind:value={description} label={fieldArgs.label} placeholder={fieldArgs.placeholder} disabled={saving} rows={fieldArgs.rows} />{/if}
 	</div>
 	{/if}
@@ -154,8 +135,8 @@
 		{#if (offersFirstMessage && !showFirstMessage) || !showDescription}
 			<!-- Together at the start of the footer, so a narrow one puts Cancel and the action on a line of their own. -->
 			<span class="ap-roomform-adds">
-				{#if offersFirstMessage && !showFirstMessage}<Button variant="ghost" size="sm" class="ap-roomform-addbtn" data-add="first" onclick={addFirstMessage} disabled={saving}><Plus size={14} aria-hidden="true" />{replyTo !== undefined ? 'Add reply' : 'Add first message'}</Button>{/if}
-				{#if !showDescription}<Button variant="ghost" size="sm" class="ap-roomform-addbtn" data-add="description" onclick={addDescription} disabled={saving}><Plus size={14} aria-hidden="true" />Add description</Button>{/if}
+				{#if offersFirstMessage && !showFirstMessage}{@render add('first', replyTo !== undefined ? 'Add reply' : 'Add first message')}{/if}
+				{#if !showDescription}{@render add('description', 'Add description')}{/if}
 			</span>
 		{/if}
 		<!-- Together, so a footer too narrow for them all puts these on a line of their own. -->
@@ -166,6 +147,10 @@
 	{/snippet}
 </Dialog>
 
-{#snippet removeButton(which: 'first' | 'description', name: string)}
-	<button type="button" class="ap-iconbtn ap-roomform-remove" aria-label="Remove {name.toLowerCase()}" title="Remove {name.toLowerCase()}" disabled={status === 'saving'} onclick={() => void remove(which)}><X size={14} aria-hidden="true" /></button>
+<!-- A field's heading, with the × that puts a thread's field away again. -->
+{#snippet head(part: Part, text: string, name: string)}
+	<span class="ap-fieldlabel-row"><span>{text}</span>{#if thread}<button type="button" class="ap-iconbtn ap-roomform-remove" aria-label="Remove {name.toLowerCase()}" title="Remove {name.toLowerCase()}" disabled={saving} onclick={() => void show(part, false)}><X size={14} aria-hidden="true" /></button>{/if}</span>
+{/snippet}
+{#snippet add(part: Part, label: string)}
+	<Button variant="ghost" size="sm" class="ap-roomform-addbtn" data-add={part} onclick={() => void show(part, true)} disabled={saving}><Plus size={14} aria-hidden="true" />{label}</Button>
 {/snippet}

@@ -64,7 +64,7 @@
 			return;
 		}
 		const text = showDescription ? description.trim() : '';
-		const first = !moving && showFirstMessage && firstMessage.trim() ? { text: firstMessage.trim(), mentions: firstMentions } : undefined;
+		const first = showFirstMessage && firstMessage.trim() ? { text: firstMessage.trim(), mentions: firstMentions } : undefined;
 		if (await task.run('saving', () => oncreate({ title: name, ...(text ? { description: text } : {}) }, first), { failed: (cause) => messageOf(cause, 'Unable to start thread') })) open = false;
 	}
 </script>
