@@ -48,14 +48,17 @@ export function knownMemberIds(members: readonly Identity[] | undefined, memberC
 
 /**
  * The user IDs that `messages` mention (`body.mentions`, §3.5) who aren't among `memberIds` (`knownMemberIds`), once
- * each, in the order mentioned: none while the members aren't all known.
+ * each, in the order mentioned, as written: none while the members aren't all known. Members are listed by their
+ * current IDs, so `current` gives the one an ID written before a change is now (§3.3): she's no less here for it.
+ * A `mentions` that isn't a list (anyone may send one) names no one.
  */
-export function absentInMessages(messages: readonly { body?: { mentions?: readonly string[] } }[], memberIds: ReadonlySet<string> | undefined): string[] {
+export function absentInMessages(messages: readonly { body?: { mentions?: unknown } }[], memberIds: ReadonlySet<string> | undefined, current: (userId: string) => string = (userId) => userId): string[] {
 	if (!memberIds) return [];
 	const absent = new Set<string>();
 	for (const message of messages) {
 		const mentions = message.body?.mentions;
-		if (mentions) for (const userId of mentions) if (typeof userId === 'string' && !memberIds.has(userId)) absent.add(userId);
+		if (!Array.isArray(mentions)) continue;
+		for (const userId of mentions) if (typeof userId === 'string' && !absent.has(userId) && !memberIds.has(current(userId))) absent.add(userId);
 	}
 	return [...absent];
 }
@@ -84,8 +87,10 @@ export function noteAbsentMention(target: EventTarget | null, absent: ReadonlySe
 	if (!chip) return;
 	const own = (chip.dataset.ownTitle ??= chip.title);
 	if (absent.has(chip.dataset.userId ?? '')) {
-		chip.title = own ? `${own} · ${note}` : note;
-		chip.setAttribute('aria-description', note);
+		// The same words for a screen reader: a description of its own takes the place of the title's, @user_id and all.
+		const tip = own ? `${own} · ${note}` : note;
+		chip.title = tip;
+		chip.setAttribute('aria-description', tip);
 	} else {
 		if (own) chip.title = own;
 		else chip.removeAttribute('title');

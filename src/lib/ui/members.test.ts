@@ -84,6 +84,10 @@ describe('mentioning someone who isn’t in the room', () => {
 		expect(knownMemberIds(undefined, undefined)).toBeUndefined();
 		expect(absentInMessages(messages, undefined)).toEqual([]);
 		expect(absentInMessages([{ body: {} }], memberIds)).toEqual([]);
+		// Anyone may send a `mentions` that isn't a list: it names no one, and nothing throws.
+		expect(absentInMessages([{ body: { mentions: 5 } }, { body: { mentions: { bob: 1 } } }, { body: { mentions: 'bob' } }, { body: { mentions: ['bob'] } }], memberIds)).toEqual(['bob']);
+		// An ID written before Ada's changed (§3.3) is hers: she's here, under the one she has now.
+		expect(absentInMessages([{ body: { mentions: ['guest_1', 'bob'] } }], memberIds, (id) => (id === 'guest_1' ? 'ada' : id))).toEqual(['bob']);
 	});
 
 	it('greys those chips with a rule that no ID can break out of', () => {

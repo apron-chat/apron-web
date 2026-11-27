@@ -698,11 +698,12 @@
 	 * it changes and no row draws again for it.
 	 */
 	let absentMentionsStyle = $derived.by(() => {
-		const ids = absentInMessages(messages, knownMemberIds(paneMembers, paneMemberCount)).filter((userId) => !notMentionable(directory.person({ user_id: userId }) ?? { user_id: userId }));
+		const ids = absentInMessages(messages, knownMemberIds(paneMembers, paneMemberCount), (userId) => directory.person({ user_id: userId })?.user_id ?? userId).filter((userId) => !notMentionable(directory.person({ user_id: userId }) ?? { user_id: userId }));
 		const last = greyedMentions;
 		if (ids.length !== last.size || ids.some((userId) => !last.has(userId))) {
 			greyedMentions = new Set(ids);
-			// Chips already told why say so again, also under a pointer that hasn't moved; after the page draws.
+			// Chips already told why say so again, also under a pointer that hasn't moved: once the DOM is updated.
+			// Here, as the set changes, rather than in an effect of its own, which each snapshot would check again.
 			queueMicrotask(renoteGreyedMentions);
 		}
 		return absentMentionsCss(ids);
@@ -724,7 +725,7 @@
 			const chip = event.target;
 			if (chip instanceof HTMLElement && chip.dataset.userId && (greyedMentions.size || chip.dataset.ownTitle !== undefined)) noteGreyedMention(event);
 		};
-		timeline.addEventListener('pointerover', over, { passive: true });
+		timeline.addEventListener('pointerover', over);
 		return () => timeline.removeEventListener('pointerover', over);
 	};
 	/**

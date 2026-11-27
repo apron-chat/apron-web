@@ -232,7 +232,7 @@ test.describe('a draft naming someone who isn’t here, and a role no one here h
 		// Its tooltip, and what a screen reader hears, say why.
 		await chip.hover();
 		await expect(chip).toHaveAttribute('title', '@grace · Not in this room');
-		await expect(chip).toHaveAttribute('aria-description', 'Not in this room');
+		await expect(chip).toHaveAttribute('aria-description', '@grace · Not in this room');
 		await page.getByRole('button', { name: 'Add member', exact: true }).click();
 		const dialog = page.getByRole('dialog', { name: 'Add people to engineering' });
 		await dialog.getByRole('combobox', { name: 'Add', exact: true }).fill('grace');
