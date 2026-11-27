@@ -68,7 +68,7 @@
 		"open-thread": {
 			"layouts": 4,
 			"styleRecalcs": 14,
-			"calls": 64258
+			"calls": 63732
 		},
 		"open-preferences": {
 			"layouts": 3,
@@ -108,7 +108,7 @@
 	},
 	"bundle": {
 		"jsGzipKB": 631.9,
-		"cssGzipKB": 31.8
+		"cssGzipKB": 32.4
 	},
 	"production": {
 		"startupFiles": 13,
