@@ -16,9 +16,9 @@ export function notificationPermission(): NotificationPermissionState {
 
 /**
  * Whether a mention or a reply to you that just arrived offers to turn
- * notifications on (the first-mention offer, `NotifyPrompt`): only until they are turned on or off
- * on this device, or the offer is answered, and not while they are on,
- * blocked or unsupported, or paused or on do not disturb.
+ * notifications on (`NotifyPrompt`): only until they are turned on or off on
+ * this device, or the offer is answered, and not while they are on, blocked
+ * or unsupported, or paused or on do not disturb.
  */
 export function offersNotifications(state: { chosen: boolean; active: boolean; permission: NotificationPermissionState; silenced: boolean }): boolean {
 	return !state.chosen && !state.active && !state.silenced && (state.permission === 'default' || state.permission === 'granted');

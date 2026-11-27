@@ -22,6 +22,11 @@ describe('NotifyPrompt', () => {
 		const reply = render({ reply: true });
 		expect(document.getElementById(reply.getAttribute('aria-describedby')!)?.textContent).toBe('Ada replied to you in General. Apron can alert you on this device, even when it’s closed.');
 		dom.unmount();
+		// Where the room is only named for its members, it isn't named again.
+		dom.render(NotifyPrompt, { from: 'Ada', reply: true, whenClosed: false, onaccept: () => {}, ondecline: () => {} });
+		const direct = document.querySelector<HTMLElement>('[data-testid="notify-prompt"]')!;
+		expect(document.getElementById(direct.getAttribute('aria-describedby')!)?.textContent).toBe('Ada replied to you. Apron can alert you on this device while it’s open.');
+		dom.unmount();
 		// Offered at sign-in, it names no mention or reply.
 		dom.render(NotifyPrompt, { whenClosed: true, onaccept: () => {}, ondecline: () => {} });
 		const atSignIn = document.querySelector<HTMLElement>('[data-testid="notify-prompt"]')!;

@@ -4,9 +4,9 @@
 	import Nudge from '$lib/design/components/Nudge.svelte';
 
 	interface Props {
-		/** Who mentioned you, or replied to you (`reply`), by name; with `room`, absent for the offer made at sign-in. */
+		/** Who mentioned you, or replied to you (`reply`), by name; absent for the offer made at sign-in. */
 		from?: string;
-		/** Where: the room's or thread's title. */
+		/** Where: the room's or thread's title, unless it would only name `from` again. */
 		room?: string;
 		/** `from` replied to one of your messages, rather than mentioning you. */
 		reply?: boolean;
@@ -21,7 +21,7 @@
 	}
 	let { from, room, reply = false, whenClosed, pointer = false, onaccept, ondecline }: Props = $props();
 
-	let detail = $derived(`${from !== undefined && room !== undefined ? `${from} ${reply ? 'replied to you' : 'mentioned you'} in ${room}. ` : ''}Apron can alert you on this device${whenClosed ? ', even when it’s closed' : ' while it’s open'}.`);
+	let detail = $derived(`${from !== undefined ? `${from} ${reply ? 'replied to you' : 'mentioned you'}${room !== undefined ? ` in ${room}` : ''}. ` : ''}Apron can alert you on this device${whenClosed ? ', even when it’s closed' : ' while it’s open'}.`);
 
 	function keydown(event: KeyboardEvent): void {
 		if (event.key !== 'Escape') return;
