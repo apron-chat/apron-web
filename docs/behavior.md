@@ -691,15 +691,18 @@ browser path as the page's own.
 
 Until notifications are turned on or off on this device, the first mention
 you'd hear (in a room you muted too, but not while paused or on do not
-disturb) offers them once: a small prompt (the design system's `Nudge`), "Get
-notified when you're mentioned?", saying who mentioned you and where, and how
-far they'd reach (even when Apron is closed, where push works here; else while
-it's open). Its **Turn on** does what the switch does, from the same tap;
+disturb), or else the first reply to one of your messages (while Replies to my
+messages is checked, and not in a room you muted), offers them once: a small
+prompt (the design system's `Nudge`), "Get notified about mentions and
+replies?", saying who mentioned or replied to you and where (not in a private
+room named for its members, where that's the same name), and how far they'd
+reach (even when Apron is closed, where push works here; else while it's
+open). Its **Turn on** does what the switch does, from the same tap;
 **Not now**, or Escape within it, turns them off. Either answer, or using the
 switch, is the choice, so it isn't offered again on this device, nor once the
 browser blocks notifications. In an installed app (a Home Screen or desktop
 app window) where push works for the signed-in account, the same prompt is
-offered as soon as you're signed in, without the mention, since a phone that's
+offered as soon as you're signed in, without a mention or reply, since a phone that's
 rarely open may not see one arrive for days, and each device asks for its own
 permission. With the rooms list showing, it sits above the
 profile bar, pointing at the button to Preferences where the switch lives, and says

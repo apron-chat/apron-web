@@ -9,6 +9,7 @@ import { MentionTracker } from './mentions.svelte';
 const me = { user_id: 'sam', name: 'Sam' };
 const message = (id: number, room = 'general', fields: Partial<MessageRecord> = {}) => messageRecord(id, room, { from: { user_id: 'ada', name: 'Ada' }, ...fields });
 const mention = (id: number, room = 'general') => message(id, room, { body: { text: '@sam hi', mentions: ['sam'] } });
+const reply = (id: number, to: string, room = 'general') => message(id, room, { reply_to: { message_id: to }, body: { text: 'yes' } });
 
 /** Notifications on, nobody looking, nothing silenced, the default scopes; no offer up. */
 const settings = (fields: Partial<AlertSettings> = {}): AlertSettings => ({ offerable: false, active: true, away: true, silenced: false, scopes: ['mentions', 'replies'], ...fields });
@@ -92,5 +93,41 @@ describe('alerts as messages arrive', () => {
 		expect(alerts.offer).toEqual({ from: 'Ada', room: 'General' });
 		expect(alertsFor([general()], [general([message(101)])], { settings: { offerable: true } }).alerts.offer).toBeUndefined();
 		expect(alertsFor([general()], [general([mention(101)])], { settings: { offerable: false } }).alerts.offer).toBeUndefined();
+	});
+
+	it('offers notifications at the first reply to one of your messages, unless a mention came too', () => {
+		const mine = messageRecord(100, 'general', { from: me, body: { text: 'lunch?' } });
+		const offerable = { settings: { offerable: true, active: false } };
+		expect(alertsFor([general([mine])], [general([mine, reply(101, '100')])], offerable).alerts.offer).toEqual({ from: 'Ada', room: 'General', reply: true });
+		// A mention in the same batch is named instead, even after the reply.
+		expect(alertsFor([general([mine])], [general([mine, reply(101, '100'), mention(102)])], offerable).alerts.offer).toEqual({ from: 'Ada', room: 'General' });
+		// A reply hasn't the chime of a mention.
+		expect(alertsFor([general([mine])], [general([mine, reply(101, '100')])], offerable).alerts.audible).toBe(0);
+	});
+
+	it('offers nothing at a reply the Replies scope wouldn’t notify about, or when an offer isn’t due', () => {
+		const mine = messageRecord(100, 'general', { from: me, body: { text: 'lunch?' } });
+		const offerable = (fields: Partial<AlertSettings> = {}) => ({ settings: { offerable: true, active: false, ...fields } });
+		const offer = (before: RoomSnapshot[], after: RoomSnapshot[], options = offerable()) => alertsFor(before, after, options).alerts.offer;
+		// Replies to my messages unchecked, or no offer due.
+		expect(offer([general([mine])], [general([mine, reply(101, '100')])], offerable({ scopes: ['mentions'] }))).toBeUndefined();
+		expect(offer([general([mine])], [general([mine, reply(101, '100')])], { settings: { offerable: false, active: false } })).toBeUndefined();
+		// A reply to someone else's message, to your deleted one, or to one that isn't loaded.
+		const theirs = message(99);
+		expect(offer([general([theirs])], [general([theirs, reply(101, '99')])])).toBeUndefined();
+		const gone = { ...mine, deleted: true };
+		expect(offer([general([gone])], [general([gone, reply(101, '100')])])).toBeUndefined();
+		expect(offer([general()], [general([reply(101, '100')])])).toBeUndefined();
+		// In a room you muted, or a thread of one.
+		const muted = { mutedUntil: true as const };
+		expect(offer([general([mine], muted)], [general([mine, reply(101, '100')], muted)])).toBeUndefined();
+		const thread = (messages: MessageRecord[] = []) => roomSnapshot('t1', messages, { parentRoomId: 'general', latestLogId: '100' });
+		const inThread = messageRecord(100, 't1', { from: me, body: { text: 'lunch?' } });
+		expect(offer([general([], muted), thread([inThread])], [general([], muted), thread([inThread, reply(101, '100', 't1')])])).toBeUndefined();
+	});
+
+	it('names no room for an offer in a private room named for its members', () => {
+		const dm = (messages: MessageRecord[] = []) => roomSnapshot('dm', messages, { title: 'Ada', namedForMembers: true, private: true, latestLogId: '100' });
+		expect(alertsFor([dm()], [dm([mention(101, 'dm')])], { settings: { offerable: true } }).alerts.offer).toEqual({ from: 'Ada' });
 	});
 });

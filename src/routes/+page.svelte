@@ -125,7 +125,7 @@
 	import { PushSettings } from '$lib/ui/push-settings.svelte';
 	import type { PushTitles } from '$lib/ui/push-titles';
 	import { notifyAccount, notifyScopesOf, pushWake } from '$lib/ui/notify-scopes';
-	import { arrivalAlerts } from '$lib/ui/alerts';
+	import { arrivalAlerts, type Alerts } from '$lib/ui/alerts';
 	import { readAction, readElsewhere, readFurthest } from '$lib/ui/read-action';
 	import { createdRoom, createdThread, moveCheck, type PendingJoin, type PendingThread } from '$lib/ui/created';
 	import { messageOf, Task } from '$lib/ui/task.svelte';
@@ -204,10 +204,10 @@
 	const trackScroll = viewport.trackScroll;
 	/** Notifications on this device (one setting with push, below): this page's own, while it's open. */
 	let notificationsEnabled = $state(false);
-	/** Notifications were turned on or off on this device, or the first-mention offer answered: it isn't made again. */
+	/** Notifications were turned on or off on this device, or the offer to turn them on answered: it isn't made again. */
 	let notificationsChoiceMade = $state(true);
-	/** The offer to turn notifications on (NotifyPrompt), at the first mention or at sign-in in an installed app, while it waits for an answer. */
-	let notifyOffer = $state<{ from?: string; room?: string } | undefined>();
+	/** The offer to turn notifications on (NotifyPrompt), at the first mention or reply or at sign-in in an installed app, while it waits for an answer. */
+	let notifyOffer = $state<Partial<NonNullable<Alerts['offer']>> | undefined>();
 	let notificationState = $state<NotificationPermissionState>(notificationPermission());
 	/** The server the client is on (`client.url`), kept as page state. */
 	let serverUrl = $state('');
@@ -1103,7 +1103,7 @@
 		};
 	});
 
-	// Signed in to an installed app where push works: offer notifications now, not at the first mention.
+	// Signed in to an installed app where push works: offer notifications now, not at the first mention or reply.
 	$effect(() => {
 		if (!session.ready || notifyOffer || previewMode) return;
 		if (offersAtSignIn({ installed: runsInstalled, push: webPushAvailable && Boolean(webPushServerKey), chosen: notificationsChoiceMade, active: notificationsActive, permission: notificationState, silenced })) notifyOffer = {};
@@ -1680,7 +1680,7 @@
 	 * alerts this device whether it is open or closed. Off turns both off.
 	 */
 	async function toggleNotifications(): Promise<void> {
-		// Using the switch is the choice the first-mention offer asks for.
+		// Using the switch is the choice the notifications offer asks for.
 		notificationsChoiceMade = true;
 		notifyOffer = undefined;
 		if (notificationsActive) {
@@ -1698,13 +1698,13 @@
 		if (webPushAvailable) await pushHere();
 	}
 
-	/** The first-mention offer's Turn on: the Notifications switch's, from the same tap. Refused, it stays off, and isn't offered again. */
+	/** The notifications offer's Turn on: the Notifications switch's, from the same tap. Refused, it stays off, and isn't offered again. */
 	async function acceptNotifyOffer(): Promise<void> {
 		await toggleNotifications();
 		if (!notificationsActive) saveNotificationsEnabled(false);
 	}
 
-	/** The first-mention offer's Not now: off, chosen, and not offered again. */
+	/** The notifications offer's Not now: off, chosen, and not offered again. */
 	function declineNotifyOffer(): void {
 		notificationsChoiceMade = true;
 		notifyOffer = undefined;
@@ -3891,7 +3891,7 @@
 		/>
 	{/snippet}
 	{#snippet sideHandle()}<SidebarHandle layout={sidebar} />{/snippet}
-	<!-- The first-mention offer, pointing at Preferences while the rooms list (and its gear) shows; above the composer otherwise. -->
+	<!-- The notifications offer, pointing at Preferences while the rooms list (and its gear) shows; above the composer otherwise. -->
 	{#snippet nudge()}
 		{#if notifyOffer}<NotifyPrompt {...notifyOffer} whenClosed={webPushAvailable && Boolean(webPushServerKey)} pointer onaccept={acceptNotifyOffer} ondecline={declineNotifyOffer} />
 		{:else if installOffer && installNudge.component}{@const InstallPrompt = installNudge.component}<InstallPrompt way={installOffer} alerts={installAlerts} oninstall={installApp} ondecline={declineInstallOffer} />{/if}

@@ -7,7 +7,8 @@ import { inNotifyScopes } from './notify-scopes';
 /**
  * What the page alerts about as messages arrive: the mentions you'd hear
  * (which chime and flash the tab), the offer to turn notifications on at the
- * first of them, and the desktop notifications to show while you're away.
+ * first of them or the first reply to you, and the desktop notifications to
+ * show while you're away.
  * The page runs it after each snapshot and acts on the answer.
  */
 
@@ -50,8 +51,11 @@ export interface AlertSettings {
 export interface Alerts {
 	/** Mentions of you that arrived, in rooms you muted too. */
 	audible: number;
-	/** Offer notifications, naming the first of those mentions. */
-	offer?: { from: string; room: string };
+	/**
+	 * Offer notifications, naming the first of those mentions, else the first reply to one of your messages (`reply`),
+	 * and where, unless the room is named for its members (a private room without a title, where that's `from` again).
+	 */
+	offer?: { from: string; room?: string; reply?: true };
 	/** The desktop notifications to show: one per room, and whether it is for a mention. */
 	notify: Array<{ event: MessageRecord; mention: boolean }>;
 }
@@ -61,7 +65,9 @@ const NOTHING: Alerts = { audible: 0, notify: [] };
 /**
  * Observes the arrivals in `view` and says what to alert about. A held view
  * alerts about nothing, and isn't observed: what it shows is from before, so
- * the live rooms that replace it count from where they are. A mention gets
+ * the live rooms that replace it count from where they are. The offer names
+ * the first mention, else the first reply to you while replies are a checked
+ * scope (outside a room you muted, as that scope judges). A mention gets
  * through a mute (§4.5), as in other chat apps: it is heard there too. Desktop
  * notifications go out only while they are on, nobody is looking and the
  * page isn't silenced, for what the checked scopes cover (an edit that adds
@@ -71,14 +77,18 @@ export function arrivalAlerts(view: AlertView, trackers: ArrivalTrackers, settin
 	if (view.held) return NOTHING;
 	const mentions = trackers.mentions.observe(view.rooms, view.you, view.pane, view.latestVisible, view.readThrough);
 	const messages = trackers.messages.observe(view.rooms, view.you);
-	const first = mentions[0];
+	const context = { me: view.you, rooms: view.rooms };
+	const reply = settings.offerable && !mentions.length && settings.scopes.includes('replies')
+		? messages.find((event) => inNotifyScopes(event, ['replies'], { ...context, mentioned: false }))
+		: undefined;
+	const first = mentions[0] ?? reply;
+	const where = first && view.rooms.find((room) => room.id === first.room_id);
 	const offer = first && settings.offerable
-		? { from: senderName(first), room: view.rooms.find((room) => room.id === first.room_id)?.title ?? first.room_id }
+		? { from: senderName(first), ...(where?.namedForMembers ? {} : { room: where?.title ?? first.room_id }), ...(reply ? { reply: true as const } : {}) }
 		: undefined;
 	const alerts: Alerts = { audible: mentions.length, ...(offer ? { offer } : {}), notify: [] };
 	if (!settings.active || !settings.away || settings.silenced) return alerts;
 	const mentioned = new Set(mentions.map((event) => event.message_id));
-	const context = { me: view.you, rooms: view.rooms };
 	const selected = [...messages, ...mentions]
 		.filter((event) => inNotifyScopes(event, settings.scopes, { ...context, mentioned: mentioned.has(event.message_id) }));
 	alerts.notify = notificationsByRoom(selected, mentioned).map((event) => ({ event, mention: mentioned.has(event.message_id) }));
