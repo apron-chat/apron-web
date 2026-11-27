@@ -5,7 +5,7 @@ import { DEVICES, expect, test, type Preview } from './fixtures';
  * returns a created room or thread without `private`. The app must say so and not open it to post in.
  */
 
-const PRIVACY_LOST = /The server made the new thread visible to people outside this private room/;
+const PRIVACY_LOST = /This thread isn’t private. The server made it visible to people outside this room/;
 
 async function createRoom(preview: Preview, title: string, { private: isPrivate }: { private: boolean }): Promise<void> {
 	const { page } = preview;
@@ -60,9 +60,11 @@ test.describe('a server that drops private from new threads', () => {
 		expect((await preview.sent('message')).filter((p) => p.room_id !== undefined && p.room_id.startsWith('thread_'))).toEqual([]);
 	});
 
-	test('sends no first message written as it was started, which waits in the room instead', async ({ preview, page }) => {
+	test('sends no first message written as it was started, which waits in the room instead, after its draft', async ({ preview, page }) => {
 		await preview.open();
 		await createRoom(preview, 'Secret plans', { private: true });
+		await preview.composer().click();
+		await page.keyboard.type('Draft for the room');
 		await page.getByRole('button', { name: 'New thread in Secret plans', exact: true }).click();
 		const dialog = page.getByRole('dialog');
 		await dialog.getByRole('textbox', { name: 'Thread title', exact: true }).fill('Hidden thread');
@@ -71,9 +73,9 @@ test.describe('a server that drops private from new threads', () => {
 		await dialog.getByRole('button', { name: 'Start thread', exact: true }).click();
 		await expect(dialog).toBeHidden();
 
-		await expect(page.getByText(PRIVACY_LOST)).toBeVisible();
+		await expect(page.getByText(PRIVACY_LOST)).toContainText('Your reply is in the message box below, unsent, after what you’d already written there.');
 		await expect(preview.heading()).toHaveText('Secret plans');
-		await expect(preview.composer()).toHaveText('The launch date is March 3');
+		await expect(preview.composer()).toHaveText(/^Draft for the room\s+The launch date is March 3$/);
 		expect((await preview.sent('message')).filter((p) => p.body?.text === 'The launch date is March 3')).toEqual([]);
 	});
 });
@@ -85,7 +87,7 @@ test.describe('a server that drops private from new rooms', () => {
 		await preview.open();
 		await createRoom(preview, 'Secret plans', { private: true });
 
-		await expect(page.getByText(/The server made “Secret plans” an ordinary room that others can see and join/)).toBeVisible();
+		await expect(page.getByText(/“Secret plans” isn’t private. The server made it an ordinary room that others can see and join/)).toBeVisible();
 		await expect(preview.heading()).toHaveText('general');
 		await expect(page).toHaveURL(/[#&]room=general(&|$)/);
 	});

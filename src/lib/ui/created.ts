@@ -9,10 +9,10 @@ import { threadLostPrivacy } from './timeline';
  */
 
 /** A new thread of a private room that the server made visible to others (§4.2.4). */
-export const PRIVACY_LOST = 'The server made the new thread visible to people outside this private room, so nothing was posted or moved into it. Leave it, or use it knowing that.';
+export const PRIVACY_LOST = 'This thread isn’t private. The server made it visible to people outside this room, so nothing was posted or moved into it. You can leave the thread, or use it knowing others can see it.';
 
 /** A room created as private that the server made an ordinary one; one started without a title is "the new conversation". */
-export const notPrivate = (title?: string) => `The server made ${title ? `“${title}”` : 'the new conversation'} an ordinary room that others can see and join, not a private one. Leave it, or use it knowing that.`;
+export const notPrivate = (title?: string) => `${title ? `“${title}”` : 'The new conversation'} isn’t private. The server made it an ordinary room that others can see and join. You can leave it, or use it knowing others can see it.`;
 
 /**
  * A room this viewer joined, or created, opened once its `room_update` has arrived. `private`: it was asked for
@@ -34,8 +34,8 @@ export interface PendingThread {
 	thread: string;
 	replyTo?: string;
 	/**
-	 * Its first message, written as it was started: sent once it opens, replying to `replyTo`. Never sent to one refused,
-	 * which others than the room's members could read.
+	 * Its first message, written as it was started: sent from its composer once it opens, replying to `replyTo`. Never
+	 * sent to one refused, which others than the room's members could read: it waits, unsent, in the room's composer.
 	 */
 	first?: { text: string; mentions: string[] };
 	/** Messages were moved into it already: it opens whatever privacy its record shows, as that was checked before they moved. */

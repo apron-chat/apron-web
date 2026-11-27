@@ -1366,16 +1366,20 @@
 		// A thread of a private room is private too (§4.2.4); one the server made visible isn't opened to reply in.
 		if (step !== 'open') {
 			untrack(() => {
-				feedback.error(step.refuse);
-				// Not sent there: it waits in the room, the reply it was.
-				if (pending.first) drafts.restore(draftKey(pending.room), pending.first.text, pending.replyTo);
+				// Not sent there: it waits, unsent, in the room's composer.
+				const after = pending.first && drafts.add(draftKey(pending.room), pending.first.text, pending.replyTo);
+				feedback.error(!pending.first ? step.refuse : `${step.refuse} Your reply is in the message box below, unsent${after ? ', after what you’d already written there' : ''}.`);
 			});
 			return;
 		}
 		untrack(() => {
 			openDestination(pending.room, pending.thread);
-			if (pending.first && client) sendFirstMessage(client, pending.thread, pending.first, pending.replyTo);
-			else if (pending.replyTo !== undefined && !drafts.reply) drafts.setReply(pending.replyTo);
+			if (pending.first) {
+				// Sent from the thread's composer, as if written there: who it mentions is added or asked about first.
+				drafts.add(draftKey(pending.thread), pending.first.text, pending.replyTo);
+				composerMentions = pending.first.mentions;
+				sendMessage();
+			} else if (pending.replyTo !== undefined && !drafts.reply) drafts.setReply(pending.replyTo);
 		});
 	});
 
@@ -3639,17 +3643,6 @@
 		// The first message goes once it opens (not to one whose privacy was lost); without one, the thread opens with its
 		// composer replying to the message it was started on.
 		pendingOpen = { room: roomId, thread: result.room_id, ...(start.message !== undefined ? { replyTo: start.message } : {}), ...(first ? { first } : {}) };
-	}
-
-	/**
-	 * A new thread's first message, written in the NewThreadDialog: sent in it once it opens, replying to the message
-	 * the thread was started on, as one written in its composer would. Should it fail, it waits as the thread's draft.
-	 */
-	function sendFirstMessage(chat: ChatClient, threadId: string, first: { text: string; mentions: string[] }, replyTo: string | undefined): void {
-		const options = { ...(replyTo !== undefined ? { replyTo } : {}), ...(first.mentions.length ? { mentions: first.mentions } : {}) };
-		feedback.track(chat.send(threadId, first.text, 'markdown', options), 'Sending…', () => {
-			if (drafts.restore(draftKey(threadId), first.text, replyTo)) composer?.focus();
-		});
 	}
 
 	/**

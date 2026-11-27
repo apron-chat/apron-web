@@ -24,6 +24,21 @@ describe('PaneDrafts', () => {
 		expect(drafts.text).toBe('in thread');
 	});
 
+	it('adds text to a pane’s draft, open or not, after what is there, keeping the reply it has', () => {
+		const drafts = new PaneDrafts();
+		drafts.open('lobby');
+		expect(drafts.add('lobby', 'reply', 'm1')).toBe(false);
+		expect([drafts.text, drafts.reply]).toEqual(['reply', 'm1']);
+		drafts.text = 'mine\n';
+		drafts.setReply('m2');
+		expect(drafts.add('lobby', 'another', 'm1')).toBe(true);
+		expect([drafts.text, drafts.reply]).toEqual(['mine\n\nanother', 'm2']);
+		// Not the open pane: kept for it.
+		expect(drafts.add('thread', 'later', 'm3')).toBe(false);
+		drafts.open('thread');
+		expect([drafts.text, drafts.reply]).toEqual(['later', 'm3']);
+	});
+
 	it('gives a failed send back, text and files, only where nothing new was typed or attached', () => {
 		const drafts = new PaneDrafts();
 		drafts.open('lobby');

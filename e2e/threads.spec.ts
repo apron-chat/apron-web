@@ -29,10 +29,13 @@ test.describe('starting a thread on a message', () => {
 
 		const created = await preview.waitForSent('room_set', (p) => p.title === 'About the welcome');
 		expect(created.description).toBeUndefined();
+		// Sent as the thread's composer sends: Ada isn't in the new thread, so she's added first, to see the mention.
+		const added = await preview.waitForSent('room_join', (p) => p.user_id === 'ada');
+		expect(added.room_id).toMatch(/^thread_/);
 		const sent = await preview.waitForSent('message', (p) => typeof p.body?.text === 'string' && p.body.text.endsWith('is this still true?'));
 		// In the thread, replying to the message in the room (§3.5.4), as one from the thread's composer would.
 		expect(sent).toMatchObject({ body: { text: '@ada is this still true?', mentions: ['ada'] }, reply_to: { message_id: messageId } });
-		expect(sent.room_id).not.toBe('general');
+		expect(sent.room_id).toBe(added.room_id);
 
 		await expect(preview.heading()).toHaveText('general › About the welcome');
 		const reply = preview.message('@Ada Lovelace is this still true?');
