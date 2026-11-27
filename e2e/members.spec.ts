@@ -217,6 +217,24 @@ test.describe('a draft naming someone who isn’t here, and a role no one here h
 		await page.keyboard.press('Enter');
 		await preview.waitForSent('message', (p) => p.body?.text?.includes('please review'));
 		expect(await preview.sent('room_join')).toEqual([]);
+
+		// In the timeline her chip is greyed while she isn't here, as it was in the draft, and isn't once she is.
+		const chip = page.getByTestId('message-list').locator('.ap-msg-text .ap-mention[data-user-id="grace"]').last();
+		const ink = () => chip.evaluate((element) => getComputedStyle(element).color);
+		const muted = await page.evaluate(() => {
+			const probe = document.body.appendChild(document.createElement('span'));
+			probe.style.color = 'var(--ink-muted)';
+			const color = getComputedStyle(probe).color;
+			probe.remove();
+			return color;
+		});
+		await expect.poll(ink).toBe(muted);
+		await page.getByRole('button', { name: 'Add member', exact: true }).click();
+		const dialog = page.getByRole('dialog', { name: 'Add people to engineering' });
+		await dialog.getByRole('combobox', { name: 'Add', exact: true }).fill('grace');
+		await page.keyboard.press('Enter');
+		await dialog.getByRole('button', { name: 'Add Grace Hopper', exact: true }).click();
+		await expect.poll(ink).not.toBe(muted);
 	});
 });
 

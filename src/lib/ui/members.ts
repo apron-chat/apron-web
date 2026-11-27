@@ -37,6 +37,42 @@ export function absentMentions(mentions: readonly string[], room: { members?: re
 	return [...new Set(mentions)].filter((userId) => !memberIds.has(userId) && !skip(userId));
 }
 
+/**
+ * The IDs of `members` while they're all known, as `absentMentions` needs them: undefined before any listing, or when
+ * the server listed only some (`memberCount`), since then anyone could be one.
+ */
+export function knownMemberIds(members: readonly Identity[] | undefined, memberCount: number | undefined): ReadonlySet<string> | undefined {
+	if (!members || (memberCount !== undefined && memberCount > members.length)) return undefined;
+	return new Set(members.map((member) => member.user_id));
+}
+
+/**
+ * The user IDs that `messages` mention (`body.mentions`, §3.5) who aren't among `memberIds` (`knownMemberIds`), once
+ * each, in the order mentioned: none while the members aren't all known.
+ */
+export function absentInMessages(messages: readonly { body?: { mentions?: readonly string[] } }[], memberIds: ReadonlySet<string> | undefined): string[] {
+	if (!memberIds) return [];
+	const absent = new Set<string>();
+	for (const message of messages) {
+		const mentions = message.body?.mentions;
+		if (mentions) for (const userId of mentions) if (typeof userId === 'string' && !memberIds.has(userId)) absent.add(userId);
+	}
+	return [...absent];
+}
+
+/**
+ * A stylesheet that greys, in a pane's message text, the mention chips of `userIds` (those not in the room), the way
+ * the composer greys a draft's (`ap-mention-quiet` in apron.css). The browser matches it, so no row draws again as
+ * people join or leave. Each ID is escaped to hex beyond `[A-Za-z0-9_-]`, so nothing in one ends the rule or the
+ * `<style>`. Empty for no one.
+ */
+export function absentMentionsCss(userIds: readonly string[]): string {
+	if (!userIds.length) return '';
+	const escape = (id: string) => id.replace(/[^A-Za-z0-9_-]/gu, (char) => `\\${char.codePointAt(0)!.toString(16)} `);
+	const selectors = userIds.map((id) => `.ap-timeline .ap-msg-text .ap-mention[data-user-id="${escape(id)}"]`);
+	return `${selectors.join(',\n')} { background: color-mix(in srgb, var(--ink-muted) 14%, transparent); color: var(--ink-muted); }`;
+}
+
 const NO_ONE: MentionPerson[] = [];
 
 /**

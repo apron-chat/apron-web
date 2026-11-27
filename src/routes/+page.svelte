@@ -51,7 +51,7 @@
 	import PrivateIntro from '$lib/design/components/PrivateIntro.svelte';
 	import AddedBanner from '$lib/design/components/AddedBanner.svelte';
 	import { ArrivalWatch, addRoomMembers, aloneIn, othersIn, reachesStart } from '$lib/ui/private-rooms';
-	import { absentMentions, addMembers, couldNotAdd, isGuest, unheldRoleHolders, outsidersOf } from '$lib/ui/members';
+	import { absentInMessages, absentMentions, absentMentionsCss, addMembers, knownMemberIds, couldNotAdd, isGuest, unheldRoleHolders, outsidersOf } from '$lib/ui/members';
 	import { faceOf, roomFaces } from '$lib/ui/faces';
 	import { receiptsByMessage, steadyReceipts } from '$lib/ui/receipts';
 	import { attachmentLimits, composerAction } from '$lib/ui/commands';
@@ -690,6 +690,12 @@
 	let paneMembers = $derived(paneRoom?.members);
 	let paneMemberCount = $derived(paneRoom?.memberCount);
 	let outsiders = $derived(outsidersOf(directory.known(), paneMembers, paneMemberCount, notMentionable));
+	/**
+	 * Whom the pane's messages mention who isn't a member, greyed in their text as the composer greys a draft's: now, not
+	 * as it was when they were sent. A rule rather than a class on each chip, and a string, so it's drawn again only as
+	 * it changes and no row draws again for it.
+	 */
+	let absentMentionsStyle = $derived(absentMentionsCss(absentInMessages(messages, knownMemberIds(paneMembers, paneMemberCount)).filter((userId) => !notMentionable(directory.person({ user_id: userId }) ?? { user_id: userId }))));
 	/**
 	 * The line's checkbox, as changed for each pane's draft (by its room's or thread's ID): whether Send adds those it
 	 * names first. Until changed, ticked, but in a private room, where adding someone may show them what was said before.
@@ -3803,6 +3809,8 @@
 <svelte:head>
 	<title>{tabTitle(unreadAlerting, presence.titleFlash)}</title>
 	<meta name="description" content="Apron, a chat frontend for the Apron Chat Protocol." />
+	<!-- absentMentionsCss escapes every ID: nothing in it can end the <style>. -->
+	{@html absentMentionsStyle && `<style>${absentMentionsStyle}</style>`}
 	<!-- Link previews. og.png is apron.chat's `npm run screenshot -- og`; absolute, as crawlers require. -->
 	<meta property="og:type" content="website" />
 	<meta property="og:site_name" content="Apron" />

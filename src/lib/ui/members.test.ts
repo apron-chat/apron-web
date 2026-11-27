@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { absentMentions, addMembers, couldNotAdd, isGuest, memberSections, roleSets, unheldRoleHolders, userIdToAdd, outsidersOf } from './members';
+import { absentInMessages, absentMentions, absentMentionsCss, addMembers, knownMemberIds, couldNotAdd, isGuest, memberSections, roleSets, unheldRoleHolders, userIdToAdd, outsidersOf } from './members';
 
 describe('adding a member', () => {
 	it('takes exactly the user_id typed, with or without @, and never a display name, which isn’t unique', () => {
@@ -74,6 +74,24 @@ describe('mentioning someone who isn’t in the room', () => {
 		expect(absentMentions(['bob'], {}, skip)).toEqual([]);
 		expect(absentMentions(['bob'], { ...room, memberCount: 40 }, skip)).toEqual([]);
 		expect(absentMentions(['bob'], { ...room, memberCount: 2 }, skip)).toEqual(['bob']);
+	});
+
+	it('finds whom the messages mention who isn’t a member, for their chips in the timeline', () => {
+		const messages = [{ body: { mentions: ['bob', 'ada'] } }, {}, { body: { mentions: ['carol', 'bob', 'me'] } }];
+		const memberIds = knownMemberIds(room.members, undefined);
+		expect(absentInMessages(messages, memberIds)).toEqual(['bob', 'carol']);
+		expect(knownMemberIds(room.members, 40)).toBeUndefined();
+		expect(knownMemberIds(undefined, undefined)).toBeUndefined();
+		expect(absentInMessages(messages, undefined)).toEqual([]);
+		expect(absentInMessages([{ body: {} }], memberIds)).toEqual([]);
+	});
+
+	it('greys those chips with a rule that no ID can break out of', () => {
+		expect(absentMentionsCss([])).toBe('');
+		const css = absentMentionsCss(['bob', 'x"]</style><b>']);
+		expect(css).toContain('.ap-mention[data-user-id="bob"]');
+		expect(css).toContain('[data-user-id="x\\22 \\5d \\3c \\2f style\\3e \\3c b\\3e "]');
+		expect(css).not.toMatch(/[<>]/);
 	});
 });
 
