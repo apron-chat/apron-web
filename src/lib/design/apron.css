@@ -1438,6 +1438,7 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-description-icon { inset-inline-start: var(--space-3); display: grid; place-items: center; color: var(--ink-muted); }
 .ap-description-close { z-index: var(--z-raised); inset-inline-end: var(--space-3); }
 .ap-description-edit { z-index: var(--z-raised); inset-inline-end: calc(var(--space-3) + var(--control-sm) + var(--space-1)); }
+.ap-description-edit .ap-icon { width: 14px; height: 14px; }
 .ap-description-edits { --ap-description-corner-end: calc(var(--ap-description-corner, 44px) + var(--control-sm) + var(--space-1)); }
 /* Its text shows to its lines (four, six on a phone, which is narrower) and a bar's height more. Cut off, its foot,
    holding Read all, lies over that bar, fading from clear to the panel's ground, solid where Read all sits: the next
