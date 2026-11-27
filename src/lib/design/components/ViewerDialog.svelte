@@ -1,4 +1,5 @@
 <script lang="ts">
+	import * as icons from './Icons.svelte';
 	import type { Snippet } from 'svelte';
 	import type { ClassValue } from 'svelte/elements';
 
@@ -118,7 +119,7 @@
 			</div>
 			{@render actions?.()}
 			<button bind:this={closeButton} class="ap-viewer-btn" type="button" aria-label="Close" title="Close" onclick={() => (open = false)}>
-				<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+				{@render icons.x()}
 			</button>
 		</header>
 		{@render children?.()}

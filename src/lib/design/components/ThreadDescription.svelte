@@ -4,7 +4,7 @@
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import TextAlignStart from '@lucide/svelte/icons/text-align-start';
 	import X from '@lucide/svelte/icons/x';
-	import { pencil } from './ActionIcons.svelte';
+	import { pencil } from './Icons.svelte';
 	import { fades } from './fades';
 
 	/**
@@ -66,7 +66,7 @@
 	{/if}
 	{#if onedit}
 		<button class="ap-iconbtn ap-description-edit" type="button" aria-label="Edit description" title="Edit description" onclick={onedit}>
-			<!-- Static markup (ActionIcons), not lucide's component: drawn with each room's or thread's first lines (perf budget: open-thread). -->
+			<!-- Static markup (Icons), not lucide's component: drawn with each room's or thread's first lines (perf budget: open-thread). -->
 			{@render pencil()}
 		</button>
 	{/if}

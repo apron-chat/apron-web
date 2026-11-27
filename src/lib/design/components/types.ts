@@ -122,7 +122,7 @@ export interface MessageAction {
 	/** A short text glyph; omitted, the label shows. */
 	glyph?: string;
 	/**
-	 * An icon (ActionIcons'): the toolbar shows it alone, its name in the tooltip, and touch's menu shows it
+	 * An icon (Icons'): the toolbar shows it alone, its name in the tooltip, and touch's menu shows it
 	 * beside the glyph or label.
 	 */
 	icon?: Snippet;

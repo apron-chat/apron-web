@@ -1,4 +1,5 @@
 <script lang="ts">
+	import * as icons from './Icons.svelte';
 	import type { Snippet } from 'svelte';
 	import type { ClassValue } from 'svelte/elements';
 
@@ -84,7 +85,7 @@
 				{#if subtitle}<p class="ap-dialog-sub">{subtitle}</p>{/if}
 			</div>
 			<button class="ap-iconbtn ap-dialog-close" type="button" aria-label={closeLabel} disabled={locked} onclick={() => dialog?.close()}>
-				<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+				{@render icons.x()}
 			</button>
 		</header>
 		<div class={['ap-dialog-body', flush && 'ap-dialog-body-flush']}>

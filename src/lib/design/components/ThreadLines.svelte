@@ -1,4 +1,6 @@
 <script lang="ts">
+	import * as icons from './Icons.svelte';
+
 	interface Props {
 		/** The thread's `description` (§3.4) as text, marked by a text icon. */
 		description?: string;
@@ -17,4 +19,4 @@
 	const descriptionText = $derived(multi ? description?.trim() : description?.replace(/\s+/g, ' ').trim());
 </script>
 
-{#if descriptionText}<span class={['ap-tline', 'ap-tline-description', multi && 'ap-tline-multi']} style:--ap-tline-lines={multi ? descriptionLines : undefined} data-testid={descriptionTestid}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Description"><path d="M21 5H3" /><path d="M15 12H3" /><path d="M17 19H3" /></svg><span class="ap-tline-text">{descriptionText}</span></span>{/if}{#if latest}<span class="ap-tline ap-tline-latest" data-testid={latestTestid}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Latest message"><path d="m15 10 5 5-5 5" /><path d="M4 4v7a4 4 0 0 0 4 4h12" /></svg><span class="ap-tline-text">{#if latest.sender}<span class="ap-tline-sender">{latest.sender}</span>{' '}{/if}{latest.text}</span></span>{/if}
+{#if descriptionText}<span class={['ap-tline', 'ap-tline-description', multi && 'ap-tline-multi']} style:--ap-tline-lines={multi ? descriptionLines : undefined} data-testid={descriptionTestid}><span class="ap-tline-icon" role="img" aria-label="Description">{@render icons.textAlignStart()}</span><span class="ap-tline-text">{descriptionText}</span></span>{/if}{#if latest}<span class="ap-tline ap-tline-latest" data-testid={latestTestid}><span class="ap-tline-icon" role="img" aria-label="Latest message">{@render icons.cornerDownRight()}</span><span class="ap-tline-text">{#if latest.sender}<span class="ap-tline-sender">{latest.sender}</span>{' '}{/if}{latest.text}</span></span>{/if}

@@ -16,7 +16,7 @@
 	import ReplyPreview from './ReplyPreview.svelte';
 	import RoleBadges from './RoleBadges.svelte';
 	import TypingDots from './TypingDots.svelte';
-	import * as icons from './ActionIcons.svelte';
+	import * as icons from './Icons.svelte';
 	import { messageDock, type DockClaim } from './message-dock.svelte';
 	import type { MessageAction, MessageEmbed, MessageTestids, MessageView } from './types';
 	import { times } from './util';
@@ -133,10 +133,10 @@
 		const react: MessageAction | undefined = can.react && !view.deleted
 			? { id: 'react', label: 'React', title: 'React', icon: icons.smilePlus, popup: true, expanded: on.picking?.(view), attach: on.pickAnchor, onclick: (event) => on.pick?.(view, event.currentTarget as HTMLElement) }
 			: undefined;
-		const thread: MessageAction | undefined = can.startThread ? { id: 'thread', label: 'Start thread', title: 'Thread', glyph: 'Thread', icon: icons.thread, onclick: () => on.startThread?.(view) } : undefined;
+		const thread: MessageAction | undefined = can.startThread ? { id: 'thread', label: 'Start thread', title: 'Thread', glyph: 'Thread', icon: icons.messageSquarePlus, onclick: () => on.startThread?.(view) } : undefined;
 		const edit: MessageAction | undefined = can.edit ? { id: 'edit', label: 'Edit message', title: 'Edit', glyph: 'Edit', icon: icons.pencil, key: 'E', onclick: () => ((held = false), on.edit?.(view)) } : undefined;
 		const unreply: MessageAction | undefined = can.edit && !can.textOnly && view.reply ? { id: 'unreply', label: 'Remove reply reference', title: 'Remove reply', glyph: 'Remove reply', icon: icons.unlink, onclick: () => on.removeReply?.(view) } : undefined;
-		const select: MessageAction | undefined = can.select ? { id: 'select', label: 'Select message', title: 'Select', glyph: 'Select', icon: icons.squareCheck, testid: testids?.select, onclick: () => ((held = false), on.beginSelect?.(view)) } : undefined;
+		const select: MessageAction | undefined = can.select ? { id: 'select', label: 'Select message', title: 'Select', glyph: 'Select', icon: icons.squareCheckBig, testid: testids?.select, onclick: () => ((held = false), on.beginSelect?.(view)) } : undefined;
 		const link: MessageAction | undefined = can.link ? { id: 'link', label: 'Copy link to message', title: 'Copy link', glyph: 'Copy link', icon: icons.link, done: { label: 'Link copied', glyph: 'Copied' }, onclick: () => on.copyLink?.(view) } : undefined;
 		const copy: MessageAction | undefined = view.body && !view.deleted && on.copyText ? { id: 'copy', label: 'Copy text', title: 'Copy text', glyph: 'Copy text', icon: icons.copy, done: { label: 'Text copied', glyph: 'Copied' }, onclick: () => on.copyText?.(view) } : undefined;
 		const remove: MessageAction | undefined = can.edit && !can.textOnly ? { id: 'delete', label: 'Delete message', title: 'Delete', glyph: 'Delete', icon: icons.trash, danger: true, onclick: () => on.delete?.(view) } : undefined;
@@ -369,9 +369,9 @@
 	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
 	<article class={['ap-notice', view.scope === 'private' && 'ap-notice-private']} data-message-id={view.id} data-scope={view.scope} data-timeline-item="" data-testid={testids?.row} tabindex="-1" onclick={click}>
 		<div class="ap-notice-head">
-			{#if view.scope === 'private'}<svg class="ap-icon ap-notice-glyph" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>{/if}
+			{#if view.scope === 'private'}{@render icons.lock()}{/if}
 			<span class="ap-notice-title">{view.sender.name}</span>{#if t.short}<time class="ap-notice-time" datetime={t.iso} title={t.exact}>{t.short}</time>{/if}
-			{#if on.dismiss}<button type="button" class="ap-iconbtn ap-notice-dismiss" aria-label="Dismiss notice" title="Dismiss" onclick={() => on.dismiss?.(view)}><svg class="ap-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg></button>{/if}
+			{#if on.dismiss}<button type="button" class="ap-iconbtn ap-notice-dismiss" aria-label="Dismiss notice" title="Dismiss" onclick={() => on.dismiss?.(view)}>{@render icons.x()}</button>{/if}
 		</div>
 		<div class="ap-notice-body">{#if view.deleted}<span class="ap-msg-tomb">Message deleted</span>{:else}<div class={['ap-msg-text', !view.body?.markdown && 'ap-msg-plain']} {@attach view.body?.code && code}>{@html view.body?.html ?? ''}</div>{/if}</div>
 	</article>
