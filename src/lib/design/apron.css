@@ -641,7 +641,7 @@ a.ap-embed-card:hover { background: var(--hover); }
 /* Floating at the top centre of the page, over everything; on phones, across the top. */
 .ap-banner-float { position: fixed; z-index: var(--z-banner); top: var(--space-4); left: 50%; transform: translateX(-50%); width: max-content; max-width: min(var(--toast-max-w), calc(100% - var(--space-8))); }
 @media (max-width: 719px) { .ap-banner-float { left: var(--space-4); right: var(--space-4); transform: none; width: auto; max-width: none; } }
-/* Nudge — a small offer made once, when it's useful (turning on notifications at your first mention); it can point at the control that changes it later */
+/* Nudge — a small offer made once, when it's useful (turning on notifications at your first mention or reply); it can point at the control that changes it later */
 .ap-nudge { position: relative; display: grid; gap: var(--space-3); width: var(--nudge-w); max-width: 100%; box-sizing: border-box; padding: var(--space-3); color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); }
 .ap-nudge-pointer::after { content: ''; position: absolute; inset-inline-start: var(--ap-nudge-tip, var(--space-6)); bottom: -6px; width: 10px; height: 10px; background: var(--bg-200); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); transform: rotate(45deg); }
 .ap-nudge-top { display: flex; align-items: flex-start; gap: var(--space-3); }

@@ -15,8 +15,8 @@ export function notificationPermission(): NotificationPermissionState {
 }
 
 /**
- * Whether a mention that just arrived offers to turn notifications on (the
- * first-mention offer, `NotifyPrompt`): only until they are turned on or off
+ * Whether a mention or a reply to you that just arrived offers to turn
+ * notifications on (the first-mention offer, `NotifyPrompt`): only until they are turned on or off
  * on this device, or the offer is answered, and not while they are on,
  * blocked or unsupported, or paused or on do not disturb.
  */

@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import NotifyPrompt from './NotifyPrompt.svelte';
 import * as dom from '$lib/test/dom';
 
-function render(props: Partial<{ whenClosed: boolean; pointer: boolean; onaccept: () => void; ondecline: () => void }> = {}) {
+function render(props: Partial<{ reply: boolean; whenClosed: boolean; pointer: boolean; onaccept: () => void; ondecline: () => void }> = {}) {
 	dom.render(NotifyPrompt, { from: 'Ada', room: 'General', whenClosed: true, onaccept: () => {}, ondecline: () => {}, ...props });
 	return document.querySelector<HTMLElement>('[data-testid="notify-prompt"]')!;
 }
@@ -11,15 +11,18 @@ function render(props: Partial<{ whenClosed: boolean; pointer: boolean; onaccept
 const button = (name: string) => [...document.querySelectorAll('button')].find((candidate) => candidate.textContent === name)!;
 
 describe('NotifyPrompt', () => {
-	it('says who mentioned you, where, and how far notifications reach, as a labelled dialog, naming no mention at sign-in', () => {
+	it('says who mentioned or replied to you, where, and how far notifications reach, as a labelled dialog, naming neither at sign-in', () => {
 		const prompt = render();
 		expect(prompt.getAttribute('role')).toBe('dialog');
 		const title = document.getElementById(prompt.getAttribute('aria-labelledby')!);
-		expect(title?.textContent).toBe('Get notified when you’re mentioned?');
+		expect(title?.textContent).toBe('Get notified about mentions and replies?');
 		const detail = document.getElementById(prompt.getAttribute('aria-describedby')!);
 		expect(detail?.textContent).toBe('Ada mentioned you in General. Apron can alert you on this device, even when it’s closed.');
 		dom.unmount();
-		// Offered at sign-in, it names no mention.
+		const reply = render({ reply: true });
+		expect(document.getElementById(reply.getAttribute('aria-describedby')!)?.textContent).toBe('Ada replied to you in General. Apron can alert you on this device, even when it’s closed.');
+		dom.unmount();
+		// Offered at sign-in, it names no mention or reply.
 		dom.render(NotifyPrompt, { whenClosed: true, onaccept: () => {}, ondecline: () => {} });
 		const atSignIn = document.querySelector<HTMLElement>('[data-testid="notify-prompt"]')!;
 		expect(document.getElementById(atSignIn.getAttribute('aria-describedby')!)?.textContent).toBe('Apron can alert you on this device, even when it’s closed.');

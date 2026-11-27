@@ -535,7 +535,7 @@ export function loadNotificationsEnabled(): boolean {
 	return read(KEY.notificationsEnabled) === 'true';
 }
 
-/** Whether notifications were ever turned on or off on this device (or the first-mention offer answered): whether to offer them. */
+/** Whether notifications were ever turned on or off on this device (or the offer at a first mention or reply answered): whether to offer them. */
 export function notificationsChosen(): boolean {
 	return read(KEY.notificationsEnabled) !== null;
 }

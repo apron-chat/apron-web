@@ -3,7 +3,7 @@
 	import type { ClassValue } from 'svelte/elements';
 
 	interface Props {
-		/** The offer, as a question: "Get notified when you’re mentioned?". */
+		/** The offer, as a question: "Get notified about mentions and replies?". */
 		title: string;
 		/** Why now, and what it does: "Ada mentioned you in General. …". */
 		detail?: string;

@@ -93,4 +93,21 @@ describe('alerts as messages arrive', () => {
 		expect(alertsFor([general()], [general([message(101)])], { settings: { offerable: true } }).alerts.offer).toBeUndefined();
 		expect(alertsFor([general()], [general([mention(101)])], { settings: { offerable: false } }).alerts.offer).toBeUndefined();
 	});
+
+	it('offers notifications at the first reply to one of your messages, unless a mention came too, or the room is muted', () => {
+		const mine = messageRecord(100, 'general', { from: me, body: { text: 'lunch?' } });
+		const reply = (id: number, to: string, room = 'general') => message(id, room, { reply_to: { message_id: to }, body: { text: 'yes' } });
+		const offerable = { settings: { offerable: true, active: false } };
+		expect(alertsFor([general([mine])], [general([mine, reply(101, '100')])], offerable).alerts.offer).toEqual({ from: 'Ada', room: 'General', reply: true });
+		// A mention in the same batch is named instead, even after the reply.
+		expect(alertsFor([general([mine])], [general([mine, reply(101, '100'), mention(102)])], offerable).alerts.offer).toEqual({ from: 'Ada', room: 'General' });
+		// Not for a reply to someone else's message, in a muted room, or when an offer isn't due.
+		const theirs = message(99);
+		expect(alertsFor([general([theirs])], [general([theirs, reply(101, '99')])], offerable).alerts.offer).toBeUndefined();
+		const muted = { mutedUntil: true as const };
+		expect(alertsFor([general([mine], muted)], [general([mine, reply(101, '100')], muted)], offerable).alerts.offer).toBeUndefined();
+		expect(alertsFor([general([mine])], [general([mine, reply(101, '100')])], { settings: { offerable: false } }).alerts.offer).toBeUndefined();
+		// A reply hasn't the chime of a mention.
+		expect(alertsFor([general([mine])], [general([mine, reply(101, '100')])], offerable).alerts.audible).toBe(0);
+	});
 });

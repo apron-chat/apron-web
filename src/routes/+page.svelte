@@ -207,7 +207,7 @@
 	/** Notifications were turned on or off on this device, or the first-mention offer answered: it isn't made again. */
 	let notificationsChoiceMade = $state(true);
 	/** The offer to turn notifications on (NotifyPrompt), at the first mention or at sign-in in an installed app, while it waits for an answer. */
-	let notifyOffer = $state<{ from?: string; room?: string } | undefined>();
+	let notifyOffer = $state<{ from?: string; room?: string; reply?: true } | undefined>();
 	let notificationState = $state<NotificationPermissionState>(notificationPermission());
 	/** The server the client is on (`client.url`), kept as page state. */
 	let serverUrl = $state('');

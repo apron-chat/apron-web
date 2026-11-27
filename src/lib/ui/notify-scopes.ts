@@ -52,6 +52,14 @@ export function inMutedRoom(event: Pick<MessageRecord, 'room_id'>, rooms: readon
 	return room?.mutedUntil !== undefined || parent?.mutedUntil !== undefined;
 }
 
+/** Whether a message replies to one of your messages that is loaded here (and not deleted). */
+export function repliesToMe(event: Pick<MessageRecord, 'reply_to'>, me: Identity | undefined, rooms: readonly RoomSnapshot[]): boolean {
+	const target = event.reply_to?.message_id;
+	if (!me || target === undefined) return false;
+	const replied = rooms.map((candidate) => candidate.timeline.events[target]).find((found) => found !== undefined);
+	return Boolean(replied && !replied.deleted && isOwn(replied, me));
+}
+
 /**
  * Whether a message from someone else is in a checked scope, judged here:
  * `mentions`, it mentions you; `replies`, it replies to one of your messages
@@ -69,12 +77,8 @@ export function inNotifyScopes(event: MessageRecord, scopes: readonly string[], 
 		switch (scope) {
 			case 'mentions':
 				return context.mentioned;
-			case 'replies': {
-				const target = event.reply_to?.message_id;
-				if (target === undefined) return false;
-				const replied = context.rooms.map((candidate) => candidate.timeline.events[target]).find((found) => found !== undefined);
-				return Boolean(replied && !replied.deleted && isOwn(replied, context.me));
-			}
+			case 'replies':
+				return repliesToMe(event, context.me, context.rooms);
 			case 'private':
 				return room?.private === true || parent?.private === true;
 			case 'joined':
