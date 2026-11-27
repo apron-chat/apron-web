@@ -11,7 +11,7 @@ function field<T extends HTMLElement>(selector: string): T {
 }
 
 describe('NewThreadDialog', () => {
-	type Props = { room?: { id: string; title: string; private?: boolean }; title?: string; description?: string; moving?: number; people?: { id: string; name?: string }[] };
+	type Props = { room?: { id: string; title: string; private?: boolean }; title?: string; description?: string; replyTo?: string; moving?: number; people?: { id: string; name?: string }[] };
 	function render(props: Props = {}, oncreate = vi.fn((_thread: { title: string; description?: string }, _first?: { text: string; mentions: string[] }) => Promise.resolve())) {
 		const onclose = vi.fn();
 		dom.render(NewThreadDialog, { room: { id: 'ops', title: 'ops' }, enabled: true, oncreate, onclose, ...props });
@@ -72,6 +72,19 @@ describe('NewThreadDialog', () => {
 		await dom.submit();
 		// Who it mentions is checked in a browser (e2e/threads.spec.ts), where its chips can be typed.
 		expect(oncreate).toHaveBeenCalledWith({ title: 'Deploy failed' }, { text: 'Can you look?', mentions: [] });
+	});
+
+	it('started on a message, offers the first message as a reply to who wrote it', async () => {
+		render({ title: 'Deploy failed', replyTo: 'Ada Lovelace' });
+		expect(button('Add first message')).toBeUndefined();
+		button('Add reply')!.click();
+		await tick();
+		await tick();
+		const reply = field('[data-testid="first-message-input"]');
+		expect(document.activeElement).toBe(reply);
+		expect(reply.getAttribute('aria-label')).toBe('Reply');
+		expect(text()).toContain('Reply to Ada Lovelace');
+		expect(button('Add reply')).toBeUndefined();
 	});
 
 	it('offers no first message when moving messages, which start the thread', () => {

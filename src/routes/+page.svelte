@@ -142,6 +142,8 @@
 		title: string;
 		description: string;
 		message?: string;
+		/** Who wrote `message`, whom a first message written in the dialog replies to. */
+		replyTo?: string;
 		moving?: number;
 	};
 
@@ -3551,7 +3553,7 @@
 			chooseThread(existing);
 			return;
 		}
-		askNewThread({ title: threadTitleFor(event), description: threadDescriptionFor(event) ?? '', message: id });
+		askNewThread({ title: threadTitleFor(event), description: threadDescriptionFor(event) ?? '', message: id, replyTo: senderName(event) });
 	}
 
 	/**
@@ -4124,7 +4126,7 @@
 		{@const start = newThread}
 		{@const NewThreadDialog = newThreadDialog.component}
 		{#key start}
-			<NewThreadDialog room={start.room} title={start.title} description={start.description} moving={start.moving}
+			<NewThreadDialog room={start.room} title={start.title} description={start.description} replyTo={start.replyTo} moving={start.moving}
 				enabled={canStartThreads && canCompose && (!start.moving || session.canEdit)}
 				{people} rooms={roomSuggestions} onmention={refreshMembers}
 				oncreate={(thread, first) => createThread(start, thread, first)} onclose={() => (newThread = undefined)} />

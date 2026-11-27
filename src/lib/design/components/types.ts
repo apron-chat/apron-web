@@ -266,9 +266,14 @@ export function descriptionField(thread: boolean, field: Omit<RoomFormField, 'la
 	};
 }
 
-/** What RoomForm draws a new thread's first message with: its name and placeholder, with the height and submit it's given. */
-export function firstMessageField(field: Omit<RoomFormField, 'label' | 'placeholder'>): RoomFormField {
-	return { label: 'First message', placeholder: 'The thread’s first message, sent as you start it.', ...field };
+/**
+ * What RoomForm draws a new thread's first message with: its name and placeholder, with the height and submit it's
+ * given. Started on a message, it's a reply to that message's sender.
+ */
+export function firstMessageField(replyTo: string | undefined, field: Omit<RoomFormField, 'label' | 'placeholder'>): RoomFormField {
+	return replyTo !== undefined
+		? { label: 'Reply', placeholder: 'Your reply', ...field }
+		: { label: 'First message', placeholder: 'The thread’s first message', ...field };
 }
 
 /** What the MessageEditor gives your own `field`: put both on it, for the editor's look and the field's name. */

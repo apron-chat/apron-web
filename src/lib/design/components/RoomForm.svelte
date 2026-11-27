@@ -35,11 +35,14 @@
 		 */
 		field?: Snippet<[RoomFormField]>;
 		/**
-		 * A new thread's first message: its field, yours to fill and read like `field`. Offered behind "Add first message",
-		 * ahead of "Add description", when starting a thread that moves no messages; sent in it once it exists.
+		 * A new thread's first message: its field, yours to fill and read like `field`. Offered behind "Add first message"
+		 * (or "Add reply", with `replyTo`), ahead of "Add description", when starting a thread that moves no messages;
+		 * sent in it once it exists.
 		 */
 		firstMessage?: Snippet<[RoomFormField]>;
-		/** Whether the first message's field shows; `bind:showFirstMessage`. Hidden until "Add first message"; once shown it stays. */
+		/** Starting a thread on a message: the name of who wrote it, whom the first message replies to (across rooms, §3.5.4). */
+		replyTo?: string;
+		/** Whether the first message's field shows; `bind:showFirstMessage`. Hidden until it's added; once shown it stays. */
 		showFirstMessage?: boolean;
 		/**
 		 * Whether the description field shows; `bind:showDescription`. Starting a thread with no description, it waits
@@ -58,7 +61,7 @@
 		/** Classes for its Dialog's `<dialog>`, added to its own. */
 		class?: ClassValue;
 	}
-	let { open = $bindable(false), kind = 'thread', subtitle, private: isPrivate = $bindable(false), moving = 0, name = $bindable(''), description = $bindable(''), field, firstMessage, showFirstMessage = $bindable(false), showDescription = $bindable(), status = 'idle', error, disabled = false, onsubmit, onclose, class: className }: Props = $props();
+	let { open = $bindable(false), kind = 'thread', subtitle, private: isPrivate = $bindable(false), moving = 0, name = $bindable(''), description = $bindable(''), field, firstMessage, replyTo, showFirstMessage = $bindable(false), showDescription = $bindable(), status = 'idle', error, disabled = false, onsubmit, onclose, class: className }: Props = $props();
 	const uid = $props.id();
 	const saving = $derived(status === 'saving');
 	const thread = $derived(kind === 'thread');
@@ -98,7 +101,7 @@
 		rows: 4,
 		submit: () => { if (!saving && !disabled) onsubmit?.(); }
 	}));
-	const firstMessageArgs = $derived<RoomFormField>(firstMessageField({
+	const firstMessageArgs = $derived<RoomFormField>(firstMessageField(replyTo, {
 		disabled: saving,
 		rows: 4,
 		submit: () => { if (!saving && !disabled) onsubmit?.(); }
@@ -122,7 +125,7 @@
 	</label>
 	<!-- Each field is named by its `label`; these head them. -->
 	{#if offersFirstMessage && showFirstMessage}
-	<div class="ap-fieldlabel" bind:this={firstMessageBox}><span class="ap-fieldlabel-row"><span>First message</span><span class="ap-fieldlabel-hint">Optional</span></span>
+	<div class="ap-fieldlabel" bind:this={firstMessageBox}><span class="ap-fieldlabel-row"><span>{replyTo !== undefined ? `Reply to ${replyTo}` : 'First message'}</span><span class="ap-fieldlabel-hint">Optional</span></span>
 		{@render firstMessage?.(firstMessageArgs)}
 	</div>
 	{/if}
@@ -142,7 +145,7 @@
 		{#if (offersFirstMessage && !showFirstMessage) || !showDescription}
 			<!-- Together at the start of the footer, so a narrow one puts Cancel and the action on a line of their own. -->
 			<span class="ap-roomform-adds">
-				{#if offersFirstMessage && !showFirstMessage}<Button variant="ghost" size="sm" class="ap-roomform-addbtn" onclick={addFirstMessage} disabled={saving}><Plus size={14} aria-hidden="true" />Add first message</Button>{/if}
+				{#if offersFirstMessage && !showFirstMessage}<Button variant="ghost" size="sm" class="ap-roomform-addbtn" onclick={addFirstMessage} disabled={saving}><Plus size={14} aria-hidden="true" />{replyTo !== undefined ? 'Add reply' : 'Add first message'}</Button>{/if}
 				{#if !showDescription}<Button variant="ghost" size="sm" class="ap-roomform-addbtn" onclick={addDescription} disabled={saving}><Plus size={14} aria-hidden="true" />Add description</Button>{/if}
 			</span>
 		{/if}

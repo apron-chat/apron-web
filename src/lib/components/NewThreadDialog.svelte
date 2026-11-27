@@ -15,6 +15,8 @@
 		 */
 		title?: string;
 		description?: string;
+		/** Started on a message: the name of who wrote it. The first message is then a reply to it, behind "Add reply". */
+		replyTo?: string;
 		/** Selected messages that move into the thread once it exists. */
 		moving?: number;
 		/** False while the session can't take requests; the form stays open but won't start the thread. */
@@ -28,7 +30,7 @@
 		/** It closed: started, or put away. */
 		onclose: () => void;
 	}
-	let { room, title: suggestedTitle = '', description: suggestedDescription = '', moving = 0, enabled, people = [], rooms = [], onmention, oncreate, onclose }: Props = $props();
+	let { room, title: suggestedTitle = '', description: suggestedDescription = '', replyTo, moving = 0, enabled, people = [], rooms = [], onmention, oncreate, onclose }: Props = $props();
 
 	// The form starts from what it was opened with; the caller remounts it for each new thread.
 	let open = $state(true);
@@ -55,7 +57,7 @@
 	}
 </script>
 
-<RoomForm bind:open kind="thread" subtitle="In {room.title}" private={room.private === true} {moving} bind:showDescription bind:showFirstMessage bind:name={title} field={descriptionField} firstMessage={firstMessageField} status={task.busy ? 'saving' : 'idle'} error={task.note} disabled={!enabled} onsubmit={start} {onclose} />
+<RoomForm bind:open kind="thread" subtitle="In {room.title}" private={room.private === true} {moving} {replyTo} bind:showDescription bind:showFirstMessage bind:name={title} field={descriptionField} firstMessage={firstMessageField} status={task.busy ? 'saving' : 'idle'} error={task.note} disabled={!enabled} onsubmit={start} {onclose} />
 
 {#snippet descriptionField(form: RoomFormField)}
 	<DescriptionField bind:value={description} {form} {people} {rooms} {onmention} />
