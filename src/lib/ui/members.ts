@@ -37,6 +37,67 @@ export function absentMentions(mentions: readonly string[], room: { members?: re
 	return [...new Set(mentions)].filter((userId) => !memberIds.has(userId) && !skip(userId));
 }
 
+/**
+ * The IDs of `members` while they're all known, as `absentMentions` needs them: undefined before any listing, or when
+ * the server listed only some (`memberCount`), since then anyone could be one.
+ */
+export function knownMemberIds(members: readonly Identity[] | undefined, memberCount: number | undefined): ReadonlySet<string> | undefined {
+	if (!members || (memberCount !== undefined && memberCount > members.length)) return undefined;
+	return new Set(members.map((member) => member.user_id));
+}
+
+/**
+ * The user IDs that `messages` mention (`body.mentions`, §3.5) who aren't among `memberIds` (`knownMemberIds`), once
+ * each, in the order mentioned, as written: none while the members aren't all known. Members are listed by their
+ * current IDs, so `current` gives the one an ID written before a change is now (§3.3): she's no less here for it.
+ * A `mentions` that isn't a list (anyone may send one) names no one.
+ */
+export function absentInMessages(messages: readonly { body?: { mentions?: unknown } }[], memberIds: ReadonlySet<string> | undefined, current: (userId: string) => string = (userId) => userId): string[] {
+	if (!memberIds) return [];
+	const absent = new Set<string>();
+	for (const message of messages) {
+		const mentions = message.body?.mentions;
+		if (!Array.isArray(mentions)) continue;
+		for (const userId of mentions) if (typeof userId === 'string' && !absent.has(userId) && !memberIds.has(current(userId))) absent.add(userId);
+	}
+	return [...absent];
+}
+
+/**
+ * A stylesheet that greys, in a pane's message text, the mention chips of `userIds` (those not in the room), the way
+ * the composer greys a draft's (`ap-mention-quiet` in apron.css). The browser matches it, so no row draws again as
+ * people join or leave. Each ID is escaped to hex beyond `[A-Za-z0-9_-]`, so nothing in one ends the rule. Empty
+ * for no one.
+ */
+export function absentMentionsCss(userIds: readonly string[]): string {
+	if (!userIds.length) return '';
+	const escape = (id: string) => id.replace(/[^A-Za-z0-9_-]/gu, (char) => `\\${char.codePointAt(0)!.toString(16)} `);
+	const selectors = userIds.map((id) => `.ap-timeline .ap-msg-text .ap-mention[data-user-id="${escape(id)}"]`);
+	return `${selectors.join(',\n')} { background: color-mix(in srgb, var(--ink-muted) 14%, transparent); color: var(--ink-muted); }`;
+}
+
+/**
+ * Says on a mention chip in a message why it's greyed (`absentMentionsCss`): while its person is among `absent`, its
+ * tooltip and accessible description add `note`; once they aren't, they're as rendered. For the chip at or around
+ * `target`, as the pointer or focus reaches it, so no row draws again for it.
+ */
+export function noteAbsentMention(target: EventTarget | null, absent: ReadonlySet<string>, note: string): void {
+	if (!(target instanceof Element)) return;
+	const chip = target.closest<HTMLElement>('.ap-msg-text .ap-mention[data-user-id]');
+	if (!chip) return;
+	const own = (chip.dataset.ownTitle ??= chip.title);
+	if (absent.has(chip.dataset.userId ?? '')) {
+		// The same words for a screen reader: a description of its own takes the place of the title's, @user_id and all.
+		const tip = own ? `${own} · ${note}` : note;
+		chip.title = tip;
+		chip.setAttribute('aria-description', tip);
+	} else {
+		if (own) chip.title = own;
+		else chip.removeAttribute('title');
+		chip.removeAttribute('aria-description');
+	}
+}
+
 const NO_ONE: MentionPerson[] = [];
 
 /**

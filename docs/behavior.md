@@ -585,11 +585,11 @@ bottom sheet on narrow screens) with their avatar, name, `@user_id` (always,
 here, with a copy button beside it), role badges, "(you)", a warning when another known user shows under
 the same name, their bio where the server keeps one (plain text with its
 line breaks, never markup; its `http(s)` links open in a new tab), and whether they're in the open room. **Message**, the
-card's primary action, opens a private conversation with them (below), for
+first of the card's actions, opens a private conversation with them (below), for
 anyone but you and the system identities, while you're signed in to an account
 (not a guest) on a server with the `rooms` capability. **Mention** puts their
 chip in the composer, and **Add to
-room** appears where the member list would let you add them. Escape, a press
+room** appears where the member list would let you add them, with whether they're in the room under it. Escape, a press
 outside, or tabbing out closes it. Mentions inside a reply's quote only read,
 since the quote is the button that jumps to its message.
 

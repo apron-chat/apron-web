@@ -11,8 +11,8 @@ function field<T extends HTMLElement>(selector: string): T {
 }
 
 describe('NewThreadDialog', () => {
-	type Props = { room?: { id: string; title: string; private?: boolean }; title?: string; description?: string; moving?: number; people?: { id: string; name?: string }[] };
-	function render(props: Props = {}, oncreate = vi.fn((_thread: { title: string; description?: string }) => Promise.resolve())) {
+	type Props = { room?: { id: string; title: string; private?: boolean }; title?: string; description?: string; replyTo?: string; moving?: number; people?: { id: string; name?: string }[] };
+	function render(props: Props = {}, oncreate = vi.fn((_thread: { title: string; description?: string }, _first?: { text: string; mentions: string[] }) => Promise.resolve())) {
 		const onclose = vi.fn();
 		dom.render(NewThreadDialog, { room: { id: 'ops', title: 'ops' }, enabled: true, oncreate, onclose, ...props });
 		return { oncreate, onclose };
@@ -20,23 +20,123 @@ describe('NewThreadDialog', () => {
 	const text = () => field('dialog').textContent ?? '';
 	const submitLabel = () => field('dialog button[type="submit"]').textContent;
 
-	it('starts from a message: its first line as the title, selected, and the message quoted as the description, its mentions as chips', async () => {
+	const button = (label: string) => [...document.querySelectorAll<HTMLButtonElement>('dialog .ap-dialog-foot button')].find((b) => b.textContent?.trim() === label);
+
+	it('starts from a message: its first line as the title, selected, and the message quoted behind "Add description", its mentions as chips', async () => {
 		const { oncreate, onclose } = render({ title: 'Deploy failed', description: '> Deploy failed\n>\n> @ada says the runner looked fine.', people: [{ id: 'ada', name: 'Ada Lovelace' }] });
 		const dialog = field<HTMLDialogElement>('dialog');
 		expect(dialog.open).toBe(true);
 		expect(text()).toContain('Start thread');
 		expect(text()).toContain('In ops');
-		const description = field('[data-testid="description-input"]');
-		expect(description.querySelector('[data-user-id="ada"]')?.textContent).toContain('Ada Lovelace');
 		await tick();
 		const input = field<HTMLInputElement>('input.ap-field');
 		expect(document.activeElement).toBe(input);
 		expect([input.selectionStart, input.selectionEnd]).toEqual([0, 'Deploy failed'.length]);
+		// Put away, so it isn't taken for the first message.
+		expect(document.querySelector('[data-testid="description-input"]')).toBeNull();
+		button('Add description')!.click();
+		await tick();
+		await tick();
+		const description = field('[data-testid="description-input"]');
+		expect(description.querySelector('[data-user-id="ada"]')?.textContent).toContain('Ada Lovelace');
 		dom.type(input, '  Why the 4pm deploy failed ');
 		await dom.submit();
 		// Sent as it was written: the chip is its `@ada`.
-		expect(oncreate).toHaveBeenCalledWith({ title: 'Why the 4pm deploy failed', description: '> Deploy failed\n>\n> @ada says the runner looked fine.' });
+		expect(oncreate).toHaveBeenCalledWith({ title: 'Why the 4pm deploy failed', description: '> Deploy failed\n>\n> @ada says the runner looked fine.' }, undefined);
 		expect(onclose).toHaveBeenCalled();
+	});
+
+	it('sends no description suggested from a message unless it was shown', async () => {
+		const { oncreate } = render({ title: 'Deploy failed', description: '> Deploy failed' });
+		await dom.submit();
+		expect(oncreate).toHaveBeenCalledWith({ title: 'Deploy failed' }, undefined);
+	});
+
+	it('offers a first message ahead of the description, and sends what is written in it', async () => {
+		const { oncreate } = render({ title: 'Deploy failed', people: [{ id: 'ada', name: 'Ada Lovelace' }] });
+		await tick();
+		const labels = [...document.querySelectorAll('dialog .ap-dialog-foot button')].map((b) => b.textContent?.trim());
+		expect(labels.indexOf('Add first message')).toBeLessThan(labels.indexOf('Add description'));
+		expect(document.querySelector('[data-testid="first-message-input"]')).toBeNull();
+		button('Add first message')!.click();
+		await tick();
+		await tick();
+		const message = field('[data-testid="first-message-input"]');
+		expect(document.activeElement).toBe(message);
+		expect(message.getAttribute('aria-label')).toBe('First message');
+		expect(button('Add first message')).toBeUndefined();
+		expect(button('Add description')).toBeDefined();
+		message.textContent = '  Can you look?  ';
+		message.dispatchEvent(new Event('input', { bubbles: true }));
+		await tick();
+		await dom.submit();
+		// Who it mentions is checked in a browser (e2e/threads.spec.ts), where its chips can be typed.
+		expect(oncreate).toHaveBeenCalledWith({ title: 'Deploy failed' }, { text: 'Can you look?', mentions: [] });
+	});
+
+	it('started on a message, offers the first message as a reply to who wrote it', async () => {
+		render({ title: 'Deploy failed', replyTo: 'Ada Lovelace' });
+		expect(button('Add first message')).toBeUndefined();
+		button('Add reply')!.click();
+		await tick();
+		await tick();
+		const reply = field('[data-testid="first-message-input"]');
+		expect(document.activeElement).toBe(reply);
+		expect(reply.getAttribute('aria-label')).toBe('Reply');
+		expect(text()).toContain('Reply to Ada Lovelace');
+		expect(button('Add reply')).toBeUndefined();
+	});
+
+	const editor = (name: string) => field(`[data-testid="${name}-editor"]`);
+
+	it('draws the reply plain, as the composer, and the description with its formatting and Preview, neither with a hint', async () => {
+		render({ title: 'Deploy failed', replyTo: 'Ada Lovelace' });
+		button('Add reply')!.click();
+		button('Add description')!.click();
+		await tick();
+		await tick();
+		expect(editor('first-message').querySelector('.ap-mdhead')).toBeNull();
+		expect(editor('description').querySelector('.ap-mdhead')).not.toBeNull();
+		expect(document.querySelector('dialog .ap-fieldlabel-hint')).toBeNull();
+		expect(text()).not.toContain('Markdown, optional');
+	});
+
+	it('puts a field back behind its button with its ×, starting over: the reply empty, the description with its suggestion', async () => {
+		const { oncreate } = render({ title: 'Deploy failed', description: '> Deploy failed', replyTo: 'Ada Lovelace' });
+		button('Add reply')!.click();
+		await tick();
+		await tick();
+		const reply = field('[data-testid="first-message-input"]');
+		reply.textContent = 'Still broken?';
+		reply.dispatchEvent(new Event('input', { bubbles: true }));
+		await tick();
+		dom.byRole<HTMLButtonElement>('button', 'Remove reply').click();
+		await tick();
+		await tick();
+		expect(document.querySelector('[data-testid="first-message-input"]')).toBeNull();
+		expect(document.activeElement).toBe(button('Add reply'));
+		button('Add reply')!.click();
+		await tick();
+		await tick();
+		expect(field('[data-testid="first-message-input"]').textContent).toBe('');
+
+		button('Add description')!.click();
+		await tick();
+		await tick();
+		dom.byRole<HTMLButtonElement>('button', 'Remove description').click();
+		await tick();
+		await tick();
+		expect(document.querySelector('[data-testid="description-input"]')).toBeNull();
+		expect(document.activeElement).toBe(button('Add description'));
+		// Nothing put away is sent.
+		await dom.submit();
+		expect(oncreate).toHaveBeenCalledWith({ title: 'Deploy failed' }, undefined);
+	});
+
+	it('offers no first message when moving messages, which start the thread', () => {
+		render({ title: 'Offer', moving: 2 });
+		expect(button('Add first message')).toBeUndefined();
+		expect(button('Add description')).toBeDefined();
 	});
 
 	it('starts from a room with nothing filled in, needs a title, and stays open with the reason when creating fails', async () => {
@@ -49,7 +149,7 @@ describe('NewThreadDialog', () => {
 		dom.type(field('input.ap-field'), 'Office move');
 		await dom.submit();
 		// An empty description sends no description.
-		expect(oncreate).toHaveBeenCalledWith({ title: 'Office move' });
+		expect(oncreate).toHaveBeenCalledWith({ title: 'Office move' }, undefined);
 		dom.unmount();
 		// Creating fails: it stays open with the reason.
 		const { onclose } = render({ title: 'Deploy' }, vi.fn(() => Promise.reject(new Error('Not allowed'))));
@@ -71,14 +171,13 @@ describe('NewThreadDialog', () => {
 		const { oncreate } = render({ title: 'Office move' });
 		await tick(); // the title takes focus first
 		expect(document.querySelector('[data-testid="description-input"]')).toBeNull();
-		const add = [...document.querySelectorAll<HTMLButtonElement>('dialog .ap-dialog-foot button')].find((b) => b.textContent?.trim() === 'Add description')!;
-		add.click();
+		button('Add description')!.click();
 		await tick();
 		await tick();
 		const description = field('[data-testid="description-input"]');
 		expect(document.activeElement).toBe(description);
 		expect([...document.querySelectorAll('dialog button')].some((b) => b.textContent?.trim() === 'Add description')).toBe(false);
 		await dom.submit();
-		expect(oncreate).toHaveBeenCalledWith({ title: 'Office move' });
+		expect(oncreate).toHaveBeenCalledWith({ title: 'Office move' }, undefined);
 	});
 });
