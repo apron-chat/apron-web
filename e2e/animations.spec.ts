@@ -65,6 +65,32 @@ test.describe('a GIF that plays by itself', () => {
 	});
 });
 
+test.describe('a playing GIF’s Pause', () => {
+	test.use({ reducedMotion: 'no-preference' });
+
+	test('shows on hover where there’s a mouse', async ({ preview, page }) => {
+		await preview.open();
+		await postGif(preview);
+		const figure = page.locator('figure.ap-embed-animated');
+		const pause = figure.getByRole('button', { name: 'Pause party.gif' });
+		await expect(figure.locator('img.ap-embed-media')).toBeVisible();
+		await page.mouse.move(1, 1);
+		await expect(pause).toHaveCSS('opacity', '0');
+		await figure.locator('img.ap-embed-media').hover();
+		await expect(pause).toHaveCSS('opacity', '1');
+	});
+
+	test.describe('on a phone', () => {
+		test.use({ ...DEVICES.phone, reducedMotion: 'no-preference' });
+
+		test('always shows, as a touch screen can’t hover', async ({ preview, page }) => {
+			await preview.open();
+			await postGif(preview);
+			await expect(page.locator('figure.ap-embed-animated').getByRole('button', { name: 'Pause party.gif' })).toHaveCSS('opacity', '1');
+		});
+	});
+});
+
 test.describe('where the device asks for reduced motion', () => {
 	test.use({ reducedMotion: 'reduce' });
 
