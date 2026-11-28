@@ -8,11 +8,11 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
    neighbours. A field rings its own border, which takes the color too (.ap-field); the composer and a message being
    edited light their frame instead, and a panel's handle its border. */
 :where(.ap-btn, .ap-cmdref-use, .ap-embed-remove, .ap-link, .ap-dialog-titlebtn, .ap-thread, .ap-composer-field, .ap-embed-card, .ap-embed-url, .ap-actions-btn, .ap-jumpbar-btn, .ap-jumpfab, .ap-sect-toggle, .ap-roomhead-back, .ap-roomhead-crumb, .ap-profile-me, .ap-shell-sidehead-return, .ap-shell-sidehead-open, .ap-field, .ap-reply, .ap-choice-item, .ap-msg-check, .ap-msg-who, .ap-member-who, .ap-iconbtn, .ap-foldpill, .ap-rchip, .ap-switch, .ap-description-toggle, .ap-attachment-rename, .ap-viewer-btn, .ap-embed-ogcard, .ap-embed-imagelink, button.ap-mention, a.ap-linkchip, .ap-pick-chip-remove, .ap-audio-play, .ap-audio-rate, .ap-audio-seek, .ap-embed-audiotitle, .ap-task, .ap-spoiler):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
-:where(.ap-room, .ap-room-exit, .ap-room-join, .ap-menu-item, .ap-seg-item, .ap-connect-recent-item, .ap-font-option, .ap-font-load, .ap-preferences-nav button, .ap-profedit-upload):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset-inset); }
+:where(.ap-room, .ap-room-exit, .ap-room-join, .ap-menu-item, .ap-seg-item, .ap-connect-recent-item, .ap-font-option, .ap-font-load, .ap-preferences-nav button, .ap-profedit-upload, .ap-profcard-action):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset-inset); }
 /* The people picker's field rings itself while its input has the keyboard, as a field does. */
 .ap-pick-field:has(.ap-pick-input:focus-visible) { outline: var(--focus-ring); outline-offset: var(--focus-offset); border-color: var(--focus); }
 /* Disabled — one fade, whatever the control. */
-:is(.ap-btn, .ap-iconbtn, .ap-link, .ap-seg-item, .ap-choice-item, .ap-field, .ap-viewer-btn):disabled, .ap-switch[aria-disabled='true'] { cursor: default; opacity: var(--opacity-disabled); }
+:is(.ap-btn, .ap-iconbtn, .ap-link, .ap-seg-item, .ap-choice-item, .ap-field, .ap-viewer-btn, .ap-profcard-action):disabled, .ap-switch[aria-disabled='true'] { cursor: default; opacity: var(--opacity-disabled); }
 
 /* Visually hidden, still read by screen readers: live regions, and explanations that controls refer to. */
 .ap-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
@@ -1298,8 +1298,9 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 /* The card is about one person: their face leads it, larger than --avatar-lg elsewhere, with room around it. */
 .ap-profcard { --profcard-pad: calc(var(--space-4) + var(--space-1)); gap: var(--space-3); padding: var(--profcard-pad); }
 .ap-profcard.ap-popover-sheet { padding-bottom: calc(var(--profcard-pad) + env(safe-area-inset-bottom) + var(--corner-clear)); }
-.ap-profcard .ap-avatar-lg { width: 80px; height: 80px; font-size: 26px; }
-.ap-profcard .ap-avatar-status-lg { --presence-d: 16px; --presence-gap: 4px; }
+/* Who they are first: a 64px avatar beside the name, @user_id and status; then, under a rule, what you can do. */
+.ap-profcard .ap-avatar-lg { width: 64px; height: 64px; font-size: 22px; }
+.ap-profcard .ap-avatar-status-lg { --presence-d: 14px; --presence-gap: 3px; }
 .ap-profcard-who { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
 .ap-profcard-names { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .ap-profcard-nameline { display: flex; align-items: baseline; gap: var(--space-1); min-width: 0; }
@@ -1308,16 +1309,32 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-profcard-handleline { display: flex; align-items: center; gap: var(--space-1); min-width: 0; }
 .ap-profcard-handle { min-width: 0; color: var(--ink-muted); font-size: var(--text-ui); line-height: var(--leading-ui); overflow-wrap: anywhere; user-select: all; }
 .ap-profcard-copy { flex: none; width: var(--control-xs); height: var(--control-xs); margin: -2px 0; }
-.ap-profcard-status, .ap-profcard-seen { color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); overflow-wrap: anywhere; }
+/* Status and when they were last seen, as one line: the dot on the avatar already says which. */
+.ap-profcard-statusline { display: flex; flex-wrap: wrap; column-gap: 6px; color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); }
+.ap-profcard-status, .ap-profcard-seen { overflow-wrap: anywhere; }
+/* The dot goes with the time, so a wrap never leaves it at the end of the line; read by no screen reader. */
+.ap-profcard-seen::before { content: '·'; content: '·' / ''; margin-inline-end: 6px; }
 .ap-profcard-literal { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--ink); }
 /* With room for more than one row, every badge shows, wrapping; one wider than the card ellipsizes. */
 .ap-profcard-names .ap-roles { align-self: flex-start; height: auto; overflow: visible; margin: 2px 0 0; }
-.ap-profcard-note, .ap-profcard-warn { margin: 0; font-size: var(--text-ui); line-height: var(--leading-ui); }
+.ap-profcard-note { margin: 0; font-size: var(--text-ui); line-height: var(--leading-ui); }
 .ap-profcard-note { color: var(--ap-tone, var(--ink-muted)); }
 .ap-profcard-bio { margin: 0; font-size: var(--text-ui); line-height: var(--leading-ui); color: var(--ink); white-space: pre-line; overflow-wrap: anywhere; }
 .ap-profcard-bio a { color: var(--denim); }
-.ap-profcard-warn { padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); background: var(--bg-300); color: var(--ink); }
-.ap-profcard-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.ap-profcard-warn { margin: 0; display: flex; align-items: flex-start; gap: var(--space-2); padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); background: color-mix(in srgb, var(--warn) 12%, transparent); color: var(--ink); font-size: var(--text-sm); line-height: var(--leading-sm); }
+.ap-profcard-warn > svg { flex: none; margin-top: 0.5px; color: var(--warn); }
+/*
+ * What you can do with them: a list of the same rows under a rule across the card, each its icon and words, the
+ * icon centred on the words' first line whatever follows, and in line with the text above. Ending the card, the last
+ * row's padding is taken back from the card's, so its words sit as far from the edge as the name does from the top.
+ */
+.ap-profcard-actions { --profcard-row-y: var(--space-2); display: flex; flex-direction: column; margin: 0 calc(-1 * var(--profcard-pad)); padding: var(--space-2) calc(var(--profcard-pad) - var(--space-2)) 0; border-top: 1px solid var(--line); }
+.ap-profcard-actions:last-child { margin-bottom: calc(-1 * var(--profcard-row-y)); }
+.ap-profcard-action { font: inherit; display: grid; grid-template-columns: 16px minmax(0, 1fr); column-gap: var(--space-3); align-items: start; width: 100%; padding: var(--profcard-row-y) var(--space-2); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); font-weight: 500; text-align: start; cursor: pointer; }
+.ap-profcard-action:hover:not(:disabled) { background: var(--hover); }
+.ap-profcard-action-icon { display: grid; place-items: center; height: var(--leading-ui); color: var(--ink-muted); }
+.ap-profcard-action-text { min-width: 0; overflow-wrap: anywhere; }
+.ap-profcard-action-sub { grid-column: 2; color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 400; overflow-wrap: anywhere; }
 
 /* ReactorsPopover — who reacted with an emoji; the list scrolls past 320px, so a crowd doesn't run off the screen */
 .ap-reactors { gap: var(--space-2); padding: var(--space-3); }
