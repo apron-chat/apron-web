@@ -47,9 +47,9 @@
 		bioBody?: Snippet;
 		/** Another user shows the same name: a note says to check the `@user_id`. */
 		sharesName?: boolean;
-		/** Their membership of the open room, in words ("Member of design"). */
+		/** Their membership of the open room, in words ("Member of design"): under Add to room when that's offered, as its description, else a line of its own. */
 		membership?: string;
-		/** Offers Message, the card's primary action: a private conversation with them (§4.2.4). */
+		/** Offers Message, first of the actions: a private conversation with them (§4.2.4). */
 		onmessage?: () => void;
 		/** Opening it is in flight: Message says "Opening…", disabled. */
 		messaging?: boolean;
@@ -112,7 +112,7 @@
 					{:else}
 						<span class="ap-profcard-status" data-testid={statusTestid}>{statusLabel ?? presenceLabel(status)}</span>
 					{/if}
-					{#if shown === 'offline' && !you && seen?.text}<span class="ap-profcard-sep" aria-hidden="true">·</span><time class="ap-profcard-seen" data-testid={seenTestid} datetime={seen.datetime} title={seen.title}>{seen.text}</time>{/if}
+					{#if shown === 'offline' && !you && seen?.text}<time class="ap-profcard-seen" data-testid={seenTestid} datetime={seen.datetime} title={seen.title}>{seen.text}</time>{/if}
 				</div>
 			{/if}
 			<RoleBadges {roles} data-testid={rolesTestid} overflow="drop" />
