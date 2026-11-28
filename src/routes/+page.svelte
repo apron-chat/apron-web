@@ -142,6 +142,8 @@
 		title: string;
 		description: string;
 		message?: string;
+		/** Who wrote `message`, whom a first message written in the dialog replies to. */
+		replyTo?: string;
 		moving?: number;
 	};
 
@@ -1363,12 +1365,21 @@
 		pendingOpen = undefined;
 		// A thread of a private room is private too (§4.2.4); one the server made visible isn't opened to reply in.
 		if (step !== 'open') {
-			untrack(() => feedback.error(step.refuse));
+			untrack(() => {
+				// Not sent there: it waits, unsent, in the room's composer.
+				const after = pending.first && drafts.add(draftKey(pending.room), pending.first.text, pending.replyTo);
+				feedback.error(!pending.first ? step.refuse : `${step.refuse} Your reply is in the message box below, unsent${after ? ', after what you’d already written there' : ''}.`);
+			});
 			return;
 		}
 		untrack(() => {
 			openDestination(pending.room, pending.thread);
-			if (pending.replyTo !== undefined && !drafts.reply) drafts.setReply(pending.replyTo);
+			if (pending.first) {
+				// Sent from the thread's composer, as if written there: who it mentions is added or asked about first.
+				drafts.add(draftKey(pending.thread), pending.first.text, pending.replyTo);
+				composerMentions = pending.first.mentions;
+				sendMessage();
+			} else if (pending.replyTo !== undefined && !drafts.reply) drafts.setReply(pending.replyTo);
 		});
 	});
 
@@ -3590,7 +3601,7 @@
 			chooseThread(existing);
 			return;
 		}
-		askNewThread({ title: threadTitleFor(event), description: threadDescriptionFor(event) ?? '', message: id });
+		askNewThread({ title: threadTitleFor(event), description: threadDescriptionFor(event) ?? '', message: id, replyTo: senderName(event) });
 	}
 
 	/**
@@ -3599,7 +3610,7 @@
 	 * select mode the selection then moves into it. A rejection is shown in the
 	 * dialog, which stays open, so it only rejects while no thread exists.
 	 */
-	async function createThread(start: NewThread, thread: { title: string; description?: string }): Promise<void> {
+	async function createThread(start: NewThread, thread: { title: string; description?: string }, first?: { text: string; mentions: string[] }): Promise<void> {
 		if (!client) throw new Error('Not connected');
 		const roomId = start.room.id;
 		if (start.moving) {
@@ -3629,7 +3640,9 @@
 		if (start.message !== undefined) startedThreads.set(start.message, result.room_id);
 		arrivals.mine(result.room_id);
 		includeMembers(start.room, result.room_id);
-		pendingOpen = { room: roomId, thread: result.room_id, ...(start.message !== undefined ? { replyTo: start.message } : {}) };
+		// The first message goes once it opens (not to one whose privacy was lost); without one, the thread opens with its
+		// composer replying to the message it was started on.
+		pendingOpen = { room: roomId, thread: result.room_id, ...(start.message !== undefined ? { replyTo: start.message } : {}), ...(first ? { first } : {}) };
 	}
 
 	/**
@@ -4152,10 +4165,10 @@
 		{@const start = newThread}
 		{@const NewThreadDialog = newThreadDialog.component}
 		{#key start}
-			<NewThreadDialog room={start.room} title={start.title} description={start.description} moving={start.moving}
+			<NewThreadDialog room={start.room} title={start.title} description={start.description} replyTo={start.replyTo} moving={start.moving}
 				enabled={canStartThreads && canCompose && (!start.moving || session.canEdit)}
 				{people} rooms={roomSuggestions} onmention={refreshMembers}
-				oncreate={(thread) => createThread(start, thread)} onclose={() => (newThread = undefined)} />
+				oncreate={(thread, first) => createThread(start, thread, first)} onclose={() => (newThread = undefined)} />
 		{/key}
 	{/if}
 	{#if searchMode && client && searchDialog.component}

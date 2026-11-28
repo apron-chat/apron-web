@@ -1,0 +1,51 @@
+import { DEVICES, expect, test } from './fixtures';
+
+test.use(DEVICES.desktop);
+
+test.describe('starting a thread on a message', () => {
+	test('puts its description away, and offers a reply to it, sent in the thread as it starts, with who it mentions', async ({ preview, page }) => {
+		await preview.open();
+		const message = preview.message(/Welcome to Apron/);
+		const messageId = await message.getAttribute('data-message-id');
+		await message.hover();
+		await message.getByRole('button', { name: 'Start thread', exact: true }).click();
+		const dialog = page.getByRole('dialog', { name: 'Start thread' });
+		await expect(dialog.getByRole('textbox', { name: 'Thread title', exact: true })).toBeFocused();
+		// Nothing there to mistake for the thread's first message.
+		await expect(dialog.getByTestId('description-input')).toHaveCount(0);
+		await expect(dialog.getByTestId('first-message-input')).toHaveCount(0);
+		await dialog.getByRole('textbox', { name: 'Thread title', exact: true }).fill('About the welcome');
+
+		await expect(dialog.getByRole('button', { name: 'Add first message', exact: true })).toHaveCount(0);
+		await dialog.getByRole('button', { name: 'Add reply', exact: true }).click();
+		const first = dialog.getByRole('textbox', { name: 'Reply', exact: true });
+		await expect(first).toBeFocused();
+		await expect(dialog).toContainText('Reply to Ada Lovelace');
+		await page.keyboard.type('@ad');
+		await page.getByTestId('first-message-picker').getByRole('option', { name: /Ada Lovelace/ }).click();
+		await page.keyboard.type('is this still true?');
+		await dialog.getByRole('button', { name: 'Start thread', exact: true }).click();
+		await expect(dialog).toBeHidden();
+
+		const created = await preview.waitForSent('room_set', (p) => p.title === 'About the welcome');
+		expect(created.description).toBeUndefined();
+		// Sent as the thread's composer sends: Ada isn't in the new thread, so she's added first, to see the mention.
+		const added = await preview.waitForSent('room_join', (p) => p.user_id === 'ada');
+		expect(added.room_id).toMatch(/^thread_/);
+		const sent = await preview.waitForSent('message', (p) => typeof p.body?.text === 'string' && p.body.text.endsWith('is this still true?'));
+		// In the thread, replying to the message in the room (§3.5.4), as one from the thread's composer would.
+		expect(sent).toMatchObject({ body: { text: '@ada is this still true?', mentions: ['ada'] }, reply_to: { message_id: messageId } });
+		expect(sent.room_id).toBe(added.room_id);
+
+		await expect(preview.heading()).toHaveText('general › About the welcome');
+		const reply = preview.message('@Ada Lovelace is this still true?');
+		await expect(reply).toBeVisible();
+		// Sent already: the composer isn't left replying to the message, as it is when the thread starts without one.
+		await expect(preview.composer()).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Cancel reply', exact: true })).toHaveCount(0);
+		// Its reference leads back to the message in the room.
+		await reply.locator('.ap-msg-reply').click();
+		await expect(preview.heading()).toHaveText('general');
+		await expect(preview.page.getByTestId('message-list').locator(`article[data-message-id="${messageId}"]`)).toBeInViewport();
+	});
+});

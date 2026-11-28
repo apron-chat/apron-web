@@ -218,6 +218,27 @@ export class PaneDrafts {
 	}
 
 	/**
+	 * Puts `text` in `key`'s draft, open or not, after what is already there (a blank line between), replying to `reply`
+	 * unless that draft replies to something already. Returns whether there was a draft before it.
+	 */
+	add(key: string, text: string, reply?: string): boolean {
+		const open = this.key === key;
+		this.recall(key);
+		const before = (open ? this.text : this.texts.get(key) ?? '').trimEnd();
+		const joined = before ? `${before}\n\n${text}` : text;
+		const replyTo = (open ? this.reply : this.replies.get(key)) ?? reply;
+		if (open) {
+			this.text = joined;
+			this.reply = replyTo;
+		} else {
+			this.texts.set(key, joined);
+			this.replies.set(key, replyTo);
+			this.persist(key);
+		}
+		return before !== '';
+	}
+
+	/**
 	 * Drops every draft here whose key passes `goes`, the open pane's too: the session they were written in signed
 	 * out, or another account signed in. The store forgets its own (`DraftKeeper.forget`, `claim`).
 	 */

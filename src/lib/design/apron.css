@@ -1510,6 +1510,8 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-profedit-signin .ap-typing-dots { vertical-align: middle; margin-inline-end: var(--space-1); }
 .ap-field-multi { height: auto; padding: var(--space-1) var(--space-2); resize: vertical; font: inherit; font-size: var(--text-field); line-height: var(--leading-field); font-weight: 400; }
 .ap-fieldlabel-row { display: flex; justify-content: space-between; }
+/* RoomForm: a thread's field put away again, at the end of its heading without making it taller */
+.ap-roomform-remove { width: auto; height: auto; margin: -2px; padding: 2px; }
 /*
  * MarkdownEditor: a Markdown field in a form, in a box like a field's, its formatting buttons and Write and Preview along
  * its top (ap-mdhead, as the full panel's). The field is at least --ap-mdedit-rows lines and grows with its text to half the window; Preview takes its
@@ -1530,8 +1532,9 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-fieldlabel-hint { font-weight: 400; color: var(--ap-tone, var(--ink-muted)); }
 /* RoomForm: what starting a thread will do, under its fields */
 .ap-roomform-note { margin: 0; font-size: var(--text-ui); line-height: var(--leading-ui); color: var(--ap-tone, var(--ink-muted)); }
-/* RoomForm's footer: Add description at its start, then Cancel and the action, together on a line of their own when it's narrow */
-.ap-roomform-addbtn { margin-right: auto; margin-left: calc(-1 * var(--space-2)); padding: 0 var(--space-2); font-weight: 400; }
+/* RoomForm's footer: Add first message and Add description at its start, then Cancel and the action, together on a line of their own when it's narrow */
+.ap-roomform-adds { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-right: auto; margin-left: calc(-1 * var(--space-2)); }
+.ap-roomform-addbtn { padding: 0 var(--space-2); font-weight: 400; }
 .ap-roomform-addbtn:hover:not(:disabled) { background: var(--hover); color: var(--ink); }
 .ap-roomform .ap-dialog-foot { flex-wrap: wrap; }
 .ap-roomform-actions { display: flex; gap: var(--space-2); margin-left: auto; }
