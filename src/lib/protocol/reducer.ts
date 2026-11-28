@@ -439,11 +439,14 @@ export class ProtocolStore {
 	/**
 	 * Drop a user the server removed with their records (§3.3.3): the messages they sent, with every reaction set
 	 * on them, their reaction sets elsewhere, and their memberships, in member lists and membership logs alike.
+	 * Returns the IDs of the messages it dropped.
 	 */
-	removeUser(userId: string): void {
+	removeUser(userId: string): Set<string> {
 		this.changed({ kind: 'removeUser', user: userId });
+		const removed = new Set<string>();
 		for (const [id, message] of [...this.messageRecords]) {
 			if (message.from.user_id !== userId) continue;
+			removed.add(id);
 			this.messageRecords.delete(id);
 			this.reactionSets.delete(id);
 			this.unhome(message.room_id, id);
@@ -470,6 +473,7 @@ export class ProtocolStore {
 			log.published = undefined;
 			this.touched.add(roomId);
 		}
+		return removed;
 	}
 
 	clear(): void {
