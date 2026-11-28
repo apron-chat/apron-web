@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { flushSync } from 'svelte';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import EmbedCard from './EmbedCard.svelte';
 import EmbedFrame from './EmbedFrame.svelte';
 import Embed from './Embed.svelte';
@@ -71,13 +71,31 @@ describe('an animated image', () => {
 		return drawImage;
 	}
 
-	it('plays 5 seconds after it has loaded, then holds still on a canvas; its button plays it on and pauses it, and the picture still views it', () => {
+	afterEach(() => {
+		vi.useRealTimers();
+		vi.restoreAllMocks();
+		vi.unstubAllGlobals();
+	});
+
+	it('plays 5 seconds from when it is first on screen loaded, then holds still on a canvas; its button plays it on and pauses it, and the picture still views it', () => {
 		vi.useFakeTimers();
+		let intersect: (entries: { isIntersecting: boolean }[]) => void = () => undefined;
+		vi.stubGlobal('IntersectionObserver', class {
+			constructor(callback: typeof intersect) {
+				intersect = callback;
+			}
+			observe() {}
+			disconnect() {}
+		});
 		const onview = vi.fn();
 		render(EmbedUpload, { kind: 'upload', url: GIF, title: 'party.gif', og: { image: { url: media(GIF), alt: 'A parrot', animated: true } }, onview });
-		// The while starts once it has loaded, as a lazy image does near the screen.
-		vi.advanceTimersByTime(20_000);
+		// Loaded, as a lazy image is well before it's in view: its while waits for the screen.
 		const drawImage = load();
+		vi.advanceTimersByTime(20_000);
+		flushSync();
+		expect(document.querySelector('canvas')).toBeNull();
+		intersect([{ isIntersecting: true }]);
+		flushSync();
 		vi.advanceTimersByTime(4_999);
 		flushSync();
 		expect(document.querySelector('canvas')).toBeNull();
@@ -89,22 +107,25 @@ describe('an animated image', () => {
 		expect(document.querySelector('img')!.classList.contains('ap-anim-held')).toBe(true);
 		document.querySelector<HTMLAnchorElement>('a.ap-embed-imagelink')!.click();
 		expect(onview).toHaveBeenCalledOnce();
-		button('Play party.gif').click();
+		button('Play GIF party.gif').click();
 		vi.advanceTimersByTime(60_000);
 		flushSync();
 		expect(document.querySelector('canvas')).toBeNull();
-		button('Pause party.gif').click();
+		button('Pause GIF party.gif').click();
 		flushSync();
 		expect(document.querySelector('canvas')).not.toBeNull();
-		vi.useRealTimers();
-		vi.restoreAllMocks();
 	});
 
-	it('without autoplay, holds still from the start, hidden until it has loaded; a card\'s has no button and stops after 5 seconds too; a still image is plain', () => {
+	it('without autoplay, holds still from the start, hidden until it has loaded (shown as it is if it fails); a card\'s has no button and stops after 5 seconds too; a still image is plain', () => {
 		render(EmbedUpload, { kind: 'upload', url: GIF, title: 'party.gif', og: { image: { url: media(GIF), animated: true } }, autoplay: false });
 		expect(document.querySelector('img')!.classList.contains('ap-anim-waiting')).toBe(true);
 		load();
 		expect(document.querySelector('canvas')?.getAttribute('aria-hidden')).toBe('true');
+		unmount();
+		render(EmbedUpload, { kind: 'upload', url: GIF, title: 'party.gif', og: { image: { url: media(GIF), animated: true } }, autoplay: false });
+		document.querySelector('img')!.dispatchEvent(new Event('error'));
+		flushSync();
+		expect([document.querySelector('img')!.className, document.querySelector('canvas')]).toEqual(['ap-embed-media', null]);
 		unmount();
 
 		vi.useFakeTimers();
@@ -114,8 +135,6 @@ describe('an animated image', () => {
 		flushSync();
 		expect(document.querySelector('canvas.ap-embed-ogimg')).not.toBeNull();
 		expect(document.querySelector('button')).toBeNull();
-		vi.useRealTimers();
-		vi.restoreAllMocks();
 		unmount();
 
 		render(EmbedUpload, { kind: 'upload', url: 'https://files.example/a.png', title: 'a.png', og: { image: { url: media(PIXEL) } }, autoplay: false });

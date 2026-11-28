@@ -31,16 +31,19 @@ describe('the custom emoji catalog (ext:emoji)', () => {
 		const load = vi.fn(async () => CATALOG);
 		const emoji = new CustomEmojiCatalog(load);
 		const parrot = { key: ':p:', url: 'https://e.example/a.gif', static_url: 'https://e.example/a.png', tags: [], hidden: false };
-		animationSettings.mode = 'always';
-		expect(emoji.image(parrot).src).toBe('https://e.example/a.gif');
-		animationSettings.mode = 'never';
-		expect(emoji.image(parrot).src).toBe('https://e.example/a.png');
+		try {
+			animationSettings.mode = 'always';
+			expect(emoji.image(parrot).src).toBe('https://e.example/a.gif');
+			animationSettings.mode = 'never';
+			expect(emoji.image(parrot).src).toBe('https://e.example/a.png');
+		} finally {
+			animationSettings.mode = 'system';
+		}
 		expect(emoji.image({ key: ':p:', url: 'https://e.example/a.gif', tags: [], hidden: false }).src).toBe('https://e.example/a.gif');
 		emoji.apply({ apron: 10, auth: [], capabilities: [], ext: { emoji: { catalog_url: 'https://e.example/c.json' } } }, 'wss://e.example/', ANY);
 		expect(emoji.resolve(':p:')).toBeUndefined();
 		emoji.need();
 		expect(load).not.toHaveBeenCalled();
-		animationSettings.mode = 'system';
 	});
 
 	it('doesn\'t ask again for a catalog that failed', async () => {

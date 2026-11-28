@@ -32,8 +32,11 @@
 	const ask = $derived(video || audio || image ? undefined : og.video?.ask ? { ...og.video.ask, what: 'Video', kind: 'video' as const } : og.audio?.ask ? { ...og.audio.ask, what: 'Audio', kind: 'audio' as const } : og.image?.ask ? { ...og.image.ask, what: og.image.alt || 'Image', kind: 'image' as const } : undefined);
 	/** An animated image held still: as `autoplay` says, until it has played its while or its button says otherwise. */
 	let paused = $derived(!autoplay);
-	/** Its button was pressed: it plays or holds as that says, for as long as it does. */
-	let pressed = $state(false);
+	/** Its button was pressed: it plays or holds as that says, until `autoplay` changes. */
+	let pressed = $derived.by(() => {
+		void autoplay;
+		return false;
+	});
 	const pending = $derived(failed ? (typeof failed === 'string' ? `Upload failed · ${failed}` : 'Upload failed') : `${detail ? `${detail} · ` : ''}${pct != null ? `Uploading · ${pct}%` : 'Uploading…'}`);
 </script>
 
@@ -74,7 +77,7 @@
 			     holds still, as what plays it; in its corner while it plays. -->
 			<div class="ap-embed-animbox">
 				{@render picture()}
-				<button type="button" class={['ap-embed-playtoggle', paused && 'ap-embed-playtoggle-still']} aria-label={paused ? `Play ${title}` : `Pause ${title}`} title={paused ? 'Play' : 'Pause'} onclick={() => { pressed = true; paused = !paused; }} data-testid="animation-toggle">
+				<button type="button" class={['ap-embed-playtoggle', paused && 'ap-embed-playtoggle-still']} aria-label={paused ? `Play GIF ${title}` : `Pause GIF ${title}`} title={paused ? 'Play' : 'Pause'} onclick={() => { pressed = true; paused = !paused; }} data-testid="animation-toggle">
 					{#if paused}<Play size={12} aria-hidden="true" />{:else}<Pause size={12} aria-hidden="true" />{/if}<span class="ap-pill-label" aria-hidden="true">GIF</span>
 				</button>
 			</div>

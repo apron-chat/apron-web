@@ -11,8 +11,9 @@
 	   canvas draws of one), on a canvas in its place with its class and style. One paused before it has
 	   loaded stays hidden until then (still taking its room, so it loads as a lazy image does), so it never moves.
 	   A canvas may draw an image from another site: it only can't be read back, which this never does.
-	   With `playFor`, one that plays calls `onstop` that long after it has loaded (or been played since), for the
-	   one that owns `paused` to hold it still. */
+	   One that fails to load shows as an image does, never held. With `playFor`, one that plays calls `onstop` that
+	   long after it is first on screen having loaded (a lazy image loads well before it's in view), for the one that
+	   owns `paused` to hold it still. */
 	import type { MediaSrc } from './util';
 
 	let { src, alt = '', paused = false, playFor, onstop, loading, class: className, style }: {
@@ -33,9 +34,31 @@
 		void src;
 		return false;
 	});
+	/** It failed to load: it shows as any image does. */
+	let failed = $derived.by(() => {
+		void src;
+		return false;
+	});
+	/** It has been on screen, loaded and playing: its `playFor` runs from then. */
+	let seen = $state(false);
+	/** It may be held: it hasn't failed. */
+	let holds = $derived(paused && !failed);
 
 	$effect(() => {
-		if (paused || !loaded || !playFor) return;
+		if (seen || paused || !loaded || !playFor || !img) return;
+		if (typeof IntersectionObserver !== 'function') {
+			seen = true;
+			return;
+		}
+		const observer = new IntersectionObserver((entries) => {
+			if (entries.some((entry) => entry.isIntersecting)) seen = true;
+		});
+		observer.observe(img);
+		return () => observer.disconnect();
+	});
+
+	$effect(() => {
+		if (!seen || paused || !loaded || !playFor) return;
 		const timer = setTimeout(() => onstop?.(), playFor);
 		return () => clearTimeout(timer);
 	});
@@ -49,5 +72,5 @@
 	}
 </script>
 
-<img bind:this={img} {src} {alt} {loading} {style} class={[className, paused && (loaded ? 'ap-anim-held' : 'ap-anim-waiting')]} onload={() => (loaded = true)} />
-{#if paused && loaded}<canvas class={className} {style} role={alt ? 'img' : undefined} aria-label={alt || undefined} aria-hidden={alt ? undefined : 'true'} data-testid="animation-still" {@attach still}></canvas>{/if}
+<img bind:this={img} {src} {alt} {loading} {style} class={[className, holds && (loaded ? 'ap-anim-held' : 'ap-anim-waiting')]} onload={() => (loaded = true)} onerror={() => (failed = true)} />
+{#if holds && loaded}<canvas class={className} {style} role={alt ? 'img' : undefined} aria-label={alt || undefined} aria-hidden={alt ? undefined : 'true'} data-testid="animation-still" {@attach still}></canvas>{/if}

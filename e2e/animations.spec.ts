@@ -31,7 +31,7 @@ test.describe('where the device doesn’t ask for reduced motion', () => {
 		const figure = page.locator('figure.ap-embed-animated');
 		const picture = figure.locator('img.ap-embed-media');
 		await expect(picture).toBeVisible();
-		const pause = figure.getByRole('button', { name: 'Pause party.gif' });
+		const pause = figure.getByRole('button', { name: 'Pause GIF party.gif' });
 		await page.mouse.move(1, 1);
 		await expect(pause).toHaveCSS('opacity', '0');
 		await picture.hover();
@@ -42,7 +42,7 @@ test.describe('where the device doesn’t ask for reduced motion', () => {
 		await expect(still).toBeVisible();
 		await expect(picture).toBeHidden();
 		expect(await stillColour(still)).toEqual([220, 60, 60]);
-		await figure.getByRole('button', { name: 'Play party.gif' }).click();
+		await figure.getByRole('button', { name: 'Play GIF party.gif' }).click();
 		await page.clock.runFor(60_000);
 		await expect(picture).toBeVisible();
 		await expect(figure.getByTestId('animation-still')).toHaveCount(0);
@@ -68,6 +68,6 @@ test.describe('where the device asks for reduced motion', () => {
 		await expect(preferences.getByTestId('animations')).toHaveValue('always');
 		await preferences.getByTestId('animations').selectOption('system');
 		await expect(figure.getByTestId('animation-still')).toBeAttached();
-		await expect(figure.getByRole('button', { name: 'Play party.gif' })).toBeAttached();
+		await expect(figure.getByRole('button', { name: 'Play GIF party.gif' })).toBeAttached();
 	});
 });
