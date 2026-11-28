@@ -76,6 +76,33 @@ describe('writeHistory', () => {
 		expect(kept?.rooms).toEqual([{ room: 'general', record: { room_id: 'general' } }]);
 	});
 
+	it('drops a removed user’s messages with every set on them, their sets and memberships, in every room', async () => {
+		const db = await opened();
+		const grace = { user_id: 'grace' };
+		const hers = (id: string, room = 'general'): MessageRecord => ({ ...message(id, id, room), from: grace });
+		const joined = (user: typeof ada, room = 'general') => ({ log_id: at(3), room_id: room, user, joined: true });
+		await writeHistory(db, write({
+			whole: [
+				{
+					room: 'general', messages: [message(at(3, 1)), hers(at(3, 2))], memberships: [joined(ada), joined(grace)],
+					reactions: [
+						{ log_id: at(2), message_id: at(3, 1), room_id: 'general', from: grace, emojis: ['👀'] },
+						{ log_id: at(2, 1), message_id: at(3, 1), room_id: 'general', from: ada, emojis: ['👍'] },
+						{ log_id: at(2, 2), message_id: at(3, 2), room_id: 'general', from: ada, emojis: ['🎉'] }
+					]
+				},
+				{ room: 'other', messages: [hers(at(3, 3), 'other')], memberships: [joined(grace, 'other')], reactions: [] }
+			],
+			rooms: [{ room: 'general', sync: { id: 'general', checkpoint: at(1) } }, { room: 'other', sync: { id: 'other', checkpoint: at(1) } }]
+		}), new Set());
+		// Whatever rooms the writer keeps: what is kept of the user goes from all of them.
+		await writeHistory(db, write({ changes: [{ kind: 'removeUser', user: 'grace' }] }), new Set(['general']));
+		const kept = await readKept(db);
+		expect(kept?.messages.map((record) => record.message_id)).toEqual([at(3, 1)]);
+		expect(kept?.reactions.map((set) => set.emojis)).toEqual([['👍']]);
+		expect(kept?.memberships).toEqual([joined(ada)]);
+	});
+
 	it('replaces an earlier snapshot below where a room is written over from', async () => {
 		const db = await opened();
 		await writeHistory(db, write({ whole: [{ room: 'general', messages: [message(at(5)), message(at(4))], reactions: [], memberships: [] }] }), new Set());

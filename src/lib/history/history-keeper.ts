@@ -202,6 +202,12 @@ export class HistoryKeeper {
 	private unwatch: Array<() => void> = [];
 	/** Changes since the last write, in order. */
 	private queue: StoreChange[] = [];
+	/**
+	 * Users the server removed (`removeUser`), by the account whose history they go from, until a write of that
+	 * account's has removed them: kept apart from `queue`, which a write in whole replaces, since no later write
+	 * brings back a removal, and what is kept below the client's bound would return with older pages.
+	 */
+	private removals: Array<{ server: string; userId: string; user: string }> = [];
 	/** What this page knows is kept: from what it restored, then from each write. */
 	private known: Known | undefined;
 	/** What is read for the next restore, begun as the page started (`prepare`). */
@@ -536,6 +542,7 @@ export class HistoryKeeper {
 			this.queue = [];
 		}
 		if (this.known && goes(this.known)) this.known = undefined;
+		this.removals = this.removals.filter((removal) => !goes(removal));
 		// What was read ahead for a restore may be of what goes: read again.
 		if (server === undefined || this.prepared?.server === server) this.prepared = undefined;
 		const views = server === undefined ? clearView(undefined, this.factory) : userId === undefined ? clearView(server, this.factory) : clearViewOf(server, userId, this.factory);
@@ -602,6 +609,12 @@ export class HistoryKeeper {
 			this.coverage.clear();
 			this.served.clear();
 			this.queue = [];
+			return;
+		}
+		if (change.kind === 'removeUser') {
+			const account = this.writer ?? this.known;
+			if (account) this.removals.push({ server: account.server, userId: account.userId, user: change.user });
+			if (this.writer) this.schedule();
 			return;
 		}
 		// What a page from here brings into the client is here already.
@@ -769,7 +782,8 @@ export class HistoryKeeper {
 		const withUsers = writer.reset || revision !== writer.usersRevision;
 		const state = client.keptState(withUsers);
 		if (!state || state.userId !== writer.userId || client.url !== writer.server) return;
-		const changes = this.queue.splice(0);
+		const removing = this.removals.filter((removal) => removal.server === writer.server && removal.userId === writer.userId);
+		const changes: StoreChange[] = [...removing.map((removal) => ({ kind: 'removeUser' as const, user: removal.user })), ...this.queue.splice(0)];
 		this.progressed = true;
 		const kept = new Set(writer.synced);
 		const synced = new Set(writer.synced);
@@ -838,6 +852,7 @@ export class HistoryKeeper {
 				changes, whole, rooms: rows, dropped, ...(sweep ? { keepOnly: sweep } : {}), reset: writer.reset, continues: !writer.reset,
 				meta: { server: writer.server, userId: writer.userId, complete, current, ...(withUsers ? { users: state.users, ...(state.aliases ? { aliases: state.aliases } : {}) } : {}) }
 			}, kept);
+			this.removals = this.removals.filter((removal) => !removing.includes(removal));
 			if (this.writer !== writer) return;
 			this.retries = 0;
 			writer.reset = false;
@@ -867,7 +882,7 @@ export class HistoryKeeper {
 				if (this.writer !== writer) return;
 				// Nothing of it was written: what it took waits again, ahead of what came since, to go in the next.
 				this.retries++;
-				this.queue.unshift(...changes);
+				this.queue.unshift(...changes.filter((change) => change.kind !== 'removeUser'));
 				for (const [room, sync] of taken) writer.disk?.set(room, sync);
 				for (const room of covered) this.coverage.delete(room);
 				this.leftover = false;
