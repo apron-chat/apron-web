@@ -7,7 +7,7 @@
 		"load": {
 			"requests": 22,
 			"startupJsKB": 975.4,
-			"domNodes": 540,
+			"domNodes": 547,
 			"layouts": 10,
 			"styleRecalcs": 18,
 			"calls": 195750,
@@ -16,7 +16,7 @@
 		"load-busy": {
 			"requests": 20,
 			"startupJsKB": 948,
-			"domNodes": 1149,
+			"domNodes": 1163,
 			"layouts": 13,
 			"styleRecalcs": 16,
 			"calls": 1368953,
@@ -25,7 +25,7 @@
 		"load-phone": {
 			"requests": 22,
 			"startupJsKB": 975.4,
-			"domNodes": 541,
+			"domNodes": 548,
 			"layouts": 10,
 			"styleRecalcs": 16,
 			"calls": 170257,
@@ -34,7 +34,7 @@
 		"load-phone-busy": {
 			"requests": 20,
 			"startupJsKB": 948,
-			"domNodes": 1150,
+			"domNodes": 1164,
 			"layouts": 9,
 			"styleRecalcs": 15,
 			"calls": 1027634,
