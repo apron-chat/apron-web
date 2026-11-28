@@ -85,7 +85,10 @@ export function inNotifyScopes(event: MessageRecord, scopes: readonly string[], 
 	});
 }
 
-/** The `wake` push sends (§4.9): the checked scopes the server pushes; undefined when it lists none (its defaults apply). */
+/**
+ * The `wake` push sends (§4.9.2): the checked scopes the server pushes; undefined when it lists none (its defaults
+ * apply). Empty when it pushes none of them: a `wake` the server refuses, so push isn't registered (`WebPushSync`).
+ */
 export function pushWake(scopes: readonly string[], offered: readonly string[]): string[] | undefined {
 	return offered.length ? scopes.filter((scope) => offered.includes(scope)) : undefined;
 }

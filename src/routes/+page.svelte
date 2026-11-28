@@ -267,7 +267,7 @@
 		return notifyScopesOf(loadNotifyScopes(notifyKey));
 	});
 	/** The wake scopes the server pushes (§4.9), and the `wake` push sends: the checked ones of them. */
-	let webPushOffered = $derived(offeredWake(session.server?.push));
+	let webPushOffered = $derived(offeredWake(session.server));
 	let webPushWake = $derived(pushWake(notifyScopes, webPushOffered));
 	/** Why push doesn't work: the browser couldn't subscribe, or the server refused the registration. */
 	let webPushError = $derived(pushSettings.error ?? session.snapshot.pushError);

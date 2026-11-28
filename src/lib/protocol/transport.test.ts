@@ -9,7 +9,7 @@ import { FakeSocket } from '$lib/test/fake-socket';
  * hooks as sockets open, greet, go quiet and close, and how it reconnects.
  */
 const URL = 'ws://fake.test/';
-const SERVER_FRAME = { method: 'server', params: { apron: 10, auth: ['guest'], capabilities: [] } };
+const SERVER_FRAME = { method: 'server', params: { apron: 11, auth: ['guest'], capabilities: [] } };
 
 interface Harness {
 	transport: Transport;

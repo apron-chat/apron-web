@@ -28,7 +28,7 @@ const sent = (method: string) => socket.sent.filter((frame) => frame.method === 
 
 async function greet(push?: Record<string, unknown>, you = 'ada'): Promise<void> {
 	socket.open();
-	socket.receive({ method: 'server', params: { apron: 10, auth: ['token', 'guest'], capabilities: [], ...(push ? { push } : {}) } });
+	socket.receive({ method: 'server', params: { apron: 11, auth: ['token', 'guest'], capabilities: [], ...(push ? { push } : {}) } });
 	// Nothing is registered before auth.
 	expect(sent('push_register')).toEqual([]);
 	await socket.reply('auth', { you: { user_id: you, name: you } });
@@ -40,7 +40,7 @@ function reconnect(): void {
 }
 
 /** Signs in to an account with a pasted token: a new connection, greeted. */
-async function signIn(push: Record<string, unknown> = { webpush: { key: 'BNcR' } }, you = 'ada'): Promise<void> {
+async function signIn(push: Record<string, unknown> = { webpush: { vapid_key: 'BNcR' } }, you = 'ada'): Promise<void> {
 	client.useToken('apron_token');
 	vi.advanceTimersByTime(0);
 	socket = FakeSocket.latest();
@@ -51,7 +51,7 @@ describe('push registration', () => {
 	it('registers on each connection while the server offers the kind, and unregisters a replaced one', async () => {
 		client.setPushRegistration(webpush, 'ada');
 		// A guest has no one to push to: nothing is registered.
-		await greet({ webpush: { key: 'BNcR' } });
+		await greet({ webpush: { vapid_key: 'BNcR' } });
 		expect(sent('push_register')).toEqual([]);
 		// Signed in to the account, it registers.
 		await signIn();
@@ -68,24 +68,25 @@ describe('push registration', () => {
 		await socket.reply('push_unregister', {});
 		// Each connection registers again.
 		reconnect();
-		await greet({ webpush: { key: 'BNcR' } });
+		await greet({ webpush: { vapid_key: 'BNcR' } });
 		expect(sent('push_register')).toEqual([renewed]);
 		await socket.reply('push_register', {});
 		// Turning push off unregisters.
 		client.setPushRegistration(undefined);
 		expect(sent('push_unregister')).toEqual([{ url: renewed.url }]);
-		// A server without the kind is never asked, until a replacing server frame offers it.
+		// A server without the kind is never asked, until a replacing server frame offers it: a bot's `webhook`
+		// (§4.9.4) is another kind, and a server of version 10's top-level `wake` isn't one at all.
 		client.setPushRegistration(renewed, 'ada');
 		reconnect();
-		await greet({ relay: {} });
+		await greet({ webhook: { signature_keys: ['whpk_MCow'], wake: ['mentions', 'records'] }, wake: ['mentions'] });
 		expect(sent('push_register')).toEqual([]);
-		socket.receive({ method: 'server', params: { apron: 10, auth: ['token', 'guest'], capabilities: [], push: { webpush: { key: 'BNcR' } } } });
+		socket.receive({ method: 'server', params: { apron: 11, auth: ['token', 'guest'], capabilities: [], push: { webpush: { vapid_key: 'BNcR' } } } });
 		expect(sent('push_register')).toEqual([renewed]);
 	});
 
 	it('registers again, on the same url, when the wake scopes change, once the last registration is answered', async () => {
 		client.setPushRegistration({ ...webpush, wake: ['mentions', 'replies'] }, 'ada');
-		await signIn({ webpush: { key: 'BNcR' }, wake: ['mentions', 'replies', 'private'] });
+		await signIn({ webpush: { vapid_key: 'BNcR', wake: ['mentions', 'replies', 'private'] } });
 		client.setPushRegistration({ ...webpush, wake: ['private'] }, 'ada');
 		// One request for a url at a time (§1): the new scopes go after the reply.
 		expect(sent('push_register')).toEqual([{ ...webpush, wake: ['mentions', 'replies'] }]);
@@ -110,18 +111,18 @@ describe('push registration', () => {
 		const renewed = { ...webpush, url: 'https://push.example/b' };
 		client.setPushRegistration(renewed, 'ada');
 		socket = afterBackoff(socket);
-		await greet({ webpush: { key: 'BNcR' } });
+		await greet({ webpush: { vapid_key: 'BNcR' } });
 		expect(socket.sent.filter((frame) => frame.method === 'push_unregister' || frame.method === 'push_register').map((frame) => [frame.method, frame.params]))
 			.toEqual([['push_unregister', { url: webpush.url }], ['push_register', renewed]]);
 		await socket.reply('push_unregister', {});
 		// One lost with its connection goes again; one the server answered doesn't.
 		client.setPushRegistration(undefined);
 		reconnect();
-		await greet({ webpush: { key: 'BNcR' } });
+		await greet({ webpush: { vapid_key: 'BNcR' } });
 		expect(sent('push_unregister')).toEqual([{ url: renewed.url }]);
 		await socket.reply('push_unregister', {});
 		reconnect();
-		await greet({ webpush: { key: 'BNcR' } });
+		await greet({ webpush: { vapid_key: 'BNcR' } });
 		expect(sent('push_unregister')).toEqual([]);
 	});
 
@@ -148,10 +149,10 @@ describe('push registration', () => {
 		client.setPushRegistration(undefined);
 		socket = afterBackoff(socket);
 		// Bob signs in instead: unregistering would remove Bob's registration of that url, if any.
-		await greet({ webpush: { key: 'BNcR' } }, 'bob');
+		await greet({ webpush: { vapid_key: 'BNcR' } }, 'bob');
 		expect(sent('push_unregister')).toEqual([]);
 		reconnect();
-		await greet({ webpush: { key: 'BNcR' } }, 'ada');
+		await greet({ webpush: { vapid_key: 'BNcR' } }, 'ada');
 		expect(sent('push_unregister')).toEqual([{ url: webpush.url }]);
 	});
 
@@ -162,7 +163,7 @@ describe('push registration', () => {
 		await settle();
 		expect(snapshot.pushError).toBe('Push is for members only');
 		reconnect();
-		await greet({ webpush: { key: 'BNcR' } });
+		await greet({ webpush: { vapid_key: 'BNcR' } });
 		await socket.reply('push_register', {});
 		expect(snapshot.pushError).toBeUndefined();
 	});
@@ -172,13 +173,13 @@ describe('push registration', () => {
 		await signIn();
 		expect(sent('push_unregister')).toEqual([{ url: 'https://push.example/old' }]);
 		reconnect();
-		await greet({ webpush: { key: 'BNcR' } });
+		await greet({ webpush: { vapid_key: 'BNcR' } });
 		expect(sent('push_unregister')).toEqual([{ url: 'https://push.example/old' }]);
 		// Not for the endpoint it registers.
 		client.setPushOff(undefined);
 		client.setPushRegistration({ ...webpush, url: 'https://push.example/old' }, 'ada');
 		reconnect();
-		await greet({ webpush: { key: 'BNcR' } });
+		await greet({ webpush: { vapid_key: 'BNcR' } });
 		expect(sent('push_unregister')).toEqual([]);
 	});
 
@@ -206,7 +207,7 @@ describe('push registration', () => {
 		expect(signedOut.sent.filter((frame) => frame.method === 'push_unregister').map((frame) => frame.params)).toEqual([{ url: webpush.url }]);
 		vi.advanceTimersByTime(0);
 		socket = FakeSocket.latest();
-		await greet({ webpush: { key: 'BNcR' } }, 'guest_1');
+		await greet({ webpush: { vapid_key: 'BNcR' } }, 'guest_1');
 		expect(sent('push_unregister')).toEqual([]);
 		// Another account isn't asked: it would drop that account's registration of the url.
 		await signIn(undefined, 'bob');
@@ -220,7 +221,7 @@ describe('push registration', () => {
 		const answered = socket;
 		socket.drop();
 		socket = await nextSocket(answered);
-		await greet({ webpush: { key: 'BNcR' } });
+		await greet({ webpush: { vapid_key: 'BNcR' } });
 		expect(sent('push_unregister')).toEqual([]);
 	});
 });

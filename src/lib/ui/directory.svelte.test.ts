@@ -192,7 +192,7 @@ describe('directory', () => {
 
 	it('loads media by the frame it is given, the session\'s, over the snapshot\'s', () => {
 		const cy: Identity = { user_id: 'cy', name: 'Cy', avatar: 'https://media.example/cy.png' };
-		const frame = (origins: string[]) => ({ apron: 10, auth: ['guest'], capabilities: ['ext:media'], ext: { media: { origins } } });
+		const frame = (origins: string[]) => ({ apron: 11, auth: ['guest'], capabilities: ['ext:media'], ext: { media: { origins } } });
 		const named = frame(['https://media.example']);
 		try {
 			mediaSettings.update('trusted', []);
@@ -215,7 +215,7 @@ describe('directory', () => {
 		const home: Identity = { user_id: 'di', name: 'Di', avatar: 'https://example.com/di.png' };
 		const image = () => directory.mediaGate.src('https://gravatar.example/x.png');
 		const plain: Identity = { user_id: 'ed', name: 'Ed', avatar: 'http://gravatar.example/ed.png' };
-		directory.apply(snapshot([ada, away, home, plain], { server: { apron: 10, auth: ['guest'], capabilities: ['ext:media'], ext: { media: { origins: ['https://media.example'] } } } }), 'https://example.com');
+		directory.apply(snapshot([ada, away, home, plain], { server: { apron: 11, auth: ['guest'], capabilities: ['ext:media'], ext: { media: { origins: ['https://media.example'] } } } }), 'https://example.com');
 		try {
 			// Server and trusted sites: the server's own and those it names; anything else in the timeline asks.
 			mediaSettings.update('trusted', []);

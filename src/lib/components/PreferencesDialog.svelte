@@ -82,7 +82,7 @@
 	];
 	/** While push is on, checked scopes this server doesn't push say they are desktop only. */
 	let scopeNotes = $derived(notifyScopeNotes(notifyScopes, webPush?.offered ?? [], webPush?.enabled === true));
-	/** Push is on, but `wake` (the checked scopes the server pushes) is empty: it wakes for nothing. */
+	/** Push is on, but `wake` (the checked scopes the server pushes) is empty: nothing to wake for, so it isn't registered. */
 	let pushesNothing = $derived(pushWake(notifyScopes, webPush?.offered ?? [])?.length === 0);
 	/** The theme's CSS as edited; applying it makes it the custom theme. */
 	let themeDraft = $state('');

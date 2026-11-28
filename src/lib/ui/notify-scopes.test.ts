@@ -87,6 +87,7 @@ describe('what to notify about', () => {
 
 	it('sends push the checked scopes the server pushes, or no `wake` when it lists none, and notes the rest as only while open', () => {
 		expect(pushWake(['mentions', 'private', 'joined'], ['mentions', 'replies', 'private'])).toEqual(['mentions', 'private']);
+		// None of them: empty, which push doesn't register (a `wake` that selects nothing is refused, §4.9.2).
 		expect(pushWake(['joined'], ['mentions', 'replies'])).toEqual([]);
 		expect(pushWake(['joined'], [])).toBeUndefined();
 		// The rest are noted as only while open, while push is on.

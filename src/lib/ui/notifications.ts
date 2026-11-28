@@ -250,25 +250,23 @@ export const PUSH_MESSAGE_PARAM = 'push_message';
 export interface PushPayload {
 	pushId?: string;
 	unread?: number;
+	/** Undefined for a push this client can't show: without a `message`, or with one it can't read. */
 	notification?: { title: string; options: ShowNotificationOptions };
-	/** It has a `message` that isn't one this client can show. */
-	unreadable?: true;
 }
 
 /**
- * Reads a push payload (§4.9): an object with `push_id`, `unread` and
- * `message`, ignoring other fields. Without `message` (a badge push) there
- * is no notification. Undefined for anything but an object. `titles`: the
- * room titles kept for each account (`loadRoomTitles`), to name the room as
- * the page would.
+ * Reads a push payload (§4.9.3): an object with `push_id`, `unread` and
+ * `message`, ignoring other fields. Every push carries a `message`: one
+ * without, or with one this client can't show, has no `notification`.
+ * Undefined for anything but an object. `titles`: the room titles kept for each
+ * account (`loadRoomTitles`), to name the room as the page would.
  */
 export function readPush(payload: unknown, titles?: ReadonlyMap<string, ReadonlyMap<string, RoomTitle>>): PushPayload | undefined {
 	if (!isJsonObject(payload)) return undefined;
 	const pushId = typeof payload.push_id === 'string' && payload.push_id ? payload.push_id : undefined;
 	const unread = typeof payload.unread === 'number' && Number.isInteger(payload.unread) && payload.unread >= 0 ? payload.unread : undefined;
-	const notification = Object.hasOwn(payload, 'message') ? pushNotification(payload.message, pushId, pushId ? titles?.get(pushId) : undefined) : undefined;
-	const unreadable = Object.hasOwn(payload, 'message') && !notification;
-	return { ...(pushId ? { pushId } : {}), ...(unread !== undefined ? { unread } : {}), ...(notification ? { notification } : {}), ...(unreadable ? { unreadable: true as const } : {}) };
+	const notification = pushNotification(payload.message, pushId, pushId ? titles?.get(pushId) : undefined);
+	return { ...(pushId ? { pushId } : {}), ...(unread !== undefined ? { unread } : {}), ...(notification ? { notification } : {}) };
 }
 
 /**
@@ -309,23 +307,22 @@ function again(notification: VisibleNotification): { title: string; options: Sho
  * dismissed doesn't notify again, and one older than the room's newest never
  * shows: with nothing showing, `QUIET_PUSH` stands in.
  *
- * Every push but a badge push (no `message`, never shown, §4.9) shows
- * something, as browsers require: what is showing, shown again as it is
- * (the room's newest, else any), else the message quietly, else `QUIET_PUSH`.
+ * Every push shows something, as browsers require: what is showing, shown
+ * again as it is (the room's newest, else any), else the message quietly,
+ * else `QUIET_PUSH`.
  */
 export function planPush(push: PushPayload | undefined, visible: readonly VisibleNotification[], known: { enabled?: readonly string[] | 'unreadable'; marks?: Record<string, string> } = {}): PushPlan {
 	const enabled = known.enabled;
 	// Fail closed: whose a push is can't be told without the list.
-	if (push?.pushId !== undefined && enabled === 'unreadable') return push.notification || push.unreadable ? { show: QUIET_PUSH } : {};
+	if (push?.pushId !== undefined && enabled === 'unreadable') return { show: QUIET_PUSH };
 	const dropped = push?.pushId !== undefined && Array.isArray(enabled) && !enabled.includes(push.pushId);
 	const plan: PushPlan = !dropped && push?.unread !== undefined ? { badge: push.unread } : {};
 	const quietly = (preferred?: VisibleNotification) => {
 		const showing = preferred ?? visible[0];
 		return showing ? again(showing) : QUIET_PUSH;
 	};
-	if (!push || dropped || push.unreadable) return { ...plan, show: quietly() };
-	const notification = push.notification;
-	if (!notification) return plan;
+	const notification = push?.notification;
+	if (!push || dropped || !notification) return { ...plan, show: quietly() };
 	const place = placeOf(notification.options.data);
 	if (!place) return { ...plan, show: notification };
 	const newest = newestNotified(visible, place.group, known.marks?.[place.group]);

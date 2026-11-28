@@ -604,7 +604,7 @@ room or its threads) and All messages in joined rooms (a joined room or its
 threads). Messages of your own never notify. At
 least one stays checked: until you choose, mentions, replies and all messages
 in private rooms, so a conversation started from a profile card alerts from
-its first message, and push sends `private` in its `wake` (§4.9.4) for it to
+its first message, and push sends `private` in its `wake` (§4.9.2) for it to
 push; the switches below turn notifications off. The choice is kept per account on each server,
 and for a server's guests together (their `user_id`s change with each
 connection), and applies in other tabs. The earlier device-wide "Everything"
@@ -716,8 +716,9 @@ forward. Notifications show through the service
 worker, or from the page where there is none yet. Permission revoked in the
 browser's site settings reads as off.
 
-When the server offers web push (`server.push.webpush` with its VAPID `key`,
-§4.9), push is for a signed-in account (not a guest), also while it
+When the server offers web push (`server.push.webpush` with its VAPID
+`vapid_key`, §4.9.3; from a server of version 10, which has no `vapid_key`,
+its `key`), push is for a signed-in account (not a guest), also while it
 reconnects. It is per account on each server, off until turned on, and
 turning it on or off in one tab applies in the others. Turning it on (with the
 Notifications switch, or its button) subscribes this browser with the
@@ -759,12 +760,18 @@ that account here even when the server can't be told; a sign-out that fails
 (with requests still pending, say) leaves push on. A registration the server refuses shows its
 message in the setting.
 
-Push's `wake` is the checked scopes that `server.push.wake` lists; when the
-server lists none, no `wake` goes and the server's defaults apply. While push
-is on, a checked scope the server doesn't push is marked "Only while open"
-beside its title. When none of the checked scopes is pushed, push still
-registers, with an empty `wake`, which wakes for nothing, and the setting says
-so. A change to the choice registers again at once, with the same `url`.
+Push's `wake` is the checked scopes that `server.push.webpush.wake` lists
+(from a server of version 10 without it, `server.push.wake`; a version 11
+server's is for version 10 clients and isn't read); when the server lists
+none, no `wake` goes and the server's defaults apply. While push is on, a
+checked scope the server doesn't push is marked "Only while open" beside its
+title. When none of the checked scopes is pushed, push stays on and keeps the
+subscription but isn't registered, as a `wake` that selects nothing is
+refused (§4.9.2): its endpoint is unregistered after each `auth`, as while push
+is off, and the setting says that none of the choices alert when Apron is
+closed. A change to the choice registers again at once, with the same `url`.
+Other push kinds the server offers, such as a bot's `webhook` (§4.9.4), are
+left alone.
 
 On iPhone and iPad Safari outside a Home Screen app, push isn't offered: under
 the Notifications switch, a callout gives the steps to add Apron to the Home
@@ -799,10 +806,8 @@ nor on a computer, whose browser offers installing in the address bar.
 made once per account on each server and kept in `apron.pushIds`, so it
 reveals neither. The service worker reads each
 push payload's `push_id`, `unread` and `message`, and shows the `message` as
-its sender and room. A payload without `message` is a badge push: it only sets
-the badge and never shows a notification. This client doesn't ask for those
-on web push, where a push that shows nothing may get the browser's own
-notice. `unread`
+its sender and room. Every push carries a `message` (§4.9.3, version 11 has
+no badge pushes); one without is a push that can't be read. `unread`
 becomes the app badge where the browser has one, cleared at 0; while Apron is
 in view, the badge is the page's own unread count. A message notification, the
 page's or a pushed one, is tagged with the `push_id` and the `message_id`, and
@@ -825,7 +830,7 @@ only shows that notifications are waiting, this is what clears it. Until the
 page runs, they stay: web push can't close them without showing something,
 which browsers require of every push. Browsers expect each push to
 show a notification, and WebKit revokes subscriptions whose pushes don't, so
-every push but a badge push shows one: a push with nothing new, one for an
+every push shows one: a push with nothing new, one for an
 account push isn't on for here, or one that can't be read shows again, as it
 is and silently, what is already showing, else the message quietly (never
 one older than the room's newest), else "Open Apron to catch up". If the

@@ -43,7 +43,7 @@ describe('history added by a replacing server frame', () => {
 		await socket.greet(['rooms'], { room: { room_id: 'general', log_id: '10', title: 'General', latest_log_id: '12', history_log_id: '10' } });
 		socket.receive({ method: 'message', params: message('13') });
 		expect(socket.sent.some((frame) => frame.method === 'history')).toBe(false);
-		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['rooms', 'history'] } });
+		socket.receive({ method: 'server', params: { apron: 11, auth: ['guest'], capabilities: ['rooms', 'history'] } });
 		expect(socket.request('history').params).toEqual({ room_id: 'general', before: '13', limit: 50 });
 		await socket.reply('history', { messages: [message('11'), message('12'), message('13')], more: false, latest_log_id: '13', history_log_id: '10' });
 		expect(room('general')).toMatchObject({ recovering: false, loaded: true });
@@ -459,7 +459,7 @@ describe('after a reconnect', () => {
 		afterBackoff();
 		const next = latest();
 		next.open();
-		next.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['history', 'rooms'] } });
+		next.receive({ method: 'server', params: { apron: 11, auth: ['guest'], capabilities: ['history', 'rooms'] } });
 		await next.reply('auth', { you: { user_id: 'guest_1' } });
 		await next.reply('room_list', { joined: [general, { ...side, latest_log_id: '23' }] });
 		// The room resumes first (history goes one request at a time): nothing new there.
@@ -492,7 +492,7 @@ describe('after a reconnect', () => {
 		afterBackoff();
 		const next = latest();
 		next.open();
-		next.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['history', 'rooms'] } });
+		next.receive({ method: 'server', params: { apron: 11, auth: ['guest'], capabilities: ['history', 'rooms'] } });
 		await next.reply('auth', { you: { user_id: 'guest_1' } });
 		await next.reply('room_list', { joined: [general, { ...side, latest_log_id: '23' }, quiet] });
 		const history = () => next.sent.filter((frame) => frame.method === 'history').map((frame) => (frame.params as { room_id: string }).room_id);
@@ -525,7 +525,7 @@ describe('after a reconnect', () => {
 		afterBackoff();
 		const next = latest();
 		next.open();
-		next.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['history', 'rooms'] } });
+		next.receive({ method: 'server', params: { apron: 11, auth: ['guest'], capabilities: ['history', 'rooms'] } });
 		await next.reply('auth', { you: { user_id: 'guest_1' } });
 		await next.reply('room_list', { joined: [general, { ...side, latest_log_id: '24' }] });
 		// Opened while its catch-up waits behind the room's resume: the same load, no second request.
@@ -552,7 +552,7 @@ describe('after a reconnect', () => {
 		afterBackoff();
 		const next = latest();
 		next.open();
-		next.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['history', 'rooms'] } });
+		next.receive({ method: 'server', params: { apron: 11, auth: ['guest'], capabilities: ['history', 'rooms'] } });
 		await next.reply('auth', { you: { user_id: 'guest_1' } });
 		await next.reply('room_list', { joined: [general, { ...side, latest_log_id: '24' }] });
 		await next.reply('history', { more: false, latest_log_id: '12', history_log_id: '10' });
@@ -647,7 +647,7 @@ describe('after a reconnect', () => {
 		afterBackoff();
 		const next = latest();
 		next.open();
-		next.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['history', 'rooms'] } });
+		next.receive({ method: 'server', params: { apron: 11, auth: ['guest'], capabilities: ['history', 'rooms'] } });
 		await next.reply('auth', { you: { user_id: 'guest_1' } });
 		// Behind auth, before the joined listing: still joined, not offered to join again.
 		expect(snapshot.threadDirectory.general?.map((listing) => [listing.id, listing.joined])).toEqual([['40', true]]);
@@ -684,7 +684,7 @@ describe('after a reconnect', () => {
 		afterBackoff();
 		const again = latest();
 		again.open();
-		again.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['history', 'rooms'] } });
+		again.receive({ method: 'server', params: { apron: 11, auth: ['guest'], capabilities: ['history', 'rooms'] } });
 		// The first kept room resumes right behind auth; the others wait their turn.
 		expect(history()).toEqual([{ room_id: 'general', after: '13' }]);
 		await again.reply('auth', { you: { user_id: 'guest_1', name: 'Guest' } });
@@ -738,7 +738,7 @@ describe('after a reconnect', () => {
 
 	it('lists again in full when a token resume signs in someone else', async () => {
 		latest().open();
-		latest().receive({ method: 'server', params: { apron: 10, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
+		latest().receive({ method: 'server', params: { apron: 11, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
 		await latest().reply('auth', { you: { user_id: 'ada', name: 'Ada' }, token: 'secret' });
 		await latest().reply('room_list', { joined: [general], users: [] });
 		await latest().reply('history', { messages: [entry('11'), entry('12')], more: false, latest_log_id: '12', history_log_id: '10' });
@@ -746,7 +746,7 @@ describe('after a reconnect', () => {
 		afterBackoff();
 		socket = latest();
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
+		socket.receive({ method: 'server', params: { apron: 11, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
 		expect(socket.request('room_list').params).toMatchObject({ latest_log_id: '12' });
 		// The token now signs in someone else: the changes since belong to another identity, so list again in full.
 		await socket.reply('auth', { you: { user_id: 'bob', name: 'Bob' } });
@@ -782,7 +782,7 @@ describe('after a reconnect', () => {
 		client.retryNow();
 		socket = FakeSocket.latest();
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['history', 'rooms', 'activity'] } });
+		socket.receive({ method: 'server', params: { apron: 11, auth: ['guest'], capabilities: ['history', 'rooms', 'activity'] } });
 		// auth, the listing, and the kept room's recovery go out together, before any reply (§3.2).
 		expect(socket.sent.map((frame) => frame.method)).toEqual(['auth', 'room_list', 'history']);
 		expect(socket.request('room_list').params).toEqual({ filter: 'joined', members: true });
@@ -843,7 +843,7 @@ describe('catching up every joined room together (`history` without `room_id`)',
 		vi.setSystemTime(NOW + 60_000);
 		const first = latest();
 		first.open();
-		first.receive({ method: 'server', params: { apron: 10, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
+		first.receive({ method: 'server', params: { apron: 11, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
 		await first.reply('auth', { you: { user_id: 'ada', name: 'Ada' }, token: 'secret' });
 		await first.reply('room_list', { joined: [general, side], users: [] });
 		await first.reply('history', { messages: [entry(11), entry(12)], more: false, latest_log_id: at(12), history_log_id: at(10) });
@@ -854,7 +854,7 @@ describe('catching up every joined room together (`history` without `room_id`)',
 		afterBackoff();
 		const next = latest();
 		next.open();
-		next.receive({ method: 'server', params: { apron: 10, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
+		next.receive({ method: 'server', params: { apron: 11, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
 		return next;
 	}
 
@@ -916,7 +916,7 @@ describe('catching up every joined room together (`history` without `room_id`)',
 		afterBackoff();
 		const again = latest();
 		again.open();
-		again.receive({ method: 'server', params: { apron: 10, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
+		again.receive({ method: 'server', params: { apron: 11, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
 		expect(histories(again)).toEqual([{ room_id: 'general', after: at(15) }]);
 	});
 
@@ -944,7 +944,7 @@ describe('catching up every joined room together (`history` without `room_id`)',
 		afterBackoff(next);
 		const later = latest();
 		later.open();
-		later.receive({ method: 'server', params: { apron: 10, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
+		later.receive({ method: 'server', params: { apron: 11, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
 		expect(later.request('room_list').params).toMatchObject({ latest_log_id: at(22) });
 		expect(histories(later)).toEqual([{ room_id: 'general', after: at(23) }]);
 	});
@@ -984,7 +984,7 @@ describe('catching up every joined room together (`history` without `room_id`)',
 		afterBackoff();
 		const again = latest();
 		again.open();
-		again.receive({ method: 'server', params: { apron: 10, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
+		again.receive({ method: 'server', params: { apron: 11, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
 		await again.reply('auth', { you: { user_id: 'ada', name: 'Ada' } });
 		await again.reply('room_list', { joined: [{ ...side, latest_log_id: at(24) }], left: [], users: [] });
 		expect(histories(again)).toEqual([{ after: at(24) }]);
@@ -1000,7 +1000,7 @@ describe('catching up every joined room together (`history` without `room_id`)',
 		afterBackoff();
 		const third = latest();
 		third.open();
-		third.receive({ method: 'server', params: { apron: 10, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
+		third.receive({ method: 'server', params: { apron: 11, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
 		expect(third.request('room_list').params).toMatchObject({ latest_log_id: at(24) });
 		await third.reply('auth', { you: { user_id: 'ada', name: 'Ada' } });
 		await third.reply('room_list', { joined: [{ ...general, latest_log_id: at(26) }, { ...side, latest_log_id: at(27) }], left: [], users: [] });
@@ -1025,7 +1025,7 @@ describe('catching up every joined room together (`history` without `room_id`)',
 		afterBackoff();
 		const again = latest();
 		again.open();
-		again.receive({ method: 'server', params: { apron: 10, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
+		again.receive({ method: 'server', params: { apron: 11, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
 		expect(again.request('room_list').params).toMatchObject({ latest_log_id: at(16) });
 		await again.reply('auth', { you: { user_id: 'ada', name: 'Ada' } });
 		await again.reply('room_list', { joined: [{ ...general, latest_log_id: at(30) }, { ...side, latest_log_id: at(31) }], left: [], users: [] });
@@ -1050,7 +1050,7 @@ describe('catching up every joined room together (`history` without `room_id`)',
 		vi.setSystemTime(NOW + 2 * HOUR + 60_000);
 		const first = latest();
 		first.open();
-		first.receive({ method: 'server', params: { apron: 10, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
+		first.receive({ method: 'server', params: { apron: 11, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
 		await first.reply('auth', { you: { user_id: 'ada', name: 'Ada' }, token: 'secret' });
 		await first.reply('room_list', { joined: [general, busy], users: [] });
 		await first.reply('history', { messages: [entry(11), entry(12)], more: false, latest_log_id: at(12), history_log_id: at(10) });
@@ -1058,7 +1058,7 @@ describe('catching up every joined room together (`history` without `room_id`)',
 		afterBackoff();
 		const next = latest();
 		next.open();
-		next.receive({ method: 'server', params: { apron: 10, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
+		next.receive({ method: 'server', params: { apron: 11, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
 		await next.reply('auth', { you: { user_id: 'ada', name: 'Ada' } });
 		await next.reply('room_list', { joined: [{ ...general, latest_log_id: at(2 * HOUR + 30) }, { ...busy, latest_log_id: at(2 * HOUR + 31) }], left: [], users: [] });
 		// The thread's records from where it was; general from its own checkpoint, each request in turn.
@@ -1074,7 +1074,7 @@ describe('catching up every joined room together (`history` without `room_id`)',
 		vi.setSystemTime(NOW + 60_000);
 		const first = latest();
 		first.open();
-		first.receive({ method: 'server', params: { apron: 10, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
+		first.receive({ method: 'server', params: { apron: 11, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
 		await first.reply('auth', { you: { user_id: 'ada', name: 'Ada' }, token: 'secret' });
 		await first.reply('room_list', { joined: [general, other], users: [] });
 		await first.reply('history', { messages: [entry(11), entry(12)], more: false, latest_log_id: at(12), history_log_id: at(10) });
@@ -1082,7 +1082,7 @@ describe('catching up every joined room together (`history` without `room_id`)',
 		afterBackoff();
 		const next = latest();
 		next.open();
-		next.receive({ method: 'server', params: { apron: 10, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
+		next.receive({ method: 'server', params: { apron: 11, auth: ['guest', 'token'], capabilities: ['history', 'rooms'] } });
 		await next.reply('auth', { you: { user_id: 'ada', name: 'Ada' } });
 		await next.reply('room_list', { joined: [{ ...general, latest_log_id: at(14) }, { ...other, latest_log_id: at(33) }], left: [], users: [] });
 		// The page asks on every snapshot while it isn't loaded.

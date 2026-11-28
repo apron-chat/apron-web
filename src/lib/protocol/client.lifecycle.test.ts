@@ -57,7 +57,7 @@ async function signedIn(): Promise<{ client: ChatClient; socket: FakeSocket; sna
 	const harness = startClient({ storage });
 	const { socket } = harness;
 	socket.open();
-	socket.receive({ method: 'server', params: { apron: 10, auth: ['webauthn', 'token', 'guest'], capabilities: ['history', 'rooms'] } });
+	socket.receive({ method: 'server', params: { apron: 11, auth: ['webauthn', 'token', 'guest'], capabilities: ['history', 'rooms'] } });
 	await socket.reply('auth', { you: ada });
 	await socket.reply('room_list', { joined: [{ ...general, latest_log_id: '12' }], users: [] });
 	await socket.reply('history', { messages: [message('11'), message('12')], first_log_id: '11', last_log_id: '12', more: false, latest_log_id: '12', history_log_id: '10' });
@@ -71,7 +71,7 @@ describe('a recovery runs only while its pages can go', () => {
 		FakeSocket.latest().drop();
 		const next = afterBackoff();
 		next.open();
-		next.receive({ method: 'server', params: { apron: 10, auth: ['webauthn', 'token', 'guest'], capabilities: ['history', 'rooms'] } });
+		next.receive({ method: 'server', params: { apron: 11, auth: ['webauthn', 'token', 'guest'], capabilities: ['history', 'rooms'] } });
 		// The resume, its listing, and the room's recovery from its checkpoint go together (§3.2).
 		expect(next.sent.map((frame) => frame.method)).toEqual(['auth', 'room_list', 'history']);
 		expect(histories(next)).toEqual([{ room_id: 'general', after: '13' }]);
@@ -119,7 +119,7 @@ describe('every way a connection ends deals with its rooms', () => {
 		client.retryNow();
 		const next = FakeSocket.latest();
 		next.open();
-		next.receive({ method: 'server', params: { apron: 10, auth: ['webauthn', 'token', 'guest'], capabilities: ['history', 'rooms'] } });
+		next.receive({ method: 'server', params: { apron: 11, auth: ['webauthn', 'token', 'guest'], capabilities: ['history', 'rooms'] } });
 		expect(histories(next)).toEqual([{ room_id: 'general', after: '13' }]);
 		await next.reply('auth', { you: ada });
 		await next.reply('room_list', { joined: [{ ...general, latest_log_id: '12' }], users: [] });

@@ -48,7 +48,7 @@ async function keptServer(page: Page, messages: Array<Record<string, unknown>>, 
 					if (frame.id !== undefined) reply({});
 			}
 		});
-		const server = { apron: 10, agent: 'apron-e2e-kept', auth: ['guest', 'token'], ping: 60, capabilities: ['history', 'rooms'], ...options.server };
+		const server = { apron: 11, agent: 'apron-e2e-kept', auth: ['guest', 'token'], ping: 60, capabilities: ['history', 'rooms'], ...options.server };
 		void (options.ready?.() ?? Promise.resolve()).then(() => ws.send(JSON.stringify({ method: 'server', params: server })));
 	});
 }

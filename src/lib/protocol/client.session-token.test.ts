@@ -53,7 +53,7 @@ describe('persisted session tokens', () => {
 		// Another server URL has its own entry.
 		const { client: elsewhere } = startClient({ url: 'ws://other.test/', storage });
 		latest().open();
-		latest().receive({ method: 'server', params: { apron: 10, auth: ['webauthn', 'token', 'guest'], capabilities: [] } });
+		latest().receive({ method: 'server', params: { apron: 11, auth: ['webauthn', 'token', 'guest'], capabilities: [] } });
 		expect(authParams()).toEqual(expect.objectContaining({ scheme: 'guest' }));
 		elsewhere.stop();
 
@@ -70,7 +70,7 @@ describe('persisted session tokens', () => {
 		storage.set('apron.session:wss://fake.test/', 'session-tls');
 		startClient({ storage, onSnapshot: (next) => (snapshot = next) });
 		latest().open();
-		latest().receive({ method: 'server', params: { apron: 10, auth: ['token', 'guest'], capabilities: [] } });
+		latest().receive({ method: 'server', params: { apron: 11, auth: ['token', 'guest'], capabilities: [] } });
 		expect(authParams()).toEqual(expect.objectContaining({ scheme: 'token', token: 'session-old' }));
 		expect(storage.get(TOKEN_KEY)).toBe('session-old');
 		expect(storage.get('apron.signin:ws://fake.test/')).toBe('email');
@@ -84,7 +84,7 @@ describe('persisted session tokens', () => {
 		storage.set('apron.signin-added:ws://fake.test/#team', 'webauthn');
 		startClient({ storage, onSnapshot: (next) => (snapshot = next) });
 		latest().open();
-		latest().receive({ method: 'server', params: { apron: 10, auth: ['token', 'guest'], capabilities: [] } });
+		latest().receive({ method: 'server', params: { apron: 11, auth: ['token', 'guest'], capabilities: [] } });
 		expect(authParams()).toEqual(expect.objectContaining({ scheme: 'token', token: 'session-frag' }));
 		expect(storage.get(TOKEN_KEY)).toBe('session-frag');
 		expect(storage.get('apron.signin-added:ws://fake.test/')).toBe('webauthn');
@@ -129,7 +129,7 @@ describe('persisted session tokens', () => {
 		vi.advanceTimersByTime(0);
 		const socket = latest();
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 10, auth: ['token', 'guest'], capabilities: [] } });
+		socket.receive({ method: 'server', params: { apron: 11, auth: ['token', 'guest'], capabilities: [] } });
 		expect(authParams()).toEqual(expect.objectContaining({ scheme: 'token', token: 'apron_bot_revoked' }));
 		const auth = socket.sent.find((frame) => frame.method === 'auth')!;
 		socket.receive({ id: auth.id, error: { code: -32001, message: 'Invalid bot token' } });
@@ -169,7 +169,7 @@ describe('persisted session tokens', () => {
 		storage.set('apron.session:ws://fake.test/', 'session-4');
 		const { client } = startClient({ storage, onSnapshot: (next) => (snapshot = next) });
 		latest().open();
-		latest().receive({ method: 'server', params: { apron: 10, auth: ['webauthn', 'token', 'guest'], capabilities: ['rooms'] } });
+		latest().receive({ method: 'server', params: { apron: 11, auth: ['webauthn', 'token', 'guest'], capabilities: ['rooms'] } });
 		latest().receive({ method: 'message', params: { from: { user_id: '~private' }, body: { text: 'Guests can read along.' } } });
 		const auth = latest().sent.find((frame) => frame.method === 'auth')!;
 		latest().receive({ id: auth.id, result: { you: { user_id: 'u_1', name: 'Ada' }, token: 'session-4' } });
@@ -212,7 +212,7 @@ describe('persisted session tokens', () => {
 		storage.set('apron.session:ws://fake.test/', 'stale');
 		const { client } = startClient({ storage, onSnapshot: (next) => (snapshot = next) });
 		latest().open();
-		latest().receive({ method: 'server', params: { apron: 10, auth: ['webauthn', 'token', 'guest'], capabilities: [] } });
+		latest().receive({ method: 'server', params: { apron: 11, auth: ['webauthn', 'token', 'guest'], capabilities: [] } });
 		const auth = latest().sent.find((frame) => frame.method === 'auth')!;
 		expect(auth.params).toEqual(expect.objectContaining({ scheme: 'token', token: 'stale' }));
 		latest().receive({ id: auth.id, error: { code: -32001, message: 'Session expired; sign in with your passkey' } });

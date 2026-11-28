@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { Greetings } from './greetings.svelte';
 import type { ServerParams } from '$lib/protocol/types';
 
-const PIPER: ServerParams = { apron: 10, auth: ['guest'], title: 'Pied Piper' };
+const PIPER: ServerParams = { apron: 11, auth: ['guest'], title: 'Pied Piper' };
 
 /** A greeter whose lookups the test answers. */
 function greeter() {

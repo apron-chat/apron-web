@@ -719,7 +719,7 @@ export class MemoryProtocolServer {
 			// A test's fields replace the demo's, `ext` key by key.
 			const extra = structuredClone(this.knobs.server ?? {});
 			const ext = { settings: PREVIEW_SETTINGS, ...(isJsonObject(extra.ext) ? extra.ext : {}) };
-			socket.deliver({ method: 'server', params: { apron: 10, agent: 'apron-preview', auth: ['guest'], ping: 60, capabilities, ...statuses, ...extra, ext } });
+			socket.deliver({ method: 'server', params: { apron: 11, agent: 'apron-preview', auth: ['guest'], ping: 60, capabilities, ...statuses, ...extra, ext } });
 		},
 		received: (socket, frame) => this.receive(socket, frame),
 		closed: (socket) => this.sockets.delete(socket)

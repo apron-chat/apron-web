@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import pushFixtures from '../../../protocol/tests/fixtures/push.json';
 import { NOTIFICATION_CLICK, PUSH_CLICK, QUIET_PUSH, closeOlderInGroup, closeReadNotifications, messageNotificationTag, notificationBody, notificationClickTarget, notificationGroup, notificationTitle, offersAtSignIn, offersNotifications, pageTarget, planPush, pushClickTarget, pushNotification, pushRoute, pushTarget, readPush, setAppBadge, showNotification, clickedTab, type ShowNotificationOptions } from './notifications';
 
 /** A service worker registration's notifications: one per tag, a newer one with a tag replacing the older. */
@@ -184,7 +185,7 @@ describe('push notifications', () => {
 		expect(pushNotification({ message_id: '1', from: { user_id: 'bob' }, body: { text: 'no room' } }, 'a1')).toBeUndefined();
 		expect(pushNotification({ room_id: 'ops', from: { user_id: 'bob' }, body: { text: 'no id' } }, 'a1')).toBeUndefined();
 		expect(pushNotification({ message_id: '1', room_id: 'ops', from: { user_id: 'bob' } }, undefined)).toBeUndefined();
-		expect(readPush({ message: { message_id: '1', room_id: 'ops', from: { user_id: 'bob' } } })).toEqual({ unreadable: true });
+		expect(readPush({ message: { message_id: '1', room_id: 'ops', from: { user_id: 'bob' } } })).toEqual({});
 	});
 
 	it('reads a push click target, and tells it apart from a page notification\'s', () => {
@@ -294,16 +295,17 @@ describe('push notifications', () => {
 		it('fails closed when the enabled accounts couldn\'t be read: only the quiet stand-in, no preview, no badge', () => {
 			expect(planPush(push('8', 'general', { unread: 9 }), [], { enabled: 'unreadable' })).toEqual({ show: QUIET_PUSH });
 			expect(planPush(push('8', 'general', { unread: 9 }), [showing('7')], { enabled: 'unreadable' })).toEqual({ show: QUIET_PUSH });
-			expect(planPush(readPush({ push_id: 'a1', unread: 4 }), [], { enabled: 'unreadable' })).toEqual({});
+			expect(planPush(readPush({ push_id: 'a1', unread: 4 }), [], { enabled: 'unreadable' })).toEqual({ show: QUIET_PUSH });
 		});
 
 		it('shows the quiet stand-in, never an older message, when nothing is showing', () => {
 			expect(planPush(push('6'), [], { marks: { 'a1:general': '7' } })).toEqual({ show: QUIET_PUSH });
 		});
 
-		it('never shows a notification for a badge push, only sets the badge', () => {
-			expect(planPush(readPush({ push_id: 'a1', unread: 0 }), [], { enabled: ['a1'] })).toEqual({ badge: 0 });
-			expect(planPush(readPush({ push_id: 'a1', unread: 4 }), [other])).toEqual({ badge: 4 });
+		it('shows what is showing, else the quiet stand-in, for a push without a message, and still sets the badge', () => {
+			// Version 11 has no badge pushes (§4.9.3): every push carries a message, and browsers expect each to show something.
+			expect(planPush(readPush({ push_id: 'a1', unread: 0 }), [], { enabled: ['a1'] })).toEqual({ badge: 0, show: QUIET_PUSH });
+			expect(planPush(readPush({ push_id: 'a1', unread: 4 }), [other])).toEqual({ badge: 4, show: { title: 'Apron', options: { body: 'hi', tag: 'apron:other', data: undefined, renotify: false, silent: true } } });
 		});
 
 		it('shows the quiet stand-in for an unreadable push, or a message it can\'t show, with nothing showing', () => {
@@ -338,10 +340,18 @@ describe('push notifications', () => {
 		expect(shown.map((entry) => entry.closed)).toEqual([true, false, false]);
 	});
 
-	it('reads a badge push, with no message, or a message without the envelope, as no notification', () => {
+	it('shows each of the shared fixtures\' valid payloads with a push_id (protocol/tests/fixtures/push.json), and none without a message', () => {
+		for (const { name, valid, payload } of pushFixtures.payloads) {
+			const read = readPush(payload);
+			if (valid && 'push_id' in payload) expect(read?.notification?.options.tag, name).toBe(`apron:${payload.push_id}:${payload.message?.message_id}`);
+			if (!('message' in payload)) expect(read?.notification, name).toBeUndefined();
+		}
+	});
+
+	it('reads a push without a message (there are no badge pushes, §4.9.3), or a message without the envelope, as no notification', () => {
 		expect(readPush({ push_id: 'a1', unread: 0 })).toEqual({ pushId: 'a1', unread: 0 });
 		expect(readPush({ push_id: 'a1' })).toEqual({ pushId: 'a1' });
-		expect(readPush({ unread: -1, message: 'nope' })).toEqual({ unreadable: true });
+		expect(readPush({ unread: -1, message: 'nope' })).toEqual({});
 		expect(readPush({ unread: 1.5 })).toEqual({});
 		// Anything but an object can't be read.
 		expect(readPush('hello')).toBeUndefined();

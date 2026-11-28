@@ -130,6 +130,23 @@ describe('push settings', () => {
 		expect(ids).toHaveBeenLastCalledWith(['id-ada']);
 	});
 
+	it('registers nothing while none of the checked scopes is pushed, unregistering the endpoint instead, until one is', async () => {
+		const { browser, state } = fakeBrowser();
+		const { settings } = tab(browser);
+		const client = fakeClient();
+		// A `wake` that selects nothing is refused (§4.9.2): push stays on and keeps the subscription, unregistered.
+		await settings.turnOn(client, 'ada', 'K1', [], true);
+		expect(state.subscribed).toBe(true);
+		expect(settings.owner).toEqual({ account: ada, key: 'K1' });
+		expect(client.registrations).toEqual([undefined]);
+		expect(client.off.at(-1)).toBe('https://push.example/1');
+		expect(settings.error).toBeUndefined();
+		// Checking a scope the server pushes registers at once.
+		await settings.enable(client, 'K1', 'ada', ['mentions']);
+		expect(client.off.at(-1)).toBeUndefined();
+		expect(client.registrations.at(-1)).toMatchObject({ kind: 'webpush', url: 'https://push.example/1', wake: ['mentions'] });
+	});
+
 	it('turns push off for an account signing out while offline, and drops the subscription once no account has push on', async () => {
 		const { browser, state } = fakeBrowser();
 		const { settings, badge, ids } = tab(browser);

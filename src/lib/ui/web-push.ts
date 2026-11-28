@@ -1,4 +1,6 @@
 import type { PushRegistration } from '$lib/protocol/client';
+import { webPushConfig } from '$lib/protocol/client-views';
+import type { ServerParams } from '$lib/protocol/types';
 import { base64url } from '$lib/protocol/webauthn';
 import { pushIdFor } from './storage';
 
@@ -20,7 +22,7 @@ export interface WebPushPreference {
 	heldBy?: string;
 	/** The server offers push, but only to a signed-in account, and this is a guest. */
 	signIn?: boolean;
-	/** The wake scopes the server advertises (§4.9); empty when it lists none. */
+	/** The wake scopes the server advertises for web push (§4.9.2); empty when it lists none. */
 	offered: string[];
 	/** The browser offers to install Apron (`beforeinstallprompt`), and it isn't installed. */
 	installable: boolean;
@@ -28,14 +30,15 @@ export interface WebPushPreference {
 }
 
 /**
- * The wake scopes a server advertises in `server.push.wake` (§4.9), ours or
- * third-party (`ext:`), that it pushes for you: `joined` only while
+ * The wake scopes a server advertises for web push in `server.push.webpush.wake`
+ * (§4.9.2; a server of version 10's `server.push.wake`, `webPushConfig`), ours
+ * or third-party (`ext:`), that it pushes for you: `joined` only while
  * `joined` is true, so it reads as alerting only while open otherwise, and
  * isn't registered.
  */
-export function offeredWake(push: unknown, joined = true): string[] {
-	const wake = push && typeof push === 'object' ? (push as { wake?: unknown }).wake : undefined;
-	return Array.isArray(wake) ? wake.filter((scope): scope is string => typeof scope === 'string' && scope !== '' && (joined || scope !== 'joined')) : [];
+export function offeredWake(server: ServerParams | undefined, joined = true): string[] {
+	const wake = webPushConfig(server)?.wake ?? [];
+	return wake.filter((scope): scope is string => typeof scope === 'string' && scope !== '' && (joined || scope !== 'joined'));
 }
 
 /**
@@ -101,11 +104,12 @@ export function pushHeldBy(owner: { account: string; key: string } | undefined, 
 /**
  * The `push_register` params for a subscription (`PushSubscription.toJSON()`),
  * if it is complete, with its `push_id` and the `wake` scopes (undefined: the
- * server's defaults; empty: nothing).
+ * server's defaults). Undefined for an empty `wake` too, which a server
+ * refuses (§4.9.2): waking for nothing is no registration.
  */
 export function webPushRegistration(subscription: PushSubscriptionJSON, pushId?: string, wake?: readonly string[]): PushRegistration | undefined {
 	const { endpoint, keys } = subscription;
-	if (!endpoint || !keys?.p256dh || !keys.auth) return undefined;
+	if (!endpoint || !keys?.p256dh || !keys.auth || wake?.length === 0) return undefined;
 	return { kind: 'webpush', url: endpoint, ...(pushId ? { push_id: pushId } : {}), keys: { p256dh: keys.p256dh, auth: keys.auth }, ...(wake ? { wake: [...wake] } : {}) };
 }
 
@@ -180,6 +184,7 @@ const browserPush: PushBrowser = {
 interface PushClient {
 	readonly url: string;
 	setPushRegistration(registration: PushRegistration | undefined, userId?: string): void;
+	setPushOff(url: string | undefined): void;
 }
 
 /**
@@ -213,9 +218,12 @@ export class WebPushSync {
 
 	/**
 	 * Subscribes with the server's key and registers the subscription for the
-	 * account `userId` on `client`'s server, waking for `wake` (§4.9; undefined: the server's defaults). `current`
-	 * says whether that is still the account signed in there. Resolves whether
-	 * it registered; rejects if the browser couldn't subscribe.
+	 * account `userId` on `client`'s server, waking for `wake` (§4.9.2; undefined: the server's defaults). `current`
+	 * says whether that is still the account signed in there. An empty `wake`
+	 * wakes for nothing, which a server refuses: the subscription is kept for
+	 * the account, but unregistered (`setPushOff`, after each `auth`), until
+	 * a `wake` the server pushes registers it. Resolves whether it took the
+	 * subscription; rejects if the browser couldn't subscribe.
 	 */
 	async enable(client: PushClient, key: string, userId: string, current: () => boolean = () => true, wake?: readonly string[]): Promise<boolean> {
 		const run = ++this.run;
@@ -225,6 +233,11 @@ export class WebPushSync {
 		const id = this.pushIdOf(webPushAccount(url, userId));
 		const subscription = await this.serially(async () => (live() ? this.browser.subscribe(key) : undefined));
 		if (!subscription || !live()) return false;
+		if (wake?.length === 0) {
+			client.setPushRegistration(undefined);
+			client.setPushOff(subscription.endpoint);
+			return true;
+		}
 		const registration = webPushRegistration(subscription, id, wake);
 		if (!registration) throw new Error('The browser returned an incomplete push subscription');
 		client.setPushRegistration(registration, userId);

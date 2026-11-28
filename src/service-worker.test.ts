@@ -117,16 +117,17 @@ describe('the service worker', () => {
 	it('leaves the badge to a tab in view, counting tabs it doesn’t control yet', async () => {
 		await saveEnabledPushIds(['a1']);
 		tabs = [{ visibilityState: 'visible', postMessage: vi.fn(), focus: vi.fn() }];
-		await push({ push_id: 'a1', unread: 2 });
+		await push({ ...message, unread: 2 });
 		expect(setAppBadge).not.toHaveBeenCalled();
 		expect(matchAll).toHaveBeenCalledWith({ type: 'window', includeUncontrolled: true });
 	});
 
-	it('only sets the badge for a badge push, and shows the quiet stand-in for a push that isn’t JSON', async () => {
+	it('shows the quiet stand-in for a push without a message, still setting the badge, and for a push that isn’t JSON', async () => {
 		await saveEnabledPushIds(['a1']);
 		await push({ push_id: 'a1', unread: 3 });
-		expect(shown).toEqual([]);
+		expect(shown.map((entry) => entry.title)).toEqual([QUIET_PUSH.title]);
 		expect(setAppBadge).toHaveBeenCalledWith(3);
+		shown.length = 0;
 		await dispatch('push', { data: { json: () => JSON.parse('not json') } });
 		expect(shown.map((entry) => entry.title)).toEqual([QUIET_PUSH.title]);
 	});

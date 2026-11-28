@@ -77,7 +77,7 @@ describe('SessionView, primed with a view kept on this device', () => {
 	});
 
 	it('stands in with its server frame until the server sends its own, which then stands in through a reconnect', () => {
-		const frame = (agent: string) => ({ apron: 10, agent, auth: ['token'], capabilities: ['ext:media'] });
+		const frame = (agent: string) => ({ apron: 11, agent, auth: ['token'], capabilities: ['ext:media'] });
 		const session = new SessionView();
 		const chat = client();
 		session.prime({ ...kept, server: frame('kept') });
@@ -181,7 +181,7 @@ describe('SessionView.starting', () => {
 });
 
 describe('SessionView through a reconnect', () => {
-	const server = { apron: 10, auth: ['token'], capabilities: ['history', 'rooms', 'status', 'embed:upload'] };
+	const server = { apron: 11, auth: ['token'], capabilities: ['history', 'rooms', 'status', 'embed:upload'] };
 	const live = (fields: Partial<ClientSnapshot> = {}) => ready({ server, capabilities: capabilitiesOf(server), rooms: [room('general', ['1'])], activeRoom: 'general', passkeySession: true, signedInWith: 'token', signInMethods: ['token'], ...fields });
 	const dropped = (at: number, fields: Partial<ClientSnapshot> = {}): ClientSnapshot => ({ ...blankSnapshot(), status: 'reconnecting', disconnectedAt: at, ...fields });
 
@@ -261,7 +261,7 @@ describe('SessionView through a reconnect', () => {
 });
 
 describe('SessionView after a reconnect', () => {
-	const server = { apron: 10, auth: ['token'], capabilities: ['history', 'rooms'] };
+	const server = { apron: 11, auth: ['token'], capabilities: ['history', 'rooms'] };
 	const live = (fields: Partial<ClientSnapshot> = {}) => ready({ server, capabilities: capabilitiesOf(server), rooms: [room('general', ['1'])], activeRoom: 'general', ...fields });
 	const dropped = (at: number, fields: Partial<ClientSnapshot> = {}): ClientSnapshot => ({ ...blankSnapshot(), status: 'reconnecting', disconnectedAt: at, retryingSince: at, ...fields });
 

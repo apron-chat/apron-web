@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { webPushKey } from '$lib/protocol/client';
+import { webPushConfig, webPushKey } from '$lib/protocol/client';
+import { parseServerParams } from '$lib/protocol/client-views';
+import type { JsonObject, JsonValue } from '$lib/protocol/types';
+import pushFixtures from '../../../protocol/tests/fixtures/push.json';
 import type { PushRegistration } from '$lib/protocol/client';
 import { base64url } from '$lib/protocol/webauthn';
 import { accountServer, base64UrlToBytes, canOfferInstall, isStandalone, keepsPushOff, needsHomeScreen, offeredWake, pushHeldBy, sameServerKey, webPushAccount, webPushRegistration, WebPushSync, type PushBrowser } from './web-push';
@@ -32,23 +35,55 @@ describe('web push', () => {
 		expect(webPushRegistration({ endpoint: 'https://push.example/send/abc', keys: { p256dh: 'BPk', auth: 'c2Vj' } }, 'a1', ['mentions', 'private']))
 			.toEqual({ kind: 'webpush', url: 'https://push.example/send/abc', push_id: 'a1', keys: { p256dh: 'BPk', auth: 'c2Vj' }, wake: ['mentions', 'private'] });
 		expect(webPushRegistration({ endpoint: 'https://push.example/send/abc', keys: { p256dh: 'BPk' } })).toBeUndefined();
+		// A `wake` that selects nothing is refused (§4.9.2): no registration.
+		expect(webPushRegistration({ endpoint: 'https://push.example/send/abc', keys: { p256dh: 'BPk', auth: 'c2Vj' } }, 'a1', [])).toBeUndefined();
 		expect(webPushRegistration({ keys: { p256dh: 'BPk', auth: 'c2Vj' } })).toBeUndefined();
 	});
 
-	it('reads the webpush key from the server frame\'s push kinds, and the wake scopes it pushes', () => {
-		const server = { apron: 10, auth: ['guest'] };
-		expect(webPushKey({ ...server, push: { relay: {}, webpush: { key: 'BNcR' } } })).toBe('BNcR');
-		expect(webPushKey({ ...server, push: { relay: {} } })).toBeUndefined();
-		expect(webPushKey({ ...server, push: { webpush: { key: '' } } })).toBeUndefined();
+	it('reads the webpush VAPID key from the server frame\'s push kinds, and the wake scopes it pushes for web push', () => {
+		const server = { apron: 11, auth: ['guest'] };
+		const hook = { signature_keys: ['whpk_MCow'], wake: ['mentions', 'records'], format: ['full'] };
+		expect(webPushKey({ ...server, push: { webhook: hook, webpush: { vapid_key: 'BNcR' } } })).toBe('BNcR');
+		// A kind other than webpush, such as a bot's `webhook` (§4.9.4), isn't one to subscribe with.
+		expect(webPushKey({ ...server, push: { webhook: hook } })).toBeUndefined();
+		expect(webPushKey({ ...server, push: { webpush: { vapid_key: '' } } })).toBeUndefined();
 		expect(webPushKey(server)).toBeUndefined();
 		expect(webPushKey(undefined)).toBeUndefined();
-		// And the wake scopes it pushes.
-		expect(offeredWake({ webpush: { key: 'BNcR' }, wake: ['mentions', 'replies', 'ext:x', 3] })).toEqual(['mentions', 'replies', 'ext:x']);
-		expect(offeredWake({ webpush: { key: 'BNcR' } })).toEqual([]);
+		// And the wake scopes it pushes for web push, not another kind's.
+		const push = (wake?: JsonValue[]) => ({ ...server, push: { webpush: { vapid_key: 'BNcR', ...(wake ? { wake } : {}) }, webhook: hook } });
+		expect(offeredWake(push(['mentions', 'replies', 'ext:x', 3]))).toEqual(['mentions', 'replies', 'ext:x']);
+		expect(offeredWake(push())).toEqual([]);
 		// Where push doesn't wake you for `joined`, it isn't offered to you.
-		expect(offeredWake({ webpush: { key: 'BNcR' }, wake: ['mentions', 'joined'] }, false)).toEqual(['mentions']);
-		expect(offeredWake({ webpush: { key: 'BNcR' }, wake: ['mentions', 'joined'] }, true)).toEqual(['mentions', 'joined']);
+		expect(offeredWake(push(['mentions', 'joined']), false)).toEqual(['mentions']);
+		expect(offeredWake(push(['mentions', 'joined']), true)).toEqual(['mentions', 'joined']);
 		expect(offeredWake(undefined)).toEqual([]);
+	});
+
+	it('reads a version 10 server\'s `webpush.key` and `server.push.wake` where the version 11 fields are missing, and ignores them from a version 11 server', () => {
+		const v10 = { apron: 10, auth: ['guest'], push: { relay: {}, webpush: { key: 'BNcR' }, wake: ['mentions', 'replies'] } };
+		expect(webPushConfig(v10)).toEqual({ key: 'BNcR', wake: ['mentions', 'replies'] });
+		expect(webPushKey(v10)).toBe('BNcR');
+		expect(offeredWake(v10)).toEqual(['mentions', 'replies']);
+		// The version 11 fields come first, from any server.
+		expect(webPushConfig({ ...v10, push: { webpush: { vapid_key: 'BNew', key: 'BOld', wake: ['private'] }, wake: ['mentions'] } })).toEqual({ key: 'BNew', wake: ['private'] });
+		// A version 11 server's version 10 fields are for version 10 clients (§4.9): not read here.
+		const v11 = { ...v10, apron: 11 };
+		expect(webPushConfig(v11)).toBeUndefined();
+		expect(webPushConfig({ ...v11, push: { webpush: { vapid_key: 'BNcR' }, wake: ['mentions'] } })).toEqual({ key: 'BNcR' });
+	});
+
+	it('reads the shared fixtures\' server frames (protocol/tests/fixtures/push.json): webpush\'s own key and scopes, other kinds ignored', () => {
+		for (const { name, valid, frame } of pushFixtures.servers) {
+			const server = parseServerParams(frame.params as JsonObject);
+			const webpush = (frame.params.push as { webpush?: { vapid_key?: string; wake?: string[] } }).webpush;
+			if (valid) {
+				expect(webPushKey(server), name).toBe(webpush?.vapid_key);
+				expect(offeredWake(server), name).toEqual(webpush?.wake ?? []);
+			} else {
+				// Without `vapid_key`, a version 11 server offers no web push here.
+				expect(webPushKey(server), name).toBeUndefined();
+			}
+		}
 	});
 
 	it('names an account on a server, and finds its server again', () => {
@@ -150,7 +185,8 @@ describe('keeping the push subscription in step', () => {
 
 	function fakeClient(url = 'wss://a.example/') {
 		const calls: Array<[PushRegistration | undefined, string | undefined]> = [];
-		return { url, calls, setPushRegistration: (registration: PushRegistration | undefined, userId?: string) => { calls.push([registration, userId]); } };
+		const off: Array<string | undefined> = [];
+		return { url, calls, off, setPushRegistration: (registration: PushRegistration | undefined, userId?: string) => { calls.push([registration, userId]); }, setPushOff: (endpoint: string | undefined) => { off.push(endpoint); } };
 	}
 
 	it('registers the subscription with the account\'s push_id and wake scopes', async () => {
@@ -162,11 +198,14 @@ describe('keeping the push subscription in step', () => {
 		expect(await enabled).toBe(true);
 		const registered = { kind: 'webpush', url: 'https://push.example/1', push_id: 'id:wss://a.example/\nada', keys: { p256dh: 'BPk', auth: 'c2Vj' } };
 		expect(client.calls).toEqual([[{ ...registered, wake: ['mentions', 'replies'] }, 'ada']]);
-		// An empty `wake` wakes for nothing, and goes as is.
+		// An empty `wake` would wake for nothing, which a server refuses (§4.9.2): the subscription is kept, but
+		// unregistered, and its endpoint after each `auth`.
 		const nothing = sync.enable(client, 'BNcR', 'ada', undefined, []);
 		await finish();
 		expect(await nothing).toBe(true);
-		expect(client.calls[1][0]).toHaveProperty('wake', []);
+		expect(client.calls[1]).toEqual([undefined, undefined]);
+		expect(client.off).toEqual(['https://push.example/2']);
+		expect(client.calls.some(([registration]) => registration && 'wake' in registration && Array.isArray(registration.wake) && !registration.wake.length)).toBe(false);
 		// Without scopes the server's defaults apply: no `wake`.
 		const defaults = sync.enable(client, 'BNcR', 'ada');
 		await finish();

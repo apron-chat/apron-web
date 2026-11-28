@@ -1,5 +1,5 @@
 /**
- * Wire types and decoders for Apron protocol v10 (`protocol/PROTOCOL.md`).
+ * Wire types and decoders for Apron protocol v11 (`protocol/PROTOCOL.md`).
  * Decoders normalize server records to the fields the protocol defines
  * and drop unknown top-level keys (§1: unknown keys MAY be dropped), while
  * copying known values exactly, including `ext`, literal `null`s, unknown embed

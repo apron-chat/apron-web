@@ -181,9 +181,9 @@ describe('what a server offers', () => {
 	});
 
 	it('warns of another protocol version without refusing it', () => {
-		expect(versionWarning(10, 10)).toBeUndefined();
-		expect(versionWarning(11, 10)).toEqual({ title: 'Newer protocol.', text: 'This server speaks Apron v11 and this app speaks v10, so some features may not work.' });
-		expect(versionWarning(9, 10)?.title).toBe('Older protocol.');
+		expect(versionWarning(11, 11)).toBeUndefined();
+		expect(versionWarning(12, 11)).toEqual({ title: 'Newer protocol.', text: 'This server speaks Apron v12 and this app speaks v11, so some features may not work.' });
+		expect(versionWarning(10, 11)?.title).toBe('Older protocol.');
 	});
 });
 
@@ -212,12 +212,12 @@ describe('the scheme shown first', () => {
 
 describe('a server that only reads', () => {
 	it('is a served archive offering guests (ARCHIVE.md §4), as its greeting says; nothing else is known to be before signing in', () => {
-		expect(readsOnly({ apron: 10, auth: ['guest'], capabilities: ['rooms', 'ext:permissions', 'ext:archive'] })).toBe(true);
-		expect(readsOnly({ apron: 10, auth: ['guest'], capabilities: ['rooms', 'ext:permissions'] })).toBe(false);
-		expect(readsOnly({ apron: 10, auth: ['token'], capabilities: ['ext:archive'] })).toBe(false);
+		expect(readsOnly({ apron: 11, auth: ['guest'], capabilities: ['rooms', 'ext:permissions', 'ext:archive'] })).toBe(true);
+		expect(readsOnly({ apron: 11, auth: ['guest'], capabilities: ['rooms', 'ext:permissions'] })).toBe(false);
+		expect(readsOnly({ apron: 11, auth: ['token'], capabilities: ['ext:archive'] })).toBe(false);
 		// Another way in means accounts to choose between: the panel asks.
-		expect(readsOnly({ apron: 10, auth: ['guest', 'webauthn'], capabilities: ['ext:archive'] })).toBe(false);
-		expect(readsOnly({ apron: 10, auth: ['guest'], signup: ['email'], capabilities: ['ext:archive'] })).toBe(false);
+		expect(readsOnly({ apron: 11, auth: ['guest', 'webauthn'], capabilities: ['ext:archive'] })).toBe(false);
+		expect(readsOnly({ apron: 11, auth: ['guest'], signup: ['email'], capabilities: ['ext:archive'] })).toBe(false);
 		expect(readsOnly(undefined)).toBe(false);
 	});
 });

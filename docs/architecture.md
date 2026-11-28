@@ -272,8 +272,10 @@ the checked scopes, and which of them push sends as `wake`, and
 `push-store.ts` keeps in IndexedDB, for the service worker too, the enabled
 `push_id`s and the newest message each notification group notified about,
 `web-push.ts` keeps this browser's push subscription for the server's key
-(`WebPushSync` runs subscribing and unsubscribing one at a time, under a Web
-Lock), `push-settings.svelte.ts` (`PushSettings`) turns push on and off per
+(`webPushConfig` in `client-views.ts` reads `server.push.webpush`'s `vapid_key`
+and `wake`, or a version 10 server's `key` and `server.push.wake`;
+`WebPushSync` runs subscribing and unsubscribing one at a time, under a Web
+Lock, and registers nothing for an empty `wake`), `push-settings.svelte.ts` (`PushSettings`) turns push on and off per
 account and shares the one subscription between accounts and tabs, and
 `sw-handlers.ts` holds the service worker's push and click handlers, apart
 from the worker so tests can run them. `media-settings.svelte.ts`
@@ -325,7 +327,7 @@ Each gate is part of `directory.pieces`, so a change redraws every row, and
 sanitized markup is kept by the gate it was made with.
 
 Protocol types, replay reduction, and the WebSocket session live under
-`src/lib/protocol` and speak Apron protocol v10. `client.ts` holds the session,
+`src/lib/protocol` and speak Apron protocol v11. `client.ts` holds the session,
 `ChatClient`, and re-exports the rest of its API: `client-types.ts` has the
 snapshot and option types, `client-views.ts` the pure helpers over snapshots,
 capabilities and server URLs, and `client-internals.ts` the per-room state,
@@ -467,7 +469,7 @@ requests for the same `url` on a connection, each after the last one's reply
 unregister queued for its user until answered, so one lost with the replaced
 connection goes again after that user's next `auth`; switching
 servers forgets it. `setPushOff(url)` unregisters this browser's endpoint after
-each `auth` while push is off for the account, and a refused `push_register`
+each `auth` while push is off for the account (or wakes for nothing), and a refused `push_register`
 is the snapshot's `pushError`.
 
 Edits, moves, and deletion use the same `message` request as creation, with an

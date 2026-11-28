@@ -174,7 +174,7 @@ describe('one link at a time', () => {
 
 	it('keeps an addition waiting until the link under way is done', async () => {
 		const { links, chat, answer } = page();
-		const snapshot = { status: 'connected', authBusy: false, authenticated: true, you: { user_id: 'ada' }, server: { apron: 10, auth: ['email'], capabilities: [] } } as unknown as ClientSnapshot;
+		const snapshot = { status: 'connected', authBusy: false, authenticated: true, you: { user_id: 'ada' }, server: { apron: 11, auth: ['email'], capabilities: [] } } as unknown as ClientSnapshot;
 		links.follow({ token: 'tok', state: 'mail', server: THERE });
 		links.follow({ token: 'add-tok', state: 'add', server: HERE });
 		links.settle(snapshot);
@@ -190,7 +190,7 @@ describe('one link at a time', () => {
 
 /** A server's sign-in page that sent this tab back (§4.12, the passkey page): its code, redeemed as its request was for. */
 describe('a sign-in page’s answer brought back to this tab', () => {
-	const snapshot = { status: 'connected', authBusy: false, authenticated: true, you: { user_id: 'ada' }, server: { apron: 10, auth: ['external', 'webauthn'], capabilities: [] } } as unknown as ClientSnapshot;
+	const snapshot = { status: 'connected', authBusy: false, authenticated: true, you: { user_id: 'ada' }, server: { apron: 11, auth: ['external', 'webauthn'], capabilities: [] } } as unknown as ClientSnapshot;
 	const request = (purpose: PendingAuthorization['purpose'], server = THERE): PendingAuthorization => ({
 		state: 'q8Rz', codeVerifier: 'v', redirectUri: 'https://web.example/signed-in/', clientId: 'apron-web', server, purpose, mode: 'page', expires: Infinity
 	});

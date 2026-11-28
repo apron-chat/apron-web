@@ -77,7 +77,7 @@ describe('posts and commands', () => {
 		// Read (`parseCommandList`) where it is kept, which loads on demand.
 		await expect(listed).resolves.toEqual(result);
 		// The next server frame doesn't list it: nothing is asked.
-		socket.receive({ method: 'server', params: { apron: 10, agent: 'fake', auth: ['guest'], capabilities: ['command', 'rooms'] } });
+		socket.receive({ method: 'server', params: { apron: 11, agent: 'fake', auth: ['guest'], capabilities: ['command', 'rooms'] } });
 		const before = socket.sent.length;
 		await expect(client.listCommands()).rejects.toThrow('This server lists no commands');
 		expect(socket.sent).toHaveLength(before);
@@ -141,7 +141,7 @@ describe('a request the connection ends under', () => {
 	it('says one that never went out before it timed out was not sent', async () => {
 		// A server that signs in only with a passkey: the connection stays up, waiting for a tap.
 		socket.open();
-		socket.receive({ method: 'server', params: { apron: 10, auth: ['webauthn'], capabilities: ['rooms'] } });
+		socket.receive({ method: 'server', params: { apron: 11, auth: ['webauthn'], capabilities: ['rooms'] } });
 		const unsent = client.send('general', 'early');
 		quiet(unsent);
 		await vi.advanceTimersByTimeAsync(20_000);

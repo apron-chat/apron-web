@@ -34,7 +34,7 @@ function startClient(url = URL): ChatClient {
 	return client;
 }
 
-const server = { method: 'server', params: { apron: 10, auth: ['guest'], capabilities: ['rooms'] } };
+const server = { method: 'server', params: { apron: 11, auth: ['guest'], capabilities: ['rooms'] } };
 
 describe('the connection opened as the app starts', () => {
 	it('is the client’s first connection, open, with the server frame and a welcome that came meanwhile: it signs in at once', async () => {

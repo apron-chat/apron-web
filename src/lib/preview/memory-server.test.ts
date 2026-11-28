@@ -331,7 +331,7 @@ describe('in-memory live text (§4.8.3, §4.8.5, §4.8.6)', () => {
 		const server = new MemoryProtocolServer({});
 		const client = await connect(server);
 		expect(client.snapshot().server?.capabilities).toEqual(expect.arrayContaining(['embed:terminal', 'embed:append']));
-		expect(client.snapshot().server?.apron).toBe(10);
+		expect(client.snapshot().server?.apron).toBe(11);
 		await client.command('general', '/help').promise;
 		await waitFor(() => (client.snapshot().rooms.find((room) => room.id === 'general')?.notices.length ?? 0) > 0);
 		const help = String(client.snapshot().rooms.find((room) => room.id === 'general')!.notices.at(-1)!.body?.text);

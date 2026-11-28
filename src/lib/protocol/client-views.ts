@@ -377,11 +377,35 @@ export function mediaLimit(types: MediaTypes, type: string): MediaLimit | undefi
 	return undefined;
 }
 
-/** The VAPID public key (base64url) of the server's `webpush` push kind (§4.9), if it offers one. */
+/**
+ * Whether to read a server's version 10 push fields (`server.push.wake`, `webpush.key`) where its
+ * version 11 ones are missing: only from a server of an earlier version, as version 11 clients ignore
+ * them (§4.9).
+ */
+function readsVersion10Push(server: ServerParams): boolean {
+	return server.apron < 11;
+}
+
+/**
+ * The server's `webpush` push kind configuration (§4.9.3), if it offers one: its VAPID public key
+ * (base64url, `vapid_key`) and the wake scopes it supports for it (`wake`, as the server lists them;
+ * undefined when it lists none). From a server of version 10, which sent the key as `key` and the
+ * scopes at `server.push.wake`, those stand in for missing ones.
+ */
+export function webPushConfig(server: ServerParams | undefined): { key: string; wake?: unknown[] } | undefined {
+	const push = server?.push;
+	const webpush = push?.webpush;
+	if (!server || !push || !isJsonObject(webpush)) return undefined;
+	const old = readsVersion10Push(server);
+	const key = typeof webpush.vapid_key === 'string' ? webpush.vapid_key : old ? webpush.key : undefined;
+	if (typeof key !== 'string' || !key) return undefined;
+	const wake = Array.isArray(webpush.wake) ? webpush.wake : old && Array.isArray(push.wake) ? push.wake : undefined;
+	return { key, ...(wake ? { wake } : {}) };
+}
+
+/** The VAPID public key (base64url) of the server's `webpush` push kind (§4.9.3), if it offers one. */
 export function webPushKey(server: ServerParams | undefined): string | undefined {
-	const webpush = server?.push?.webpush;
-	const key = isJsonObject(webpush) ? webpush.key : undefined;
-	return typeof key === 'string' && key ? key : undefined;
+	return webPushConfig(server)?.key;
 }
 
 export function defaultWebSocketUrl(locationLike?: Location): string {
