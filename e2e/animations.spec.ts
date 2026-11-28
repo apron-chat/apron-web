@@ -60,7 +60,7 @@ test.describe('where the device asks for reduced motion', () => {
 		const preferences = page.getByRole('dialog', { name: 'Preferences' });
 		await preferences.getByRole('navigation').getByRole('button', { name: 'Media' }).click();
 		await expect(preferences.getByTestId('animations')).toHaveValue('system');
-		await expect(preferences.getByTestId('animations-note')).toContainText('Your device asks for reduced motion');
+		await expect(preferences.getByTestId('animations-note')).toHaveText('Follows your device’s reduced motion setting.');
 		await preferences.getByTestId('animations').selectOption('always');
 		await expect(figure.getByTestId('animation-still')).toHaveCount(0);
 		await expect(figure.getByRole('button', { name: 'Pause party.gif' })).toBeAttached();

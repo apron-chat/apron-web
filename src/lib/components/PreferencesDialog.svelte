@@ -127,12 +127,11 @@
 	/** Export's Include private rooms: off each time Preferences opens, so private rooms go only when asked for. */
 	let exportPrivate = $state(false);
 
-	/** What the chosen animation mode does, under it, and whether the device asks for reduced motion where that decides. */
+	/** What the chosen animation mode does, under it. */
 	let animationNote = $derived(
-		animationSettings.mode === 'always' ? 'Animated images play by themselves, each with a button to pause it.'
-		: animationSettings.mode === 'never' ? 'Animated images hold still until you press Play. So do custom emoji, where the server has a still copy.'
-		: animationSettings.reducedMotion ? 'Your device asks for reduced motion, so animated images hold still until you press Play.'
-		: 'Animated images play by themselves, each with a button to pause it, unless your device asks for reduced motion.'
+		animationSettings.mode === 'always' ? 'GIFs play by themselves.'
+		: animationSettings.mode === 'never' ? 'GIFs hold still until you press Play.'
+		: 'Follows your device’s reduced motion setting.'
 	);
 	/** What the chosen media policy loads, under it: the server, by name, and the trusted origins. */
 	let mediaNote = $derived(mediaSettings.policy === 'any' ? 'Everything, from any site.' : `From ${serverHost ?? 'this server'} and the trusted origins below. Other images wait for a click.`);
@@ -349,17 +348,17 @@
 				<p class="ap-pref-help">Whether Apron is open or closed. At least one stays on; the switch above turns notifications off.</p>
 			</div>
 		{:else if preferencesSection === 'media'}
+			<SettingRow title="Play animations" for="ap-media-animations" hint={animationNote} hintTestid="animations-note" class="ap-pref-media-setting">
+				{#snippet control()}
+					<select id="ap-media-animations" class="ap-field ap-pref-select" value={animationSettings.mode} onchange={(event) => animationSettings.set(event.currentTarget.value)} data-testid="animations">
+						{#each ANIMATION_MODES as mode (mode.value)}<option value={mode.value}>{mode.label}</option>{/each}
+					</select>
+				{/snippet}
+			</SettingRow>
 			<SettingRow title="Load images from" for="ap-media-policy" hint={mediaNote} hintTestid="media-note" class="ap-pref-media-setting">
 				{#snippet control()}
 					<select id="ap-media-policy" class="ap-field ap-pref-select" value={mediaSettings.policy} onchange={(event) => mediaSettings.update(event.currentTarget.value)} data-testid="media-policy">
 						{#each MEDIA_POLICIES as policy (policy.value)}<option value={policy.value}>{policy.label}</option>{/each}
-					</select>
-				{/snippet}
-			</SettingRow>
-			<SettingRow title="Play animated images" for="ap-media-animations" hint={animationNote} hintTestid="animations-note" class="ap-pref-media-setting">
-				{#snippet control()}
-					<select id="ap-media-animations" class="ap-field ap-pref-select" value={animationSettings.mode} onchange={(event) => animationSettings.set(event.currentTarget.value)} data-testid="animations">
-						{#each ANIMATION_MODES as mode (mode.value)}<option value={mode.value}>{mode.label}</option>{/each}
 					</select>
 				{/snippet}
 			</SettingRow>
@@ -402,10 +401,10 @@
 				{/snippet}
 			</SettingRow>
 		{:else}
-			<SettingRow title="Mode" for="ap-theme-mode" hint="System follows your operating system’s light or dark preference." class="ap-pref-theme-setting">
+			<SettingRow title="Mode" for="ap-theme-mode" hint="System Default follows your device’s light or dark setting." class="ap-pref-theme-setting">
 				{#snippet control()}
 					<select id="ap-theme-mode" class="ap-field ap-pref-select" value={appearanceSettings.current.mode} onchange={(event) => setThemeMode(event.currentTarget.value)}>
-						<option value="system">System</option>
+						<option value="system">System Default</option>
 						<option value="light">Light</option>
 						<option value="dark">Dark</option>
 					</select>

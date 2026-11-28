@@ -7,7 +7,7 @@ import { ANIMATIONS_KEY, loadAnimations, saveAnimations } from './storage';
  * - `always`, `never`: whatever the device asks.
  */
 export const ANIMATION_MODES = [
-	{ value: 'system', label: 'Unless reduced motion is on' },
+	{ value: 'system', label: 'System Default' },
 	{ value: 'always', label: 'Always' },
 	{ value: 'never', label: 'Never' }
 ] as const;
