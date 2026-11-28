@@ -3,6 +3,7 @@
 	import type { MessageUpload } from '$lib/design/components/types';
 	import { safeLink } from '$lib/protocol/embeds';
 	import type { Embed } from '$lib/protocol/types';
+	import { animationSettings } from '$lib/ui/animation-settings.svelte';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { docKindOf, docViewer } from '$lib/ui/doc-viewer.svelte';
 	import { mediaViewer } from '$lib/ui/media-viewer.svelte';
@@ -16,11 +17,13 @@
 	 * and when) goes under its name there. Other clicks keep the link's own
 	 * behavior: a new tab or window. A plain click on a Markdown file's card
 	 * shows it rendered, full screen (`docViewer`), with `detail` likewise; a
-	 * plain text file's shows it there as written.
+	 * plain text file's shows it there as written. An animated image plays as
+	 * Preferences' Media says (`animationSettings`), and has a button to play
+	 * and pause it.
 	 */
 	let { embed, upload, detail }: { embed: Embed; upload?: MessageUpload; detail?: string } = $props();
 	let url = $derived(safeLink(embed.url));
-	let og = $derived(loadableOg(embed.og, directory.mediaGate));
+	let og = $derived(loadableOg(embed.og, directory.mediaGate, embed.title));
 	let title = $derived(embed.title || og.title || 'File');
 	/** An image's size as sent, until the server's `og` arrives with the finished upload. */
 	let size = $derived(upload?.width && upload.height ? `${upload.width} × ${upload.height}` : undefined);
@@ -33,4 +36,4 @@
 </script>
 
 <DesignEmbedUpload kind="upload" {url} title={embed.title} {og} progress={upload?.progress} failed={upload?.failed} detail={url ? undefined : size}
-	{viewer} onview={(event) => mediaViewer.show(event.currentTarget as HTMLElement)} onpreview={preview} />
+	{viewer} onview={(event) => mediaViewer.show(event.currentTarget as HTMLElement)} onpreview={preview} autoplay={animationSettings.autoplay} />

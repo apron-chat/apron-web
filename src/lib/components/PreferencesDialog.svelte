@@ -3,6 +3,7 @@
 	import { resolve } from '$app/paths';
 	import { clearLabels, historySettings, RETENTIONS, storageUsed, type KeptSummary } from '$lib/history/settings.svelte';
 	import type { KeptHistoryControls } from '$lib/history/history-keeper';
+	import { ANIMATION_MODES, animationSettings } from '$lib/ui/animation-settings.svelte';
 	import { MEDIA_POLICIES, mediaSettings, parseBlockedOrigins, parseMediaOrigins } from '$lib/ui/media-settings.svelte';
 	import { appearanceSettings, cssForTheme, parseThemeCss, THEME_CSS_MAX, THEMES, type ThemeId, type ThemeMode } from '$lib/ui/appearance.svelte';
 	import type { NotificationPermissionState, NotificationTestResult } from '$lib/ui/notifications';
@@ -126,6 +127,13 @@
 	/** Export's Include private rooms: off each time Preferences opens, so private rooms go only when asked for. */
 	let exportPrivate = $state(false);
 
+	/** What the chosen animation mode does, under it, and whether the device asks for reduced motion where that decides. */
+	let animationNote = $derived(
+		animationSettings.mode === 'always' ? 'Animated images play by themselves, each with a button to pause it.'
+		: animationSettings.mode === 'never' ? 'Animated images hold still until you press Play. So do custom emoji, where the server has a still copy.'
+		: animationSettings.reducedMotion ? 'Your device asks for reduced motion, so animated images hold still until you press Play.'
+		: 'Animated images play by themselves, each with a button to pause it, unless your device asks for reduced motion.'
+	);
 	/** What the chosen media policy loads, under it: the server, by name, and the trusted origins. */
 	let mediaNote = $derived(mediaSettings.policy === 'any' ? 'Everything, from any site.' : `From ${serverHost ?? 'this server'} and the trusted origins below. Other images wait for a click.`);
 	/** The trusted origins, one per line as hosts, as the field shows them. */
@@ -345,6 +353,13 @@
 				{#snippet control()}
 					<select id="ap-media-policy" class="ap-field ap-pref-select" value={mediaSettings.policy} onchange={(event) => mediaSettings.update(event.currentTarget.value)} data-testid="media-policy">
 						{#each MEDIA_POLICIES as policy (policy.value)}<option value={policy.value}>{policy.label}</option>{/each}
+					</select>
+				{/snippet}
+			</SettingRow>
+			<SettingRow title="Play animated images" for="ap-media-animations" hint={animationNote} hintTestid="animations-note" class="ap-pref-media-setting">
+				{#snippet control()}
+					<select id="ap-media-animations" class="ap-field ap-pref-select" value={animationSettings.mode} onchange={(event) => animationSettings.set(event.currentTarget.value)} data-testid="animations">
+						{#each ANIMATION_MODES as mode (mode.value)}<option value={mode.value}>{mode.label}</option>{/each}
 					</select>
 				{/snippet}
 			</SettingRow>
