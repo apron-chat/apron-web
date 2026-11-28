@@ -1,10 +1,12 @@
 <script lang="ts">
+	import AtSign from '@lucide/svelte/icons/at-sign';
 	import Copy from '@lucide/svelte/icons/copy';
 	import MessageCircle from '@lucide/svelte/icons/message-circle';
+	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
+	import UserPlus from '@lucide/svelte/icons/user-plus';
 	import type { Snippet } from 'svelte';
 	import type { ClassValue } from 'svelte/elements';
 	import Avatar from './Avatar.svelte';
-	import Button from './Button.svelte';
 	import Popover from './Popover.svelte';
 	import RoleBadges from './RoleBadges.svelte';
 	import type { PopoverPlacement, Presence } from './types';
@@ -13,8 +15,9 @@
 	/**
 	 * Who a mention, a sender or a member is, in a Popover: their avatar, name,
 	 * `@user_id` (always, here: this is where people check who someone really
-	 * is, §3.3), status (and when they were last seen, while offline), roles, bio, and whether they're in the open room, with
-	 * what you can do about them.
+	 * is, §3.3), status (and when they were last seen, while offline) on one line, roles, bio, and whether they're in
+	 * the open room. Below a rule, what you can do with them, as a list of the same rows (Message, Mention, Add to
+	 * room), each an icon and its words; Add says under its words why, when the card knows they aren't in the room.
 	 */
 	interface Props extends PopoverPlacement {
 		/** Closes it: on a phone, a press on the dimmed page behind the sheet. */
@@ -44,9 +47,9 @@
 		bioBody?: Snippet;
 		/** Another user shows the same name: a note says to check the `@user_id`. */
 		sharesName?: boolean;
-		/** Their membership of the open room, in words ("Member of design"). */
+		/** Their membership of the open room, in words ("Member of design"): under Add to room when that's offered, as its description, else a line of its own. */
 		membership?: string;
-		/** Offers Message, the card's primary action: a private conversation with them (§4.2.4). */
+		/** Offers Message, first of the actions: a private conversation with them (§4.2.4). */
 		onmessage?: () => void;
 		/** Opening it is in flight: Message says "Opening…", disabled. */
 		messaging?: boolean;
@@ -81,6 +84,7 @@
 		/** A `data-testid` for the bio. */
 		bioTestid?: string;
 	}
+	const uid = $props.id();
 	let {
 		userId, name, avatar, you = false, status, statusLabel, seen, roles, bio, bioBody, sharesName = false, membership, onmessage, messaging = false, onmention, oncopyid, onaddtoroom, adding = false, note,
 		element = $bindable(), offsetHeight = $bindable(0), statusTestid, seenTestid, rolesTestid, bioTestid, mode, top, left, width, height, class: className, testid, onkeydown, onfocusout, onclose
@@ -101,25 +105,29 @@
 				<span class="ap-profcard-handle">@{userId}</span>
 				{#if oncopyid}<button type="button" class="ap-iconbtn ap-profcard-copy" aria-label="Copy @user_id" title="Copy @user_id" onclick={oncopyid}><Copy size={14} aria-hidden="true" /></button>{/if}
 			</div>
-			{#if shown === 'unknown'}
-				<div class="ap-profcard-status" data-testid={statusTestid}>Unknown status: <code class="ap-profcard-literal">{status}</code></div>
-			{:else if shown}
-				<div class="ap-profcard-status" data-testid={statusTestid}>{statusLabel ?? presenceLabel(status)}</div>
+			{#if shown}
+				<div class="ap-profcard-statusline">
+					{#if shown === 'unknown'}
+						<span class="ap-profcard-status" data-testid={statusTestid}>Unknown status: <code class="ap-profcard-literal">{status}</code></span>
+					{:else}
+						<span class="ap-profcard-status" data-testid={statusTestid}>{statusLabel ?? presenceLabel(status)}</span>
+					{/if}
+					{#if shown === 'offline' && !you && seen?.text}<time class="ap-profcard-seen" data-testid={seenTestid} datetime={seen.datetime} title={seen.title}>{seen.text}</time>{/if}
+				</div>
 			{/if}
-			{#if shown === 'offline' && !you && seen?.text}<time class="ap-profcard-seen" data-testid={seenTestid} datetime={seen.datetime} title={seen.title}>{seen.text}</time>{/if}
 			<RoleBadges {roles} data-testid={rolesTestid} overflow="drop" />
 		</div>
 	</div>
 	{#if sharesName}
-		<p class="ap-profcard-warn" role="note">Another user also shows as <strong>{shownName}</strong>. Check the @user_id.</p>
+		<p class="ap-profcard-warn" role="note"><TriangleAlert size={15} aria-hidden="true" /><span>Another user also shows as <strong>{shownName}</strong>. Check the @user_id.</span></p>
 	{/if}
 	{#if bio}<p class="ap-profcard-bio" dir="auto" data-testid={bioTestid}>{#if bioBody}{@render bioBody()}{:else}{bio}{/if}</p>{/if}
-	{#if membership}<p class="ap-profcard-note">{membership}</p>{/if}
+	{#if membership && !onaddtoroom}<p class="ap-profcard-note">{membership}</p>{/if}
 	{#if onmessage || onmention || onaddtoroom}
 		<div class="ap-profcard-actions">
-			{#if onmessage}<Button variant="primary" size="sm" disabled={messaging} onclick={onmessage}><MessageCircle size={15} aria-hidden="true" />{messaging ? 'Opening…' : 'Message'}</Button>{/if}
-			{#if onmention}<Button size="sm" onclick={onmention}>Mention</Button>{/if}
-			{#if onaddtoroom}<Button variant="ghost" size="sm" disabled={adding} onclick={onaddtoroom}>{adding ? 'Adding…' : 'Add to room'}</Button>{/if}
+			{#if onmessage}<button type="button" class="ap-profcard-action" disabled={messaging} onclick={onmessage}><span class="ap-profcard-action-icon"><MessageCircle size={16} aria-hidden="true" /></span><span class="ap-profcard-action-text">{messaging ? 'Opening…' : 'Message'}</span></button>{/if}
+			{#if onmention}<button type="button" class="ap-profcard-action" onclick={onmention}><span class="ap-profcard-action-icon"><AtSign size={16} aria-hidden="true" /></span><span class="ap-profcard-action-text">Mention</span></button>{/if}
+			{#if onaddtoroom}<button type="button" class="ap-profcard-action" disabled={adding} aria-label={adding ? 'Adding…' : 'Add to room'} aria-describedby={membership ? `${uid}-membership` : undefined} onclick={onaddtoroom}><span class="ap-profcard-action-icon"><UserPlus size={16} aria-hidden="true" /></span><span class="ap-profcard-action-text">{adding ? 'Adding…' : 'Add to room'}</span>{#if membership}<span class="ap-profcard-action-sub" id="{uid}-membership" aria-hidden="true">{membership}</span>{/if}</button>{/if}
 		</div>
 	{/if}
 	{#if note}<p class={['ap-profcard-note', note.error && 'ap-tone-danger']} role={note.error ? 'alert' : 'status'}>{note.text}</p>{/if}

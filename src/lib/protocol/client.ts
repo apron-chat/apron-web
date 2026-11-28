@@ -3840,10 +3840,39 @@ export class ChatClient {
 		} else if (isIdentity(params.new)) {
 			const current = this.noteUser(cloneJson(params.new));
 			if (isIdentity(params.old) && params.old.user_id !== current.user_id) this.retireUserId(params.old.user_id, current.user_id);
+		} else if (isJsonObject(params.new) && Object.keys(params.new).length === 0 && isIdentity(params.old)) {
+			this.removeUser(params.old.user_id);
 		} else {
 			return;
 		}
 		this.emit();
+	}
+
+	/**
+	 * A user the server removed with their records (`new` of `{}`, §3.3.3): forgotten here, with what they sent,
+	 * reacted and joined, so nobody shows under their name any more, a rebuild's held live records included (its
+	 * first page would bring them back). A `user_id` retired into them only stops showing as them: what was logged
+	 * under it stays, as the server keeps it. Never you: the server closes your own connections instead.
+	 */
+	private removeUser(userId: string): void {
+		if (userId === this.you?.user_id) return;
+		for (const [retired, current] of [...this.userAliases]) if (current === userId) this.userAliases.delete(retired);
+		this.users.delete(userId);
+		this.recordedUsers.delete(userId);
+		this.sawOffline.delete(userId);
+		for (const readers of this.reads.values()) readers.delete(userId);
+		for (const typing of [...this.typing.values()]) if (typing.from.user_id === userId) this.removeTyping(typing.room, userId);
+		const gone = this.store.removeUser(userId);
+		const recovering = [...this.rooms.values(), ...this.retainedRooms.values()].flatMap((room) => (room.recovery ? [room.recovery] : []));
+		for (const recovery of recovering) {
+			for (const live of recovery.buffer) if (live.kind === 'message' && live.record.from.user_id === userId) gone.add(live.record.message_id);
+		}
+		for (const recovery of recovering) {
+			const kept = recovery.buffer.filter((live) => live.record.from.user_id !== userId && !gone.has(live.record.message_id));
+			if (kept.length === recovery.buffer.length) continue;
+			recovery.buffer = kept;
+			recovery.bufferBytes = kept.reduce((bytes, live) => bytes + recordBytes(live.record), 0);
+		}
 	}
 
 	/**

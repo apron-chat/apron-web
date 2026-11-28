@@ -91,6 +91,51 @@ function markdownItUnusedRules(): Plugin {
 }
 
 /**
+ * What else of markdown-it `markdown.ts` never reaches, out of the bundle: its `zero` and `commonmark` presets (it
+ * makes the default one; asking for another now fails as for an unknown name), and the methods it never calls, which
+ * turn rules on and off, take plugins or work on inline text only: about 2.2 KB of startup JS. Calling one of those
+ * fails (`md.use is not a function`): see here. Each part must read exactly as it did when checked (`sha`, of
+ * markdown-it 15.0.3's), so the build fails after an upgrade that changed one: check that nothing else of
+ * markdown-it uses it, then record its new `sha`. Each keeps its line count, so what follows it keeps its lines.
+ */
+function markdownItUnusedParts(): Plugin {
+	// A class's method, from its head to its closing brace.
+	const method = (code: string, within: string, head: string): [number, number] => {
+		const start = code.indexOf(`\n\t${head} {\n`, code.indexOf(within));
+		return [start, start < 0 ? -1 : code.indexOf('\n\t}\n', start) + 3];
+	};
+	const parts: Array<{ name: string; find: (code: string) => [number, number]; sha: string }> = [
+		{ name: 'other presets', find: (code) => [code.indexOf('\n\tzero: {\n'), code.indexOf('\n};\nvar BAD_PROTO_RE')], sha: 'f69f6df047340bf9' },
+		...([
+			['Ruler', 'enable(list, ignoreInvalid = false)', '97aa61fc774fad46'],
+			['Ruler', 'enableOnly(list, ignoreInvalid = false)', 'bdf661529fd472c5'],
+			['Ruler', 'disable(list, ignoreInvalid = false)', 'ed7d4425a6dd9d54'],
+			['MarkdownIt', 'enable(list, ignoreInvalid = false)', '294b1488db281022'],
+			['MarkdownIt', 'disable(list, ignoreInvalid = false)', '7b133c79bae2088c'],
+			['MarkdownIt', 'use(plugin, ...params)', '7a1892a01565a632'],
+			['MarkdownIt', 'parseInline(src, env)', '0156c195e4363ff6'],
+			['MarkdownIt', 'renderInline(src, env = {})', 'e8e4e82ca02de23c']
+		] as const).map(([owner, head, sha]) => ({ name: `${owner}'s ${head}`, find: (code: string) => method(code, `var ${owner} = class {`, head), sha }))
+	];
+	return {
+		name: 'apron:markdown-it-unused-parts',
+		enforce: 'pre',
+		transform(code, id) {
+			if (!id.split('?')[0].endsWith('/markdown-it/dist/markdown-it.mjs')) return;
+			for (const part of parts) {
+				const [start, end] = part.find(code);
+				const text = code.slice(start, end);
+				if (start < 0 || end <= start || createHash('sha256').update(text).digest('hex').slice(0, 16) !== part.sha) {
+					throw new Error(`apron:markdown-it-unused-parts: markdown-it's ${part.name} isn't as checked; see that nothing else of markdown-it uses it, then record its sha`);
+				}
+				code = `${code.slice(0, start)}${'\n'.repeat(text.split('\n').length - 1)}${code.slice(end)}`;
+			}
+			return { code, map: null };
+		}
+	};
+}
+
+/**
  * markdown-it's class fields as plain assignments. Its dist sets each field through oxc's `_defineProperty` helper,
  * which goes through `toPropertyKey`, `toPrimitive` and `_typeof` (two calls of it) before assigning: five calls per
  * field, eleven fields per `Token`, so about 12,000 calls to render the messages the app opens with (6% of a phone's
@@ -182,6 +227,7 @@ export default defineConfig(({ command }) => {
 			// Before markdownItUnusedRules, which changes the file this checks.
 			markdownItPlainFields(),
 			markdownItUnusedRules(),
+			markdownItUnusedParts(),
 			lucideSharedIcon(),
 			sveltekit({
 				compilerOptions: {
