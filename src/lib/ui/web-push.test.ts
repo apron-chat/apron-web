@@ -73,16 +73,20 @@ describe('web push', () => {
 	});
 
 	it('reads the shared fixtures\' server frames (protocol/tests/fixtures/push.json): webpush\'s own key and scopes, other kinds ignored', () => {
+		/** How this client reads the invalid ones: a version 11 server's version 10 key isn't read, and a missing `wake` reads as none listed (its defaults apply). */
+		const invalid: Record<string, { key?: string; offered: string[] }> = {
+			'webhook-without-signature-keys': { offered: [] },
+			'webpush-with-only-the-version-10-key': { offered: [] },
+			'webpush-without-wake': { key: 'BNcR', offered: [] },
+			'extension-kind-with-empty-wake': { offered: [] }
+		};
 		for (const { name, valid, frame } of pushFixtures.servers) {
 			const server = parseServerParams(frame.params as JsonObject);
 			const webpush = (frame.params.push as { webpush?: { vapid_key?: string; wake?: string[] } }).webpush;
-			if (valid) {
-				expect(webPushKey(server), name).toBe(webpush?.vapid_key);
-				expect(offeredWake(server), name).toEqual(webpush?.wake ?? []);
-			} else {
-				// Without `vapid_key`, a version 11 server offers no web push here.
-				expect(webPushKey(server), name).toBeUndefined();
-			}
+			const expected = valid ? { key: webpush?.vapid_key, offered: webpush?.wake ?? [] } : invalid[name];
+			expect(expected, `${name}: a case this test doesn't know`).toBeDefined();
+			expect(webPushKey(server), name).toBe(expected.key);
+			expect(offeredWake(server), name).toEqual(expected.offered);
 		}
 	});
 

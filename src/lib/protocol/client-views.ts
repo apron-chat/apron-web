@@ -379,8 +379,8 @@ export function mediaLimit(types: MediaTypes, type: string): MediaLimit | undefi
 
 /**
  * Whether to read a server's version 10 push fields (`server.push.wake`, `webpush.key`) where its
- * version 11 ones are missing: only from a server of an earlier version, as version 11 clients ignore
- * them (§4.9).
+ * version 11 ones are missing: only from a server of an earlier version (§4.9 lets clients read them
+ * from a version 10 server and ignore them from others; versions 8 and 9 sent the same fields).
  */
 function readsVersion10Push(server: ServerParams): boolean {
 	return server.apron < 11;
@@ -389,7 +389,7 @@ function readsVersion10Push(server: ServerParams): boolean {
 /**
  * The server's `webpush` push kind configuration (§4.9.3), if it offers one: its VAPID public key
  * (base64url, `vapid_key`) and the wake scopes it supports for it (`wake`, as the server lists them;
- * undefined when it lists none). From a server of version 10, which sent the key as `key` and the
+ * undefined when it lists none, which version 11 requires it to: its defaults apply). From a server of version 10, which sent the key as `key` and the
  * scopes at `server.push.wake`, those stand in for missing ones.
  */
 export function webPushConfig(server: ServerParams | undefined): { key: string; wake?: unknown[] } | undefined {
