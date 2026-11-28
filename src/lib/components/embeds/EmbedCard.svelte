@@ -2,6 +2,7 @@
 	import DesignEmbedCard from '$lib/design/components/EmbedCard.svelte';
 	import { safeLink } from '$lib/protocol/embeds';
 	import type { Embed } from '$lib/protocol/types';
+	import { animationSettings } from '$lib/ui/animation-settings.svelte';
 	import { directory } from '$lib/ui/directory.svelte';
 	import { loadableOg } from './og';
 
@@ -9,4 +10,4 @@
 	let { embed }: { embed: Embed } = $props();
 </script>
 
-<DesignEmbedCard kind={embed.kind} url={safeLink(embed.url)} title={embed.title} og={loadableOg(embed.og, directory.mediaGate)} />
+<DesignEmbedCard kind={embed.kind} url={safeLink(embed.url)} title={embed.title} og={loadableOg(embed.og, directory.mediaGate)} autoplay={animationSettings.autoplay} />

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from 'vitest';
+import { flushSync } from 'svelte';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import EmbedCard from './EmbedCard.svelte';
 import EmbedFrame from './EmbedFrame.svelte';
 import Embed from './Embed.svelte';
@@ -54,6 +55,90 @@ describe('EmbedUpload', () => {
 		render(EmbedUpload, { kind: 'upload', url: 'https://files.example/a.zip', title: 'a.zip' });
 		const plainCard = document.querySelector<HTMLAnchorElement>('a.ap-embed-file')!;
 		expect([plainCard.hasAttribute('title'), plainCard.hasAttribute('aria-haspopup')]).toEqual([false, false]);
+	});
+});
+
+describe('an animated image', () => {
+	const GIF = 'https://files.example/party.gif';
+	/** Loads the image as a browser would, at 40 × 30, with a canvas that records what it draws. */
+	function load(): ReturnType<typeof vi.fn> {
+		const drawImage = vi.fn();
+		vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({ drawImage } as unknown as CanvasRenderingContext2D);
+		const img = document.querySelector('img')!;
+		Object.defineProperties(img, { naturalWidth: { value: 40 }, naturalHeight: { value: 30 } });
+		img.dispatchEvent(new Event('load'));
+		flushSync();
+		return drawImage;
+	}
+
+	afterEach(() => {
+		vi.useRealTimers();
+		vi.restoreAllMocks();
+		vi.unstubAllGlobals();
+	});
+
+	it('plays 5 seconds from when it is first on screen loaded, then holds still on a canvas; its button plays it on and pauses it, and the picture still views it', () => {
+		vi.useFakeTimers();
+		let intersect: (entries: { isIntersecting: boolean }[]) => void = () => undefined;
+		vi.stubGlobal('IntersectionObserver', class {
+			constructor(callback: typeof intersect) {
+				intersect = callback;
+			}
+			observe() {}
+			disconnect() {}
+		});
+		const onview = vi.fn();
+		render(EmbedUpload, { kind: 'upload', url: GIF, title: 'party.gif', og: { image: { url: media(GIF), alt: 'A parrot', animated: true } }, onview });
+		// Loaded, as a lazy image is well before it's in view: its while waits for the screen.
+		const drawImage = load();
+		vi.advanceTimersByTime(20_000);
+		flushSync();
+		expect(document.querySelector('canvas')).toBeNull();
+		intersect([{ isIntersecting: true }]);
+		flushSync();
+		vi.advanceTimersByTime(4_999);
+		flushSync();
+		expect(document.querySelector('canvas')).toBeNull();
+		vi.advanceTimersByTime(1);
+		flushSync();
+		const still = document.querySelector('canvas')!;
+		expect([still.width, still.height, still.getAttribute('aria-label'), still.className]).toEqual([40, 30, 'A parrot', 'ap-embed-media']);
+		expect(drawImage).toHaveBeenCalledWith(document.querySelector('img'), 0, 0);
+		expect(document.querySelector('img')!.classList.contains('ap-anim-held')).toBe(true);
+		document.querySelector<HTMLAnchorElement>('a.ap-embed-imagelink')!.click();
+		expect(onview).toHaveBeenCalledOnce();
+		button('Play GIF party.gif').click();
+		vi.advanceTimersByTime(60_000);
+		flushSync();
+		expect(document.querySelector('canvas')).toBeNull();
+		button('Pause GIF party.gif').click();
+		flushSync();
+		expect(document.querySelector('canvas')).not.toBeNull();
+	});
+
+	it('without autoplay, holds still from the start, hidden until it has loaded (shown as it is if it fails); a card\'s has no button and stops after 5 seconds too; a still image is plain', () => {
+		render(EmbedUpload, { kind: 'upload', url: GIF, title: 'party.gif', og: { image: { url: media(GIF), animated: true } }, autoplay: false });
+		expect(document.querySelector('img')!.classList.contains('ap-anim-waiting')).toBe(true);
+		load();
+		expect(document.querySelector('canvas')?.getAttribute('aria-hidden')).toBe('true');
+		unmount();
+		render(EmbedUpload, { kind: 'upload', url: GIF, title: 'party.gif', og: { image: { url: media(GIF), animated: true } }, autoplay: false });
+		document.querySelector('img')!.dispatchEvent(new Event('error'));
+		flushSync();
+		expect([document.querySelector('img')!.className, document.querySelector('canvas')]).toEqual(['ap-embed-media', null]);
+		unmount();
+
+		vi.useFakeTimers();
+		render(EmbedCard, { kind: 'link', url: 'https://site.example/', og: { title: 'Party', image: { url: media(GIF), animated: true } } });
+		load();
+		vi.advanceTimersByTime(5_000);
+		flushSync();
+		expect(document.querySelector('canvas.ap-embed-ogimg')).not.toBeNull();
+		expect(document.querySelector('button')).toBeNull();
+		unmount();
+
+		render(EmbedUpload, { kind: 'upload', url: 'https://files.example/a.png', title: 'a.png', og: { image: { url: media(PIXEL) } }, autoplay: false });
+		expect([document.querySelector('button'), document.querySelector('img')!.className]).toEqual([null, 'ap-embed-media']);
 	});
 });
 

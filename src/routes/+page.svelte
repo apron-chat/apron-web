@@ -97,6 +97,7 @@
 	import { historySettings } from '$lib/history/settings.svelte';
 	import { mediaAskClick } from '$lib/ui/media-ask';
 	import { mediaSettings } from '$lib/ui/media-settings.svelte';
+	import { animationSettings } from '$lib/ui/animation-settings.svelte';
 	import { receiptSettings } from '$lib/ui/receipt-settings.svelte';
 	import { onlyPreferencesDiffer, preferencesOpener } from '$lib/ui/preferences.svelte';
 	import { nextRoomRow } from '$lib/ui/room-steps';
@@ -1464,6 +1465,7 @@
 		if (!previewMode) pushSettings.load();
 		// Where images load from holds for an export read here too.
 		mediaSettings.load();
+		animationSettings.load();
 		receiptSettings.load();
 		webPushAvailable = webPushSupported();
 		runsInstalled = isStandalone();
@@ -1474,6 +1476,7 @@
 			// Not keeping history, or keeping less, chosen in another tab: this one stops or prunes too.
 			historySettings.storageChanged(event.key);
 			mediaSettings.storageChanged(event.key);
+			animationSettings.storageChanged(event.key);
 			receiptSettings.storageChanged(event.key);
 			// A terminal closed, or shown again, in another tab is here too.
 			closedTerminals.storageChanged(event.key);

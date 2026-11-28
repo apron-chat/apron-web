@@ -1,16 +1,21 @@
 <script lang="ts">
 	/* upload (§4.8.4, writes §4.8.3): pending while url is absent; og.video / og.audio / og.image preview; else a file card,
-	   which a plain click shows full screen where `onpreview` is given (a Markdown file).
+	   which a plain click shows full screen where `onpreview` is given (a Markdown file). An animated image
+	   (`og.image.animated`) plays as `autoplay` says, and its corner button plays and pauses it; a click on the picture
+	   still shows it full screen, playing.
 	   A preview that waits for a click (its `ask`) shows under the file card as a MediaAsk. Its `class` and `testid` go on
 	   whichever of those shows, or on what holds the file card and the ask. */
 	import FileIcon from '@lucide/svelte/icons/file';
 	import FileX from '@lucide/svelte/icons/file-x';
+	import Pause from '@lucide/svelte/icons/pause';
+	import Play from '@lucide/svelte/icons/play';
+	import AnimatedImage, { PLAY_FOR } from './AnimatedImage.svelte';
 	import AudioPlayer from './AudioPlayer.svelte';
 	import MediaAsk from './MediaAsk.svelte';
 	import type { EmbedComponentProps } from './types';
 	import { ogRatio, plainClick, safeHttp } from './util';
 
-	let { url: rawUrl, title: rawTitle, og = {}, progress, failed, detail, onview, onpreview, viewer, class: className, testid }: EmbedComponentProps = $props();
+	let { url: rawUrl, title: rawTitle, og = {}, progress, failed, detail, onview, onpreview, viewer, autoplay = true, class: className, testid }: EmbedComponentProps = $props();
 	/**
 	 * A video fetches its poster and metadata only as it nears the screen, not every one in the history loaded
 	 * (`loading` on media: Chrome 148; others load as before). Spread, as Svelte's types don't know it on `<video>` yet.
@@ -25,6 +30,13 @@
 	const image = $derived(og.image && safeHttp(og.image.url));
 	/** The preview that waits for a click, the one that would show first: none while one may load. */
 	const ask = $derived(video || audio || image ? undefined : og.video?.ask ? { ...og.video.ask, what: 'Video', kind: 'video' as const } : og.audio?.ask ? { ...og.audio.ask, what: 'Audio', kind: 'audio' as const } : og.image?.ask ? { ...og.image.ask, what: og.image.alt || 'Image', kind: 'image' as const } : undefined);
+	/** An animated image held still: as `autoplay` says, until it has played its while or its button says otherwise. */
+	let paused = $derived(!autoplay);
+	/** Its button was pressed: it plays or holds as that says, until `autoplay` changes. */
+	let pressed = $derived.by(() => {
+		void autoplay;
+		return false;
+	});
 	const pending = $derived(failed ? (typeof failed === 'string' ? `Upload failed · ${failed}` : 'Upload failed') : `${detail ? `${detail} · ` : ''}${pct != null ? `Uploading · ${pct}%` : 'Uploading…'}`);
 </script>
 
@@ -52,10 +64,26 @@
 		<AudioPlayer src={audio} preload="none" label={title} />
 	</div>
 {:else if image}
-	<figure data-testid={testid} class={['ap-embed', 'ap-embed-figure', className]}>
-		<a data-viewer-src={viewer?.src} data-viewer-title={viewer?.title} data-viewer-alt={viewer?.alt} data-viewer-detail={viewer?.detail} data-viewer-width={viewer?.width} data-viewer-height={viewer?.height}
-			href={url} class="ap-embed-imagelink" target="_blank" rel="noreferrer noopener" aria-haspopup={onview ? 'dialog' : undefined} title={onview ? `View ${title}` : undefined}
-			onclick={(event) => { if (onview && plainClick(event)) { event.preventDefault(); onview(event); } }}><img class="ap-embed-media" src={image} alt={og.image?.alt || ''} loading="lazy" style={ogRatio(og.image)} /></a>
+	<figure data-testid={testid} class={['ap-embed', 'ap-embed-figure', og.image?.animated && 'ap-embed-animated', className]}>
+		{#snippet picture()}
+			<a data-viewer-src={viewer?.src} data-viewer-title={viewer?.title} data-viewer-alt={viewer?.alt} data-viewer-detail={viewer?.detail} data-viewer-width={viewer?.width} data-viewer-height={viewer?.height}
+				href={url} class="ap-embed-imagelink" target="_blank" rel="noreferrer noopener" aria-haspopup={onview ? 'dialog' : undefined} title={onview ? `View ${title}` : undefined}
+				onclick={(event) => { if (onview && plainClick(event)) { event.preventDefault(); onview(event); } }}>
+				{#if og.image?.animated && og.image.url}<AnimatedImage class="ap-embed-media" src={og.image.url} alt={og.image.alt} {paused} playFor={pressed ? undefined : PLAY_FOR} onstop={() => (paused = true)} loading="lazy" style={ogRatio(og.image)} />
+				{:else}<img class="ap-embed-media" src={image} alt={og.image?.alt || ''} loading="lazy" style={ogRatio(og.image)} />{/if}</a>
+		{/snippet}
+		{#if og.image?.animated}
+			<!-- The button goes after the link, not in it (a button can't be), over the picture: in its middle while it
+			     holds still, as what plays it; in its corner while it plays. -->
+			<div class="ap-embed-animbox">
+				{@render picture()}
+				<button type="button" class={['ap-embed-playtoggle', paused && 'ap-embed-playtoggle-still']} aria-label={paused ? `Play GIF ${title}` : `Pause GIF ${title}`} title={paused ? 'Play' : 'Pause'} onclick={() => { pressed = true; paused = !paused; }} data-testid="animation-toggle">
+					{#if paused}<Play size={12} aria-hidden="true" />{:else}<Pause size={12} aria-hidden="true" />{/if}<span class="ap-pill-label" aria-hidden="true">GIF</span>
+				</button>
+			</div>
+		{:else}
+			{@render picture()}
+		{/if}
 		<figcaption class="ap-embed-caption">{title}</figcaption>
 	</figure>
 {:else if ask}
