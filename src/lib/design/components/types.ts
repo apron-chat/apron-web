@@ -57,9 +57,9 @@ export interface EmbedProps {
 	 */
 	viewer?: Partial<Omit<MediaItem, 'href'>>;
 	/**
-	 * With an animated og.image (`og.image.animated`): whether it plays by itself (true when omitted). One that
-	 * doesn't shows its first frame. An upload's has a button to play and pause it, whatever this says; a card's, in
-	 * a link, has none.
+	 * With an animated og.image (`og.image.animated`): whether it plays by itself (true when omitted), for 10 seconds
+	 * (`PLAY_FOR`) before it holds still. One that doesn't shows its first frame. An upload's has a button to play it
+	 * on and pause it, whatever this says; a card's, in a link, has none.
 	 */
 	autoplay?: boolean;
 	/** terminal (§4.8.6): live while `url` is set and not `done`. A terminal's plain text without `attach`; on the fallback card, a note in place of a link (EmbedFrame's, for an address it can't use). */

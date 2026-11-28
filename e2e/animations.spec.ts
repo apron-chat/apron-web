@@ -45,6 +45,26 @@ test.describe('where the device doesn’t ask for reduced motion', () => {
 	});
 });
 
+test.describe('a GIF that plays by itself', () => {
+	test.use({ reducedMotion: 'no-preference' });
+
+	test('holds still after 10 seconds, and a Play press then plays it on', async ({ preview, page }) => {
+		await page.clock.install();
+		await preview.open();
+		await postGif(preview);
+		const figure = page.locator('figure.ap-embed-animated');
+		await expect(figure.locator('img.ap-embed-media')).toBeVisible();
+		await page.clock.runFor(9_000);
+		await expect(figure.getByTestId('animation-still')).toHaveCount(0);
+		await page.clock.runFor(1_000);
+		await expect(figure.getByTestId('animation-still')).toBeVisible();
+		await figure.getByRole('button', { name: 'Play party.gif' }).click();
+		await page.clock.runFor(60_000);
+		await expect(figure.locator('img.ap-embed-media')).toBeVisible();
+		await expect(figure.getByTestId('animation-still')).toHaveCount(0);
+	});
+});
+
 test.describe('where the device asks for reduced motion', () => {
 	test.use({ reducedMotion: 'reduce' });
 

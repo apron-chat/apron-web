@@ -9,7 +9,7 @@
 	import FileX from '@lucide/svelte/icons/file-x';
 	import Pause from '@lucide/svelte/icons/pause';
 	import Play from '@lucide/svelte/icons/play';
-	import AnimatedImage from './AnimatedImage.svelte';
+	import AnimatedImage, { PLAY_FOR } from './AnimatedImage.svelte';
 	import AudioPlayer from './AudioPlayer.svelte';
 	import MediaAsk from './MediaAsk.svelte';
 	import type { EmbedComponentProps } from './types';
@@ -30,8 +30,10 @@
 	const image = $derived(og.image && safeHttp(og.image.url));
 	/** The preview that waits for a click, the one that would show first: none while one may load. */
 	const ask = $derived(video || audio || image ? undefined : og.video?.ask ? { ...og.video.ask, what: 'Video', kind: 'video' as const } : og.audio?.ask ? { ...og.audio.ask, what: 'Audio', kind: 'audio' as const } : og.image?.ask ? { ...og.image.ask, what: og.image.alt || 'Image', kind: 'image' as const } : undefined);
-	/** An animated image held still: as `autoplay` says, until its button says otherwise. */
+	/** An animated image held still: as `autoplay` says, until it has played its while or its button says otherwise. */
 	let paused = $derived(!autoplay);
+	/** Its button was pressed: it plays or holds as that says, for as long as it does. */
+	let pressed = $state(false);
 	const pending = $derived(failed ? (typeof failed === 'string' ? `Upload failed · ${failed}` : 'Upload failed') : `${detail ? `${detail} · ` : ''}${pct != null ? `Uploading · ${pct}%` : 'Uploading…'}`);
 </script>
 
@@ -63,11 +65,11 @@
 		<a data-viewer-src={viewer?.src} data-viewer-title={viewer?.title} data-viewer-alt={viewer?.alt} data-viewer-detail={viewer?.detail} data-viewer-width={viewer?.width} data-viewer-height={viewer?.height}
 			href={url} class="ap-embed-imagelink" target="_blank" rel="noreferrer noopener" aria-haspopup={onview ? 'dialog' : undefined} title={onview ? `View ${title}` : undefined}
 			onclick={(event) => { if (onview && plainClick(event)) { event.preventDefault(); onview(event); } }}>
-			{#if og.image?.animated && og.image.url}<AnimatedImage class="ap-embed-media" src={og.image.url} alt={og.image.alt} {paused} loading="lazy" style={ogRatio(og.image)} />
+			{#if og.image?.animated && og.image.url}<AnimatedImage class="ap-embed-media" src={og.image.url} alt={og.image.alt} {paused} playFor={pressed ? undefined : PLAY_FOR} onstop={() => (paused = true)} loading="lazy" style={ogRatio(og.image)} />
 			{:else}<img class="ap-embed-media" src={image} alt={og.image?.alt || ''} loading="lazy" style={ogRatio(og.image)} />{/if}</a>
 		{#if og.image?.animated}
 			<!-- After the link, not in it (a button can't be), over the picture's corner. -->
-			<button type="button" class="ap-embed-playtoggle" aria-label={paused ? `Play ${title}` : `Pause ${title}`} title={paused ? 'Play' : 'Pause'} onclick={() => (paused = !paused)} data-testid="animation-toggle">
+			<button type="button" class="ap-embed-playtoggle" aria-label={paused ? `Play ${title}` : `Pause ${title}`} title={paused ? 'Play' : 'Pause'} onclick={() => { pressed = true; paused = !paused; }} data-testid="animation-toggle">
 				{#if paused}<Play size={12} aria-hidden="true" />{:else}<Pause size={12} aria-hidden="true" />{/if}<span class="ap-pill-label" aria-hidden="true">GIF</span>
 			</button>
 		{/if}

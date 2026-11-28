@@ -95,6 +95,38 @@ describe('an animated image', () => {
 		vi.restoreAllMocks();
 	});
 
+	it('holds still 10 seconds after it has loaded, and so does a card\'s; once played with its button, it plays on', () => {
+		vi.useFakeTimers();
+		render(EmbedUpload, { kind: 'upload', url: GIF, title: 'party.gif', og: { image: { url: media(GIF), animated: true } } });
+		vi.advanceTimersByTime(20_000);
+		flushSync();
+		// The while starts once it has loaded, as a lazy image does near the screen.
+		expect(document.querySelector('canvas')).toBeNull();
+		load();
+		vi.advanceTimersByTime(9_999);
+		flushSync();
+		expect(document.querySelector('canvas')).toBeNull();
+		vi.advanceTimersByTime(1);
+		flushSync();
+		expect(document.querySelector('canvas')).not.toBeNull();
+		button('Play party.gif').click();
+		flushSync();
+		vi.advanceTimersByTime(60_000);
+		flushSync();
+		expect(document.querySelector('canvas')).toBeNull();
+		expect(button('Pause party.gif')).toBeDefined();
+		unmount();
+		vi.restoreAllMocks();
+
+		render(EmbedCard, { kind: 'link', url: 'https://site.example/', og: { title: 'Party', image: { url: media(GIF), animated: true } } });
+		load();
+		vi.advanceTimersByTime(10_000);
+		flushSync();
+		expect(document.querySelector('canvas.ap-embed-ogimg')).not.toBeNull();
+		vi.useRealTimers();
+		vi.restoreAllMocks();
+	});
+
 	it('holds still without autoplay, hidden until it has loaded, and so does a card\'s, which has no button', () => {
 		render(EmbedUpload, { kind: 'upload', url: GIF, title: 'party.gif', og: { image: { url: media(GIF), animated: true } }, autoplay: false });
 		expect(document.querySelector('img')!.classList.contains('ap-anim-waiting')).toBe(true);
