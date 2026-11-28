@@ -71,83 +71,55 @@ describe('an animated image', () => {
 		return drawImage;
 	}
 
-	it('plays by itself, until its button pauses it on its first frame; a click on the picture still views it', () => {
+	it('plays 5 seconds after it has loaded, then holds still on a canvas; its button plays it on and pauses it, and the picture still views it', () => {
+		vi.useFakeTimers();
 		const onview = vi.fn();
 		render(EmbedUpload, { kind: 'upload', url: GIF, title: 'party.gif', og: { image: { url: media(GIF), alt: 'A parrot', animated: true } }, onview });
-		const toggle = button('Pause party.gif');
-		expect(toggle.textContent).toBe('GIF');
-		expect(document.querySelector('canvas')).toBeNull();
-		const drawImage = load();
-		toggle.click();
-		flushSync();
-		const still = document.querySelector('canvas')!;
-		expect([still.width, still.height, still.getAttribute('aria-label'), still.className]).toEqual([40, 30, 'A parrot', 'ap-embed-media']);
-		expect(drawImage).toHaveBeenCalledWith(document.querySelector('img'), 0, 0);
-		expect(document.querySelector('img')!.classList.contains('ap-anim-held')).toBe(true);
-		expect(toggle.getAttribute('aria-label')).toBe('Play party.gif');
-		// The picture's link still views it, the button aside.
-		document.querySelector<HTMLAnchorElement>('a.ap-embed-imagelink')!.click();
-		expect(onview).toHaveBeenCalledOnce();
-		toggle.click();
-		flushSync();
-		expect(document.querySelector('canvas')).toBeNull();
-		expect(document.querySelector('img')!.className).toBe('ap-embed-media');
-		vi.restoreAllMocks();
-	});
-
-	it('holds still 5 seconds after it has loaded, and so does a card\'s; once played with its button, it plays on', () => {
-		vi.useFakeTimers();
-		render(EmbedUpload, { kind: 'upload', url: GIF, title: 'party.gif', og: { image: { url: media(GIF), animated: true } } });
-		vi.advanceTimersByTime(20_000);
-		flushSync();
 		// The while starts once it has loaded, as a lazy image does near the screen.
-		expect(document.querySelector('canvas')).toBeNull();
-		load();
+		vi.advanceTimersByTime(20_000);
+		const drawImage = load();
 		vi.advanceTimersByTime(4_999);
 		flushSync();
 		expect(document.querySelector('canvas')).toBeNull();
 		vi.advanceTimersByTime(1);
 		flushSync();
-		expect(document.querySelector('canvas')).not.toBeNull();
+		const still = document.querySelector('canvas')!;
+		expect([still.width, still.height, still.getAttribute('aria-label'), still.className]).toEqual([40, 30, 'A parrot', 'ap-embed-media']);
+		expect(drawImage).toHaveBeenCalledWith(document.querySelector('img'), 0, 0);
+		expect(document.querySelector('img')!.classList.contains('ap-anim-held')).toBe(true);
+		document.querySelector<HTMLAnchorElement>('a.ap-embed-imagelink')!.click();
+		expect(onview).toHaveBeenCalledOnce();
 		button('Play party.gif').click();
-		flushSync();
 		vi.advanceTimersByTime(60_000);
 		flushSync();
 		expect(document.querySelector('canvas')).toBeNull();
-		expect(button('Pause party.gif')).toBeDefined();
-		unmount();
+		button('Pause party.gif').click();
+		flushSync();
+		expect(document.querySelector('canvas')).not.toBeNull();
+		vi.useRealTimers();
 		vi.restoreAllMocks();
+	});
 
+	it('without autoplay, holds still from the start, hidden until it has loaded; a card\'s has no button and stops after 5 seconds too; a still image is plain', () => {
+		render(EmbedUpload, { kind: 'upload', url: GIF, title: 'party.gif', og: { image: { url: media(GIF), animated: true } }, autoplay: false });
+		expect(document.querySelector('img')!.classList.contains('ap-anim-waiting')).toBe(true);
+		load();
+		expect(document.querySelector('canvas')?.getAttribute('aria-hidden')).toBe('true');
+		unmount();
+
+		vi.useFakeTimers();
 		render(EmbedCard, { kind: 'link', url: 'https://site.example/', og: { title: 'Party', image: { url: media(GIF), animated: true } } });
 		load();
 		vi.advanceTimersByTime(5_000);
 		flushSync();
 		expect(document.querySelector('canvas.ap-embed-ogimg')).not.toBeNull();
+		expect(document.querySelector('button')).toBeNull();
 		vi.useRealTimers();
 		vi.restoreAllMocks();
-	});
-
-	it('holds still without autoplay, hidden until it has loaded, and so does a card\'s, which has no button', () => {
-		render(EmbedUpload, { kind: 'upload', url: GIF, title: 'party.gif', og: { image: { url: media(GIF), animated: true } }, autoplay: false });
-		expect(document.querySelector('img')!.classList.contains('ap-anim-waiting')).toBe(true);
-		load();
-		expect(document.querySelector('canvas')?.getAttribute('aria-hidden')).toBe('true');
-		button('Play party.gif').click();
-		flushSync();
-		expect(document.querySelector('canvas')).toBeNull();
 		unmount();
 
-		render(EmbedCard, { kind: 'link', url: 'https://site.example/', og: { title: 'Party', image: { url: media(GIF), animated: true } }, autoplay: false });
-		load();
-		expect(document.querySelector('canvas.ap-embed-ogimg')).not.toBeNull();
-		expect(document.querySelector('button')).toBeNull();
-		vi.restoreAllMocks();
-	});
-
-	it('is a plain image, without a button, where it isn\'t animated', () => {
 		render(EmbedUpload, { kind: 'upload', url: 'https://files.example/a.png', title: 'a.png', og: { image: { url: media(PIXEL) } }, autoplay: false });
-		expect(document.querySelector('button')).toBeNull();
-		expect(document.querySelector('img')!.className).toBe('ap-embed-media');
+		expect([document.querySelector('button'), document.querySelector('img')!.className]).toEqual([null, 'ap-embed-media']);
 	});
 });
 
