@@ -17,7 +17,7 @@
 
 {#snippet card(className: EmbedComponentProps['class'], testid: string | undefined)}
 	<svelte:element this={url ? 'a' : 'div'} href={url} rel={url ? 'noreferrer noopener' : undefined} target={url ? '_blank' : undefined} data-testid={testid} class={['ap-embed', 'ap-embed-ogcard', img && 'ap-embed-ogcard-img', className]}>
-		{#if img && og.image?.animated}<AnimatedImage class="ap-embed-ogimg" src={img} alt={og.image.alt} paused={props.autoplay === false} loading="lazy" />
+		{#if img && og.image?.animated && og.image.url}<AnimatedImage class="ap-embed-ogimg" src={og.image.url} alt={og.image.alt} paused={props.autoplay === false} loading="lazy" />
 		{:else if img}<img class="ap-embed-ogimg" src={img} alt={og.image?.alt || ''} loading="lazy" />{/if}
 		<span class="ap-embed-cardtext">
 			{#if og.site_name}<span class="ap-embed-site">{og.site_name}</span>{/if}

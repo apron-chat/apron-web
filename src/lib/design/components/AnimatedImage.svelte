@@ -3,8 +3,9 @@
 	   canvas draws of one), on a canvas in its place with its class and style. One paused before it has
 	   loaded stays hidden until then (still taking its room, so it loads as a lazy image does), so it never moves.
 	   A canvas may draw an image from another site: it only can't be read back, which this never does. */
+	import type { MediaSrc } from './util';
 	let { src, alt = '', paused = false, loading, class: className, style }: {
-		src: string;
+		src: MediaSrc;
 		alt?: string;
 		paused?: boolean;
 		loading?: 'lazy' | 'eager';
