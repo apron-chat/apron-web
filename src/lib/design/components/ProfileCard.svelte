@@ -1,14 +1,12 @@
 <script lang="ts">
 	import AtSign from '@lucide/svelte/icons/at-sign';
 	import Copy from '@lucide/svelte/icons/copy';
-	import Hash from '@lucide/svelte/icons/hash';
 	import MessageCircle from '@lucide/svelte/icons/message-circle';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 	import UserPlus from '@lucide/svelte/icons/user-plus';
 	import type { Snippet } from 'svelte';
 	import type { ClassValue } from 'svelte/elements';
 	import Avatar from './Avatar.svelte';
-	import Button from './Button.svelte';
 	import Popover from './Popover.svelte';
 	import RoleBadges from './RoleBadges.svelte';
 	import type { PopoverPlacement, Presence } from './types';
@@ -17,9 +15,9 @@
 	/**
 	 * Who a mention, a sender or a member is, in a Popover: their avatar, name,
 	 * `@user_id` (always, here: this is where people check who someone really
-	 * is, §3.3), status (and when they were last seen, while offline) on one line, roles, bio, and what you can do with
-	 * them (Message, Mention), as equal buttons side by side. Below a rule, the open room: whether they're in it, with
-	 * Add beside it when they aren't, since that's what it's about.
+	 * is, §3.3), status (and when they were last seen, while offline) on one line, roles, bio, and whether they're in
+	 * the open room. Below a rule, what you can do with them, as a list of the same rows (Message, Mention, Add to
+	 * room), each an icon and its words; Add says under its words why, when the card knows they aren't in the room.
 	 */
 	interface Props extends PopoverPlacement {
 		/** Closes it: on a phone, a press on the dimmed page behind the sheet. */
@@ -86,6 +84,7 @@
 		/** A `data-testid` for the bio. */
 		bioTestid?: string;
 	}
+	const uid = $props.id();
 	let {
 		userId, name, avatar, you = false, status, statusLabel, seen, roles, bio, bioBody, sharesName = false, membership, onmessage, messaging = false, onmention, oncopyid, onaddtoroom, adding = false, note,
 		element = $bindable(), offsetHeight = $bindable(0), statusTestid, seenTestid, rolesTestid, bioTestid, mode, top, left, width, height, class: className, testid, onkeydown, onfocusout, onclose
@@ -123,17 +122,12 @@
 		<p class="ap-profcard-warn" role="note"><TriangleAlert size={15} aria-hidden="true" /><span>Another user also shows as <strong>{shownName}</strong>. Check the @user_id.</span></p>
 	{/if}
 	{#if bio}<p class="ap-profcard-bio" dir="auto" data-testid={bioTestid}>{#if bioBody}{@render bioBody()}{:else}{bio}{/if}</p>{/if}
-	{#if onmessage || onmention}
+	{#if membership && !onaddtoroom}<p class="ap-profcard-note">{membership}</p>{/if}
+	{#if onmessage || onmention || onaddtoroom}
 		<div class="ap-profcard-actions">
-			{#if onmessage}<Button variant="primary" size="sm" disabled={messaging} onclick={onmessage}><MessageCircle size={15} aria-hidden="true" />{messaging ? 'Opening…' : 'Message'}</Button>{/if}
-			{#if onmention}<Button size="sm" onclick={onmention}><AtSign size={15} aria-hidden="true" />Mention</Button>{/if}
-		</div>
-	{/if}
-	{#if membership || onaddtoroom}
-		<div class="ap-profcard-room">
-			<Hash size={15} aria-hidden="true" />
-			<span class="ap-profcard-membership">{membership}</span>
-			{#if onaddtoroom}<Button size="sm" class="ap-profcard-add" disabled={adding} aria-label={adding ? undefined : 'Add to room'} onclick={onaddtoroom}><UserPlus size={15} aria-hidden="true" />{adding ? 'Adding…' : 'Add'}</Button>{/if}
+			{#if onmessage}<button type="button" class="ap-profcard-action" disabled={messaging} onclick={onmessage}><span class="ap-profcard-action-icon"><MessageCircle size={16} aria-hidden="true" /></span><span class="ap-profcard-action-text">{messaging ? 'Opening…' : 'Message'}</span></button>{/if}
+			{#if onmention}<button type="button" class="ap-profcard-action" onclick={onmention}><span class="ap-profcard-action-icon"><AtSign size={16} aria-hidden="true" /></span><span class="ap-profcard-action-text">Mention</span></button>{/if}
+			{#if onaddtoroom}<button type="button" class="ap-profcard-action" disabled={adding} aria-label={adding ? 'Adding…' : 'Add to room'} aria-describedby={membership ? `${uid}-membership` : undefined} onclick={onaddtoroom}><span class="ap-profcard-action-icon"><UserPlus size={16} aria-hidden="true" /></span><span class="ap-profcard-action-text">{adding ? 'Adding…' : 'Add to room'}</span>{#if membership}<span class="ap-profcard-action-sub" id="{uid}-membership" aria-hidden="true">{membership}</span>{/if}</button>{/if}
 		</div>
 	{/if}
 	{#if note}<p class={['ap-profcard-note', note.error && 'ap-tone-danger']} role={note.error ? 'alert' : 'status'}>{note.text}</p>{/if}

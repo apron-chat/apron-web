@@ -8,7 +8,7 @@ body { margin: 0; font-family: var(--font-sans); font-size: var(--text-body); li
    neighbours. A field rings its own border, which takes the color too (.ap-field); the composer and a message being
    edited light their frame instead, and a panel's handle its border. */
 :where(.ap-btn, .ap-cmdref-use, .ap-embed-remove, .ap-link, .ap-dialog-titlebtn, .ap-thread, .ap-composer-field, .ap-embed-card, .ap-embed-url, .ap-actions-btn, .ap-jumpbar-btn, .ap-jumpfab, .ap-sect-toggle, .ap-roomhead-back, .ap-roomhead-crumb, .ap-profile-me, .ap-shell-sidehead-return, .ap-shell-sidehead-open, .ap-field, .ap-reply, .ap-choice-item, .ap-msg-check, .ap-msg-who, .ap-member-who, .ap-iconbtn, .ap-foldpill, .ap-rchip, .ap-switch, .ap-description-toggle, .ap-attachment-rename, .ap-viewer-btn, .ap-embed-ogcard, .ap-embed-imagelink, button.ap-mention, a.ap-linkchip, .ap-pick-chip-remove, .ap-audio-play, .ap-audio-rate, .ap-audio-seek, .ap-embed-audiotitle, .ap-task, .ap-spoiler):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
-:where(.ap-room, .ap-room-exit, .ap-room-join, .ap-menu-item, .ap-seg-item, .ap-connect-recent-item, .ap-font-option, .ap-font-load, .ap-preferences-nav button, .ap-profedit-upload):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset-inset); }
+:where(.ap-room, .ap-room-exit, .ap-room-join, .ap-menu-item, .ap-seg-item, .ap-connect-recent-item, .ap-font-option, .ap-font-load, .ap-preferences-nav button, .ap-profedit-upload, .ap-profcard-action):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset-inset); }
 /* The people picker's field rings itself while its input has the keyboard, as a field does. */
 .ap-pick-field:has(.ap-pick-input:focus-visible) { outline: var(--focus-ring); outline-offset: var(--focus-offset); border-color: var(--focus); }
 /* Disabled — one fade, whatever the control. */
@@ -1321,13 +1321,18 @@ html[data-keyboard] .ap-shell-viewport .ap-composer { margin-bottom: var(--space
 .ap-profcard-bio a { color: var(--denim); }
 .ap-profcard-warn { display: flex; align-items: flex-start; gap: var(--space-2); padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); background: color-mix(in srgb, var(--warn) 12%, transparent); color: var(--ink); font-size: var(--text-sm); line-height: var(--leading-sm); }
 .ap-profcard-warn > svg { flex: none; margin-top: 2px; color: var(--warn); }
-/* Message and Mention: the same size, side by side, filling the row; one alone fills it. */
-.ap-profcard-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: var(--space-2); }
-.ap-profcard-actions .ap-btn { justify-content: center; min-width: 0; }
-.ap-profcard-room { display: flex; align-items: center; gap: var(--space-2); min-height: var(--control-md); margin: 0 calc(-1 * var(--profcard-pad)); padding: var(--space-3) var(--profcard-pad) 0; border-top: 1px solid var(--line); color: var(--ink-muted); font-size: var(--text-ui); line-height: var(--leading-ui); }
-.ap-profcard-room > svg { flex: none; }
-.ap-profcard-membership { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.ap-profcard-room .ap-btn.ap-profcard-add { flex: none; height: var(--control-sm); padding: 0 var(--space-3); font-size: var(--text-sm); }
+/*
+ * What you can do with them: a list of the same rows under a rule across the card, each its icon and words, the
+ * icon centred on the words' first line whatever follows, and in line with the text above. The last row's padding is
+ * taken back from the card's, so its words sit as far from the card's edge as the name does from the top.
+ */
+.ap-profcard-actions { --profcard-row-y: var(--space-2); display: flex; flex-direction: column; margin: 0 calc(-1 * var(--profcard-pad)) calc(-1 * var(--profcard-row-y)); padding: var(--space-2) calc(var(--profcard-pad) - var(--space-2)) 0; border-top: 1px solid var(--line); }
+.ap-profcard-action { font: inherit; display: grid; grid-template-columns: 16px minmax(0, 1fr); column-gap: var(--space-3); align-items: start; width: 100%; padding: var(--profcard-row-y) var(--space-2); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink); font-size: var(--text-ui); line-height: var(--leading-ui); font-weight: 500; text-align: left; cursor: pointer; }
+.ap-profcard-action:hover:not(:disabled) { background: var(--hover); }
+.ap-profcard-action:disabled { color: var(--ink-muted); cursor: default; }
+.ap-profcard-action-icon { display: grid; place-items: center; height: var(--leading-ui); color: var(--ink-muted); }
+.ap-profcard-action-text { min-width: 0; overflow-wrap: anywhere; }
+.ap-profcard-action-sub { grid-column: 2; color: var(--ink-muted); font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 400; overflow-wrap: anywhere; }
 
 /* ReactorsPopover — who reacted with an emoji; the list scrolls past 320px, so a crowd doesn't run off the screen */
 .ap-reactors { gap: var(--space-2); padding: var(--space-3); }

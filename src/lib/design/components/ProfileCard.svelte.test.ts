@@ -90,33 +90,31 @@ describe('ProfileCard', () => {
 	it('offers only the actions it is given, and says Add to room is in flight', () => {
 		const noop = () => undefined;
 		const box = render({ userId: 'ada', onmention: noop, oncopyid: noop, onaddtoroom: noop, adding: true, note: { text: 'Nope', error: true } });
-		expect([...box.querySelectorAll('.ap-profcard-actions button')].map((b) => b.textContent)).toEqual(['Mention']);
-		// Add sits on the room's line, beside whether they're in it.
-		expect(dom.button('Adding…', box).closest('.ap-profcard-room')).not.toBeNull();
+		expect([...box.querySelectorAll('.ap-profcard-actions button')].map((b) => b.textContent)).toEqual(['Mention', 'Adding…']);
 		expect(dom.button('Adding…', box).disabled).toBe(true);
 		expect(dom.byRole('alert', undefined, box).textContent).toBe('Nope');
 	});
 
-	it('says whether they are in the room on its own line, with Add, named Add to room, only when given', () => {
+	it('says under Add to room that they are not in it, as its description; else says whether they are on a line of its own', () => {
 		const onaddtoroom = vi.fn();
 		let box = render({ userId: 'ada', membership: 'Not in design', onaddtoroom });
-		const room = box.querySelector('.ap-profcard-room')!;
-		expect(room.querySelector('.ap-profcard-membership')?.textContent).toBe('Not in design');
-		dom.button('Add to room', box).click();
+		const add = dom.button('Add to room', box);
+		const sub = add.querySelector('.ap-profcard-action-sub')!;
+		expect(sub.textContent).toBe('Not in design');
+		expect(add.getAttribute('aria-describedby')).toBe(sub.id);
+		expect(box.querySelector('.ap-profcard-note')).toBeNull();
+		add.click();
 		expect(onaddtoroom).toHaveBeenCalledOnce();
 		dom.unmount();
 		box = render({ userId: 'ada', membership: 'Member of design' });
-		expect(box.querySelector('.ap-profcard-room button')).toBeNull();
-		dom.unmount();
-		expect(render({ userId: 'ada' }).querySelector('.ap-profcard-room')).toBeNull();
+		expect(box.querySelector('.ap-profcard-note')?.textContent).toBe('Member of design');
+		expect(box.querySelector('.ap-profcard-actions')).toBeNull();
 	});
 
-	it('leads with Message, the primary action, which says when it is opening', () => {
+	it('leads with Message, which says when it is opening', () => {
 		const noop = () => undefined;
 		let box = render({ userId: 'bob', onmessage: noop, onmention: noop, oncopyid: noop });
 		expect([...box.querySelectorAll('.ap-profcard-actions button')].map((b) => b.textContent)).toEqual(['Message', 'Mention']);
-		expect(dom.button('Message', box).classList.contains('ap-btn-primary')).toBe(true);
-		expect(dom.button('Mention', box).classList.contains('ap-btn-primary')).toBe(false);
 		dom.unmount();
 		box = render({ userId: 'bob', onmessage: noop, messaging: true });
 		expect(dom.button('Opening…', box).disabled).toBe(true);
