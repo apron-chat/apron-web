@@ -7,6 +7,9 @@ import { DEVICES, expect, test, type Preview } from './fixtures';
  */
 
 const pinned = (preview: Preview) => preview.page.getByTestId('pane-description');
+/** A description longer than its first lines under the header show: Read all opens the whole. */
+const LONG = ['Say hello.', '', ...Array.from({ length: 12 }, (_, n) => `- Rule ${n + 1}`)].join('\n');
+const readAll = (preview: Preview) => preview.page.getByRole('button', { name: 'Read all', exact: true });
 const button = (preview: Preview) => preview.page.getByTestId('show-description');
 const UPDATED = /ap-roomhead-description-updated/;
 
@@ -116,9 +119,9 @@ test.describe('a description read and edited where it shows', () => {
 
 	test('Read all shows the whole; Edit turns it into its editor in the same place, Save sends it, and once read the first lines retire', async ({ preview, page }) => {
 		await preview.open();
-		await preview.describe('general', ['Say hello.', '', ...Array.from({ length: 12 }, (_, n) => `- Rule ${n + 1}`)].join('\n'));
+		await preview.describe('general', LONG);
 		const sheet = page.getByTestId('description-sheet');
-		await page.getByRole('button', { name: 'Read all', exact: true }).click();
+		await readAll(preview).click();
 		await expect(sheet.getByTestId('sheet-description').locator('li')).toHaveCount(12);
 		// Under the sheet, the conversation is out of reach until it shuts.
 		await expect(page.getByTestId('message-list')).toHaveJSProperty('inert', true);
@@ -177,12 +180,80 @@ test.describe('a description read and edited where it shows', () => {
 	});
 });
 
+test.describe('a description its first lines show all of', () => {
+	test.use(DEVICES.desktop);
+
+	test('offers no Read all and opens nothing from a click; its pencil edits it, and shut, its first lines stay', async ({ preview, page }) => {
+		await preview.open();
+		await preview.describe('general', 'Say hello, and keep it kind.');
+		const sheet = page.getByTestId('description-sheet');
+		await expect(pinned(preview)).toHaveText('Say hello, and keep it kind.');
+		await expect(readAll(preview)).toHaveCount(0);
+		await pinned(preview).click();
+		await expect(sheet).toHaveCount(0);
+
+		const pencil = page.getByRole('button', { name: 'Edit description', exact: true });
+		await pencil.click();
+		await expect(sheet.getByTestId('description-input')).toBeFocused();
+		// Escape steps back to reading it, where Show less would fold it into the same lines: none.
+		await page.keyboard.press('Escape');
+		await expect(sheet.getByTestId('sheet-description')).toHaveText('Say hello, and keep it kind.');
+		await expect(sheet.getByRole('button', { name: 'Show less' })).toHaveCount(0);
+		// Shut, its first lines showed it all: they stay, and the keyboard goes back to the pencil.
+		await page.keyboard.press('Escape');
+		await expect(sheet).toHaveCount(0);
+		await expect(pinned(preview)).toBeVisible();
+		await expect(pencil).toBeFocused();
+		await expect(button(preview)).toHaveCount(0);
+	});
+
+	test('put away, Description shows it whole, where Show less brings its first lines back', async ({ preview, page }) => {
+		await putAway(preview);
+		await preview.describe('general', 'Say hello, and keep it kind.');
+		const sheet = page.getByTestId('description-sheet');
+		await button(preview).click();
+		await sheet.getByRole('button', { name: 'Show less' }).click();
+		await expect(sheet).toHaveCount(0);
+		await expect(pinned(preview)).toHaveText('Say hello, and keep it kind.');
+		await expect(readAll(preview)).toHaveCount(0);
+	});
+});
+
+test.describe('a description at the lengths where its first lines just get cut, on a phone', () => {
+	test.use(DEVICES.phone);
+
+	test('offers Show less read whole exactly where its first lines offered Read all, and only then retires them', async ({ preview, page }) => {
+		await preview.open();
+		const sheet = page.getByTestId('description-sheet');
+		const words = (n: number) => Array.from({ length: n }, (_, i) => `word${i}`).join(' ');
+		let seen = { cut: 0, whole: 0 };
+		for (let n = 8; n <= 64; n += 4) {
+			await preview.describe('general', words(n));
+			await expect(pinned(preview)).toContainText(`word${n - 1}`);
+			await page.waitForTimeout(100);
+			if ((await readAll(preview).count()) === 0) {
+				seen.whole++;
+				continue;
+			}
+			seen.cut++;
+			await readAll(preview).click();
+			await expect(sheet.getByRole('button', { name: 'Show less' })).toBeVisible();
+			await sheet.getByRole('button', { name: 'Show less' }).click();
+			await expect(pinned(preview)).toBeVisible();
+		}
+		// The sweep crossed the cut: some lengths showed whole, some cut off.
+		expect(seen.cut).toBeGreaterThan(0);
+		expect(seen.whole).toBeGreaterThan(0);
+	});
+});
+
 test.describe('the description over the conversation, as the pane moves on', () => {
 	test.use(DEVICES.desktop);
 
 	test('opening another room shuts it without counting that room’s description as read', async ({ preview, page }) => {
 		await preview.open();
 		await preview.describe('engineering', 'Builds, deploys and the on-call rotation.');
+		await preview.describe('general', LONG);
 		await page.getByTestId('pane-description').click();
 		await expect(page.getByTestId('description-sheet')).toBeVisible();
 		await preview.openRoom('engineering');
@@ -256,9 +327,9 @@ test.describe('the description read on a phone', () => {
 	test.use(DEVICES.phone);
 
 	test('is as tall as it reads, the room dimmed below it, where a tap shuts it; its header holds only its own buttons', async ({ preview, page }) => {
-		await preview.open();
+		await putAway(preview);
 		await preview.describe('general', 'Say hello, and keep it kind.');
-		await page.getByTestId('pane-description').click();
+		await page.locator('.ap-roomhead-name').click();
 		const sheet = page.getByTestId('description-sheet');
 		await expect(sheet).toBeVisible();
 		const [box, pane] = [await sheet.boundingBox(), await page.locator('main.ap-shell-main').boundingBox()];
@@ -273,20 +344,21 @@ test.describe('the description read on a phone', () => {
 test.describe('the description read whole', () => {
 	test.use(DEVICES.desktop);
 
-	test('folds back into its first lines with ⌃ at its foot, there again once read and on the next visit', async ({ preview, page }) => {
+	test('folds back into its first lines with Show less at its foot, there again once read and on the next visit', async ({ preview, page }) => {
 		await preview.open();
+		await preview.describe('general', LONG);
 		const sheet = page.getByTestId('description-sheet');
 		await pinned(preview).click();
 		await expect(sheet).toBeVisible();
-		await sheet.getByRole('button', { name: 'Fold into preview' }).click();
+		await sheet.getByRole('button', { name: 'Show less' }).click();
 		await expect(sheet).toHaveCount(0);
 		await expect(pinned(preview)).toBeVisible();
-		// Shut with × instead, the first lines retire; Description opens it, and ⌃ brings them back.
+		// Shut with × instead, the first lines retire; Description opens it, and Show less brings them back.
 		await pinned(preview).click();
 		await page.getByRole('button', { name: 'Close description' }).click();
 		await expect(pinned(preview)).toHaveCount(0);
 		await button(preview).click();
-		await sheet.getByRole('button', { name: 'Fold into preview' }).click();
+		await sheet.getByRole('button', { name: 'Show less' }).click();
 		await expect(pinned(preview)).toBeVisible();
 		await page.reload();
 		await expect(pinned(preview)).toBeVisible();
@@ -294,6 +366,7 @@ test.describe('the description read whole', () => {
 
 	test('wears the focus ring opened from the keyboard, not from the pointer', async ({ preview, page }) => {
 		await preview.open();
+		await preview.describe('general', LONG);
 		const body = page.getByTestId('description-sheet').locator('.ap-descsheet-body');
 		const ringed = () => body.evaluate((el) => el === document.activeElement && getComputedStyle(el).outlineStyle !== 'none');
 		await pinned(preview).click();
@@ -313,20 +386,21 @@ test.describe('the description read whole', () => {
 
 	test('shut from the keyboard, gives the keyboard back to what opens it again; shut by the pointer, leaves focus be', async ({ preview, page }) => {
 		await preview.open();
+		await preview.describe('general', LONG);
 		const sheet = page.getByTestId('description-sheet');
-		const readAll = page.getByRole('button', { name: 'Read all', exact: true });
-		const open = async (from: typeof readAll) => {
+		const more = readAll(preview);
+		const open = async (from: typeof more) => {
 			await from.focus();
 			await page.keyboard.press('Enter');
 			await expect(sheet).toBeVisible();
 		};
-		// ⌃ pressed: folded back, to the first lines' Read all.
-		await open(readAll);
-		await sheet.getByRole('button', { name: 'Fold into preview' }).focus();
+		// Show less pressed: folded back, to the first lines' Read all.
+		await open(more);
+		await sheet.getByRole('button', { name: 'Show less' }).focus();
 		await page.keyboard.press('Enter');
-		await expect(readAll).toBeFocused();
+		await expect(more).toBeFocused();
 		// Escape: read, the first lines retire, so to Description.
-		await open(readAll);
+		await open(more);
 		await page.keyboard.press('Escape');
 		await expect(button(preview)).toBeFocused();
 		// × pressed: to Description again.
@@ -361,6 +435,7 @@ test.describe('the description on a wide window', () => {
 
 	test('starts where the conversation’s text does, in its first lines and read whole, its icon in the corner of both', async ({ preview, page }) => {
 		await preview.open();
+		await preview.describe('general', LONG);
 		const left = (locator: ReturnType<typeof page.locator>) => locator.first().evaluate((el) => Math.round(el.getBoundingClientRect().left));
 		const messages = await left(page.getByTestId('message-list').locator('article[data-message-id] .ap-msg-main'));
 		const description = pinned(preview);

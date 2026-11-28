@@ -902,6 +902,16 @@
 
 	/** The description was opened by the pointer, not the keyboard (whose click has `detail` 0): it takes focus unringed. */
 	let descriptionByPointer = $state(false);
+	/**
+	 * The room or thread whose first lines under the header are cut off, as they measure it (`room_id`): its whole has more
+	 * to it, so Show less folds it back into them, and read whole, they retire. Not cut off, they showed it all: no Show
+	 * less (unless they're put away), and they stay as they were.
+	 */
+	let descriptionCut = $state<string | undefined>();
+	function clipDescription(id: string, cut: boolean): void {
+		if (cut) descriptionCut = id;
+		else if (descriptionCut === id) descriptionCut = undefined;
+	}
 	/** Shows the description over the pane, to read; put away and edited since, it is news no more. */
 	function openDescription(event?: MouseEvent): void {
 		const target = editTarget;
@@ -917,8 +927,9 @@
 		roomEdit.start(editTarget);
 	}
 	/**
-	 * Shuts the description; being edited, once discarding a draft is agreed. Returns whether it shut. Read whole, its first
-	 * lines under the header have done their work: they retire to the header's line and Description, as × puts them away.
+	 * Shuts the description; being edited, once discarding a draft is agreed. Returns whether it shut. Read whole, and cut off
+	 * in its first lines under the header, they have done their work: they retire to the header's line and Description,
+	 * as × puts them away.
 	 */
 	function closeDescription(event?: MouseEvent): boolean {
 		// Only the room or thread it shows: the pane may have moved on already (another room opened over it, `leave`).
@@ -926,19 +937,20 @@
 		if (!shown) return true;
 		const target = editTarget?.id === shown.id ? editTarget : undefined;
 		if (!roomEdit.close(target, Boolean(activeThread))) return false;
-		if (target?.description && !descriptionPutAway) hiddenDescriptions = hideDescription(hiddenDescriptions, draftKey(target.id), target.description);
+		if (target?.description && descriptionCut === target.id && !descriptionPutAway) hiddenDescriptions = hideDescription(hiddenDescriptions, draftKey(target.id), target.description);
 		if (event?.detail === 0) refocusDescription();
 		return true;
 	}
 	/**
-	 * Shut from the keyboard (Escape, or × or ⌃ pressed with Enter), the keyboard goes back to what opens the description
-	 * again, as a dialog's goes back to what opened it: its first lines' Read all, or the header's Description. Shut by the
-	 * pointer, focus stays put, so no ring is drawn where nobody is typing.
+	 * Shut from the keyboard (Escape, or ×, Show less or Cancel pressed with Enter), the keyboard goes back to what opens
+	 * the description again, as a dialog's goes back to what opened it: its first lines' Read all, or their pencil where
+	 * they show it all, or the header's Description. Shut by the pointer, focus stays put, so no ring is drawn where nobody
+	 * is typing.
 	 */
 	function refocusDescription(): void {
 		void tick().then(() => {
 			const pane = document.querySelector('.ap-shell-main');
-			(pane?.querySelector<HTMLElement>('.ap-description .ap-description-more') ?? pane?.querySelector<HTMLElement>('.ap-roomhead-show'))?.focus();
+			(pane?.querySelector<HTMLElement>('.ap-description :is(.ap-description-more, .ap-description-edit)') ?? pane?.querySelector<HTMLElement>('.ap-roomhead-show'))?.focus();
 		});
 	}
 	/** Read, folds the description back into its first lines under the header, there again as when it was new. */
@@ -3991,7 +4003,7 @@
 			{#if sheetShown && editTarget && descriptionSheet.component}
 				{@const DescriptionSheet = descriptionSheet.component}
 				{#key editTarget.id}
-					<DescriptionSheet room={editTarget} thread={Boolean(activeThread)} edit={roomEdit} {people} rooms={roomSuggestions} onmention={refreshMembers} onopenroom={openMentionedRoom} onsave={saveDescription} onclose={closeDescription} onescape={descriptionEscape} onfold={foldDescription} pointer={descriptionByPointer} />
+					<DescriptionSheet room={editTarget} thread={Boolean(activeThread)} edit={roomEdit} {people} rooms={roomSuggestions} onmention={refreshMembers} onopenroom={openMentionedRoom} onsave={saveDescription} onclose={closeDescription} onescape={descriptionEscape} onfold={descriptionPutAway || descriptionCut === editTarget.id ? foldDescription : undefined} pointer={descriptionByPointer} />
 				{/key}
 			{/if}
 
@@ -4018,7 +4030,7 @@
 				{@const pinned = pinnedDescription}
 				{#key pinned.id}
 					<ThreadDescription description={pinned.description} thread={Boolean(activeThread)} onopenroom={openMentionedRoom} ondismiss={() => (hiddenDescriptions = hideDescription(hiddenDescriptions, draftKey(pinned.id), pinned.description))}
-						onexpand={openDescription} draft={descriptionDrafted && canEditPane} ondraft={editDescription} />
+						onexpand={openDescription} onedit={canEditPane && paneReady ? editDescription : undefined} onclip={(cut) => clipDescription(pinned.id, cut)} draft={descriptionDrafted && canEditPane} ondraft={editDescription} />
 				{/key}
 			{/if}
 

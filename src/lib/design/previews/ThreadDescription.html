@@ -1,4 +1,4 @@
-<!-- @dsCard group="Timeline" height=300 subtitle="A room's or thread's Markdown description, its first four lines (six on a phone) on the sheet's raised ground, faded where they're cut: a click anywhere on it, or its chevron, opens the whole; × puts it away; an edit kept as a draft says so" -->
+<!-- @dsCard group="Timeline" height=300 subtitle="A room's or thread's Markdown description, its first four lines (six on a phone) on the sheet's raised ground, faded where they're cut: cut off, a click anywhere on it, or Read all, opens the whole; short, it is all there, with no foot; the pencil edits it, × puts it away; an edit kept as a draft says so" -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>ThreadDescription</title></head>
@@ -8,7 +8,8 @@
   var A = window.Apron, root = document.getElementById('root');
   function add(C, props, at) { return A.render(C, at || root, props || {}); }
   var noop = function () {};
-  add(A.ThreadDescription, { ondismiss: noop, onexpand: noop, children: A.html('<div class="ap-msg-text ap-msg-markdown"><p>Worker <code>1.9.0</code> crash-looped on the new queue client. Resolved:</p><ul><li>Rolled back to <code>1.8.3</code></li><li>Re-ran migration 0042 once the lock cleared</li><li>Follow-up: <a href="#">raise the client timeout</a></li></ul></div>') });
+  add(A.ThreadDescription, { ondismiss: noop, onexpand: noop, onedit: noop, children: A.html('<div class="ap-msg-text ap-msg-markdown"><p>Worker <code>1.9.0</code> crash-looped on the new queue client. Resolved:</p><ul><li>Rolled back to <code>1.8.3</code></li><li>Re-ran migration 0042 once the lock cleared</li><li>Follow-up: <a href="#">raise the client timeout</a></li><li>Follow-up: alert on restart loops, not only on errors</li><li>Postmortem on Thursday, notes in this thread</li></ul></div>') });
+  add(A.ThreadDescription, { label: 'Room description', ondismiss: noop, onexpand: noop, onedit: noop, description: 'Say hello, and read the rules before posting.' });
   add(A.ThreadDescription, { label: 'Room description', ondismiss: noop, onexpand: noop, draft: true, ondraft: noop, description: 'Rotation for October. Swap requests in this thread by Friday.' });
 </script>
 </body>

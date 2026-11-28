@@ -9,7 +9,7 @@
 	import type { ClassValue } from 'svelte/elements';
 	import { composing } from './compose';
 	import AudioPlayer from './AudioPlayer.svelte';
-	import FileGlyph from './FileGlyph.svelte';
+	import * as icons from './Icons.svelte';
 
 	interface Props {
 		name: string;
@@ -89,7 +89,7 @@
 			<span class={['ap-attachment-meta', detailClass]}>
 				{#if detail}<span class="ap-attachment-detail">{detail}</span>{/if}
 				<span class="ap-attachment-renamehint" aria-hidden="true">
-					<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z" /><path d="m15 5 4 4" /></svg><span class="ap-attachment-renametext">Rename</span>
+					{@render icons.pencil()}<span class="ap-attachment-renametext">Rename</span>
 				</span>
 			</span>
 		</button>
@@ -116,9 +116,9 @@
 		<div class="ap-embed ap-embed-card ap-embed-file">
 			<span class="ap-embed-fileglyph">
 				{#if kind === 'link'}
-					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></svg>
+					{@render icons.link()}
 				{:else}
-					<FileGlyph />
+					{@render icons.file()}
 				{/if}
 			</span>
 			<span class="ap-embed-cardtext">{@render label('ap-embed-title', 'ap-embed-detail')}</span>
@@ -127,7 +127,7 @@
 	{#if onremove && !renaming}
 		{@const removeText = removeLabel ?? `Remove ${name}`}
 		<button type="button" class="ap-embed-remove" aria-label={removeText} title={removeText} onclick={onremove}>
-			<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+			{@render icons.x()}
 		</button>
 	{/if}
 </div>

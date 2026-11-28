@@ -7,11 +7,11 @@
 	import Link from '@lucide/svelte/icons/link';
 	import Lock from '@lucide/svelte/icons/lock';
 	import LogOut from '@lucide/svelte/icons/log-out';
-	import Pencil from '@lucide/svelte/icons/pencil';
 	import Search from '@lucide/svelte/icons/search';
 	import TextAlignStart from '@lucide/svelte/icons/text-align-start';
 	import Users from '@lucide/svelte/icons/users';
 	import X from '@lucide/svelte/icons/x';
+	import * as icons from './Icons.svelte';
 	import type { ClassValue } from 'svelte/elements';
 	import Faces from './Faces.svelte';
 	import MenuButton from './MenuButton.svelte';
@@ -245,7 +245,7 @@
 	{:else if reading}
 		{#if reading.onedit}
 			<button type="button" class="ap-btn ap-btn-sm ap-btn-ghost ap-roomhead-description" aria-label="Edit {noun}{descriptionDraft ? ', unsaved draft' : ''}" title={descriptionDraft ? 'Edit (your unsaved draft)' : `Edit the ${noun}'s title and description`} onclick={reading.onedit}>
-				<Pencil size={15} strokeWidth={2} aria-hidden="true" /><span class="ap-roomhead-description-word">Edit</span>{#if descriptionDraft}<span class="ap-roomhead-dot" aria-hidden="true"></span>{/if}
+				{@render icons.pencil()}<span class="ap-roomhead-description-word">Edit</span>{#if descriptionDraft}<span class="ap-roomhead-dot" aria-hidden="true"></span>{/if}
 			</button>
 		{/if}
 	{/if}
@@ -277,7 +277,7 @@
 	{#if actions.length > 0 && !sheet}
 		<MenuButton label={thread ? 'Thread actions' : 'Room actions'} buttonTestid={actionsTestid} choices={actions} disabled={busy} onselect={act} bind:open={actionsOpen}>
 			{#snippet icon()}<Ellipsis size={18} strokeWidth={1.8} aria-hidden="true" />{/snippet}
-			{#snippet lead(value)}{#if value === 'search'}<Search size={15} aria-hidden="true" />{:else if value === 'edit'}<Pencil size={15} aria-hidden="true" />{:else if value === 'mute'}<BellOff size={15} aria-hidden="true" />{:else if value === 'unmute'}<Bell size={15} aria-hidden="true" />{:else if value === 'link'}<Link size={15} aria-hidden="true" />{:else if value === 'shortcuts'}<Keyboard size={15} aria-hidden="true" />{:else}<LogOut size={15} aria-hidden="true" />{/if}{/snippet}
+			{#snippet lead(value)}{#if value === 'search'}<Search size={15} aria-hidden="true" />{:else if value === 'edit'}{@render icons.pencil()}{:else if value === 'mute'}<BellOff size={15} aria-hidden="true" />{:else if value === 'unmute'}<Bell size={15} aria-hidden="true" />{:else if value === 'link'}<Link size={15} aria-hidden="true" />{:else if value === 'shortcuts'}<Keyboard size={15} aria-hidden="true" />{:else}<LogOut size={15} aria-hidden="true" />{/if}{/snippet}
 		</MenuButton>
 	{/if}
 	{#if updating}<span class="ap-roomhead-updating" data-testid="room-updating" aria-hidden="true"></span>{/if}

@@ -17,8 +17,9 @@
 	 * Read, the description (`children`: rendered Markdown with its own `.ap-msg-text`) is set as a document (`.ap-doc`) in
 	 * the column the conversation's text starts on, with the description icon in its top left corner as its first lines
 	 * have it. It has focus as it opens, so the keys that scroll a page scroll it: with the focus ring if the keyboard
-	 * opened it, without if the pointer did. ⌃ at its foot folds it back into its first lines under the header (`onfold`),
-	 * the ThreadDescription whose ⌄ opens it.
+	 * opened it, without if the pointer did. Show less at its foot folds it back into its first lines under the header
+	 * (`onfold`), the ThreadDescription whose Read all opens it: offered where that changes what shows (they were cut off,
+	 * or put away), not where they showed it all.
 	 */
 	interface Props {
 		/** Names the region: "Room description" or "Thread description". */
@@ -30,7 +31,7 @@
 		onclose: () => void;
 		/** Escape that nothing in it took: a step back (from editing to reading, say); shutting it, without. */
 		onescape?: () => void;
-		/** Read, ⌃ at its foot: fold it back into its first lines under the header. */
+		/** Read, Show less at its foot: fold it back into its first lines under the header. */
 		onfold?: (event: MouseEvent) => void;
 		/** Read, opened by the pointer: no focus ring as it takes focus (the browser draws one after a click on what takes none). */
 		pointer?: boolean;
@@ -101,7 +102,7 @@
 		<div class="ap-descsheet-body ap-doc" tabindex="0" {@attach fades()} {@attach focused}>{@render children()}</div>
 		{#if onfold}
 			<div class="ap-descsheet-foot">
-				<button class="ap-iconbtn ap-description-more" type="button" aria-label="Fold into preview" title="Fold into preview" onclick={onfold}><ChevronUp size={18} strokeWidth={2} aria-hidden="true" /></button>
+				<button class="ap-btn ap-btn-sm ap-btn-ghost ap-description-more" type="button" onclick={onfold}>Show less<ChevronUp size={16} strokeWidth={2} aria-hidden="true" /></button>
 			</div>
 		{/if}
 	{/if}

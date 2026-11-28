@@ -11,8 +11,8 @@
 	 * `edit` says (RoomEdit, which the header reads too: its Edit and ×, or the title, Cancel and Save). Read, it is
 	 * DescriptionText's; edited, it is the description's own editor (DescriptionField: written as in the composer), filling
 	 * the sheet, with the keyboard in it as it opens. Ctrl+Enter (⌘+Enter) saves (`onsave`); a click on the dimmed room
-	 * asks to shut it (`onclose`), and Escape to step back (`onescape`); read, ⌃ at its foot folds it back into its first
-	 * lines (`onfold`).
+	 * asks to shut it (`onclose`), and Escape to step back (`onescape`); read, Show less at its foot folds it back into its
+	 * first lines (`onfold`), where that changes what shows.
 	 */
 	interface Props extends DescriptionSources {
 		room: EditedRoom;

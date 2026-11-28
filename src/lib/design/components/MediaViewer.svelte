@@ -1,4 +1,5 @@
 <script lang="ts">
+	import * as icons from './Icons.svelte';
 	import type { ClassValue } from 'svelte/elements';
 	import type { MediaItem } from './types';
 	import ViewerDialog from './ViewerDialog.svelte';
@@ -318,7 +319,7 @@
 		{#if many}<span class="ap-viewer-count" aria-live="polite">{index + 1} of {items.length}</span>{/if}
 		{#if item?.href}
 			<a class="ap-viewer-btn" href={item.href} target="_blank" rel="noreferrer noopener" aria-label="Open original in a new tab" title="Open original">
-				<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6" /><path d="M10 14 21 3" /><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /></svg>
+				{@render icons.externalLink()}
 			</a>
 		{/if}
 	{/snippet}
@@ -335,10 +336,10 @@
 				ontransitionend={() => (easing = false)} />{/key}
 			{#if many}
 				<button class="ap-viewer-btn ap-viewer-nav ap-viewer-prev" type="button" aria-label="Previous image" title="Previous (←)" disabled={index === 0} onclick={() => step(-1)}>
-					<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+					{@render icons.chevronLeft()}
 				</button>
 				<button class="ap-viewer-btn ap-viewer-nav ap-viewer-next" type="button" aria-label="Next image" title="Next (→)" disabled={index === items.length - 1} onclick={() => step(1)}>
-					<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
+					{@render icons.chevronRight()}
 				</button>
 			{/if}
 		</div>

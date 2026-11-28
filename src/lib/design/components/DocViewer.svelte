@@ -1,4 +1,5 @@
 <script lang="ts" module>
+	import * as icons from './Icons.svelte';
 	/** The sizes Smaller and Larger text step through: 100% to 200%. */
 	export const DOC_ZOOMS = [1, 1.25, 1.5, 1.75, 2];
 </script>
@@ -101,8 +102,6 @@
 	}
 </script>
 
-{#snippet downloadIcon()}<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3" /><path d="m7 10 5 5 5-5" /><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /></svg>{/snippet}
-
 <ViewerDialog bind:open {title} {detail} {onclose} onkeydown={keydown} class={['ap-docviewer', className]} {testid}>
 	{#snippet actions()}
 		{#if !status}
@@ -110,7 +109,7 @@
 			<button class="ap-viewer-btn" type="button" aria-label="Smaller text" title="Smaller text (−)" disabled={at === DOC_ZOOMS[0]} onclick={() => step(-1)}><AArrowDown size={18} aria-hidden="true" /></button>
 			<button class="ap-viewer-btn" type="button" aria-label="Larger text" title="Larger text (+)" disabled={at === DOC_ZOOMS[DOC_ZOOMS.length - 1]} onclick={() => step(1)}><AArrowUp size={18} aria-hidden="true" /></button>
 		{/if}
-		{#if href}<a class="ap-viewer-btn" {href} download={title} target="_blank" rel="noreferrer noopener" aria-label={`Download ${title}`} title="Download">{@render downloadIcon()}</a>{/if}
+		{#if href}<a class="ap-viewer-btn" {href} download={title} target="_blank" rel="noreferrer noopener" aria-label={`Download ${title}`} title="Download">{@render icons.download()}</a>{/if}
 	{/snippet}
 	<!-- The document, which has focus once it opens, so Space, the arrows and Page Up and Down scroll it. Named
 	     Document: the dialog it is in already says the file's name. -->
@@ -120,7 +119,7 @@
 		{#if status}
 			<div class="ap-docviewer-status" data-viewer-ground>
 				<p aria-hidden="true">{status}</p>
-				{#if failed && href}<a class="ap-btn ap-btn-quiet ap-docviewer-download" {href} download={title} target="_blank" rel="noreferrer noopener">{@render downloadIcon()}Download</a>{/if}
+				{#if failed && href}<a class="ap-btn ap-btn-quiet ap-docviewer-download" {href} download={title} target="_blank" rel="noreferrer noopener">{@render icons.download()}Download</a>{/if}
 			</div>
 		{:else}
 			<article class={['ap-docviewer-page', 'ap-doc', wrap === false && 'ap-docviewer-page-wide']} style:zoom={zoom === undefined ? undefined : String(zoom)}>{@render children?.()}</article>

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { tick } from 'svelte';
-	import { check, ellipsis } from './ActionIcons.svelte';
+	import { check, ellipsis } from './Icons.svelte';
 	import type { MessageAction } from './types';
 
 	/** How long a `done` action says so before the ⋯ actions close. */

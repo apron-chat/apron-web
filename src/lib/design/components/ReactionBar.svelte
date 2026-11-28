@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { ReactionChip } from './types';
 	import { longPress } from './hold';
-	import { smilePlus } from './ActionIcons.svelte';
+	import { smilePlus } from './Icons.svelte';
 
 	interface Props {
 		reactions: ReactionChip[];

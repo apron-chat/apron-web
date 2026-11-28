@@ -334,7 +334,7 @@ describe('a message row’s toolbar', () => {
 		flushSync();
 		dom.button('Copy link to message').click();
 		await vi.waitFor(() => expect(dom.queryByRole('button', 'Link copied')).not.toBeNull());
-		// In the menu ⋯ opened, its row's icon turns to a check (ActionIcons') and its words to Copied.
+		// In the menu ⋯ opened, its row's icon turns to a check (Icons') and its words to Copied.
 		expect(dom.byRole('toolbar', 'Message actions').getAttribute('aria-orientation')).toBe('vertical');
 		expect(dom.button('Link copied').querySelector('path[d="M20 6 9 17l-5-5"]')).not.toBeNull();
 		expect(dom.button('Link copied').textContent).toBe('Copied');
@@ -677,7 +677,7 @@ describe('system messages', () => {
 		const dismiss = vi.fn();
 		const row = render({ system: true, scope: 'private', timestamp: Date.UTC(2026, 10, 16, 14, 28), sender: { user_id: '~private', name: 'System message to you (~private)' }, body: { html: 'Unknown command' } }, { dismiss });
 		const head = row.querySelector('.ap-notice-head')!;
-		expect([...head.children].map((child) => child.getAttribute('class'))).toEqual(['ap-icon ap-notice-glyph', 'ap-notice-title', 'ap-notice-time', 'ap-iconbtn ap-notice-dismiss']);
+		expect([...head.children].map((child) => child.getAttribute('class'))).toEqual(['ap-icon', 'ap-notice-title', 'ap-notice-time', 'ap-iconbtn ap-notice-dismiss']);
 		dom.button('Dismiss notice').click();
 		expect(dismiss).toHaveBeenCalledWith(expect.objectContaining({ scope: 'private' }));
 	});
