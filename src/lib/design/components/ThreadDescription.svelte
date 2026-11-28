@@ -29,13 +29,15 @@
 		onexpand?: (event: MouseEvent) => void;
 		/** Offer the pencil beside × to edit the description. */
 		onedit?: () => void;
+		/** Hears whether its first lines are cut off, as measured and as that changes. */
+		onclip?: (clipped: boolean) => void;
 		/** An edit of the description is kept as a draft: Unsaved draft, which takes it up (`ondraft`). */
 		draft?: boolean;
 		ondraft?: () => void;
 		/** Classes for its `<section>`, added to its own. */
 		class?: ClassValue;
 	}
-	let { description, children, label = 'Thread description', ondismiss, onexpand, onedit, draft = false, ondraft, class: className }: Props = $props();
+	let { description, children, label = 'Thread description', ondismiss, onexpand, onedit, onclip, draft = false, ondraft, class: className }: Props = $props();
 	/** More of it than its first lines show: Read all at its foot, over its last lines, faded; and it opens the whole. */
 	let clipped = $state(false);
 	let opens = $derived(Boolean(onexpand) && clipped);
@@ -55,7 +57,7 @@
 <section aria-label={label} class={['ap-description', opens && 'ap-description-opens', clipped && 'ap-description-clipped', drafted && 'ap-description-footed', onedit && 'ap-description-edits', className]} onclick={click}>
 	<!-- The region's label already says it's a description; the icon's title says so to the pointer. -->
 	<span class="ap-description-icon" title={label}><TextAlignStart size={15} strokeWidth={2} aria-hidden="true" /></span>
-	<div class="ap-description-text ap-doc" {@attach fades((on) => (clipped = on))}>
+	<div class="ap-description-text ap-doc" {@attach fades((on) => ((clipped = on), onclip?.(on)))}>
 		{#if children}{@render children()}{:else}<div class="ap-msg-text"><p>{description}</p></div>{/if}
 	</div>
 	{#if opens || drafted}

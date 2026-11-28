@@ -661,7 +661,6 @@ a.ap-embed-card:hover { background: var(--hover); }
 .ap-actions-btn { font: inherit; font-size: var(--text-sm); line-height: var(--leading-sm); font-weight: 500; min-width: var(--control-md); height: var(--control-md); padding: 0 var(--space-2); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink-muted); cursor: pointer; }
 .ap-actions-btn:hover { background: var(--hover); color: var(--ink); }
 .ap-actions-danger:hover { color: var(--danger); }
-/* ActionIcons: lucide's stroke, sized where each sits. */
 /* An icon (Icons): 16px unless where it sits sets --ap-icon-size (and --ap-icon-stroke, to draw a small one bolder). */
 .ap-icon { flex: none; width: var(--ap-icon-size, 16px); height: var(--ap-icon-size, 16px); fill: none; stroke: currentColor; stroke-width: var(--ap-icon-stroke, 2); stroke-linecap: round; stroke-linejoin: round; }
 .ap-actions-touch .ap-icon { width: 20px; height: 20px; }
@@ -1435,11 +1434,9 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
    DescriptionSheet folded, on its raised ground, rounded at its foot and lifted off the conversation; the description icon
    in its top left corner as × is in its top right. Set as the sheet sets it, in the same column, but clear of both
    corners where the column comes nearer the edges (a phone), the far one wider when it holds the pencil too. Cut off,
-   the whole of it opens the rest, so it lifts a shade under the pointer. Its lines and the bar under them are the
-   sheet's too, which measures against them whether a description outgrows its first lines. */
-:is(.ap-description, .ap-descsheet) { --ap-description-bar: 48px; --ap-description-lines: 4; }
+   the whole of it opens the rest, so it lifts a shade under the pointer. */
 .ap-description {
-	--ap-description-ground: var(--bg-200);
+	--ap-description-ground: var(--bg-200); --ap-description-bar: 48px; --ap-description-lines: 4;
 	--ap-description-foot: calc(var(--control-md) + var(--space-2)); --ap-description-pad-end: var(--space-3);
 	--ap-description-corner-end: var(--ap-description-corner, 44px);
 	--ap-description-inline: max(var(--ap-doc-start, var(--space-4)), var(--ap-description-corner, 44px)) max(var(--ap-doc-end, var(--space-4)), var(--ap-description-corner-end));
@@ -1473,7 +1470,7 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-description-clipped .ap-description-foot { height: calc(var(--ap-description-bar) + var(--ap-description-pad-end)); background: linear-gradient(to bottom, transparent, var(--ap-description-ground) calc(100% - var(--control-md) - var(--space-1))); }
 .ap-description-more { gap: var(--space-1); color: var(--ink-muted); }
 .ap-description-opens:hover .ap-description-more { color: var(--ink); }
-@container (max-width: 560px) { :is(.ap-description, .ap-descsheet) { --ap-description-lines: 6; } }
+@container (max-width: 560px) { .ap-description { --ap-description-lines: 6; } }
 /* An edit kept as a draft, here and in the header: an accent dot before what says so. */
 :is(.ap-description-draft, .ap-roomhead-draft)::before { content: ''; flex: none; width: 7px; height: 7px; border-radius: var(--radius-full); background: var(--accent); }
 
@@ -1493,9 +1490,7 @@ a.ap-linkcard:hover :is(.ap-linkcard-known, .ap-linkcard-name) { color: var(--de
 .ap-descsheet-body:focus { outline: none; }
 /* Opened by the keyboard, the description wears the focus ring; opened by the pointer, it doesn't (`data-pointer`). */
 .ap-descsheet-body:not([data-pointer]):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset-inset); }
-/* Read, and longer than its first lines show, Show less at its foot folds it back into them under the header, where
-   their Read all opened it. What it's measured against: its first lines' box, as tall as theirs, out of sight. */
-.ap-descsheet-probe { position: absolute; top: 0; width: 0; visibility: hidden; pointer-events: none; height: calc(var(--leading-body) * var(--ap-description-lines) + var(--ap-description-bar)); }
+/* Read, Show less at its foot folds it back into its first lines under the header, where their Read all opened it. */
 .ap-descsheet-foot { flex: none; display: flex; justify-content: center; padding-bottom: var(--space-1); }
 .ap-descsheet-folds .ap-descsheet-body { padding-bottom: var(--space-2); }
 .ap-descsheet-editing .ap-descsheet-body { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding-block: var(--space-4) var(--space-6); }

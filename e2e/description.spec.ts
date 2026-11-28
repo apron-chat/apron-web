@@ -206,6 +206,45 @@ test.describe('a description its first lines show all of', () => {
 		await expect(pencil).toBeFocused();
 		await expect(button(preview)).toHaveCount(0);
 	});
+
+	test('put away, Description shows it whole, where Show less brings its first lines back', async ({ preview, page }) => {
+		await putAway(preview);
+		await preview.describe('general', 'Say hello, and keep it kind.');
+		const sheet = page.getByTestId('description-sheet');
+		await button(preview).click();
+		await sheet.getByRole('button', { name: 'Show less' }).click();
+		await expect(sheet).toHaveCount(0);
+		await expect(pinned(preview)).toHaveText('Say hello, and keep it kind.');
+		await expect(readAll(preview)).toHaveCount(0);
+	});
+});
+
+test.describe('a description at the lengths where its first lines just get cut, on a phone', () => {
+	test.use(DEVICES.phone);
+
+	test('offers Show less read whole exactly where its first lines offered Read all, and only then retires them', async ({ preview, page }) => {
+		await preview.open();
+		const sheet = page.getByTestId('description-sheet');
+		const words = (n: number) => Array.from({ length: n }, (_, i) => `word${i}`).join(' ');
+		let seen = { cut: 0, whole: 0 };
+		for (let n = 8; n <= 64; n += 4) {
+			await preview.describe('general', words(n));
+			await expect(pinned(preview)).toContainText(`word${n - 1}`);
+			await page.waitForTimeout(100);
+			if ((await readAll(preview).count()) === 0) {
+				seen.whole++;
+				continue;
+			}
+			seen.cut++;
+			await readAll(preview).click();
+			await expect(sheet.getByRole('button', { name: 'Show less' })).toBeVisible();
+			await sheet.getByRole('button', { name: 'Show less' }).click();
+			await expect(pinned(preview)).toBeVisible();
+		}
+		// The sweep crossed the cut: some lengths showed whole, some cut off.
+		expect(seen.cut).toBeGreaterThan(0);
+		expect(seen.whole).toBeGreaterThan(0);
+	});
 });
 
 test.describe('the description over the conversation, as the pane moves on', () => {

@@ -902,16 +902,20 @@
 	/** The description was opened by the pointer, not the keyboard (whose click has `detail` 0): it takes focus unringed. */
 	let descriptionByPointer = $state(false);
 	/**
-	 * The description over the pane, read, is longer than its first lines under the header show (the sheet measures it):
-	 * read whole, they retire. As short as they are, they showed it all, and stay as they were.
+	 * The room or thread whose first lines under the header are cut off, as they measure it (`room_id`): its whole has more
+	 * to it, so Show less folds it back into them, and read whole, they retire. Not cut off, they showed it all: no Show
+	 * less (unless they're put away), and they stay as they were.
 	 */
-	let descriptionOutgrows = false;
+	let descriptionCut = $state<string | undefined>();
+	function clipDescription(id: string, cut: boolean): void {
+		if (cut) descriptionCut = id;
+		else if (descriptionCut === id) descriptionCut = undefined;
+	}
 	/** Shows the description over the pane, to read; put away and edited since, it is news no more. */
 	function openDescription(event?: MouseEvent): void {
 		const target = editTarget;
 		if (!target) return;
 		descriptionByPointer = event?.detail !== 0;
-		descriptionOutgrows = false;
 		roomEdit.open(target);
 		if (target.description && descriptionPutAway) hiddenDescriptions = hideDescription(hiddenDescriptions, draftKey(target.id), target.description);
 	}
@@ -919,12 +923,11 @@
 	function editDescription(): void {
 		if (!editTarget || !canEditPane) return;
 		descriptionByPointer = false;
-		if (!roomEdit.shown) descriptionOutgrows = false;
 		roomEdit.start(editTarget);
 	}
 	/**
-	 * Shuts the description; being edited, once discarding a draft is agreed. Returns whether it shut. Read whole, and longer
-	 * than its first lines under the header, they have done their work: they retire to the header's line and Description,
+	 * Shuts the description; being edited, once discarding a draft is agreed. Returns whether it shut. Read whole, and cut off
+	 * in its first lines under the header, they have done their work: they retire to the header's line and Description,
 	 * as × puts them away.
 	 */
 	function closeDescription(event?: MouseEvent): boolean {
@@ -933,7 +936,7 @@
 		if (!shown) return true;
 		const target = editTarget?.id === shown.id ? editTarget : undefined;
 		if (!roomEdit.close(target, Boolean(activeThread))) return false;
-		if (target?.description && descriptionOutgrows && !descriptionPutAway) hiddenDescriptions = hideDescription(hiddenDescriptions, draftKey(target.id), target.description);
+		if (target?.description && descriptionCut === target.id && !descriptionPutAway) hiddenDescriptions = hideDescription(hiddenDescriptions, draftKey(target.id), target.description);
 		if (event?.detail === 0) refocusDescription();
 		return true;
 	}
@@ -3997,7 +4000,7 @@
 			{#if sheetShown && editTarget && descriptionSheet.component}
 				{@const DescriptionSheet = descriptionSheet.component}
 				{#key editTarget.id}
-					<DescriptionSheet room={editTarget} thread={Boolean(activeThread)} edit={roomEdit} {people} rooms={roomSuggestions} onmention={refreshMembers} onopenroom={openMentionedRoom} onsave={saveDescription} onclose={closeDescription} onescape={descriptionEscape} onfold={foldDescription} onoutgrow={(outgrows) => (descriptionOutgrows = outgrows)} pointer={descriptionByPointer} />
+					<DescriptionSheet room={editTarget} thread={Boolean(activeThread)} edit={roomEdit} {people} rooms={roomSuggestions} onmention={refreshMembers} onopenroom={openMentionedRoom} onsave={saveDescription} onclose={closeDescription} onescape={descriptionEscape} onfold={descriptionPutAway || descriptionCut === editTarget.id ? foldDescription : undefined} pointer={descriptionByPointer} />
 				{/key}
 			{/if}
 
@@ -4024,7 +4027,7 @@
 				{@const pinned = pinnedDescription}
 				{#key pinned.id}
 					<ThreadDescription description={pinned.description} thread={Boolean(activeThread)} onopenroom={openMentionedRoom} ondismiss={() => (hiddenDescriptions = hideDescription(hiddenDescriptions, draftKey(pinned.id), pinned.description))}
-						onexpand={openDescription} onedit={canEditPane ? editDescription : undefined} draft={descriptionDrafted && canEditPane} ondraft={editDescription} />
+						onexpand={openDescription} onedit={canEditPane && paneReady ? editDescription : undefined} onclip={(cut) => clipDescription(pinned.id, cut)} draft={descriptionDrafted && canEditPane} ondraft={editDescription} />
 				{/key}
 			{/if}
 

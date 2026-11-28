@@ -334,7 +334,7 @@ describe('a message row’s toolbar', () => {
 		flushSync();
 		dom.button('Copy link to message').click();
 		await vi.waitFor(() => expect(dom.queryByRole('button', 'Link copied')).not.toBeNull());
-		// In the menu ⋯ opened, its row's icon turns to a check (ActionIcons') and its words to Copied.
+		// In the menu ⋯ opened, its row's icon turns to a check (Icons') and its words to Copied.
 		expect(dom.byRole('toolbar', 'Message actions').getAttribute('aria-orientation')).toBe('vertical');
 		expect(dom.button('Link copied').querySelector('path[d="M20 6 9 17l-5-5"]')).not.toBeNull();
 		expect(dom.button('Link copied').textContent).toBe('Copied');

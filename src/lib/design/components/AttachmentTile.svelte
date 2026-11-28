@@ -1,5 +1,4 @@
 <script lang="ts">
-	import * as icons from './Icons.svelte';
 	import type { MediaSrc } from './types';
 	/*
 	 * One file on a draft, or in a message being edited (§4.8.4): an image as a thumbnail, audio with a player
@@ -10,6 +9,7 @@
 	import type { ClassValue } from 'svelte/elements';
 	import { composing } from './compose';
 	import AudioPlayer from './AudioPlayer.svelte';
+	import * as icons from './Icons.svelte';
 
 	interface Props {
 		name: string;

@@ -57,13 +57,17 @@ describe('ThreadDescription', () => {
 		expect(document.querySelector('section')?.classList.contains('ap-description-opens')).toBe(false);
 	});
 
-	it('offers its pencil to edit it, cut off or not', () => {
+	it.each([false, true])('offers its pencil to edit it (cut off: %s), and says whether it is cut off', (clipped) => {
+		cut = clipped;
 		const onedit = vi.fn();
 		const onexpand = vi.fn();
-		render({ description: 'Say hello.', onexpand, onedit });
+		const onclip = vi.fn();
+		render({ description: 'Say hello.', onexpand, onedit, onclip });
 		dom.button('Edit description').click();
 		expect(onedit).toHaveBeenCalledOnce();
 		expect(onexpand).not.toHaveBeenCalled();
+		expect(onclip).toHaveBeenLastCalledWith(clipped);
+		expect(dom.queryByRole('button', 'Read all') !== null).toBe(clipped);
 	});
 
 	it('says an edit of it is kept as a draft, which takes it up', () => {
