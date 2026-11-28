@@ -9,6 +9,7 @@ import { catalogUrlOf, EMOJI_KEY, parseCatalog, type CustomEmoji, type EmojiCata
 import { serverOrigin } from '$lib/protocol/embeds';
 import type { CustomEmojiImage } from '$lib/protocol/markdown';
 import type { ServerParams } from '$lib/protocol/types';
+import { animationSettings } from './animation-settings.svelte';
 
 /** The largest catalog fetched, in characters: more is no catalog. */
 const CATALOG_MAX = 4 * 1024 * 1024;
@@ -29,8 +30,10 @@ export class CustomEmojiCatalog {
 	url = $state<string | undefined>();
 	/** Its catalog, once fetched. */
 	catalog = $state.raw<EmojiCatalog | undefined>();
-	/** The user prefers reduced motion: emoji show their `static_url` where they have one. */
-	reducedMotion = $state(false);
+	/** Animated images don't play by themselves (Preferences' Media): emoji show their `static_url` where they have one. */
+	get still(): boolean {
+		return !animationSettings.autoplay;
+	}
 	/** The chat server's origin, which emoji images may also load from (§4.8.6). */
 	private origin: string | undefined;
 	/**
@@ -44,13 +47,7 @@ export class CustomEmojiCatalog {
 	/** The URLs being fetched, and those that failed (not tried again until the server sends another). */
 	private readonly asked = new Set<string>();
 
-	constructor(private readonly load: CatalogFetch = fetchCatalog) {
-		const query = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)');
-		if (query) {
-			this.reducedMotion = query.matches;
-			query.addEventListener?.('change', (event) => (this.reducedMotion = event.matches));
-		}
-	}
+	constructor(private readonly load: CatalogFetch = fetchCatalog) {}
 
 	/**
 	 * Follows the server frame of the server at `serverUrl`: its catalog, fetched already or not yet, and fetched
@@ -96,10 +93,10 @@ export class CustomEmojiCatalog {
 		return catalog.get(key);
 	}
 
-	/** How an emoji shows: its still copy where the user prefers reduced motion, and its hover text. */
+	/** How an emoji shows: its still copy where animated images don't play by themselves, and its hover text. */
 	image(emoji: CustomEmoji): CustomEmojiImage {
 		return {
-			src: this.reducedMotion && emoji.static_url ? emoji.static_url : emoji.url,
+			src: this.still && emoji.static_url ? emoji.static_url : emoji.url,
 			alt: emoji.alt ?? emoji.key,
 			...(emoji.width && emoji.height ? { width: emoji.width, height: emoji.height } : {})
 		};

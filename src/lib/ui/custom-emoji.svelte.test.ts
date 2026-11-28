@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { CustomEmojiCatalog } from './custom-emoji.svelte';
+import { animationSettings } from './animation-settings.svelte';
 
 const server = (catalog_url: string) => ({ apron: 10, auth: ['guest'], capabilities: ['ext:emoji'], ext: { emoji: { catalog_url } } });
 const ANY = () => true;
@@ -26,11 +27,18 @@ describe('the custom emoji catalog (ext:emoji)', () => {
 		expect(load).toHaveBeenCalledTimes(2);
 	});
 
-	it('shows the still copy to someone who prefers reduced motion, and asks nothing of a server without the extension', () => {
+	it('shows the still copy where animations don\'t play by themselves, and asks nothing of a server without the extension', () => {
 		const load = vi.fn(async () => CATALOG);
 		const emoji = new CustomEmojiCatalog(load);
-		emoji.reducedMotion = true;
-		expect(emoji.image({ key: ':p:', url: 'https://e.example/a.gif', static_url: 'https://e.example/a.png', tags: [], hidden: false }).src).toBe('https://e.example/a.png');
+		const parrot = { key: ':p:', url: 'https://e.example/a.gif', static_url: 'https://e.example/a.png', tags: [], hidden: false };
+		try {
+			animationSettings.mode = 'always';
+			expect(emoji.image(parrot).src).toBe('https://e.example/a.gif');
+			animationSettings.mode = 'never';
+			expect(emoji.image(parrot).src).toBe('https://e.example/a.png');
+		} finally {
+			animationSettings.mode = 'system';
+		}
 		expect(emoji.image({ key: ':p:', url: 'https://e.example/a.gif', tags: [], hidden: false }).src).toBe('https://e.example/a.gif');
 		emoji.apply({ apron: 10, auth: [], capabilities: [], ext: { emoji: { catalog_url: 'https://e.example/c.json' } } }, 'wss://e.example/', ANY);
 		expect(emoji.resolve(':p:')).toBeUndefined();

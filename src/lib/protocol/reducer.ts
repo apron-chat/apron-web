@@ -436,6 +436,46 @@ export class ProtocolStore {
 		this.touched.add(roomId);
 	}
 
+	/**
+	 * Drop a user the server removed with their records (§3.3.3): the messages they sent, with every reaction set
+	 * on them, their reaction sets elsewhere, and their memberships, in member lists and membership logs alike.
+	 * Returns the IDs of the messages it dropped.
+	 */
+	removeUser(userId: string): Set<string> {
+		this.changed({ kind: 'removeUser', user: userId });
+		const removed = new Set<string>();
+		for (const [id, message] of [...this.messageRecords]) {
+			if (message.from.user_id !== userId) continue;
+			removed.add(id);
+			this.messageRecords.delete(id);
+			this.reactionSets.delete(id);
+			this.unhome(message.room_id, id);
+		}
+		for (const [messageId, sets] of this.reactionSets) {
+			const set = sets.get(userId);
+			if (!set) continue;
+			sets.delete(userId);
+			if (!sets.size) this.reactionSets.delete(messageId);
+			const home = this.messageRecords.get(messageId)?.room_id ?? set.room_id;
+			if (home !== undefined) this.touched.add(home);
+		}
+		for (const [roomId, state] of this.memberships) {
+			if (!state.entries.delete(userId)) continue;
+			state.list = undefined;
+			this.touched.add(roomId);
+		}
+		for (const [roomId, log] of this.membershipLogs) {
+			if (!log.records.some((record) => record.entries.some((entry) => entry.user.user_id === userId))) continue;
+			log.records = log.records.flatMap((record) => {
+				const entries = record.entries.filter((entry) => entry.user.user_id !== userId);
+				return entries.length === record.entries.length ? [record] : entries.length ? [{ log_id: record.log_id, entries }] : [];
+			});
+			log.published = undefined;
+			this.touched.add(roomId);
+		}
+		return removed;
+	}
+
 	clear(): void {
 		this.changed({ kind: 'clear' });
 		for (const roomId of this.roomIds()) this.touched.add(roomId);
@@ -514,7 +554,8 @@ export class ProtocolStore {
  * One change to a store's records, as it is made (`ProtocolStore.observe`): a
  * record it took (only one that replaced what it had), the messages and
  * memberships a room's bound dropped (`evict`), a room's messages and reactions
- * cleared for a rebuild (`clearRoom`), or everything (`clear`).
+ * cleared for a rebuild (`clearRoom`), a removed user's records (`removeUser`),
+ * or everything (`clear`).
  */
 export type StoreChange =
 	| { kind: 'room'; record: RoomRecord }
@@ -523,6 +564,7 @@ export type StoreChange =
 	| { kind: 'membership'; entry: MembershipEntry }
 	| { kind: 'evict'; room: string; floor: string }
 	| { kind: 'clearRoom'; room: string }
+	| { kind: 'removeUser'; user: string }
 	| { kind: 'clear' };
 
 /** A store's records by kind (`ProtocolStore.records`). */

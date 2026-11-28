@@ -26,6 +26,7 @@ describe('media loads only through the gate', () => {
 	it('loads media only in the design components that take a MediaSrc for it', () => {
 		// Each of these takes its image, video or audio as a `MediaSrc` prop, which only the gate makes.
 		expect(using(/<(?:img|video|audio|source|track|picture|image)\b|\bposter=|\bsrcset=/)).toEqual([
+			'lib/design/components/AnimatedImage.svelte',
 			'lib/design/components/AttachmentTile.svelte',
 			'lib/design/components/AudioPlayer.svelte',
 			'lib/design/components/Avatar.svelte',

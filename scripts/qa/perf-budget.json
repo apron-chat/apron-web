@@ -6,8 +6,8 @@
 	"probes": {
 		"load": {
 			"requests": 22,
-			"startupJsKB": 965.4,
-			"domNodes": 546,
+			"startupJsKB": 975.4,
+			"domNodes": 540,
 			"layouts": 10,
 			"styleRecalcs": 18,
 			"calls": 195750,
@@ -15,8 +15,8 @@
 		},
 		"load-busy": {
 			"requests": 20,
-			"startupJsKB": 938,
-			"domNodes": 1162,
+			"startupJsKB": 948,
+			"domNodes": 1149,
 			"layouts": 13,
 			"styleRecalcs": 16,
 			"calls": 1368953,
@@ -24,8 +24,8 @@
 		},
 		"load-phone": {
 			"requests": 22,
-			"startupJsKB": 965.4,
-			"domNodes": 547,
+			"startupJsKB": 975.4,
+			"domNodes": 541,
 			"layouts": 10,
 			"styleRecalcs": 16,
 			"calls": 170257,
@@ -33,8 +33,8 @@
 		},
 		"load-phone-busy": {
 			"requests": 20,
-			"startupJsKB": 938,
-			"domNodes": 1163,
+			"startupJsKB": 948,
+			"domNodes": 1150,
 			"layouts": 9,
 			"styleRecalcs": 15,
 			"calls": 1027634,
@@ -48,7 +48,7 @@
 		"send-message-busy": {
 			"layouts": 38,
 			"styleRecalcs": 13,
-			"calls": 254376
+			"calls": 256309
 		},
 		"sidebar-collapse": {
 			"layouts": 3,

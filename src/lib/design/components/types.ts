@@ -9,7 +9,8 @@ export interface OG {
 	description?: string;
 	site_name?: string;
 	/** Each medium: its `url` where it may load, else what a click may load (`ask`), else neither. */
-	image?: { url?: MediaSrc; type?: string; width?: number; height?: number; alt?: string; ask?: MediaAskProps };
+	/** `animated`: it may be (a GIF, say), so it may be held still (`EmbedProps.autoplay`). */
+	image?: { url?: MediaSrc; type?: string; width?: number; height?: number; alt?: string; ask?: MediaAskProps; animated?: boolean };
 	video?: { url?: MediaSrc; type?: string; width?: number; height?: number; ask?: MediaAskProps };
 	audio?: { url?: MediaSrc; type?: string; ask?: MediaAskProps };
 }
@@ -55,6 +56,12 @@ export interface EmbedProps {
 	 * `-title`, `-alt`, `-detail`, `-width` and `-height`, which a viewer reads to page through a timeline's images.
 	 */
 	viewer?: Partial<Omit<MediaItem, 'href'>>;
+	/**
+	 * With an animated og.image (`og.image.animated`): whether it plays by itself (true when omitted), for 5 seconds
+	 * (`PLAY_FOR`) before it holds still. One that doesn't shows its first frame. An upload's has a button to play it
+	 * on and pause it, whatever this says; a card's, in a link, has none.
+	 */
+	autoplay?: boolean;
 	/** terminal (§4.8.6): live while `url` is set and not `done`. A terminal's plain text without `attach`; on the fallback card, a note in place of a link (EmbedFrame's, for an address it can't use). */
 	text?: string;
 	done?: boolean;

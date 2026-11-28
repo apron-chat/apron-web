@@ -49,6 +49,8 @@ const KEY = {
 	media: 'apron.media',
 	/** Read Receipts (`ext.settings.read_receipts`) turned off on this device: `'off'`, else absent. */
 	readReceipts: 'apron.readReceipts',
+	/** Whether animated images play by themselves (`$lib/ui/animation-settings`): `'always'` or `'never'`, else absent to match the system. */
+	animations: 'apron.animations',
 	/**
 	 * How each server was last signed in to on this device (a scheme, §3.2: `guest`, `webauthn`, `email`, `external`,
 	 * `token`), by its address: chosen first on its connect screen next time. Kept through signing out.
@@ -741,6 +743,18 @@ export function loadMediaSettings(): unknown {
 
 export function saveMediaSettings(value: { policy: string; origins: readonly string[]; blocked: readonly string[] }): void {
 	write(KEY.media, JSON.stringify(value));
+}
+
+export const ANIMATIONS_KEY = KEY.animations;
+
+/** Whether animated images play by themselves on this device, as saved: `'always'`, `'never'`, else undefined (as the system says). */
+export function loadAnimations(): string | undefined {
+	return read(KEY.animations) ?? undefined;
+}
+
+export function saveAnimations(mode: string | undefined): void {
+	if (mode) write(KEY.animations, mode);
+	else remove(KEY.animations);
 }
 
 export const READ_RECEIPTS_KEY = KEY.readReceipts;
