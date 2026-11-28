@@ -65,7 +65,6 @@ const ANIMATED_TYPES = new Set(['image/gif', 'image/apng']);
 export function mayAnimate(image: { type?: string; url?: string } | undefined, name?: string): boolean {
 	if (!image) return false;
 	if (image.type) return ANIMATED_TYPES.has(image.type.toLowerCase());
-	if (image.url && /^data:image\/(gif|apng)[;,]/i.test(image.url)) return true;
 	const extension = /\.(gif|apng)$/i;
 	let path = '';
 	try {

@@ -54,7 +54,6 @@ describe('animation settings', () => {
 		expect(mayAnimate({ type: 'image/webp', url: 'https://chat.example/f/a.gif' }, 'a.gif')).toBe(false);
 		expect(mayAnimate({ url: 'https://cdn.example/party.GIF?w=200' })).toBe(true);
 		expect(mayAnimate({ url: 'https://chat.example/f/a' }, 'party.gif')).toBe(true);
-		expect(mayAnimate({ url: 'data:image/gif;base64,R0lGOD' })).toBe(true);
 		expect(mayAnimate({ url: 'https://chat.example/f/a.png' }, 'a.png')).toBe(false);
 		expect(mayAnimate({ url: 'not a url' })).toBe(false);
 		expect(mayAnimate(undefined)).toBe(false);
