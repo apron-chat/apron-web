@@ -48,13 +48,13 @@ test.describe('where the device doesn’t ask for reduced motion', () => {
 test.describe('a GIF that plays by itself', () => {
 	test.use({ reducedMotion: 'no-preference' });
 
-	test('holds still after 10 seconds, and a Play press then plays it on', async ({ preview, page }) => {
+	test('holds still after 5 seconds, and a Play press then plays it on', async ({ preview, page }) => {
 		await page.clock.install();
 		await preview.open();
 		await postGif(preview);
 		const figure = page.locator('figure.ap-embed-animated');
 		await expect(figure.locator('img.ap-embed-media')).toBeVisible();
-		await page.clock.runFor(9_000);
+		await page.clock.runFor(4_000);
 		await expect(figure.getByTestId('animation-still')).toHaveCount(0);
 		await page.clock.runFor(1_000);
 		await expect(figure.getByTestId('animation-still')).toBeVisible();

@@ -129,7 +129,7 @@
 
 	/** What the chosen animation mode does, under it. */
 	let animationNote = $derived(
-		animationSettings.mode === 'always' ? 'GIFs play for 10 seconds, then hold still.'
+		animationSettings.mode === 'always' ? 'GIFs play for 5 seconds, then hold still.'
 		: animationSettings.mode === 'never' ? 'GIFs hold still until you press Play.'
 		: 'Follows your device’s reduced motion setting.'
 	);

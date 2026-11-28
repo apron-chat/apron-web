@@ -1,7 +1,7 @@
 import { ANIMATIONS_KEY, loadAnimations, saveAnimations } from './storage';
 
 /**
- * Whether animated images play by themselves (Preferences' Media): GIFs and the like in the timeline, for 10 seconds
+ * Whether animated images play by themselves (Preferences' Media): GIFs and the like in the timeline, for 5 seconds
  * (`PLAY_FOR`), and custom emoji with a still copy. One that doesn't play shows its first frame, and its Play button
  * plays it on until paused.
  * - `system`: unless the device asks for reduced motion (`prefers-reduced-motion: reduce`).

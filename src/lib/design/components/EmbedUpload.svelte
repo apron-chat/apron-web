@@ -62,16 +62,24 @@
 	</div>
 {:else if image}
 	<figure data-testid={testid} class={['ap-embed', 'ap-embed-figure', og.image?.animated && 'ap-embed-animated', className]}>
-		<a data-viewer-src={viewer?.src} data-viewer-title={viewer?.title} data-viewer-alt={viewer?.alt} data-viewer-detail={viewer?.detail} data-viewer-width={viewer?.width} data-viewer-height={viewer?.height}
-			href={url} class="ap-embed-imagelink" target="_blank" rel="noreferrer noopener" aria-haspopup={onview ? 'dialog' : undefined} title={onview ? `View ${title}` : undefined}
-			onclick={(event) => { if (onview && plainClick(event)) { event.preventDefault(); onview(event); } }}>
-			{#if og.image?.animated && og.image.url}<AnimatedImage class="ap-embed-media" src={og.image.url} alt={og.image.alt} {paused} playFor={pressed ? undefined : PLAY_FOR} onstop={() => (paused = true)} loading="lazy" style={ogRatio(og.image)} />
-			{:else}<img class="ap-embed-media" src={image} alt={og.image?.alt || ''} loading="lazy" style={ogRatio(og.image)} />{/if}</a>
+		{#snippet picture()}
+			<a data-viewer-src={viewer?.src} data-viewer-title={viewer?.title} data-viewer-alt={viewer?.alt} data-viewer-detail={viewer?.detail} data-viewer-width={viewer?.width} data-viewer-height={viewer?.height}
+				href={url} class="ap-embed-imagelink" target="_blank" rel="noreferrer noopener" aria-haspopup={onview ? 'dialog' : undefined} title={onview ? `View ${title}` : undefined}
+				onclick={(event) => { if (onview && plainClick(event)) { event.preventDefault(); onview(event); } }}>
+				{#if og.image?.animated && og.image.url}<AnimatedImage class="ap-embed-media" src={og.image.url} alt={og.image.alt} {paused} playFor={pressed ? undefined : PLAY_FOR} onstop={() => (paused = true)} loading="lazy" style={ogRatio(og.image)} />
+				{:else}<img class="ap-embed-media" src={image} alt={og.image?.alt || ''} loading="lazy" style={ogRatio(og.image)} />{/if}</a>
+		{/snippet}
 		{#if og.image?.animated}
-			<!-- After the link, not in it (a button can't be), over the picture's corner. -->
-			<button type="button" class="ap-embed-playtoggle" aria-label={paused ? `Play ${title}` : `Pause ${title}`} title={paused ? 'Play' : 'Pause'} onclick={() => { pressed = true; paused = !paused; }} data-testid="animation-toggle">
-				{#if paused}<Play size={12} aria-hidden="true" />{:else}<Pause size={12} aria-hidden="true" />{/if}<span class="ap-pill-label" aria-hidden="true">GIF</span>
-			</button>
+			<!-- The button goes after the link, not in it (a button can't be), over the picture: in its middle while it
+			     holds still, as what plays it; in its corner while it plays. -->
+			<div class="ap-embed-animbox">
+				{@render picture()}
+				<button type="button" class={['ap-embed-playtoggle', paused && 'ap-embed-playtoggle-still']} aria-label={paused ? `Play ${title}` : `Pause ${title}`} title={paused ? 'Play' : 'Pause'} onclick={() => { pressed = true; paused = !paused; }} data-testid="animation-toggle">
+					{#if paused}<Play size={12} aria-hidden="true" />{:else}<Pause size={12} aria-hidden="true" />{/if}<span class="ap-pill-label" aria-hidden="true">GIF</span>
+				</button>
+			</div>
+		{:else}
+			{@render picture()}
 		{/if}
 		<figcaption class="ap-embed-caption">{title}</figcaption>
 	</figure>

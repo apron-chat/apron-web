@@ -1,6 +1,9 @@
 <script lang="ts" module>
-	/** How long an animated image plays by itself before it holds still, in ms: a Play press plays it on until paused. */
-	export const PLAY_FOR = 10_000;
+	/**
+	 * How long an animated image plays by itself before it holds still, in ms: a Play press plays it on until paused.
+	 * Five seconds: motion that stops by then needs no way to pause it (WCAG 2.2.2), though each upload's has one.
+	 */
+	export const PLAY_FOR = 5_000;
 </script>
 
 <script lang="ts">

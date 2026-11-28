@@ -95,7 +95,7 @@ describe('an animated image', () => {
 		vi.restoreAllMocks();
 	});
 
-	it('holds still 10 seconds after it has loaded, and so does a card\'s; once played with its button, it plays on', () => {
+	it('holds still 5 seconds after it has loaded, and so does a card\'s; once played with its button, it plays on', () => {
 		vi.useFakeTimers();
 		render(EmbedUpload, { kind: 'upload', url: GIF, title: 'party.gif', og: { image: { url: media(GIF), animated: true } } });
 		vi.advanceTimersByTime(20_000);
@@ -103,7 +103,7 @@ describe('an animated image', () => {
 		// The while starts once it has loaded, as a lazy image does near the screen.
 		expect(document.querySelector('canvas')).toBeNull();
 		load();
-		vi.advanceTimersByTime(9_999);
+		vi.advanceTimersByTime(4_999);
 		flushSync();
 		expect(document.querySelector('canvas')).toBeNull();
 		vi.advanceTimersByTime(1);
@@ -120,7 +120,7 @@ describe('an animated image', () => {
 
 		render(EmbedCard, { kind: 'link', url: 'https://site.example/', og: { title: 'Party', image: { url: media(GIF), animated: true } } });
 		load();
-		vi.advanceTimersByTime(10_000);
+		vi.advanceTimersByTime(5_000);
 		flushSync();
 		expect(document.querySelector('canvas.ap-embed-ogimg')).not.toBeNull();
 		vi.useRealTimers();
